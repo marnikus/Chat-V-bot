@@ -1,6 +1,7 @@
 """Main window: Qt shell, menu, tray icon, status bar, file dialogs."""
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QFileDialog, QLabel, QMenu, QMainWindow,
                                QSystemTrayIcon, QStatusBar)
@@ -37,6 +38,22 @@ class MainWindow(QMainWindow):
             f"queued {counts.get('queued', 0)} • messaged {counts.get('messaged', 0)}")
 
     # --- menus -----------------------------------------------------------------
+    def _make_icon(self):
+        """Brand icon drawn at runtime (no image asset needed)."""
+        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+        pm = QPixmap(64, 64)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor("#007acc"))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(2, 2, 60, 60, 12, 12)
+        p.setPen(QColor("#ececec"))
+        p.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        p.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, "CF")
+        p.end()
+        return QIcon(pm)
+
     def _build_menu(self) -> None:
         bar = self.menuBar()
         file_menu = bar.addMenu("File")
@@ -63,6 +80,7 @@ class MainWindow(QMainWindow):
     # --- tray --------------------------------------------------------------------
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(self)
+        self.tray.setIcon(self._tray_icon)
         self.tray.setToolTip("ChatFlow Orchestrator")
         menu = QMenu(self)
         menu.addAction("Stop", lambda: self.sv.api.stop("{}"))
