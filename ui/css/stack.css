@@ -107,3 +107,30 @@
 .finder-preset-bar .finder-preset-actions {
   display: flex; gap: var(--gap-sm); flex-wrap: wrap;
 }
+
+/* — Find Element constructor menu emphasis — */
+.add-block-menu .menu-section {
+  display: block;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--gap-xs);
+}
+.add-block-menu .menu-item {
+  position: relative;
+}
+.add-block-menu .menu-item.highlight {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+}
+.add-block-menu .menu-item.highlight:hover { background: var(--accent); color: #fff; }
+.add-block-menu .mi-hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.add-block-menu .menu-item.highlight:hover .mi-hint { color: #fff; }

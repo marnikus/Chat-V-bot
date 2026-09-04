@@ -54,6 +54,9 @@ const StackDnD = {
 
   _initDefaultStack() {
     this.stack = [
+      { block_id:'FIND_ELEMENT',  name:'Find Setting Button', pre_delay_ms:300,
+        selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", text:'',
+        click:true, click_index:0 },
       { block_id:'CLICK_MAIN_TAB', pre_delay_ms:500, selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная' },
       { block_id:'SCROLL_PARSE',   pre_delay_ms:300, max_scrolls:50, scroll_pause_ms:800 },
       { block_id:'CONDITIONAL_SKIP',pre_delay_ms:0 },
@@ -136,9 +139,15 @@ const StackDnD = {
         menu.style.left = rect.left + 'px';
       }
     });
-    menu.innerHTML = AVAILABLE_BLOCKS.map(b =>
-      `<div class="menu-item" data-block="${b.block_id}">
+    const ordered = [
+      ...AVAILABLE_BLOCKS.filter(b => b.block_id === 'FIND_ELEMENT'),
+      ...AVAILABLE_BLOCKS.filter(b => b.block_id !== 'FIND_ELEMENT'),
+    ];
+    menu.innerHTML = `<div class="menu-section">Element Constructor</div>` +
+      ordered.map(b =>
+      `<div class="menu-item${b.block_id === 'FIND_ELEMENT' ? ' highlight' : ''}" data-block="${b.block_id}">
         <span class="mi-icon">${b.icon}</span> ${b.name}
+        ${b.block_id === 'FIND_ELEMENT' ? '<span class="mi-hint">any CSS selector + click?</span>' : ''}
       </div>`
     ).join('');
     menu.querySelectorAll('.menu-item').forEach(el => {
