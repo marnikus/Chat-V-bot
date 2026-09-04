@@ -30,6 +30,10 @@ DEFAULTS: dict[str, Any] = {
     "url_presets": [
         {"name": "Virt Chat Main", "pattern": "ru.virt-chat.com/chat"},
     ],
+    "state": {
+        "last_preset": "",
+        "active_url_preset": "",
+    },
     "ui": {"theme": "dark", "language": "ru"},
 }
 

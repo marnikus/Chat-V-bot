@@ -10,7 +10,7 @@ const AVAILABLE_BLOCKS = [
     labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name (text match)', pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'FIND_ELEMENT',  name:'Find Element',      icon:'🔎',
     defaults:{name:'Find Element', selector:"div[role='tab'].tab-item", child_selector:'', text:'', click:true, click_index:0, pre_delay_ms:300},
-    labels:{name:'Block name', selector:'CSS selector (e.g. div[role=\'tab\'].tab-item)', child_selector:'Child text selector (optional)', text:'Required text (optional)', click:'Click after found', click_index:'Match to click (0=first, -1=last)', pre_delay_ms:'Pre-delay (ms)'} },
+    labels:{name:'Block name', selector:'Search element (rect / container CSS selector)', child_selector:'Text element inside the rect (child CSS selector)', text:'Required text to match (optional)', click:'Click after found', click_index:'Match to click (0=first, -1=last)', pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'SCROLL_PARSE',   name:'Scroll & Parse',    icon:'📜',
     defaults:{max_scrolls:50,scroll_pause_ms:800,pre_delay_ms:300},
     labels:{max_scrolls:'Max scrolls',scroll_pause_ms:'Scroll pause (ms)',pre_delay_ms:'Pre-delay (ms)'} },
@@ -178,8 +178,7 @@ const StackDnD = {
     document.getElementById('stopBtn').addEventListener('click', () => {
       if (App.bridge) App.bridge.stop_stack();
     });
-    document.getElementById('saveStackBtn').addEventListener('click', () => this.openStackPresets());
-    document.getElementById('loadStackBtn').addEventListener('click', () => this.openStackPresets());
+    document.getElementById('presetsBtn').addEventListener('click', () => this.openStackPresets());
   },
 
   // ── stack preset manager ─────────────────────────────────────
@@ -198,19 +197,27 @@ const StackDnD = {
         list.innerHTML = items.map(p => `
           <div class="preset-row">
             <span class="preset-name">${p.name}</span>
-            <span class="preset-meta">${p.block_count || 0} blocks</span>
+            <span class="preset-meta">${p.block_count || 0} blocks${p.url_preset ? ' · ' + p.url_preset : ''}</span>
             <button onclick="StackDnD.loadStackPreset('${p.name.replace(/'/g, "\\'")}')">Load</button>
             <button class="btn-danger-text" onclick="StackDnD.deleteStackPreset('${p.name.replace(/'/g, "\\'")}')">Delete</button>
           </div>
         `).join('') || '<div class="preset-empty">No saved stack presets yet</div>';
       });
     }
+    // URL preset selector: defaults to the currently chosen one.
+    const urlSel = document.getElementById('stackPresetUrlSelect');
+    if (urlSel) {
+      const active = getActiveUrlPreset();
+      urlSel.innerHTML = '<option value="">— None —</option>' +
+        (App.urlPresets || []).map(p => `<option value="${p.name}" ${active && active.name === p.name ? 'selected' : ''}>${p.name}</option>`).join('');
+    }
     document.getElementById('stackPresetName').value = '';
     document.getElementById('stackPresetSaveBtn').onclick = () => {
       const name = document.getElementById('stackPresetName').value.trim();
       if (!name) { LogConsole.log('⚠ Enter a preset name', 'warn'); return; }
+      const urlPreset = urlSel ? urlSel.value : '';
       if (App.bridge) {
-        App.bridge.save_stack_preset(name, JSON.stringify(this.stack));
+        App.bridge.save_stack_preset(name, JSON.stringify(this.stack), urlPreset);
         this.renderStackPresets();
       }
     };
@@ -361,8 +368,8 @@ const StackDnD = {
     if (block.block_id === 'FIND_ELEMENT') {
       form.innerHTML += `
         <div class="finder-preset-bar">
-          <label>Element preset (reusable search + click)</label>
-          <select id="finderPresetSelect"></select>
+          <label>Reusable element preset (search + click)</label>
+          <select id="finderPresetSelect"><option value="">— Choose preset —</option></select>
           <input id="finderPresetNameInput" placeholder="Preset name (e.g. Find Setting Button)" value="${(block.name || '').replace(/"/g, '&quot;')}">
           <div class="finder-preset-actions">
             <button class="btn-small" onclick="StackDnD.saveFinderPresetFromBlock()">💾 Save As Preset</button>

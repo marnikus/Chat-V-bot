@@ -31,7 +31,6 @@
       </div>
       <span id="connectionStatus" class="status-dot disconnected" title="Disconnected"></span>
       <button id="connectBtn" class="btn-primary"><span class="material-icons">link</span> Connect</button>
-      <button id="settingsBtn" class="btn-icon" title="Settings"><span class="material-icons">settings</span></button>
     </div>
   </header>
 
@@ -63,8 +62,7 @@
           <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
           <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
           <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
-          <button id="saveStackBtn" class="btn-icon-sm" title="Save stack"><span class="material-icons">save</span></button>
-          <button id="loadStackBtn" class="btn-icon-sm" title="Load stack"><span class="material-icons">folder_open</span></button>
+          <button id="presetsBtn" class="btn-icon-sm" title="Presets (save / load / delete)"><span class="material-icons">inventory_2</span></button>
         </h3>
         <div id="stackList" class="stack-list">
           <div class="stack-empty">Drag blocks here or click + to add</div>
@@ -129,9 +127,10 @@
 <div id="stackPresetModal" class="modal hidden">
   <div class="modal-content">
     <h3>Stack Presets</h3>
-    <p class="modal-hint">Saving stores the <b>full action stack list</b>, so a preset can be loaded and edited later.</p>
+    <p class="modal-hint">Saving stores the <b>full action stack list</b> plus the currently selected URL preset. Text search blocks are saved as reusable element presets inside each block.</p>
     <div class="preset-new">
       <div class="form-row"><label>New preset name</label><input id="stackPresetName" type="text" placeholder="e.g. Daily DM run"></div>
+      <div class="form-row"><label>URL preset</label><select id="stackPresetUrlSelect"></select></div>
       <button id="stackPresetSaveBtn" class="btn-primary">Save Current Stack</button>
     </div>
     <div class="preset-list" id="stackPresetList"></div>
@@ -154,18 +153,6 @@
     <div class="preset-list" id="urlPresetList"></div>
     <div class="modal-actions">
       <button id="urlPresetCloseBtn" class="btn-small">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- SETTINGS MODAL -->
-<div id="settingsModal" class="modal hidden">
-  <div class="modal-content">
-    <h3>Settings</h3>
-    <div id="settingsForm"></div>
-    <div class="modal-actions">
-      <button id="settingsSaveBtn" class="btn-primary">Save</button>
-      <button id="settingsCancelBtn" class="btn-small">Cancel</button>
     </div>
   </div>
 </div>

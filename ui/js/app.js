@@ -34,13 +34,13 @@ function initApp() {
   setupHeader();
   setupUrlPresets();
   if (App.bridge) setupBridgeListeners();
+  if (App.bridge) restorePersistedState();
 }
 
 // ── Header: tabs + connect ────────────────────────────────────
 function setupHeader() {
   const refreshBtn = document.getElementById('refreshTabsBtn');
   const connectBtn = document.getElementById('connectBtn');
-  const settingsBtn = document.getElementById('settingsBtn');
   const tabSelect = document.getElementById('tabSelect');
 
   refreshBtn.addEventListener('click', () => {
@@ -62,8 +62,6 @@ function setupHeader() {
     if (!wsUrl) { LogConsole.log('⚠ Select a tab first (or choose a URL preset)', 'warn'); return; }
     App.bridge.connect_tab(wsUrl);
   });
-
-  settingsBtn.addEventListener('click', openSettings);
 }
 
 // ── URL presets ───────────────────────────────────────────────
@@ -82,6 +80,8 @@ function setupUrlPresets() {
 
   sel.addEventListener('change', () => {
     App.urlPresetChosen = !!sel.value;
+    // Remember the user's last chosen URL preset.
+    if (App.bridge) App.bridge.set_active_url_preset(sel.value);
     autoSelectByUrlPreset();
   });
 
@@ -141,6 +141,28 @@ function autoSelectByUrlPreset() {
   const preset = getActiveUrlPreset();
   if (preset) return autoSelectTabForPreset(preset);
   return null;
+}
+
+// Restore the last loaded stack preset and the last chosen URL preset.
+// This must run after urlPresets are loaded so the dropdown can reflect it.
+function restorePersistedState() {
+  if (!App.bridge) return;
+  App.bridge.get_state((json) => {
+    try {
+      const st = JSON.parse(json) || {};
+      const sel = document.getElementById('urlPresetSelect');
+      if (st.active_url_preset &&
+          (App.urlPresets || []).some(p => p.name === st.active_url_preset)) {
+        sel.value = st.active_url_preset;
+        App.urlPresetChosen = true;
+        LogConsole.log(`🔎 Restored last URL preset: ${st.active_url_preset}`, 'info');
+      }
+      if (st.last_preset) {
+        LogConsole.log(`📂 Restoring last used preset: ${st.last_preset}`, 'info');
+        App.bridge.load_stack_preset(st.last_preset);
+      }
+    } catch (e) {}
+  });
 }
 
 const UrlPresetManager = {
@@ -218,6 +240,13 @@ function setupBridgeListeners() {
     if (typeof StackDnD !== 'undefined') StackDnD.populateFinderPresetSelect();
   });
 
+  b.active_url_updated.connect((name) => {
+    const sel = document.getElementById('urlPresetSelect');
+    if (!sel) return;
+    sel.value = name || '';
+    App.urlPresetChosen = !!name;
+  });
+
   b.stack_presets_updated.connect(() => {
     if (typeof StackDnD !== 'undefined') {
       const modal = document.getElementById('stackPresetModal');
@@ -227,13 +256,21 @@ function setupBridgeListeners() {
 
   b.stack_loaded.connect((json) => {
     try {
-      const blocks = JSON.parse(json);
+      const data = JSON.parse(json);
+      const blocks = Array.isArray(data) ? data : (data.blocks || []);
       if (typeof StackDnD !== 'undefined') {
         StackDnD.stack = blocks;
         StackDnD._renderStack();
         if (StackDnD.selectedIdx >= 0 && StackDnD.selectedIdx < blocks.length) {
           StackDnD._showConfig(StackDnD.selectedIdx);
         }
+      }
+      const sel = document.getElementById('urlPresetSelect');
+      if (data && data.url_preset && sel &&
+          (App.urlPresets || []).some(p => p.name === data.url_preset)) {
+        sel.value = data.url_preset;
+        App.urlPresetChosen = true;
+        autoSelectByUrlPreset();
       }
     } catch (e) {}
   });
@@ -278,51 +315,4 @@ function setupBridgeListeners() {
     CriteriaEditor.loadFromJson(json);
     CriteriaEditor.renderDisplay();
   });
-}
-
-// ── Settings modal ────────────────────────────────────────────
-function openSettings() {
-  const modal = document.getElementById('settingsModal');
-  modal.classList.remove('hidden');
-  if (App.bridge) {
-    App.bridge.get_settings((json) => renderSettingsForm(JSON.parse(json)));
-  }
-  document.getElementById('settingsSaveBtn').onclick = () => {
-    const data = collectSettingsForm();
-    if (App.bridge) App.bridge.save_settings(JSON.stringify(data));
-    modal.classList.add('hidden');
-  };
-  document.getElementById('settingsCancelBtn').onclick = () => {
-    modal.classList.add('hidden');
-  };
-}
-
-function renderSettingsForm(settings) {
-  const form = document.getElementById('settingsForm');
-  form.innerHTML = '';
-  for (const [section, values] of Object.entries(settings)) {
-    if (typeof values !== 'object' || values === null || Array.isArray(values)) continue;
-    const h = document.createElement('h4');
-    h.textContent = section.toUpperCase();
-    h.style.cssText = 'margin:12px 0 6px;color:var(--text-secondary);font-size:11px;letter-spacing:1px';
-    form.appendChild(h);
-    for (const [key, val] of Object.entries(values)) {
-      const row = document.createElement('div');
-      row.className = 'form-row';
-      row.innerHTML = `<label>${key}</label><input data-section="${section}" data-key="${key}" value="${val}" type="${typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'checkbox' : 'text'}" ${typeof val === 'boolean' && val ? 'checked' : ''}>`;
-      form.appendChild(row);
-    }
-  }
-}
-
-function collectSettingsForm() {
-  const data = {};
-  document.querySelectorAll('#settingsForm input[data-section]').forEach(inp => {
-    const s = inp.dataset.section, k = inp.dataset.key;
-    if (!data[s]) data[s] = {};
-    if (inp.type === 'checkbox') data[s][k] = inp.checked;
-    else if (inp.type === 'number') data[s][k] = Number(inp.value);
-    else data[s][k] = inp.value;
-  });
-  return data;
 }

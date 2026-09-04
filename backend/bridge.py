@@ -20,6 +20,7 @@ class Bridge(QObject):
     stats_updated = Signal(str)
     tabs_received = Signal(str)
     url_presets_updated = Signal(str)
+    active_url_updated = Signal(str)
     finder_presets_updated = Signal(str)
 
     def __init__(self, cdp, memory, criteria, engine, config, parent=None):
@@ -46,8 +47,13 @@ class Bridge(QObject):
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS stacks ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, "
-                "blocks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "blocks TEXT, url_preset TEXT DEFAULT '', "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
                 "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+            # Migrate older stacks tables that lack the url_preset column.
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(stacks)").fetchall()}
+            if "url_preset" not in cols:
+                conn.execute("ALTER TABLE stacks ADD COLUMN url_preset TEXT DEFAULT ''")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS finder_presets ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, "
@@ -129,8 +135,8 @@ class Bridge(QObject):
     def get_stack_json(self): return json.dumps(self._engine.get_stack(), ensure_ascii=False)
 
     # ── stack presets (full action stack list) ─────────────────────
-    @Slot(str, str)
-    def save_stack_preset(self, name, stack_json):
+    @Slot(str, str, str)
+    def save_stack_preset(self, name, stack_json, url_preset=""):
         name = (name or "").strip()
         if not name:
             self.log_message.emit("❌ Preset name is empty", "error"); return
@@ -138,12 +144,14 @@ class Bridge(QObject):
             blocks = json.loads(stack_json)
             if not isinstance(blocks, list):
                 raise ValueError("blocks must be an array")
+            url_preset = (url_preset or "").strip()
             self._engine.load_stack(blocks)  # keep engine + UI in sync
             conn = sqlite3.connect(self._db_path)
             conn.execute(
-                "INSERT INTO stacks(name, blocks) VALUES(?,?) "
-                "ON CONFLICT(name) DO UPDATE SET blocks=excluded.blocks",
-                (name, json.dumps(blocks, ensure_ascii=False)))
+                "INSERT INTO stacks(name, blocks, url_preset) VALUES(?,?,?) "
+                "ON CONFLICT(name) DO UPDATE SET blocks=excluded.blocks, "
+                "url_preset=excluded.url_preset",
+                (name, json.dumps(blocks, ensure_ascii=False), url_preset))
             conn.commit(); self._close(conn)
             self.stack_presets_updated.emit(self.list_stack_presets())
             self.log_message.emit(f"💾 Stack preset saved: {name} "
@@ -155,12 +163,13 @@ class Bridge(QObject):
     def list_stack_presets(self):
         try:
             conn = sqlite3.connect(self._db_path)
-            cur = conn.execute("SELECT name, blocks FROM stacks ORDER BY name")
+            cur = conn.execute("SELECT name, blocks, url_preset FROM stacks ORDER BY name")
             rows = cur.fetchall(); self._close(conn)
             out = []
-            for name, blocks in rows:
+            for name, blocks, url_preset in rows:
                 arr = json.loads(blocks) if isinstance(blocks, str) else []
-                out.append({"name": name, "block_count": len(arr), "blocks": arr})
+                out.append({"name": name, "block_count": len(arr), "blocks": arr,
+                            "url_preset": url_preset or ""})
             return json.dumps(out, ensure_ascii=False)
         except Exception as e:
             log.error("List stack presets error: %s", e)
@@ -170,14 +179,21 @@ class Bridge(QObject):
     def load_stack_preset(self, name):
         try:
             conn = sqlite3.connect(self._db_path)
-            cur = conn.execute("SELECT blocks FROM stacks WHERE name=?", (name,))
+            cur = conn.execute("SELECT blocks, url_preset FROM stacks WHERE name=?", (name,))
             row = cur.fetchone(); self._close(conn)
             if not row:
                 self.log_message.emit(f"❌ Stack preset not found: {name}", "error")
                 return
             blocks = json.loads(row[0])
+            url_preset = row[1] or ""
             self._engine.load_stack(blocks)
-            self.stack_loaded.emit(json.dumps(blocks, ensure_ascii=False))
+            # Remember this preset as the one to restore on next launch.
+            self.set_last_preset(name)
+            if url_preset:
+                self.set_active_url_preset(url_preset)
+            # Emit blocks + the URL preset that is stored with this stack preset.
+            self.stack_loaded.emit(json.dumps({"blocks": blocks, "url_preset": url_preset},
+                                              ensure_ascii=False))
             self.log_message.emit(f"📂 Loaded stack preset: {name} "
                                   f"({len(blocks)} blocks)", "info")
         except Exception as e:
@@ -288,6 +304,9 @@ class Bridge(QObject):
         self._config.set("url_presets", presets)
         self._config.save()
         self.url_presets_updated.emit(json.dumps(presets, ensure_ascii=False))
+        # If the deleted preset was the active one, clear it.
+        if (self._config.get("state", "active_url_preset", default="") or "") == name:
+            self.set_active_url_preset("")
         self.log_message.emit(f"🗑 Deleted URL preset: {name}", "warn")
 
     # ── message / criteria ────────────────────────────────────────
@@ -316,20 +335,25 @@ class Bridge(QObject):
         c = await self._memory.clear_all()
         self.log_message.emit(f"🗑 Cleared {c} users", "warn"); await self._refresh_users()
 
-    # ── settings ──────────────────────────────────────────────────
+    # ── persisted app state (last preset + last chosen URL preset) ─
     @Slot(result=str)
-    def get_settings(self): return self._config.to_dict()
+    def get_state(self):
+        return json.dumps({
+            "last_preset": self._config.get("state", "last_preset", default="") or "",
+            "active_url_preset": self._config.get("state", "active_url_preset", default="") or "",
+        }, ensure_ascii=False)
 
     @Slot(str)
-    def save_settings(self, j):
-        try:
-            for sec, vals in json.loads(j).items():
-                if isinstance(vals, dict):
-                    for k, v in vals.items():
-                        self._config.set(sec, k, v)
-            self._config.save(); self.log_message.emit("💾 Settings saved", "info")
-        except Exception as e:
-            self.log_message.emit(f"❌ Settings error: {e}", "error")
+    def set_last_preset(self, name):
+        self._config.set("state", "last_preset", (name or "").strip() or "")
+        self._config.save()
+
+    @Slot(str)
+    def set_active_url_preset(self, name):
+        self._config.set("state", "active_url_preset", (name or "").strip() or "")
+        self._config.save()
+        # Push the newly remembered selection back to the UI.
+        self.active_url_updated.emit((name or "").strip())
 
     async def _refresh_users(self):
         users = await self._memory.get_all()

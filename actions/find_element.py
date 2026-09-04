@@ -54,12 +54,12 @@ class FindElement(BaseAction):
         await self.pre_delay()
 
         if not self.selector:
-            self.debug(f"❌ [{self.name}] no CSS selector configured")
+            self.debug(f"❌ [{self.name}] no element (rect) selector configured")
             return ActionResult.FAIL
 
-        self.debug(f"🔍 [{self.name}] searching for selector '{self.selector}'"
-                   + (f" with text '{self.text}'" if self.text else "")
-                   + (f" (child '{self.child_selector}')" if self.child_selector else ""))
+        self.debug(f"🔍 [{self.name}] searching rect/container '{self.selector}'"
+                   + (" and looking for text in '" + str(self.child_selector) + "'" if self.child_selector else "")
+                   + (f" with text '{self.text}'" if self.text else ""))
 
         sel = json.dumps(self.selector)
         child = json.dumps(self.child_selector)
