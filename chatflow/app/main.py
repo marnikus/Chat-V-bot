@@ -38,6 +38,8 @@ def main() -> int:
     channel.make_channel(sv, webview)
     sv.worker.start()  # the QThread that executes everything (RUN, tests, …)
     window.show()
+    # auto-diagnose Chrome on startup: result lands in the top bar + live log
+    QTimer.singleShot(1500, lambda: sv.api.testConnection("{}"))
     rc = app.exec()
     try:
         sv.worker.shutdown()

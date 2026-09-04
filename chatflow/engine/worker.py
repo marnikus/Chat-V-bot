@@ -84,11 +84,15 @@ class Worker(QThread):
                 if name == "run":
                     await run_task.do_run(self, payload)
                 elif name == "test":
+                    self.log("info", f"Testing Chrome connection "
+                                     f"http://{self.s.cdp_host}:{self.s.cdp_port}…")
                     try:
                         from ..browser import connect as cdp
                         result = await cdp.test_connection(self.s)
                     except Exception as e:  # noqa: BLE001 e.g. playwright missing
                         result = {"ok": False, "error": f"test failed to run: {e}"}
+                    if not result.get("ok"):
+                        self.log("error", f"Chrome connection failed: {result.get('error')}")
                     self.emit_event("test_result", result)
                 elif name == "stop":
                     self._on_stop()

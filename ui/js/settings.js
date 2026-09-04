@@ -1,8 +1,11 @@
-/* settings.js — settings modal (docs §8.7). */
+/* settings.js — settings modal (docs §8.7). All fields auto-save on change. */
 (function () {
   "use strict";
 
   function $(id) { return document.getElementById(id); }
+  var FIELDS = ["st-host", "st-port", "st-pattern", "st-jitter", "st-cps", "st-var",
+    "st-mpe", "st-mps", "st-cooldown", "st-level", "st-retention", "st-policy"];
+  var saveTO = null;
 
   window.openSettings = function () {
     $("settings-modal").classList.remove("hidden");
@@ -25,8 +28,8 @@
 
   function closeModal() { $("settings-modal").classList.add("hidden"); }
 
-  function saveSettings() {
-    var payload = {
+  function collectAll() {
+    return {
       cdp_host: $("st-host").value,
       cdp_port: parseInt($("st-port").value, 10) || 9222,
       tab_url_pattern: $("st-pattern").value,
@@ -40,7 +43,28 @@
       retention_days: parseInt($("st-retention").value, 10) || 7,
       fail_policy: $("st-policy").value
     };
-    callApi("saveSettings", payload).then(function (r) {
+  }
+
+  function flashSaved() {
+    var el = $("btn-settings-save");
+    el.textContent = "Saved ✓";
+    clearTimeout(flashSaved._t);
+    flashSaved._t = setTimeout(function () { el.textContent = "Save Settings"; }, 1200);
+  }
+
+  // auto-save every field ~0.6 s after the user stops editing (no connection
+  // needed — settings are local; this is what "Test Connection" uses too)
+  function autoSave() {
+    clearTimeout(saveTO);
+    saveTO = setTimeout(function () {
+      callApi("saveSettings", collectAll()).then(function (r) {
+        if (r && r.ok) flashSaved();
+      });
+    }, 600);
+  }
+
+  function saveSettings() {
+    callApi("saveSettings", collectAll()).then(function (r) {
       if (r && r.ok) { logLine("ok", "Settings saved"); closeModal(); }
     });
   }
@@ -49,6 +73,9 @@
     $("btn-settings-close").addEventListener("click", closeModal);
     $("btn-settings-cancel").addEventListener("click", closeModal);
     $("btn-settings-save").addEventListener("click", saveSettings);
+    FIELDS.forEach(function (id) {
+      $(id).addEventListener("change", autoSave);
+    });
     $("btn-test-conn").addEventListener("click", function () {
       $("test-result").textContent = "testing…";
       $("test-result").style.color = "#a0a0a0";
@@ -58,12 +85,8 @@
         $("test-result").textContent = "no response from worker — restart the app (latest build)";
         $("test-result").style.color = "#F44336";
       }, 45000);
-      // apply connection fields to settings first so the test uses them
-      callApi("saveSettings", {
-        cdp_host: $("st-host").value,
-        cdp_port: parseInt($("st-port").value, 10) || 9222,
-        tab_url_pattern: $("st-pattern").value
-      }).then(function () {
+      // persist the current fields first so the test uses them
+      callApi("saveSettings", collectAll()).then(function () {
         return callApi("testConnection");
       }).catch(function (e) {
         $("test-result").textContent = "call failed: " + e.message;
@@ -92,7 +115,7 @@
           msg += " — open: " + r.tabs.slice(0, 3).join(", ");
         }
       } else {
-        msg = "FAIL — " + r.error;
+        msg = "FAIL — " + r.error + (r.endpoint ? " (tested " + r.endpoint + ")" : "");
       }
       $("test-result").textContent = msg;
       $("test-result").style.color = r.ok ? "#4CAF50" : "#F44336";

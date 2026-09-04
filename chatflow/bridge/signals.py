@@ -38,6 +38,8 @@ def mirror_to_status_bar(window, name: str, payload) -> None:
     elif name == "connection_lost":
         window.set_status("Connection lost — reconnect?")
     elif name == "test_result":
-        ok = (payload or {}).get("ok")
-        detail = "chat tab found" if payload.get("chat_tab_found") else "no chat tab"
-        window.set_status(("Test: OK — " if ok else "Test: FAIL — ") + str(detail))
+        if (payload or {}).get("ok"):
+            detail = "chat tab found" if payload.get("chat_tab_found") else "no tab matched"
+            window.set_status(f"Test: OK — {payload.get('pages', 0)} pages, {detail}")
+        else:
+            window.set_status("Test: FAIL — " + str(payload.get("error", "?"))[:90])

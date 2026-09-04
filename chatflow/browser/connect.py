@@ -68,9 +68,11 @@ async def test_connection(settings) -> dict:
         urls = [p.url for c in browser.contexts for p in c.pages]
         found = any(tab_matches(settings.tab_url_pattern, u) for u in urls)
         return {"ok": True, "chat_tab_found": found, "pages": len(urls),
-                "tabs": [u for u in urls if u][:10]}
+                "tabs": [u for u in urls if u][:10],
+                "endpoint": _endpoint(settings.cdp_host, settings.cdp_port)}
     except Exception as e:
-        return {"ok": False, "error": str(e).splitlines()[0][:300]}
+        return {"ok": False, "error": str(e).splitlines()[0][:300],
+                "endpoint": _endpoint(settings.cdp_host, settings.cdp_port)}
     finally:
         await _stop_pw(pw)
 
