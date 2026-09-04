@@ -173,7 +173,7 @@ const PresetsUI = {
     const el = document.getElementById('customBlockChips');
     if (!el) return;
     if (!this.customBlocks.length) {
-      el.innerHTML = '<span class="preset-row-empty">no saved blocks — create a “Find &amp; Click” block and press Save Block</span>';
+      el.innerHTML = '<span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>';
       return;
     }
     el.innerHTML = '';

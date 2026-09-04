@@ -86,6 +86,29 @@
 }
 .config-panel textarea { min-height: 60px; resize: vertical; }
 
+/* — Configurable constructor form (CUSTOM_FIND "Find & Click") — */
+.config-panel .form-row--head { align-items: center; }
+.config-panel .form-row--head label { min-width: 0; }
+.config-panel .form-row--stack {
+  flex-direction: column; align-items: stretch;
+  gap: var(--gap-xs);
+}
+.config-panel .form-row--stack label {
+  min-width: 0; width: 100%;
+}
+.config-panel .form-row-check label { min-width: 130px; }
+.config-panel .form-row-check input[type="checkbox"] {
+  flex: 0 0 auto; width: 15px; height: 15px;
+  margin: 0; accent-color: var(--accent);
+}
+.form-hint {
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  line-height: 1.5; padding: 6px 10px; margin: 0 0 var(--gap-sm);
+  background: var(--bg-input); border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.config-actions button .btn-label { white-space: normal; text-align: left; }
+
 /* Running-step highlight (debugger) */
 .stack-item.block-running {
   border-color: var(--green);

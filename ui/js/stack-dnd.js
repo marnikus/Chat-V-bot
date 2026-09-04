@@ -8,7 +8,13 @@
 const BUILTIN_BLOCKS = [
   { block_id:'CUSTOM_FIND',    name:'Find & Click',     icon:'🔎',
     defaults:{custom_name:'', selector:"div[role='tab'].tab-item", label_selector:'p.chat-title', match_text:'', click_enabled:true, click_selector:'', pre_delay_ms:500},
-    labels:{custom_name:'Block name (shown in stack)', selector:'Element to find (CSS)', label_selector:'Text element inside (CSS)', match_text:'Text to match inside (optional)', click_enabled:'Click after found', click_selector:'Element inside to click (optional)', pre_delay_ms:'Pre-delay (ms)'} },
+    labels:{custom_name:'Block name (shown in stack & logs)',
+            selector:'① Element to find — the clickable box (CSS)',
+            label_selector:'② Separate text element inside it to confirm (CSS)',
+            match_text:'Text it must contain (empty = first match)',
+            click_enabled:'Click after found',
+            click_selector:'Or click this inner element instead (CSS, optional)',
+            pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'CLICK_MAIN_TAB', name:'Click Main Tab',   icon:'🏠',
     defaults:{selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', pre_delay_ms:500},
     labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name (text match)', pre_delay_ms:'Pre-delay (ms)'} },
@@ -84,7 +90,29 @@ const StackDnD = {
     return meta.name;
   },
 
+  // Human-readable card description for the configurable constructor block.
+  _findDesc(b) {
+    const s = String(b.selector || '').trim();
+    const ls = String(b.label_selector || '').trim();
+    const mt = String(b.match_text || '').trim();
+    const box = s || '?';
+    let search;
+    if (ls && mt) search = `Find “${mt}” in ${ls} within ${box}`;
+    else if (ls) search = `Find the first ${ls} within ${box}`;
+    else if (mt) search = `Find “${mt}” in ${box}`;
+    else search = `Find ${box}`;
+    let act;
+    if (!b.click_enabled) act = '→ check only (no click)';
+    else if (b.click_selector && String(b.click_selector).trim()) {
+      act = `→ click ${String(b.click_selector).trim()} inside`;
+    } else {
+      act = '→ click the found box';
+    }
+    return `${search} ${act}`;
+  },
+
   _summary(b) {
+    if (b.block_id === 'CUSTOM_FIND') return this._findDesc(b);
     const parts = [];
     for (const [k, v] of Object.entries(b)) {
       if (['block_id','pre_delay_ms'].includes(k)) continue;
@@ -101,6 +129,24 @@ const StackDnD = {
     this.customBlocks = Array.isArray(list)
       ? list.map((c) => ({ ...c, block: c.block ? { ...c.block } : {} }))
       : [];
+    this._refreshSaveLabel();
+  },
+
+  // "Save as new preset" vs "Update preset “name”" depending on whether the
+  // currently selected block's name is already stored as a preset.
+  _refreshSaveLabel() {
+    const btn = document.getElementById('saveCustomBlockBtn');
+    const actions = document.getElementById('customBlockActions');
+    if (!btn || !actions || actions.classList.contains('hidden')) return;
+    const block = this.stack[this.selectedIdx];
+    if (!block || block.block_id !== 'CUSTOM_FIND') return;
+    const name = block.custom_name ? String(block.custom_name).trim() : '';
+    const exists = !!name && this.customBlocks.some((c) => {
+      const b = (c && c.block) || {};
+      return String(c.name || '') === name || String(b.custom_name || '') === name;
+    });
+    const lbl = btn.querySelector('[data-label]');
+    if (lbl) lbl.textContent = exists ? `Update preset “${name}”` : 'Save as new preset';
   },
 
   // insert a configured block (from built-in defaults or a saved preset)
@@ -416,6 +462,19 @@ const StackDnD = {
     this.notifyEdited();
   },
 
+  // Deterministic config-field order: follow the block's declared default
+  // key order, then any extra keys that were loaded from saved configs.
+  _configKeys(block, meta) {
+    const byKey = {};
+    const entries = Object.keys(block);
+    entries.forEach((k) => { byKey[k] = block[k]; });
+    const order = meta.defaults ? Object.keys(meta.defaults) : [];
+    const ordered = [];
+    order.forEach((k) => { if (k in byKey && k !== 'block_id') ordered.push(k); });
+    entries.forEach((k) => { if (k !== 'block_id' && !ordered.includes(k)) ordered.push(k); });
+    return ordered;
+  },
+
   _showConfig(idx) {
     const panel = document.getElementById('blockConfigPanel');
     const form = document.getElementById('blockConfigForm');
@@ -424,24 +483,39 @@ const StackDnD = {
     panel.classList.remove('hidden');
     const meta = this._meta(block.block_id);
     const labels = meta.labels || {};
-    form.innerHTML = `<div class="form-row"><label>Block</label><span style="font-weight:600">${meta.icon||''} ${this._displayName(block)}</span></div>`;
-    for (const [key, val] of Object.entries(block)) {
+    const isConstructor = block.block_id === 'CUSTOM_FIND';
+    const icon = meta.icon || '';
+    const safeName = this._esc(this._displayName(block));
+    let html = `<div class="form-row form-row--head">
+        <label>Block</label><span style="font-weight:600">${icon} ${safeName}</span>
+      </div>`;
+    if (isConstructor) {
+      html += `<p class="form-hint">Configurable search-and-click constructor:
+        field ① finds the clickable element (the box / rectangle);
+        field ② is the separate element inside it whose text confirms the
+        match. Give it a name, then save it as a preset for reuse.</p>`;
+    }
+    const keys = this._configKeys(block, meta);
+    for (const key of keys) {
       if (key === 'block_id') continue;
+      const val = block[key];
       const labelText = labels[key] || key;
+      const safeVal = String(val).replace(/"/g, '&quot;');
       if (typeof val === 'boolean') {
-        form.innerHTML += `<div class="form-row form-row-check">
+        html += `<div class="form-row form-row-check">
           <label>${labelText}</label>
           <input data-key="${key}" type="checkbox" ${val ? 'checked' : ''}>
         </div>`;
       } else {
         const inputType = typeof val === 'number' ? 'number' : 'text';
-        const safeVal = String(val).replace(/"/g, '&quot;');
-        form.innerHTML += `<div class="form-row">
+        const rowCls = isConstructor ? 'form-row form-row--stack' : 'form-row';
+        html += `<div class="${rowCls}">
           <label>${labelText}</label>
           <input data-key="${key}" value="${safeVal}" type="${inputType}">
         </div>`;
       }
     }
+    form.innerHTML = html;
     form.querySelectorAll('input[data-key]').forEach(inp => {
       inp.addEventListener('change', () => {
         const k = inp.dataset.key;
@@ -453,12 +527,13 @@ const StackDnD = {
     });
     document.getElementById('closeConfigBtn').onclick = () => panel.classList.add('hidden');
 
-    // Save Block preset action (only for configurable Find & Click blocks)
+    // Save / Update preset action (only for the configurable block)
     const actions = document.getElementById('customBlockActions');
     if (block.block_id === 'CUSTOM_FIND' && App.bridge) {
       actions.classList.remove('hidden');
       const btn = document.getElementById('saveCustomBlockBtn');
       btn.onclick = () => this._saveBlockPreset(block);
+      this._refreshSaveLabel();
     } else {
       actions.classList.add('hidden');
     }
@@ -466,10 +541,15 @@ const StackDnD = {
 
   _saveBlockPreset(block) {
     if (!App.bridge) return;
+    const finish = () => {
+      this._renderStack();
+      this._showConfig(this.selectedIdx);
+      this.notifyEdited();
+    };
     const useName = (name) => {
       block.custom_name = name;
-      this._renderStack();
       App.bridge.save_custom_block(name, JSON.stringify(block));
+      finish();
     };
     if (block.custom_name && String(block.custom_name).trim()) {
       useName(String(block.custom_name).trim());

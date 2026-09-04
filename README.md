@@ -86,20 +86,38 @@ Add blocks from the **+ Add** menu, or click them to add:
 - **Pause** — add a delay between actions
 - **Conditional Skip** — skip users already messaged
 
-### Find & Click — configurable action block
-A generic reusable block that is configured entirely through the UI:
-1. Add **🔎 Find & Click** and click it to open its config panel.
-2. Two search fields (CSS selectors):
-   - **Element to find** — the clickable element (the "rectangle"),
-     e.g. `div[role='tab'].tab-item`.
-   - **Text element inside** — the element *inside* whose text is searched,
-     e.g. `p.chat-title`, plus an optional **text to match** (`Settings`).
-3. Tick **Click after found** to click it (or leave it to find-only).
-4. Give the block a **custom name** (e.g. "Find Settings Button") — the name
-   is shown in the stack and logs.
-5. Press **Save Block as Preset** — it becomes a chip under "Custom blocks"
-   and an entry at the top of the **+ Add** menu for reuse in other stacks.
-   Use **×** on a chip to remove a preset you no longer need.
+### Find & Click — the configurable action-block constructor
+A generic search-and-click block that is built entirely in the UI — it is the
+way to create your own reusable blocks instead of being limited to the
+hardcoded ones. Example: a "Find Settings Button" block.
+
+**The two search fields (CSS selectors):**
+- **① Element to find — the clickable box**, e.g. `div[role='tab'].tab-item`
+  (the button/rectangle to detect).
+- **② Separate text element inside it to confirm**, e.g. `p.chat-title`
+  (a *different* element whose text proves this is the right box), plus an
+  optional **text to match** (e.g. `Settings`; empty = take the first match).
+
+**Click or not:**
+- **Click after found** ticks the box and clicks the found element when the
+  match is confirmed.
+- **Or click this inner element instead** (CSS, optional) clicks a child of
+  the found box rather than the box itself.
+- Untick **Click after found** to turn the block into a find/verify-only step.
+
+**Build once, reuse everywhere:**
+1. **+ Add** → **🔎 Find & Click**, click the new card to open its config panel.
+2. Give it a **custom name** (e.g. `Find Settings Button`) — shown on the card
+   and in the run logs.
+3. Fill in the two search fields, the text to match, and the click behaviour.
+4. Press **Save as new preset** — the block is stored in the single
+   `config.json` store and appears as a chip under **Custom blocks** and at the
+   top of the **+ Add** menu.
+5. Reuse it in any stack by clicking the chip (or its **+ Add** entry) — the
+   full configuration comes back. If you edit a saved block and press the
+   button again it reads **Update preset “name”** and overwrites that preset.
+6. Remove a preset you no longer need with the **×** on its chip (confirmed in
+   an in-app dialog). Everything persists across app restarts.
 
 ### Reorder Blocks (drag & drop)
 Grab any block (or its **⠿** handle) and drag it up or down. While you move
