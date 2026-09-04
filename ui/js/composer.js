@@ -1,5 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   composer.js — Message composer: textarea, variables, templates
+   composer.js — Message composer: textarea, variables, templates.
+   Template presets are persisted through the backend and rendered as
+   chips / a picker list (BUG #1 — same store pattern as stack presets).
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -43,20 +45,34 @@ const Composer = {
 
     document.addEventListener('click', () => varMenu.classList.add('hidden'));
 
-    // Template save/load
+    // Template save (real persistence through the backend)
     document.getElementById('saveTemplateBtn').addEventListener('click', () => {
-      const name = prompt('Template name:');
-      if (name && App.bridge) {
-        // Save as stack preset with message embedded
-        LogConsole.log(`💾 Template "${name}" saved`, 'info');
+      if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+      if (!textarea.value.trim()) {
+        LogConsole.log('⚠ Composer is empty — type a message first', 'warn');
+        return;
       }
+      PresetsUI.promptName('Save message template', 'e.g. Greeting RU',
+        'Save', (name) => {
+          App.bridge.save_template_preset(name, textarea.value);
+        });
     });
+
+    // Template load — opens the picker list of saved templates
     document.getElementById('loadTemplateBtn').addEventListener('click', () => {
-      const name = prompt('Template name:');
-      if (name && App.bridge) {
-        LogConsole.log(`📂 Template "${name}" loaded`, 'info');
-      }
+      if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+      App.bridge.list_template_presets((json) => {
+        PresetsUI.setTemplatePresets(json);
+        PresetsUI.toggleTemplatePicker(document.getElementById('loadTemplateBtn'));
+      });
     });
+  },
+
+  setMessage(text) {
+    const textarea = document.getElementById('messageInput');
+    if (!textarea) return;
+    textarea.value = text || '';
+    textarea.dispatchEvent(new Event('input'));
   },
 };
 

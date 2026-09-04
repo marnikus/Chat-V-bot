@@ -34,8 +34,16 @@ class BaseAction(ABC):
             _REGISTRY[cls.block_id] = cls
 
     @abstractmethod
-    async def execute(self, user_nick: str, cdp: CDPClient) -> str:
-        """Run this action. Return ActionResult.*"""
+    async def execute(self, user_nick: str, cdp: CDPClient,
+                      engine: Optional[object] = None) -> str:
+        """Run this action. Return ActionResult.*
+
+        :param engine: the running ActionEngine (optional). When provided,
+            actions stream step-by-step debugger detail through
+            ``engine.report(message, level)`` so every element search,
+            clickability check and outcome is visible in the log console
+            and written to the run trace.
+        """
         ...
 
     async def pre_delay(self) -> None:
@@ -46,7 +54,16 @@ class BaseAction(ABC):
         return {"pre_delay_ms": {"type": "number", "default": 500, "label": "Pre-delay (ms)"}}
 
     def to_dict(self) -> dict:
-        return {"block_id": self.block_id, "pre_delay_ms": self.pre_delay_ms, **self.config}
+        """Serialize the block with ALL of its settings (round-trip safe)."""
+        d: dict[str, Any] = {"block_id": self.block_id}
+        for key, value in vars(self).items():
+            if key.startswith("_") or key in ("config", "pre_delay_ms"):
+                continue
+            d[key] = value
+        d["pre_delay_ms"] = getattr(self, "pre_delay_ms", 500)
+        if self.config:
+            d.update(self.config)
+        return d
 
 
 def get_action_class(block_id: str) -> Optional[type]:

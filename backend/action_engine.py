@@ -1,8 +1,20 @@
-"""Action stack executor: runs blocks sequentially over queued users."""
+"""Action stack executor: runs blocks sequentially over queued users.
+
+Provides the step-by-step "debugger" contract:
+  * `debug_msg(message, level)`  — live detail lines streamed to the UI log
+    console (element search results, clickability, per-step status, timing).
+  * `step_started(index, block_id, nick)` — lets the UI highlight the running
+    block in the stack.
+  * every run writes a JSONL trace to logs/run_trace_<run_id>.jsonl so issues
+    can be traced after the run.
+"""
 
 import asyncio
 import json
 import logging
+import os
+import time
+from datetime import datetime
 from typing import Callable, Optional
 from PySide6.QtCore import QObject, Signal
 from backend.cdp_client import CDPClient
@@ -14,13 +26,52 @@ from actions.base_action import BaseAction, ActionResult, get_action_class
 log = logging.getLogger("chatbot")
 
 
+class RunTracer:
+    """Appends one JSON line per event to logs/run_trace_<run_id>.jsonl."""
+
+    def __init__(self, run_id: str, log_dir: str = "logs"):
+        os.makedirs(log_dir, exist_ok=True)
+        self.run_id = run_id
+        self.path = os.path.join(log_dir, f"run_trace_{run_id}.jsonl")
+        self._fh = open(self.path, "a", encoding="utf-8")
+
+    def note(self, record: dict) -> None:
+        try:
+            rec = {"ts": datetime.now().isoformat(timespec="milliseconds"),
+                   "run_id": self.run_id, **record}
+            self._fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            self._fh.flush()
+        except OSError as exc:
+            log.error("Trace write failed: %s", exc)
+
+    def close(self) -> None:
+        try:
+            self._fh.close()
+        except OSError:
+            pass
+
+
+_LEVEL_MAP = {
+    "ok": "success", "success": "success", "done": "success",
+    "info": "info", "debug": "info",
+    "warn": "warn", "warning": "warn",
+    "error": "error", "fail": "error",
+}
+
+
+def norm_level(level: str) -> str:
+    return _LEVEL_MAP.get((level or "info").lower(), "info")
+
+
 class ActionEngine(QObject):
     """Execute a stack of action blocks over a user queue."""
 
-    step_complete = Signal(str, str)   # block_name, user_nick
-    user_complete = Signal(str, bool)  # user_nick, success
+    step_complete = Signal(str, str)      # block_name, user_nick
+    user_complete = Signal(str, bool)     # user_nick, success
     stack_complete = Signal()
     log_msg = Signal(str)
+    debug_msg = Signal(str, str)          # message, level (info|success|warn|error)
+    step_started = Signal(int, str, str)  # step index (1-based), block_id, user_nick
 
     def __init__(self, cdp: CDPClient, memory: UserMemory,
                  criteria: CriteriaEngine, parent: QObject | None = None):
@@ -32,12 +83,15 @@ class ActionEngine(QObject):
         self._running = False
         self._paused = False
         self._stop_requested = False
+        self._tracer: Optional[RunTracer] = None
+        self._ctx: dict = {}       # current step context for report()
+        self._run_seq = 0
 
     # ── stack management ─────────────────────────────────────────
     def load_stack(self, blocks: list[dict]) -> None:
         """Build action list from block config dicts."""
         self._stack.clear()
-        for b in blocks:
+        for b in blocks or []:
             cls = get_action_class(b.get("block_id", ""))
             if cls:
                 self._stack.append(cls(**{k: v for k, v in b.items() if k != "block_id"}))
@@ -60,73 +114,162 @@ class ActionEngine(QObject):
     def resume(self) -> None:
         self._paused = False
 
+    # ── step reporting API (used by action blocks) ───────────────
+    def report(self, message: str, level: str = "info") -> None:
+        """Stream a detail line about the currently executing step."""
+        level = norm_level(level)
+        self.debug_msg.emit(f"      {message}", level)
+        if self._tracer is not None:
+            self._tracer.note({"type": "detail", "level": level,
+                               "message": message, **self._ctx})
+
     # ── main execution loop ──────────────────────────────────────
     async def execute(self, scroll_parser: ScrollParser | None = None) -> None:
         """Run the full stack over the user queue."""
+        if self._running:
+            self.log_msg.emit("⚠ Already running", "warn")
+            return
         self._running = True
         self._stop_requested = False
+        self._paused = False
+        self._run_seq += 1
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{self._run_seq}"
+        self._tracer = RunTracer(run_id)
+        self.log_msg.emit(f"▶▶ Run #{run_id} started")
+        self.debug_msg.emit(f"📄 Trace file: {self._tracer.path}", "info")
+        self._tracer.note({"type": "run_start",
+                           "blocks": [b.block_id for b in self._stack]})
         try:
             # Phase 1: parse users if SCROLL_PARSE block exists
             has_scroll = any(b.block_id == "SCROLL_PARSE" for b in self._stack)
             if has_scroll and scroll_parser:
-                self.log_msg.emit("📜 Starting user parse...")
-                all_u, filtered = await scroll_parser.parse()
+                all_u, filtered = await self._run_parse_phase(scroll_parser)
                 for u in all_u:
                     await self._memory.upsert_user(u)
-                self.log_msg.emit(f"📜 Found {len(all_u)} users, {len(filtered)} passed criteria")
-            # Phase 2: get queue
+                self.log_msg.emit(
+                    f"📜 Parsed {len(all_u)} users, {len(filtered)} passed criteria")
+            # Phase 2: build queue
             queue = await self._memory.get_queue()
             has_skip = any(b.block_id == "CONDITIONAL_SKIP" for b in self._stack)
-            self.log_msg.emit(f"▶ Running stack on {len(queue)} users")
-            # Phase 3: execute loop
+            if has_scroll and scroll_parser and not queue:
+                self.log_msg.emit("⚠ No users in queue — nothing to run", "warn")
+            else:
+                self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
+            # Phase 3: per-user execution
             for user in queue:
                 if self._stop_requested:
-                    self.log_msg.emit("⏹ Stack stopped by user")
+                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                    self._tracer.note({"type": "run_end", "reason": "stopped"})
                     break
-                while self._paused:
-                    await asyncio.sleep(0.2)
-                    if self._stop_requested:
-                        break
+                await self._wait_if_paused()
                 if self._stop_requested:
+                    self._tracer.note({"type": "run_end", "reason": "stopped"})
                     break
-                success = await self._execute_for_user(user, has_skip)
-                if success:
+                ok = await self._execute_for_user(user, has_skip)
+                if ok:
                     await self._memory.mark_messaged(user.nick)
-                self.user_complete.emit(user.nick, success)
+                self.user_complete.emit(user.nick, ok)
+            else:
+                self._tracer.note({"type": "run_end", "reason": "completed"})
         except Exception as exc:
             log.error("Stack execution error: %s", exc, exc_info=True)
             self.log_msg.emit(f"❌ Error: {exc}")
+            self.debug_msg.emit(f"❌ Fatal error: {exc}", "error")
+            if self._tracer:
+                self._tracer.note({"type": "run_end", "reason": "exception",
+                                   "error": str(exc)})
         finally:
+            if self._tracer:
+                self._tracer.close()
+                self._tracer = None
             self._running = False
+            self._ctx = {}
             self.stack_complete.emit()
             self.log_msg.emit("✅ Stack execution complete")
+
+    async def _wait_if_paused(self) -> None:
+        while self._paused and not self._stop_requested:
+            await asyncio.sleep(0.2)
+
+    async def _run_parse_phase(self, sp: ScrollParser) -> tuple[list, list]:
+        self.log_msg.emit("📜 Starting user parse (SCROLL_PARSE step)...")
+        self._tracer.note({"type": "phase", "phase": "parse"})
+
+        def progress(scroll_i: int, total: int, new_count: int) -> None:
+            self._tracer.note({"type": "scroll", "scroll": scroll_i,
+                               "total_users": total, "new": new_count,
+                               "phase": "parse"})
+
+        def parse_log(message: str, level: str = "info") -> None:
+            self.debug_msg.emit("      " + message, norm_level(level))
+            self._tracer.note({"type": "detail", "level": norm_level(level),
+                               "message": message, "phase": "parse"})
+
+        sp.set_log_cb(parse_log)
+        all_u, filtered = await sp.parse(progress_cb=progress)
+        return all_u, filtered
 
     async def _execute_for_user(self, user: UserRecord, has_skip: bool) -> bool:
         """Execute all blocks for one user."""
         if user.messaged and has_skip:
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return False
-        for block in self._stack:
+        total = len(self._stack)
+        for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
                 return False
-            while self._paused:
-                await asyncio.sleep(0.2)
+            await self._wait_if_paused()
             if block.block_id == "CONDITIONAL_SKIP":
                 if user.messaged:
-                    self.log_msg.emit(f"⏭ Conditional skip: {user.nick}")
+                    self.debug_msg.emit(
+                        f"      ⏭ Conditional skip: {user.nick} already messaged",
+                        "warn")
+                    self._tracer.note({"type": "user_skip", "nick": user.nick})
                     return False
                 continue
             if block.block_id == "SCROLL_PARSE":
-                continue  # already handled above
+                continue  # already handled in parse phase
+            self._ctx = {"step": idx, "total_steps": total,
+                         "block_id": block.block_id, "block_name": block.name,
+                         "user": user.nick}
+            self.step_started.emit(idx, block.block_id, user.nick)
+            started = time.monotonic()
+            self.debug_msg.emit(
+                f"▶▶ Step {idx}/{total} [{block.icon}] {block.name} — user: {user.nick}",
+                "info")
+            self._tracer.note({"type": "step_start", **self._ctx})
             try:
-                result = await block.execute(user.nick, self._cdp)
-                self.step_complete.emit(block.name, user.nick)
-                self.log_msg.emit(f"  {block.icon} {block.name} → {result}")
-                if result == ActionResult.FAIL:
-                    self.log_msg.emit(f"  ❌ Block failed for {user.nick}")
-                    return False
+                result = await block.execute(user.nick, self._cdp, self)
             except Exception as exc:
-                self.log_msg.emit(f"  ❌ {block.name} error: {exc}")
+                log.exception("Block error")
+                self._tracer.note({"type": "step_end", "status": "exception",
+                                   "error": str(exc), **self._ctx})
+                self.debug_msg.emit(f"      ❌ {block.name} raised: {exc}", "error")
+                self.step_complete.emit(block.name, user.nick)
+                self._ctx = {}
                 return False
-        self.log_msg.emit(f"✅ Message sent to {user.nick}")
+            elapsed = time.monotonic() - started
+            if result == ActionResult.OK:
+                status = "ok"
+                self.debug_msg.emit(f"      ✓ Step {idx} OK ({elapsed:.2f}s)", "success")
+                self._tracer.note({"type": "step_end", "status": "ok",
+                                   "duration_s": round(elapsed, 3), **self._ctx})
+                self.step_complete.emit(block.name, user.nick)
+            elif result == ActionResult.SKIP:
+                self.debug_msg.emit(f"      ⏭ Step {idx} skipped", "warn")
+                self._tracer.note({"type": "step_end", "status": "skip", **self._ctx})
+                self.step_complete.emit(block.name, user.nick)
+                self._ctx = {}
+                return False
+            else:
+                self.debug_msg.emit(
+                    f"      ✗ Step {idx} FAILED after {elapsed:.2f}s — stopping this user",
+                    "error")
+                self._tracer.note({"type": "step_end", "status": "fail",
+                                   "duration_s": round(elapsed, 3), **self._ctx})
+                self.step_complete.emit(block.name, user.nick)
+                self._ctx = {}
+                return False
+            self._ctx = {}
+        self.debug_msg.emit(f"      ✅ All steps done for {user.nick}", "success")
         return True

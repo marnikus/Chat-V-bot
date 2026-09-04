@@ -30,6 +30,19 @@
     </div>
   </header>
 
+  <!-- URL PRESET TOOLBAR (FEATURE #2) -->
+  <div class="url-toolbar" id="urlToolbar">
+    <span class="url-toolbar-label" title="URL Parse Preset — matches the URL against open Chrome tabs and connects to the best one"><span class="material-icons">language</span> URL Presets</span>
+    <input id="urlInput" type="text" spellcheck="false"
+           placeholder="Paste URL or keyword — e.g. https://ru.virt-chat.com/chat"
+           autocomplete="off">
+    <button id="urlConnectBtn" class="btn-primary btn-compact"
+            title="Parse the URL / keyword, find the matching tab and connect to it">
+      <span class="material-icons">link</span> Auto-Connect</button>
+    <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a preset chip"><span class="material-icons">add</span></button>
+    <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
+  </div>
+
   <!-- MAIN CONTENT -->
   <div class="main-content">
     <!-- LEFT SIDEBAR -->
@@ -58,13 +71,21 @@
           <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
           <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
           <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
-          <button id="saveStackBtn" class="btn-icon-sm" title="Save stack"><span class="material-icons">save</span></button>
-          <button id="loadStackBtn" class="btn-icon-sm" title="Load stack"><span class="material-icons">folder_open</span></button>
+          <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
+          <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
         </h3>
+        <!-- Saved preset chips: click to load (BUG #1) -->
+        <div class="preset-row">
+          <span class="preset-row-label">Saved presets</span>
+          <div id="presetChips" class="chip-wrap">
+            <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
+          </div>
+        </div>
         <div id="stackList" class="stack-list">
           <div class="stack-empty">Drag blocks here or click + to add</div>
         </div>
         <div id="addBlockMenu" class="add-block-menu hidden"></div>
+        <div id="presetPicker" class="preset-picker hidden"></div>
       </div>
 
       <!-- BLOCK CONFIG EDITOR -->
@@ -88,10 +109,18 @@
           <div class="var-item" data-var="{{date}}">{{date}}</div>
         </div>
         <button id="saveTemplateBtn" class="btn-small">Save Template</button>
-        <button id="loadTemplateBtn" class="btn-small">Load Template</button>
+        <button id="loadTemplateBtn" class="btn-small">Load Template ▾</button>
         <span class="spacer"></span>
         <span id="charCount">0 / 1000</span>
       </div>
+      <!-- Saved message-template chips -->
+      <div class="preset-row template-row">
+        <span class="preset-row-label">Templates</span>
+        <div id="templateChips" class="chip-wrap">
+          <span class="preset-row-empty">none yet — click “Save Template”</span>
+        </div>
+      </div>
+      <div id="templatePicker" class="preset-picker hidden"></div>
     </div>
   </div>
 
@@ -114,7 +143,10 @@
       </div>
     </div>
     <div class="panel log-panel">
-      <h3><span class="material-icons">terminal</span> Log Console</h3>
+      <h3><span class="material-icons">terminal</span> Log Console
+        <span class="spacer"></span>
+        <button id="clearLogBtn" class="btn-small" title="Clear console">Clear</button>
+      </h3>
       <div id="logConsole" class="log-console"></div>
     </div>
   </div>
@@ -144,11 +176,38 @@
   </div>
 </div>
 
+<!-- NAME MODAL (Qt WebEngine does not reliably support prompt()) -->
+<div id="nameModal" class="modal hidden">
+  <div class="modal-content name-modal">
+    <h3 id="nameModalTitle">Preset name</h3>
+    <input id="nameModalInput" type="text" maxlength="80" spellcheck="false"
+           placeholder="Enter a name…" autocomplete="off">
+    <div class="modal-actions">
+      <button id="nameModalOk" class="btn-primary">Save</button>
+      <button id="nameModalCancel" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL (Qt WebEngine does not reliably support confirm()) -->
+<div id="confirmModal" class="modal hidden">
+  <div class="modal-content name-modal">
+    <h3 id="confirmModalTitle">Confirm</h3>
+    <div id="confirmModalText" class="confirm-text"></div>
+    <div class="modal-actions">
+      <button id="confirmModalYes" class="btn-danger btn-danger-solid">Delete</button>
+      <button id="confirmModalNo" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/app.js"></script>
 <script src="js/user-table.js"></script>
 <script src="js/stack-dnd.js"></script>
-<script src="js/criteria-editor.js"></script>
+<script src="js/presets-ui.js"></script>
 <script src="js/composer.js"></script>
+<script src="js/url-toolbar.js"></script>
+<script src="js/criteria-editor.js"></script>
 <script src="js/log-console.js"></script>
 </body>
 </html>

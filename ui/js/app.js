@@ -27,7 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   setupHeader();
-  if (App.bridge) setupBridgeListeners();
+  document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
+  if (App.bridge) {
+    setupBridgeListeners();
+    // initial data pull after backend is live
+    StackDnD.refreshPresets();
+    PresetsUI.refreshAll();
+    UrlToolbar.refresh();
+  }
 }
 
 // ── Header: tabs + connect ────────────────────────────────────
@@ -73,8 +80,18 @@ function setupBridgeListeners() {
     const dot = document.getElementById('connectionStatus');
     dot.className = 'status-dot ' + status;
     dot.title = status.charAt(0).toUpperCase() + status.slice(1);
-    if (status === 'connected') LogConsole.log('🔗 Connected to Chrome', 'success');
-    else if (status === 'disconnected') LogConsole.log('🔴 Disconnected', 'error');
+    if (status === 'connected') {
+      LogConsole.log('🔗 Connected to Chrome tab', 'success');
+      // remember the connected tab URL in the URL field (FEATURE #2)
+      const sel = document.getElementById('tabSelect');
+      if (sel && sel.selectedOptions.length && sel.selectedOptions[0].value) {
+        const m = (sel.selectedOptions[0].textContent || '').match(/—\s*(\S+)\s*$/);
+        const input = document.getElementById('urlInput');
+        if (m && input) input.value = m[1];
+      }
+    } else if (status === 'disconnected') {
+      LogConsole.log('🔴 Disconnected', 'error');
+    }
   });
 
   b.users_updated.connect((json) => {
@@ -93,16 +110,24 @@ function setupBridgeListeners() {
     LogConsole.log(msg, level);
   });
 
+  // debugger: highlight the currently running block in the stack
+  b.step_started.connect((idx, blockId, nick) => {
+    StackDnD.setRunningBlock(idx - 1);
+  });
+
   b.step_complete.connect((block, nick) => {
-    // highlight active step in stack
+    // (log lines for each step are streamed via log_message)
   });
 
   b.stack_complete.connect(() => {
-    document.getElementById('runBtn').disabled = false;
-    document.getElementById('pauseBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = true;
     StackDnD.setRunning(false);
   });
+
+  // presets & templates live updates (BUG #1)
+  b.preset_list_updated.connect((json) => PresetsUI.setStackPresets(json));
+  b.template_list_updated.connect((json) => PresetsUI.setTemplatePresets(json));
+  b.url_presets_updated.connect((json) => UrlToolbar.setPresets(json));
+  b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
 
   // Load initial criteria display
   b.get_criteria((json) => {

@@ -55,7 +55,7 @@ const CriteriaEditor = {
           <span class="material-icons" style="font-size:14px;color:var(--red)">delete</span>
         </button>
       </div>
-    `).join('') + `<button class="btn-small" style="margin-top:8px" onclick="CriteriaEditor addCriterion()">+ Add Criterion</button>`;
+    `).join('') + `<button class="btn-small" style="margin-top:8px" onclick="CriteriaEditor.addCriterion()">+ Add Criterion</button>`;
   },
 
   addCriterion() {

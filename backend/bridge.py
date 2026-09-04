@@ -1,42 +1,66 @@
 """QWebChannel bridge: routes calls between JS and Python backend."""
-import asyncio, json, logging
+
+import asyncio
+import json
+import logging
 from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine
 from backend.config_manager import ConfigManager
+from backend.preset_store import PresetStore
+from backend.tab_matcher import best_matches
+
 log = logging.getLogger("chatbot")
 
 
 class Bridge(QObject):
     users_updated = Signal(str)
     step_complete = Signal(str, str)
+    step_started = Signal(int, str, str)     # index, block_id, user_nick
     stack_complete = Signal()
-    log_message = Signal(str, str)
+    log_message = Signal(str, str)           # message, level
     connection_status = Signal(str)
     stats_updated = Signal(str)
     tabs_received = Signal(str)
+    preset_list_updated = Signal(str)        # JSON: stack presets
+    template_list_updated = Signal(str)      # JSON: template presets
+    url_presets_updated = Signal(str)        # JSON: url preset list
+    tab_match_result = Signal(str, str)      # query, JSON matches
+    stack_loaded = Signal(str, str)          # name, JSON blocks
+    template_loaded = Signal(str, str)       # name, body
 
-    def __init__(self, cdp, memory, criteria, engine, config, parent=None):
+    def __init__(self, cdp, memory, criteria, engine, config,
+                 presets: PresetStore | None = None, parent=None):
         super().__init__(parent)
         self._cdp, self._memory = cdp, memory
         self._criteria, self._engine = criteria, engine
         self._config, self._message_text = config, ""
+        self._presets = presets or PresetStore()
         self._cdp.connected.connect(lambda: self.connection_status.emit("connected"))
         self._cdp.disconnected.connect(lambda: self.connection_status.emit("disconnected"))
         self._cdp.error.connect(lambda e: self.connection_status.emit("error"))
         self._engine.step_complete.connect(self.step_complete.emit)
+        self._engine.step_started.connect(self.step_started.emit)
         self._engine.stack_complete.connect(self.stack_complete.emit)
         self._engine.log_msg.connect(lambda m: self.log_message.emit(m, "info"))
+        self._engine.debug_msg.connect(lambda m, l: self.log_message.emit(m, l))
 
+    # ── tab discovery / connection ───────────────────────────────
     @Slot(result=str)
     def get_tabs(self):
         asyncio.ensure_future(self._fetch_tabs()); return "pending"
 
     async def _fetch_tabs(self):
-        tabs = await self._cdp.fetch_tabs()
-        self.tabs_received.emit(json.dumps([{"id":t.id,"title":t.title,"url":t.url,"ws_url":t.ws_url} for t in tabs], ensure_ascii=False))
+        try:
+            tabs = await self._cdp.fetch_tabs()
+            self.tabs_received.emit(json.dumps(
+                [{"id": t.id, "title": t.title, "url": t.url, "ws_url": t.ws_url}
+                 for t in tabs], ensure_ascii=False))
+        except Exception as exc:
+            log.error("Tab fetch failed: %s", exc)
+            self.log_message.emit(f"❌ Tab discovery failed: {exc}", "error")
 
     @Slot(str)
     def connect_tab(self, ws_url):
@@ -44,21 +68,78 @@ class Bridge(QObject):
 
     async def _do_connect(self, ws_url):
         if await self._cdp.connect(ws_url):
-            self.log_message.emit("🔗 Connected", "info"); await self._refresh_users()
+            self.log_message.emit("🔗 Connected", "info")
+            await self._refresh_users()
 
+    # ── URL parse preset: match query against open tabs & connect ─
+    @Slot(str)
+    def find_tab_by_url(self, query):
+        asyncio.ensure_future(self._find_tab_by_url(query))
+
+    async def _find_tab_by_url(self, query):
+        query = (query or "").strip()
+        if not query:
+            self.log_message.emit("⚠ URL field is empty — enter a URL or keyword",
+                                  "warn")
+            self.tab_match_result.emit(query, "[]")
+            return
+        self.log_message.emit(f"🔍 URL preset: parsing “{query}” against open tabs…",
+                              "info")
+        try:
+            tabs = await self._cdp.fetch_tabs()
+        except Exception as exc:
+            self.log_message.emit(f"❌ Tab discovery failed: {exc}", "error")
+            self.tab_match_result.emit(query, "[]")
+            return
+        if not tabs:
+            self.log_message.emit("⚠ No Chrome tabs found — is Chrome running with "
+                                  "--remote-debugging-port=9222?", "warn")
+            self.tab_match_result.emit(query, "[]")
+            return
+        matches = best_matches(query, [t.__dict__ for t in tabs])
+        if not matches:
+            self.log_message.emit(
+                f"❌ No open tab matches “{query}”. Available: "
+                + "; ".join(f"{t.title} — {t.url}" for t in tabs[:5])
+                + ("…" if len(tabs) > 5 else ""), "error")
+            self.tab_match_result.emit(query, "[]")
+            return
+        kind_names = {"url_exact": "exact URL", "url_path": "URL path",
+                      "host": "host", "keyword": "keyword"}
+        for m in matches[:3]:
+            self.log_message.emit(
+                f"  · match ({kind_names.get(m['kind'], m['kind'])}): "
+                f"{m['title']} — {m['url']}", "success")
+        # feed the full tab list so the select can be re-populated too
+        self.tabs_received.emit(json.dumps(
+            [{"id": t.id, "title": t.title, "url": t.url, "ws_url": t.ws_url}
+             for t in tabs], ensure_ascii=False))
+        self.tab_match_result.emit(query, json.dumps(matches, ensure_ascii=False))
+
+    # ── run / pause / stop ───────────────────────────────────────
     @Slot(str)
     def run_stack(self, stack_json):
-        if self._engine.is_running: self.log_message.emit("⚠ Already running","warn"); return
-        try: blocks = json.loads(stack_json); self._engine.load_stack(blocks)
-        except json.JSONDecodeError: self.log_message.emit("❌ Bad JSON","error"); return
+        if self._engine.is_running:
+            self.log_message.emit("⚠ Already running", "warn"); return
+        try:
+            blocks = json.loads(stack_json)
+            self._engine.load_stack(blocks)
+        except json.JSONDecodeError:
+            self.log_message.emit("❌ Bad JSON", "error"); return
         from backend.scroll_parser import ScrollParser
-        sp = ScrollParser(cdp=self._cdp, criteria=self._criteria,
-            viewport_sel=self._config.get("scroll","viewport_selector",
+        # honor the SCROLL_PARSE block's own settings when present
+        scroll_cfg = next((b for b in blocks
+                           if b.get("block_id") == "SCROLL_PARSE"), {})
+        sp = ScrollParser(
+            cdp=self._cdp, criteria=self._criteria,
+            viewport_sel=self._config.get("scroll", "viewport_selector",
                 default="cdk-virtual-scroll-viewport.users-list-viewport"),
-            scroll_dy=self._config.get("scroll","scroll_delta_y",default=300),
-            pause_ms=self._config.get("scroll","scroll_pause_ms",default=800),
-            stall_threshold=self._config.get("scroll","stall_threshold",default=3),
-            max_scrolls=self._config.get("scroll","max_scrolls",default=50))
+            scroll_dy=self._config.get("scroll", "scroll_delta_y", default=300),
+            pause_ms=int(scroll_cfg.get("scroll_pause_ms") or
+                self._config.get("scroll", "scroll_pause_ms", default=800)),
+            stall_threshold=self._config.get("scroll", "stall_threshold", default=3),
+            max_scrolls=int(scroll_cfg.get("max_scrolls") or
+                self._config.get("scroll", "max_scrolls", default=50)))
         asyncio.ensure_future(self._engine.execute(sp))
 
     @Slot()
@@ -68,18 +149,22 @@ class Bridge(QObject):
     @Slot()
     def resume_stack(self): self._engine.resume()
 
+    # ── message composer ─────────────────────────────────────────
     @Slot(str)
     def save_message(self, text): self._message_text = text
     @Slot(result=str)
     def get_message(self): return self._message_text
 
+    # ── criteria ─────────────────────────────────────────────────
     @Slot(str)
     def save_criteria(self, j):
-        self._criteria.load_json(j); self.log_message.emit("💾 Criteria saved","info")
+        self._criteria.load_json(j)
+        self.log_message.emit("💾 Criteria saved", "info")
 
     @Slot(result=str)
     def get_criteria(self): return self._criteria.to_json()
 
+    # ── user memory ──────────────────────────────────────────────
     @Slot()
     def reset_messaged(self): asyncio.ensure_future(self._do_reset())
     @Slot()
@@ -87,12 +172,15 @@ class Bridge(QObject):
 
     async def _do_reset(self):
         c = await self._memory.reset_messaged()
-        self.log_message.emit(f"🔄 Reset {c} users","info"); await self._refresh_users()
+        self.log_message.emit(f"🔄 Reset {c} users", "info")
+        await self._refresh_users()
 
     async def _do_clear(self):
         c = await self._memory.clear_all()
-        self.log_message.emit(f"🗑 Cleared {c} users","warn"); await self._refresh_users()
+        self.log_message.emit(f"🗑 Cleared {c} users", "warn")
+        await self._refresh_users()
 
+    # ── settings ─────────────────────────────────────────────────
     @Slot(result=str)
     def get_settings(self): return self._config.to_dict()
 
@@ -101,38 +189,155 @@ class Bridge(QObject):
         try:
             for sec, vals in json.loads(j).items():
                 if isinstance(vals, dict):
-                    for k, v in vals.items(): self._config.set(sec, k, v)
-            self._config.save(); self.log_message.emit("💾 Settings saved","info")
-        except Exception as e: self.log_message.emit(f"❌ Settings error: {e}","error")
+                    for k, v in vals.items():
+                        self._config.set(sec, k, v)
+            self._config.save()
+            self.log_message.emit("💾 Settings saved", "info")
+        except Exception as e:
+            self.log_message.emit(f"❌ Settings error: {e}", "error")
 
-    @Slot(str)
-    def save_stack_preset(self, name): asyncio.ensure_future(self._save_preset(name))
-    @Slot(str)
-    def load_stack_preset(self, name): asyncio.ensure_future(self._load_preset(name))
+    # ── stack presets (BUG #1) ───────────────────────────────────
+    @Slot(str, str)
+    def save_stack_preset(self, name, stack_json):
+        """Save the FULL action stack received from the UI."""
+        try:
+            blocks = json.loads(stack_json or "[]")
+        except json.JSONDecodeError:
+            self.log_message.emit("❌ Preset save aborted: stack is not valid JSON",
+                                  "error")
+            return
+        try:
+            self._presets.save_stack(name, blocks)
+        except Exception as exc:
+            self.log_message.emit(f"❌ Preset save failed: {exc}", "error")
+            return
+        self._emit_presets()
+        self.log_message.emit(
+            f"💾 Preset “{name}” saved ({len(blocks)} block(s)) — reload anytime "
+            f"from the preset chips", "success")
+
+    @Slot(str, result=str)
+    def load_stack_preset(self, name):
+        """Return the stored stack JSON and load it into the engine."""
+        blocks = self._presets.load_stack(name)
+        if blocks is None:
+            self.log_message.emit(f"❌ Preset “{name}” not found", "error")
+            return "null"
+        self._engine.load_stack(blocks)
+        payload = json.dumps(blocks, ensure_ascii=False)
+        self.stack_loaded.emit(name, payload)
+        self.log_message.emit(f"📂 Preset “{name}” loaded — {len(blocks)} block(s) "
+                              "restored", "success")
+        return payload
+
     @Slot(result=str)
-    def get_stack_json(self): return json.dumps(self._engine.get_stack())
+    def list_stack_presets(self):
+        try:
+            return json.dumps(self._presets.list_stacks(), ensure_ascii=False)
+        except Exception as exc:
+            log.error("list presets failed: %s", exc)
+            return "[]"
 
-    async def _save_preset(self, name):
-        import aiosqlite
-        db = await aiosqlite.connect("chatbot.db")
-        await db.execute("CREATE TABLE IF NOT EXISTS stacks (id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "name TEXT UNIQUE,blocks TEXT,created_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
-        await db.execute("INSERT OR REPLACE INTO stacks(name,blocks) VALUES(?,?)",
-            (name, json.dumps(self._engine.get_stack(), ensure_ascii=False)))
-        await db.commit(); await db.close()
-        self.log_message.emit(f"💾 Preset saved: {name}","info")
+    @Slot(str)
+    def delete_stack_preset(self, name):
+        try:
+            if self._presets.delete_stack(name):
+                self._emit_presets()
+                self.log_message.emit(f"🗑 Preset “{name}” deleted", "warn")
+            else:
+                self.log_message.emit(f"⚠ Preset “{name}” not found", "warn")
+        except Exception as exc:
+            self.log_message.emit(f"❌ Preset delete failed: {exc}", "error")
 
-    async def _load_preset(self, name):
-        import aiosqlite
-        db = await aiosqlite.connect("chatbot.db")
-        cur = await db.execute("SELECT blocks FROM stacks WHERE name=?",(name,))
-        row = await cur.fetchone(); await db.close()
-        if row: self._engine.load_stack(json.loads(row[0])); self.log_message.emit(f"📂 Loaded: {name}","info")
+    def _emit_presets(self):
+        self.preset_list_updated.emit(
+            json.dumps(self._presets.list_stacks(), ensure_ascii=False))
 
+    # ── message template presets ─────────────────────────────────
+    @Slot(str, str)
+    def save_template_preset(self, name, body):
+        try:
+            self._presets.save_template(name, body or "")
+        except Exception as exc:
+            self.log_message.emit(f"❌ Template save failed: {exc}", "error")
+            return
+        self._emit_templates()
+        self.log_message.emit(f"💾 Template “{name}” saved", "success")
+
+    @Slot(str, result=str)
+    def load_template_preset(self, name):
+        body = self._presets.load_template(name)
+        if body is None:
+            self.log_message.emit(f"❌ Template “{name}” not found", "error")
+            return ""
+        self.template_loaded.emit(name, body)
+        self.log_message.emit(f"📂 Template “{name}” loaded", "success")
+        return body
+
+    @Slot(result=str)
+    def list_template_presets(self):
+        try:
+            return json.dumps(self._presets.list_templates(), ensure_ascii=False)
+        except Exception as exc:
+            log.error("list templates failed: %s", exc)
+            return "[]"
+
+    @Slot(str)
+    def delete_template_preset(self, name):
+        try:
+            if self._presets.delete_template(name):
+                self._emit_templates()
+                self.log_message.emit(f"🗑 Template “{name}” deleted", "warn")
+        except Exception as exc:
+            self.log_message.emit(f"❌ Template delete failed: {exc}", "error")
+
+    def _emit_templates(self):
+        self.template_list_updated.emit(
+            json.dumps(self._presets.list_templates(), ensure_ascii=False))
+
+    # ── URL presets (FEATURE #2) ─────────────────────────────────
+    @Slot(result=str)
+    def get_url_presets(self):
+        return json.dumps(list(self._config.get("url_presets", default=[])),
+                          ensure_ascii=False)
+
+    @Slot(str)
+    def add_url_preset(self, url):
+        url = (url or "").strip()
+        if not url:
+            self.log_message.emit("⚠ URL field is empty — nothing added", "warn")
+            return
+        presets = list(self._config.get("url_presets", default=[]))
+        if url not in presets:
+            presets.append(url)
+            self._config.set("url_presets", presets)
+            self._config.save()
+            self.log_message.emit(f"💾 URL preset added: {url}", "success")
+        else:
+            self.log_message.emit(f"ℹ URL preset already exists: {url}", "info")
+        self.url_presets_updated.emit(json.dumps(presets, ensure_ascii=False))
+
+    @Slot(str)
+    def remove_url_preset(self, url):
+        presets = list(self._config.get("url_presets", default=[]))
+        if url in presets:
+            presets.remove(url)
+            self._config.set("url_presets", presets)
+            self._config.save()
+            self.log_message.emit(f"🗑 URL preset removed: {url}", "warn")
+        self.url_presets_updated.emit(json.dumps(presets, ensure_ascii=False))
+
+    # ── engine current stack (compat helper) ─────────────────────
+    @Slot(result=str)
+    def get_stack_json(self):
+        return json.dumps(self._engine.get_stack(), ensure_ascii=False)
+
+    # ── user list refresh ────────────────────────────────────────
     async def _refresh_users(self):
         users = await self._memory.get_all()
-        self.users_updated.emit(json.dumps([{"nick":u.nick,"gender":u.gender,
-            "registered":u.registered,"anonymous":u.anonymous,"guest":u.guest,
-            "messaged":u.messaged,"first_seen":u.first_seen,"last_messaged":u.last_messaged}
-            for u in users], ensure_ascii=False))
+        self.users_updated.emit(json.dumps(
+            [{"nick": u.nick, "gender": u.gender, "registered": u.registered,
+              "anonymous": u.anonymous, "guest": u.guest, "messaged": u.messaged,
+              "first_seen": u.first_seen, "last_messaged": u.last_messaged}
+             for u in users], ensure_ascii=False))
         self.stats_updated.emit(json.dumps(await self._memory.get_stats()))

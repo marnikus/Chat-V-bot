@@ -89,6 +89,24 @@ Drag blocks from the **+ Add** menu into the stack area, or click them to add:
 Click on any block in the stack to open its **config panel** on the right.
 Each block has its own settings (selectors, text, delays, etc.).
 
+### Save / Load Presets (full action stack)
+- **💾 Save** — name the preset and the **complete stack** (block order + every
+  block setting) is stored in `chatbot.db`.
+- Every saved preset appears as a small **chip** under "Saved presets" and in
+  the **folder picker list** — click either to load it back. Chips survive an
+  app restart (close → reopen → click chip → full stack restored).
+- **Save Template / Load Template ▾** work the same way for message templates.
+- Deletion is confirmed through an in-app dialog (no browser dialogs needed).
+
+### URL Presets (auto-connect by URL)
+The toolbar below the header holds a **URL field** and quick-connect presets:
+1. Paste a URL or keyword (e.g. `https://ru.virt-chat.com/chat`) or click a chip.
+2. Click **Auto-Connect** — the app parses the URL, matches it against every
+   open Chrome tab (exact URL → path → host → keyword) and **automatically
+   selects and connects** to the best match.
+3. Press **+** to store the current URL as a new preset chip, **×** on a chip
+   to remove it.
+
 ### Message Composer
 Type your message in the bottom composer area. Use `{{nick}}` to insert the
 user's nickname automatically.
@@ -98,15 +116,25 @@ Click the ✏️ edit button in the Filters sidebar to set criteria:
 - **MUST HAVE** — only message users matching these classes (e.g. `registered`)
 - **MUST NOT HAVE** — skip users with these classes (e.g. `guest`, `anonymous`)
 
-### Run
+### Run & Debugger
 1. Click **▶ Run** in the stack header
 2. The app will parse users → filter by criteria → execute the stack for each user
-3. Use **⏸ Pause** and **⏹ Stop** at any time
-4. Progress is shown in the **Log Console** at the bottom
+3. Use **⏸ Pause** (click again to resume) and **⏹ Stop** at any time
 
-### Save / Load
-- **Save Stack** / **Load Stack** — save and restore action stack presets
-- **Save Template** / **Load Template** — save and restore message templates
+The **Log Console** is a live step-by-step debugger for every block:
+- element searches: how many nodes matched and whether the element was **found**
+  (e.g. `✅ Tab found: "Гостиная"`) or **not** (`❌ Failed to find element: …`
+  with a candidate list when available)
+- whether the found element was **clickable** (visible / disabled checks) and
+  whether the click actually happened
+- per-step status (`✓ Step 3 OK (0.42s)` / `✗ Step 3 FAILED …`) and which block
+  is currently executing (highlighted green in the stack)
+- a JSONL run trace for every run is written to
+  `logs/run_trace_<timestamp>.jsonl` (path announced in the console)
+
+### Debugging & logs
+- Daily logs: `logs/YYYY-MM-DD.log` (Python logging)
+- Per-run trace: `logs/run_trace_<timestamp>.jsonl` (step-by-step JSON records)
 
 ---
 
@@ -125,6 +153,9 @@ Click the ✏️ edit button in the Filters sidebar to set criteria:
 │   ├── message_injector.py  # Message typing via CDP
 │   ├── media_handler.py     # Image attachment via CDP
 │   ├── config_manager.py    # JSON settings manager
+│   ├── preset_store.py      # SQLite stack/template preset store
+│   ├── dom_probe.py         # DOM probe JS + result interpreter (debugger)
+│   ├── tab_matcher.py       # URL → tab matching (URL presets)
 │   └── logger.py            # File + console logging
 ├── actions/
 │   ├── base_action.py       # Action base class + registry

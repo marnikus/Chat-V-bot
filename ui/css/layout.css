@@ -217,3 +217,118 @@ button:disabled { opacity: .35; cursor: default; }
 .modal-actions { display: flex; gap: var(--gap-sm); justify-content: flex-end; margin-top: var(--gap-lg); }
 
 .hidden { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   URL Preset toolbar (FEATURE #2) + preset chips / pickers
+   ═══════════════════════════════════════════════════════════════ */
+.url-toolbar {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  padding: 6px var(--gap-lg);
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.url-toolbar-label {
+  display: flex; align-items: center; gap: var(--gap-xs);
+  color: var(--text-secondary); font-size: var(--font-size-sm);
+  font-weight: 600; letter-spacing: .3px; white-space: nowrap;
+}
+.url-toolbar-label .material-icons { font-size: 14px; color: var(--accent); }
+#urlInput {
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 5px 10px; font-size: var(--font-size-sm);
+  min-width: 260px; width: 320px; outline: none;
+  font-family: var(--font-mono);
+}
+#urlInput:focus { border-color: var(--border-focus); }
+#urlInput::placeholder { color: var(--text-muted); }
+.btn-compact { padding: 5px 12px; font-size: var(--font-size-sm); }
+
+/* chip rows */
+.preset-row {
+  display: flex; align-items: flex-start; gap: var(--gap-sm);
+  margin: 0 0 var(--gap-sm);
+}
+.preset-row-label {
+  flex-shrink: 0; font-size: var(--font-size-xs);
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: .5px; padding-top: 4px; min-width: 86px;
+}
+.chip-wrap {
+  display: flex; flex-wrap: wrap; gap: var(--gap-xs);
+  align-items: center; min-height: 18px; flex: 1;
+}
+.chip-wrap-inline { margin-left: var(--gap-xs); }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px;
+  font-size: var(--font-size-xs); color: var(--text-primary);
+  cursor: pointer; transition: background .15s, border-color .15s;
+  max-width: 240px; white-space: nowrap;
+}
+.chip:hover { background: var(--bg-card-hover); border-color: var(--border-focus); }
+.chip .chip-title { overflow: hidden; text-overflow: ellipsis; }
+.chip .chip-meta { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.chip .chip-x {
+  color: var(--text-muted); cursor: pointer; font-weight: 700;
+  padding: 0 0 0 4px; line-height: 1;
+}
+.chip .chip-x:hover { color: var(--red); }
+.preset-row-empty { color: var(--text-muted); font-size: var(--font-size-xs); font-style: italic; }
+.template-row { margin-top: 2px; }
+
+/* preset picker dropdowns */
+.preset-picker {
+  position: absolute; z-index: 90;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  min-width: 320px; max-width: 460px; max-height: 300px;
+  overflow-y: auto; padding: var(--gap-xs);
+}
+.preset-picker .picker-title {
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  padding: 6px 10px;
+}
+.preset-picker-row {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  padding: 6px 10px; border-radius: var(--radius-sm);
+}
+.preset-picker-row:hover { background: var(--bg-card-hover); }
+.preset-picker-row .pp-name {
+  flex: 1; font-size: var(--font-size-sm); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preset-picker-row .pp-meta {
+  color: var(--text-muted); font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.preset-picker .pp-load {
+  background: var(--green-dim); color: var(--green);
+  border-radius: var(--radius-sm); padding: 3px 10px;
+  font-size: var(--font-size-xs); cursor: pointer;
+}
+.preset-picker .pp-load:hover { background: #1f4a30; }
+.preset-picker .pp-del {
+  color: var(--text-muted); cursor: pointer; padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.preset-picker .pp-del:hover { color: var(--red); background: var(--red-dim); }
+.preset-picker .pp-empty { color: var(--text-muted); font-size: var(--font-size-sm); padding: 12px 10px; }
+
+/* — Name / confirm modals (replaces browser prompt/confirm in Qt) — */
+.name-modal { min-width: 380px; max-width: 420px; }
+.name-modal h3 { margin-bottom: var(--gap-md); }
+.name-modal #nameModalInput {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+  color: var(--text-primary); font-size: var(--font-size-md);
+  font-family: var(--font); outline: none;
+}
+.name-modal #nameModalInput:focus { border-color: var(--border-focus); }
+.confirm-text { color: var(--text-secondary); font-size: var(--font-size-md); line-height: 1.5; }
+.btn-danger-solid { background: var(--red-dim); color: var(--red); border-radius: var(--radius-sm); padding: 6px 14px; font-weight: 500; }
+.btn-danger-solid:hover { background: #4a1e1e; }

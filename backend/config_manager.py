@@ -28,6 +28,11 @@ DEFAULTS: dict[str, Any] = {
         "page_load_timeout_ms": 5000,
     },
     "ui": {"theme": "dark", "language": "ru"},
+    # URL presets shown as quick-connect chips in the URL toolbar
+    "url_presets": [
+        "https://ru.virt-chat.com/chat",
+        "https://ru.virt-chat.com/",
+    ],
 }
 
 

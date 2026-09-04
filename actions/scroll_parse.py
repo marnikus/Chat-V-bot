@@ -1,6 +1,11 @@
-"""Scroll & Parse Users action block — triggers the scroll parser."""
+"""Scroll & Parse Users action block — handled by the engine's parse phase.
+
+The block itself is a marker: the engine executes the ScrollParser once
+before the per-user loop and reports every scroll/probe step there.
+"""
 
 import logging
+from typing import Optional
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
 
@@ -18,9 +23,12 @@ class ScrollParse(BaseAction):
         self.max_scrolls = max_scrolls
         self.scroll_pause_ms = scroll_pause_ms
 
-    async def execute(self, user_nick: str, cdp: CDPClient) -> str:
-        await self.pre_delay()
-        # The actual scroll parsing is handled by ScrollParser in action_engine
+    async def execute(self, user_nick: str, cdp: CDPClient,
+                      engine: Optional[object] = None) -> str:
+        if engine:
+            engine.report(f"📜 SCROLL_PARSE (max={self.max_scrolls}, "
+                          f"pause={self.scroll_pause_ms} ms) — runs in parse phase",
+                          "info")
         log.info("Scroll parse block triggered (max=%d)", self.max_scrolls)
         return ActionResult.OK
 

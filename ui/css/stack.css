@@ -85,3 +85,14 @@
   border-color: var(--border-focus); outline: none;
 }
 .config-panel textarea { min-height: 60px; resize: vertical; }
+
+/* Running-step highlight (debugger) */
+.stack-item.block-running {
+  border-color: var(--green);
+  background: var(--green-dim);
+  box-shadow: 0 0 8px rgba(74, 222, 128, .25);
+}
+.stack-item.block-running .block-name::after {
+  content: ' ▶';
+  color: var(--green);
+}

@@ -40,6 +40,8 @@ const StackDnD = {
   selectedIdx: -1,
   _sortable: null,
   _running: false,
+  _runningIdx: -1,
+  _paused: false,
 
   init() {
     this._initDefaultStack();
@@ -75,7 +77,8 @@ const StackDnD = {
         .map(([k,v]) => `${k}=${String(v).substring(0,20)}`)
         .join(' · ') || `delay: ${b.pre_delay_ms||0}ms`;
       const sel = i === this.selectedIdx ? ' active' : '';
-      return `<div class="stack-item${sel}" data-idx="${i}">
+      const run = i === this._runningIdx && this._running ? ' block-running' : '';
+      return `<div class="stack-item${sel}${run}" data-idx="${i}">
         <span class="drag-handle">⠿</span>
         <span class="block-icon">${meta.icon}</span>
         <div class="block-info">
@@ -151,8 +154,10 @@ const StackDnD = {
 
   _setupButtons() {
     document.getElementById('runBtn').addEventListener('click', () => {
-      if (!App.bridge) return;
+      if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
       this._running = true;
+      this._runningIdx = -1;
+      this._paused = false;
       document.getElementById('runBtn').disabled = true;
       document.getElementById('pauseBtn').disabled = false;
       document.getElementById('stopBtn').disabled = false;
@@ -160,23 +165,96 @@ const StackDnD = {
       LogConsole.log('▶ Stack execution started', 'success');
     });
     document.getElementById('pauseBtn').addEventListener('click', () => {
-      if (App.bridge) App.bridge.pause_stack();
+      if (!App.bridge) return;
+      const btn = document.getElementById('pauseBtn');
+      if (this._paused) {
+        App.bridge.resume_stack();
+        this._paused = false;
+        btn.title = 'Pause';
+        btn.querySelector('.material-icons').textContent = 'pause';
+        LogConsole.log('▶ Resumed', 'success');
+      } else {
+        App.bridge.pause_stack();
+        this._paused = true;
+        btn.title = 'Resume';
+        btn.querySelector('.material-icons').textContent = 'play_arrow';
+        LogConsole.log('⏸ Paused — click again to resume', 'warn');
+      }
     });
     document.getElementById('stopBtn').addEventListener('click', () => {
       if (App.bridge) App.bridge.stop_stack();
     });
+
+    // BUG #1 fix: save the FULL visible stack (order + every setting)
     document.getElementById('saveStackBtn').addEventListener('click', () => {
-      const name = prompt('Stack preset name:');
-      if (name && App.bridge) App.bridge.save_stack_preset(name);
-    });
-    document.getElementById('loadStackBtn').addEventListener('click', () => {
-      const name = prompt('Load preset name:');
-      if (name && App.bridge) {
-        App.bridge.load_stack_preset(name);
-        setTimeout(() => App.bridge.get_stack_json((json) => {
-          try { this.stack = JSON.parse(json); this._renderStack(); } catch(e) {}
-        }), 300);
+      if (!this.stack.length) {
+        LogConsole.log('⚠ Stack is empty — nothing to save', 'warn');
+        return;
       }
+      if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+      PresetsUI.promptName('Save stack as preset', 'e.g. My Campaign',
+        'Save', (name) => {
+          App.bridge.save_stack_preset(name, JSON.stringify(this.stack));
+        });
+    });
+
+    // Load button opens the saved-presets picker list (small Load buttons)
+    document.getElementById('loadStackBtn').addEventListener('click', () => {
+      if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+      App.bridge.list_stack_presets((json) => {
+        PresetsUI.setStackPresets(json);
+        PresetsUI.toggleStackPicker(document.getElementById('loadStackBtn'));
+      });
+    });
+  },
+
+  // ── programmatic stack replacement (preset load) ─────────────
+  setStack(blocks) {
+    if (!Array.isArray(blocks)) return;
+    this.stack = blocks.map((b) => ({ ...b }));
+    this.selectedIdx = -1;
+    this._runningIdx = -1;
+    this._renderStack();
+    const panel = document.getElementById('blockConfigPanel');
+    if (panel) panel.classList.add('hidden');
+  },
+
+  refreshPresets() {
+    if (typeof PresetsUI !== 'undefined' && App.bridge) {
+      App.bridge.list_stack_presets((json) => PresetsUI.setStackPresets(json));
+    }
+  },
+
+  // ── run-state helpers (debugger highlight) ───────────────────
+  setRunning(val) {
+    this._running = val;
+    this._paused = false;
+    if (!val) this._runningIdx = -1;
+    this._renderStack();
+    if (!val) {
+      const runBtn = document.getElementById('runBtn');
+      if (runBtn) runBtn.disabled = false;
+      const pauseBtn = document.getElementById('pauseBtn');
+      if (pauseBtn) {
+        pauseBtn.disabled = true;
+        pauseBtn.title = 'Pause';
+        const ic = pauseBtn.querySelector('.material-icons');
+        if (ic) ic.textContent = 'pause';
+      }
+      const stopBtn = document.getElementById('stopBtn');
+      if (stopBtn) stopBtn.disabled = true;
+    }
+  },
+
+  setRunningBlock(idx) {
+    this._runningIdx = idx;
+    if (!this._running) this._running = true;
+    // toggle classes without a full re-render to keep DnD state
+    const list = document.getElementById('stackList');
+    if (!list) return;
+    list.querySelectorAll('.stack-item').forEach((el) => {
+      const i = parseInt(el.dataset.idx);
+      el.classList.toggle('block-running', i === idx && idx >= 0);
     });
   },
 
@@ -192,15 +270,6 @@ const StackDnD = {
     this._renderStack();
   },
 
-  setRunning(val) {
-    this._running = val;
-    if (!val) {
-      document.getElementById('runBtn').disabled = false;
-      document.getElementById('pauseBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = true;
-    }
-  },
-
   _showConfig(idx) {
     const panel = document.getElementById('blockConfigPanel');
     const form = document.getElementById('blockConfigForm');
@@ -214,9 +283,10 @@ const StackDnD = {
       if (key === 'block_id') continue;
       const inputType = typeof val === 'number' ? 'number' : 'text';
       const labelText = labels[key] || key;
+      const safeVal = String(val).replace(/"/g, '&quot;');
       form.innerHTML += `<div class="form-row">
         <label>${labelText}</label>
-        <input data-key="${key}" value="${val}" type="${inputType}">
+        <input data-key="${key}" value="${safeVal}" type="${inputType}">
       </div>`;
     }
     form.querySelectorAll('input[data-key]').forEach(inp => {

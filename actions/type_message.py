@@ -1,6 +1,7 @@
-"""Type a message into the chat textarea."""
+"""Type a message into the chat textarea (with debugger detail)."""
 
 import logging
+from typing import Optional
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
 from backend.message_injector import type_message
@@ -19,10 +20,12 @@ class TypeMessage(BaseAction):
         self.message = message
         self.typing_speed_ms = typing_speed_ms
 
-    async def execute(self, user_nick: str, cdp: CDPClient) -> str:
+    async def execute(self, user_nick: str, cdp: CDPClient,
+                      engine: Optional[object] = None) -> str:
         await self.pre_delay()
         text = self.message.replace("{{nick}}", user_nick)
-        ok = await type_message(cdp, text, self.typing_speed_ms)
+        report = engine.report if engine else None
+        ok = await type_message(cdp, text, self.typing_speed_ms, report)
         return ActionResult.OK if ok else ActionResult.FAIL
 
     def config_schema(self) -> dict:
