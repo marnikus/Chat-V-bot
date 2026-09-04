@@ -84,8 +84,12 @@ class Worker(QThread):
                 if name == "run":
                     await run_task.do_run(self, payload)
                 elif name == "test":
-                    from ..browser import connect as cdp
-                    self.emit_event("test_result", await cdp.test_connection(self.s))
+                    try:
+                        from ..browser import connect as cdp
+                        result = await cdp.test_connection(self.s)
+                    except Exception as e:  # noqa: BLE001 e.g. playwright missing
+                        result = {"ok": False, "error": f"test failed to run: {e}"}
+                    self.emit_event("test_result", result)
                 elif name == "stop":
                     self._on_stop()
                 elif name == "pause":

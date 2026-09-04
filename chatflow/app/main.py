@@ -36,6 +36,7 @@ def main() -> int:
     webview = ChatWebView()
     window = MainWindow(webview, sv)
     channel.make_channel(sv, webview)
+    sv.worker.start()  # the QThread that executes everything (RUN, tests, …)
     window.show()
     rc = app.exec()
     try:

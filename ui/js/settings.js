@@ -51,6 +51,13 @@
     $("btn-settings-save").addEventListener("click", saveSettings);
     $("btn-test-conn").addEventListener("click", function () {
       $("test-result").textContent = "testing…";
+      $("test-result").style.color = "#a0a0a0";
+      clearTimeout(openSettings._testTO);
+      // safety net: if no test_result arrives (worker died etc.), don't hang
+      openSettings._testTO = setTimeout(function () {
+        $("test-result").textContent = "no response from worker — restart the app (latest build)";
+        $("test-result").style.color = "#F44336";
+      }, 45000);
       // apply connection fields to settings first so the test uses them
       callApi("saveSettings", {
         cdp_host: $("st-host").value,
@@ -58,7 +65,16 @@
         tab_url_pattern: $("st-pattern").value
       }).then(function () {
         return callApi("testConnection");
+      }).catch(function (e) {
+        $("test-result").textContent = "call failed: " + e.message;
+        $("test-result").style.color = "#F44336";
       });
+    });
+    Bus.on("error", function (p) {
+      if ($("test-result").textContent === "testing…") {
+        $("test-result").textContent = "worker error: " + (p && p.msg);
+        $("test-result").style.color = "#F44336";
+      }
     });
     $("btn-reset-memory").addEventListener("click", function () {
       if (!confirm("Delete ALL remembered users?")) return;
@@ -67,6 +83,7 @@
       });
     });
     Bus.on("test_result", function (r) {
+      clearTimeout(openSettings._testTO);
       var msg;
       if (r.ok) {
         msg = "OK — " + r.pages + " page(s)" +
