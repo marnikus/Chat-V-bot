@@ -67,9 +67,17 @@
       });
     });
     Bus.on("test_result", function (r) {
-      $("test-result").textContent = r.ok
-        ? "OK — " + r.pages + " pages" + (r.chat_tab_found ? ", chat tab found" : ", NO chat tab")
-        : "FAIL — " + r.error;
+      var msg;
+      if (r.ok) {
+        msg = "OK — " + r.pages + " page(s)" +
+          (r.chat_tab_found ? ", matching tab found" : ", NO tab matched the pattern");
+        if (!r.chat_tab_found && r.tabs && r.tabs.length) {
+          msg += " — open: " + r.tabs.slice(0, 3).join(", ");
+        }
+      } else {
+        msg = "FAIL — " + r.error;
+      }
+      $("test-result").textContent = msg;
       $("test-result").style.color = r.ok ? "#4CAF50" : "#F44336";
     });
   });
