@@ -18,4 +18,5 @@ class ConditionalSkip(BaseAction):
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         # This is a sentinel — action_engine checks messaged status
         # and skips the user before reaching this block's execute.
+        self.debug(f"🔀 Conditional skip marker reached for '{user_nick}'")
         return ActionResult.SKIP

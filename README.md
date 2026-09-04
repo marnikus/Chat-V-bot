@@ -75,6 +75,7 @@ The app window will open and **automatically detect** your open Chrome tabs.
 ### Build an Action Stack
 Drag blocks from the **+ Add** menu into the stack area, or click them to add:
 - **Click Main Tab** — switch to a chat room tab
+- **Find Element** — generic search + click block (choose any CSS selector, optional text, and whether to click after it is found). Saves reusable element presets
 - **Scroll Parse** — scroll through the user list and collect users
 - **Click User** — click on a specific user to open private chat
 - **Wait Page Load** — wait for a page/element to appear
@@ -105,8 +106,16 @@ Click the ✏️ edit button in the Filters sidebar to set criteria:
 4. Progress is shown in the **Log Console** at the bottom
 
 ### Save / Load
-- **Save Stack** / **Load Stack** — save and restore action stack presets
+- **Save Stack** / **Load Stack** — open the Stack Presets panel. It shows saved presets as a list with **Load** / **Delete**. Saving stores the **full action stack list**, so a preset is restored exactly as-built.
+- **Element Presets** — in any **Find Element** block's config panel you can save the current selector + click options under a name (e.g. `Find Setting Button`) and load/delete it later for quick reuse.
+- **URL Presets** — in the header, pick or save a URL pattern (e.g. `ru.virt-chat.com`). On Connect the matching Chrome tab is auto-selected automatically.
 - **Save Template** / **Load Template** — save and restore message templates
+
+### Debugger / Logging
+Every step is traced in the Log Console:
+- each **search** logs success/failure and how many elements were found,
+- after finding an element it logs whether the element was **clickable** and whether it was clicked,
+- the final **result of each stack step** (`ok` / `fail` / `skip`) is shown along with the block index.
 
 ---
 

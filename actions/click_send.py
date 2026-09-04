@@ -15,5 +15,10 @@ class ClickSend(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
+        self.debug("📨 Clicking send button (button[type='submit'] / mat-icon send)")
         ok = await click_send(cdp)
-        return ActionResult.OK if ok else ActionResult.FAIL
+        if ok:
+            self.debug("✅ send button found and clicked")
+            return ActionResult.OK
+        self.debug("❌ search failed: send button not found / click did not proceed")
+        return ActionResult.FAIL

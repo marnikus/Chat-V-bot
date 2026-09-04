@@ -18,8 +18,10 @@ class Pause(BaseAction):
         self.duration_ms = duration_ms
 
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
+        self.debug(f"⏸ Pausing {self.duration_ms} ms")
         log.info("Pausing %d ms", self.duration_ms)
         await asyncio.sleep(self.duration_ms / 1000.0)
+        self.debug(f"✅ pause finished")
         return ActionResult.OK
 
     def config_schema(self) -> dict:

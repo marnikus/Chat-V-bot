@@ -22,8 +22,13 @@ class TypeMessage(BaseAction):
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
         text = self.message.replace("{{nick}}", user_nick)
+        self.debug(f"⌨️ Typing {len(text)} char(s) for '{user_nick}'")
         ok = await type_message(cdp, text, self.typing_speed_ms)
-        return ActionResult.OK if ok else ActionResult.FAIL
+        if ok:
+            self.debug("✅ textarea found and message injected")
+            return ActionResult.OK
+        self.debug("❌ textarea not found (message was not typed)")
+        return ActionResult.FAIL
 
     def config_schema(self) -> dict:
         s = super().config_schema()

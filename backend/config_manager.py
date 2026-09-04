@@ -27,6 +27,9 @@ DEFAULTS: dict[str, Any] = {
         "global_post_action_ms": 200,
         "page_load_timeout_ms": 5000,
     },
+    "url_presets": [
+        {"name": "Virt Chat Main", "pattern": "ru.virt-chat.com/chat"},
+    ],
     "ui": {"theme": "dark", "language": "ru"},
 }
 

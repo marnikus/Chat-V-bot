@@ -20,6 +20,11 @@
       <span class="app-title">🤖 ChatBot Automator</span>
     </div>
     <div class="header-right">
+      <div class="tab-select-wrap url-preset-wrap">
+        <select id="urlPresetSelect"><option value="">— URL Preset —</option></select>
+        <button id="saveUrlPresetBtn" class="btn-icon-sm" title="Save URL preset"><span class="material-icons">bookmark_add</span></button>
+        <button id="manageUrlPresetBtn" class="btn-icon-sm" title="Manage URL presets"><span class="material-icons">bookmarks</span></button>
+      </div>
       <div class="tab-select-wrap">
         <select id="tabSelect"><option value="">— Select Chrome Tab —</option></select>
         <button id="refreshTabsBtn" class="btn-icon" title="Refresh tabs"><span class="material-icons">refresh</span></button>
@@ -116,6 +121,39 @@
     <div class="panel log-panel">
       <h3><span class="material-icons">terminal</span> Log Console</h3>
       <div id="logConsole" class="log-console"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STACK PRESETS MODAL -->
+<div id="stackPresetModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Stack Presets</h3>
+    <p class="modal-hint">Saving stores the <b>full action stack list</b>, so a preset can be loaded and edited later.</p>
+    <div class="preset-new">
+      <div class="form-row"><label>New preset name</label><input id="stackPresetName" type="text" placeholder="e.g. Daily DM run"></div>
+      <button id="stackPresetSaveBtn" class="btn-primary">Save Current Stack</button>
+    </div>
+    <div class="preset-list" id="stackPresetList"></div>
+    <div class="modal-actions">
+      <button id="stackPresetCloseBtn" class="btn-small">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- URL PRESETS MODAL -->
+<div id="urlPresetModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>URL Presets</h3>
+    <p class="modal-hint">Enter a URL pattern (e.g. <code>ru.virt-chat.com</code>). The matching Chrome tab is auto-selected on Connect.</p>
+    <div class="preset-new">
+      <div class="form-row"><label>Name</label><input id="urlPresetName" type="text" placeholder="Virt Chat Main"></div>
+      <div class="form-row"><label>URL pattern</label><input id="urlPresetPattern" type="text" placeholder="ru.virt-chat.com"></div>
+      <button id="urlPresetSaveBtn" class="btn-primary">Save URL Preset</button>
+    </div>
+    <div class="preset-list" id="urlPresetList"></div>
+    <div class="modal-actions">
+      <button id="urlPresetCloseBtn" class="btn-small">Close</button>
     </div>
   </div>
 </div>

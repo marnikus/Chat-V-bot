@@ -21,6 +21,8 @@ class ScrollParse(BaseAction):
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
         # The actual scroll parsing is handled by ScrollParser in action_engine
+        self.debug(f"📜 Scroll parse block configured (max={self.max_scrolls}, "
+                   f"pause={self.scroll_pause_ms} ms) — handled during parse phase")
         log.info("Scroll parse block triggered (max=%d)", self.max_scrolls)
         return ActionResult.OK
 

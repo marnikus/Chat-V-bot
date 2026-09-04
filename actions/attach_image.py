@@ -22,9 +22,15 @@ class AttachImage(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
+        self.debug(f"🖼️ Attaching image from '{self.folder_path}' "
+                   f"(pattern '{self.file_pattern}')")
         ok = await attach_image(cdp, self.folder_path,
                                 self.file_pattern, self.rotation_mode)
-        return ActionResult.OK if ok else ActionResult.FAIL
+        if ok:
+            self.debug("✅ image attached successfully")
+            return ActionResult.OK
+        self.debug("❌ search failed: image folder/file input unavailable")
+        return ActionResult.FAIL
 
     def config_schema(self) -> dict:
         s = super().config_schema()

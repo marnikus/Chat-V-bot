@@ -24,15 +24,23 @@ class WaitPageLoad(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
+        self.debug(f"⏳ Waiting for element '{self.target_selector}' "
+                   f"({self.timeout_ms} ms)")
         deadline = asyncio.get_event_loop().time() + self.timeout_ms / 1000
+        attempts = 0
         while asyncio.get_event_loop().time() < deadline:
+            attempts += 1
             result = await cdp.evaluate(
                 f"!!document.querySelector('{self.target_selector}')"
             )
             if result:
+                self.debug(f"✅ search succeeded: '{self.target_selector}' found "
+                           f"after {attempts} attempt(s)")
                 log.info("Element found: %s", self.target_selector[:50])
                 return ActionResult.OK
             await asyncio.sleep(0.3)
+        self.debug(f"❌ search failed: timed out waiting for "
+                   f"'{self.target_selector}' ({self.timeout_ms} ms)")
         log.warning("Timeout waiting for: %s", self.target_selector[:50])
         return ActionResult.FAIL
 

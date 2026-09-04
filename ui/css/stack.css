@@ -85,3 +85,25 @@
   border-color: var(--border-focus); outline: none;
 }
 .config-panel textarea { min-height: 60px; resize: vertical; }
+
+/* — Finder / element preset controls inside the block config panel — */
+.finder-preset-bar {
+  margin-top: var(--gap-md);
+  padding-top: var(--gap-md);
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: var(--gap-sm);
+}
+.finder-preset-bar label {
+  min-width: 130px; font-size: var(--font-size-sm);
+  color: var(--text-secondary); font-weight: 500;
+}
+.finder-preset-bar select,
+.finder-preset-bar input {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px;
+  color: var(--text-primary); font-size: var(--font-size-sm);
+  font-family: var(--font);
+}
+.finder-preset-bar .finder-preset-actions {
+  display: flex; gap: var(--gap-sm); flex-wrap: wrap;
+}

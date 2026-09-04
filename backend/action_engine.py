@@ -37,11 +37,15 @@ class ActionEngine(QObject):
     def load_stack(self, blocks: list[dict]) -> None:
         """Build action list from block config dicts."""
         self._stack.clear()
+        if not isinstance(blocks, list):
+            self.log_msg.emit("❌ Stack blocks must be an array")
+            return
         for b in blocks:
             cls = get_action_class(b.get("block_id", ""))
             if cls:
                 self._stack.append(cls(**{k: v for k, v in b.items() if k != "block_id"}))
         log.info("Stack loaded: %d blocks", len(self._stack))
+        self.log_msg.emit(f"🧱 Stack loaded: {len(self._stack)} block(s)")
 
     def get_stack(self) -> list[dict]:
         return [a.to_dict() for a in self._stack]
@@ -70,14 +74,18 @@ class ActionEngine(QObject):
             has_scroll = any(b.block_id == "SCROLL_PARSE" for b in self._stack)
             if has_scroll and scroll_parser:
                 self.log_msg.emit("📜 Starting user parse...")
-                all_u, filtered = await scroll_parser.parse()
+                all_u, filtered = await scroll_parser.parse(progress_cb=(
+                    lambda i, n, new: self.log_msg.emit(
+                        f"📜 Scroll {i}: {n} users found (+{new} new)")))
                 for u in all_u:
                     await self._memory.upsert_user(u)
-                self.log_msg.emit(f"📜 Found {len(all_u)} users, {len(filtered)} passed criteria")
+                self.log_msg.emit(f"📜 Parse complete: {len(all_u)} users found, "
+                                  f"{len(filtered)} passed criteria")
             # Phase 2: get queue
             queue = await self._memory.get_queue()
             has_skip = any(b.block_id == "CONDITIONAL_SKIP" for b in self._stack)
-            self.log_msg.emit(f"▶ Running stack on {len(queue)} users")
+            self.log_msg.emit(f"▶ Running stack ({len(self._stack)} block(s)) "
+                              f"on {len(queue)} user(s)")
             # Phase 3: execute loop
             for user in queue:
                 if self._stop_requested:
@@ -106,27 +114,46 @@ class ActionEngine(QObject):
         if user.messaged and has_skip:
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return False
-        for block in self._stack:
+        steps_ok = 0
+        for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
                 return False
             while self._paused:
                 await asyncio.sleep(0.2)
+            # Register the per-step debug sink (shows in the Log Console)
+            block.set_debug_cb(self.log_msg.emit)
+
             if block.block_id == "CONDITIONAL_SKIP":
                 if user.messaged:
                     self.log_msg.emit(f"⏭ Conditional skip: {user.nick}")
                     return False
+                self.log_msg.emit(f"  {block.icon} [{idx}/{len(self._stack)}] "
+                                  f"{block.name} → skipped marker (active)")
                 continue
+
             if block.block_id == "SCROLL_PARSE":
-                continue  # already handled above
+                self.log_msg.emit(f"  {block.icon} [{idx}/{len(self._stack)}] "
+                                  f"{block.name} → handled during parse phase")
+                continue
+
             try:
                 result = await block.execute(user.nick, self._cdp)
                 self.step_complete.emit(block.name, user.nick)
-                self.log_msg.emit(f"  {block.icon} {block.name} → {result}")
+                # Show the fine-grained debug already emitted by the block,
+                # then the final verdict for this step.
+                status_icon = "✅" if result == ActionResult.OK else \
+                              "⚠️" if result == ActionResult.SKIP else "❌"
+                self.log_msg.emit(f"  {block.icon} [{idx}/{len(self._stack)}] "
+                                  f"{block.name} → {status_icon} {result}")
+                self.log_msg.emit(f"  📋 Result[{idx}] {block.name} = {result}")
                 if result == ActionResult.FAIL:
                     self.log_msg.emit(f"  ❌ Block failed for {user.nick}")
                     return False
+                if result == ActionResult.OK:
+                    steps_ok += 1
             except Exception as exc:
-                self.log_msg.emit(f"  ❌ {block.name} error: {exc}")
+                self.log_msg.emit(f"  {block.icon} [{idx}/{len(self._stack)}] "
+                                  f"{block.name} → ❌ error: {exc}")
                 return False
-        self.log_msg.emit(f"✅ Message sent to {user.nick}")
+        self.log_msg.emit(f"✅ All {steps_ok} step(s) completed for {user.nick}")
         return True

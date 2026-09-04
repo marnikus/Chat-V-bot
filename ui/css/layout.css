@@ -217,3 +217,60 @@ button:disabled { opacity: .35; cursor: default; }
 .modal-actions { display: flex; gap: var(--gap-sm); justify-content: flex-end; margin-top: var(--gap-lg); }
 
 .hidden { display: none !important; }
+
+/* — URL preset controls — */
+.tab-select-wrap.url-preset-wrap #urlPresetSelect {
+  min-width: 150px;
+}
+.url-preset-wrap { border-right: 1px solid var(--border); padding-right: var(--gap-sm); }
+
+/* — Preset list in modals — */
+.preset-new {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--gap-md);
+  margin-bottom: var(--gap-md);
+}
+.preset-new .form-row {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
+}
+.preset-new label {
+  min-width: 130px; font-size: var(--font-size-sm);
+  color: var(--text-secondary); font-weight: 500;
+}
+.preset-new input {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px;
+  color: var(--text-primary); font-size: var(--font-size-sm);
+  font-family: var(--font);
+}
+.preset-new input:focus { border-color: var(--border-focus); outline: none; }
+.modal-hint {
+  font-size: var(--font-size-xs); color: var(--text-secondary);
+  margin: -8px 0 var(--gap-md); line-height: 1.5;
+}
+.modal-hint code { color: var(--accent); font-family: var(--font-mono); }
+
+.preset-list { display: flex; flex-direction: column; gap: var(--gap-xs); }
+.preset-empty {
+  padding: var(--gap-lg); text-align: center;
+  color: var(--text-muted); font-size: var(--font-size-sm);
+  font-style: italic;
+}
+.preset-row {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  padding: 8px 12px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.preset-row:hover { background: var(--bg-card-hover); }
+.preset-row .preset-name { font-weight: 600; font-size: var(--font-size-sm); min-width: 120px; }
+.preset-row .preset-meta { flex: 1; color: var(--text-muted); font-size: var(--font-size-xs); }
+.preset-row button {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 3px 10px;
+  font-size: var(--font-size-xs);
+}
+.preset-row button:hover { background: var(--bg-card-hover); }
+.preset-row button.btn-danger-text { color: var(--red); }
