@@ -3,3 +3,7 @@ __pycache__/
 *.db
 logs/*.log
 .env
+*.db-shm
+*.db-wal
+*.db-journal
+logs/*.jsonl
