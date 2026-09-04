@@ -57,3 +57,51 @@
   border-radius: var(--radius-sm); color: var(--text-secondary);
 }
 .row-actions button:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
+/* ═══════════════════════════════════════════════════════════════
+   People-list selection + deletion controls (BUG #4 / FEATURE #5)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* toolbar in the panel header */
+.user-search {
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 3px 8px; font-size: var(--font-size-xs);
+  width: 130px; outline: none; text-transform: none; letter-spacing: 0;
+  font-family: var(--font);
+}
+.user-search:focus { border-color: var(--border-focus); }
+.user-search::placeholder { color: var(--text-muted); }
+.sel-count {
+  font-size: var(--font-size-xs); color: var(--accent);
+  font-weight: 700; text-transform: none; letter-spacing: 0;
+  background: var(--accent-dim); border-radius: 999px; padding: 2px 8px;
+}
+#deleteSelectedBtn:disabled { opacity: .35; cursor: default; }
+#deleteSelectedBtn:not(:disabled) {
+  border-color: var(--red); background: var(--red-dim);
+}
+#deleteSelectedBtn:not(:disabled):hover { background: #4a1e1e; }
+#clearMemBtn:hover { background: var(--red-dim); border-color: var(--red); }
+
+/* selection column */
+#userTable th.col-select, #userTable td.col-select {
+  width: 28px; max-width: 28px; padding: 4px 6px; text-align: center;
+}
+#userTable input[type="checkbox"] {
+  cursor: pointer; accent-color: var(--accent);
+  width: 13px; height: 13px; margin: 0; vertical-align: middle;
+}
+#userTable tbody tr.row-selected { background: rgba(108, 140, 255, .13); }
+#userTable tbody tr.row-selected:hover { background: rgba(108, 140, 255, .2); }
+#userTable td.col-nick { font-weight: 500; }
+.table-placeholder {
+  text-align: center; color: var(--text-muted); padding: 24px;
+  font-style: italic;
+}
+
+/* per-row delete */
+.row-actions button.btn-row-danger { color: var(--red); border-color: rgba(248,113,113,.35); }
+.row-actions button.btn-row-danger:hover {
+  background: var(--red-dim); color: var(--red); border-color: var(--red);
+}

@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   setupHeader();
+  UserTable.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
@@ -34,6 +35,8 @@ function initApp() {
     StackDnD.refreshPresets();
     PresetsUI.refreshAll();
     UrlToolbar.refresh();
+    // BUG #4: fill the people list on start, not only after connecting
+    App.bridge.refresh_users();
   }
 }
 
@@ -95,8 +98,14 @@ function setupBridgeListeners() {
   });
 
   b.users_updated.connect((json) => {
-    const users = JSON.parse(json);
+    let users = [];
+    try { users = JSON.parse(json); } catch (e) { users = []; }
     UserTable.render(users);
+  });
+
+  // people list: deletions (single / selection / clear all)
+  b.users_deleted.connect((nicksJson, count) => {
+    UserTable.onDeleted(nicksJson);
   });
 
   b.stats_updated.connect((json) => {

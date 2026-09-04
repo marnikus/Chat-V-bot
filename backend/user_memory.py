@@ -102,6 +102,53 @@ class UserMemory:
         queued = (await cur.fetchone())[0]
         return {"total": total, "queued": queued, "done": total - queued}
 
+    async def get_user(self, nick: str) -> Optional[UserRecord]:
+        cur = await self._db.execute(
+            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
+            "messaged,message_count,last_messaged,notes FROM users WHERE nick=?",
+            (nick,))
+        row = await cur.fetchone()
+        return self._row(row) if row else None
+
+    async def delete_user(self, nick: str) -> bool:
+        """Delete a single user by nick. Returns True when a row was removed."""
+        cur = await self._db.execute("DELETE FROM users WHERE nick=?", (nick,))
+        await self._db.commit()
+        removed = cur.rowcount > 0
+        log.info("delete_user(%s) → %s", nick, "removed" if removed else "not found")
+        return removed
+
+    async def delete_users(self, nicks: list[str]) -> int:
+        """Delete many users in one transaction. Returns the number removed."""
+        nicks = [n for n in (nicks or []) if n]
+        if not nicks:
+            return 0
+        total = 0
+        # chunk to stay well below SQLite's variable limit
+        for i in range(0, len(nicks), 500):
+            chunk = nicks[i:i + 500]
+            marks = ",".join("?" * len(chunk))
+            cur = await self._db.execute(
+                f"DELETE FROM users WHERE nick IN ({marks})", chunk)
+            total += cur.rowcount
+        await self._db.commit()
+        log.info("delete_users(%d requested) → %d removed", len(nicks), total)
+        return total
+
+    async def set_messaged(self, nick: str, messaged: bool) -> bool:
+        """Manually flip a user's messaged flag (per-row Mark done / Undo)."""
+        if messaged:
+            now = datetime.now().isoformat(timespec="seconds")
+            cur = await self._db.execute(
+                "UPDATE users SET messaged=1,last_messaged=? WHERE nick=?",
+                (now, nick))
+        else:
+            cur = await self._db.execute(
+                "UPDATE users SET messaged=0,last_messaged=NULL WHERE nick=?",
+                (nick,))
+        await self._db.commit()
+        return cur.rowcount > 0
+
     async def reset_messaged(self) -> int:
         cur = await self._db.execute("UPDATE users SET messaged=0")
         await self._db.commit()

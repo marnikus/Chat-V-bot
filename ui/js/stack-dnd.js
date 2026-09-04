@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
-   stack-dnd.js — SortableJS-based drag-and-drop action stack
+   stack-dnd.js — Action Stack editor (blocks, config, run controls)
+   Reordering is handled by the bundled StackDrag engine (stack-drag.js)
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -38,17 +39,19 @@ const AVAILABLE_BLOCKS = [
 const StackDnD = {
   stack: [],
   selectedIdx: -1,
-  _sortable: null,
+  _inited: false,
   _running: false,
   _runningIdx: -1,
   _paused: false,
 
   init() {
+    if (this._inited) return;      // guard against a double DOMContentLoaded
+    this._inited = true;
     this._initDefaultStack();
     this._renderStack();
     this._setupAddMenu();
     this._setupButtons();
-    this._initSortable();
+    this._setupKeyboardReorder();
   },
 
   _initDefaultStack() {
@@ -68,58 +71,116 @@ const StackDnD = {
     const list = document.getElementById('stackList');
     if (!this.stack.length) {
       list.innerHTML = '<div class="stack-empty">Drag blocks here or click + to add</div>';
+      this._attachDrag();
       return;
     }
     list.innerHTML = this.stack.map((b, i) => {
       const meta = AVAILABLE_BLOCKS.find(a => a.block_id === b.block_id) || { name: b.block_id, icon:'?' };
       const summary = Object.entries(b)
         .filter(([k]) => !['block_id','pre_delay_ms'].includes(k))
-        .map(([k,v]) => `${k}=${String(v).substring(0,20)}`)
+        .map(([k,v]) => `${k}=${this._esc(String(v).substring(0,20))}`)
         .join(' · ') || `delay: ${b.pre_delay_ms||0}ms`;
       const sel = i === this.selectedIdx ? ' active' : '';
       const run = i === this._runningIdx && this._running ? ' block-running' : '';
       return `<div class="stack-item${sel}${run}" data-idx="${i}">
-        <span class="drag-handle">⠿</span>
+        <span class="drag-handle" title="Drag to reorder">⠿</span>
+        <span class="block-pos">${i + 1}</span>
         <span class="block-icon">${meta.icon}</span>
         <div class="block-info">
-          <div class="block-name">${meta.name}</div>
+          <div class="block-name">${this._esc(meta.name)}</div>
           <div class="block-summary">${summary}</div>
         </div>
-        <span class="block-remove" onclick="event.stopPropagation();StackDnD.removeBlock(${i})">✕</span>
+        <span class="block-remove" data-remove="${i}" title="Remove block">✕</span>
       </div>`;
     }).join('');
-    // click to select
+
+    // click to select / remove (delegated once per render)
     list.querySelectorAll('.stack-item').forEach(el => {
-      el.addEventListener('click', () => {
-        this.selectBlock(parseInt(el.dataset.idx));
+      el.addEventListener('click', (ev) => {
+        if (StackDrag.dragging) return;
+        const rm = ev.target.closest('[data-remove]');
+        if (rm) {
+          ev.stopPropagation();
+          this.removeBlock(parseInt(rm.dataset.remove, 10));
+          return;
+        }
+        this.selectBlock(parseInt(el.dataset.idx, 10));
       });
+    });
+    this._attachDrag();
+  },
+
+  _esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s === null || s === undefined ? '' : String(s);
+    return d.innerHTML;
+  },
+
+  /* ── FEATURE #6: drag & drop reordering ────────────────────────
+     Previously this used SortableJS pulled from a CDN at runtime; on a
+     file:// page inside QWebEngineView that request fails silently (no
+     onerror handler existed), so reordering never worked offline.
+     StackDrag is bundled with the app and needs no network.          */
+  _attachDrag() {
+    const list = document.getElementById('stackList');
+    if (!list || typeof StackDrag === 'undefined') return;
+    StackDrag.attach({
+      container: list,
+      itemSelector: '.stack-item',
+      handleSelector: null,                       // whole card is draggable
+      ignoreSelector: '[data-remove], input, textarea, select, button',
+      labelOf: (i) => {
+        const b = this.stack[i];
+        if (!b) return '';
+        const meta = AVAILABLE_BLOCKS.find(a => a.block_id === b.block_id);
+        return meta ? meta.name : b.block_id;
+      },
+      onReorder: (from, to) => this.moveBlock(from, to),
     });
   },
 
-  _initSortable() {
-    if (typeof Sortable === 'undefined') {
-      // load SortableJS dynamically
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
-      s.onload = () => this._createSortable();
-      document.head.appendChild(s);
-    } else {
-      this._createSortable();
+  /** Array-move a block and keep selection / config panel in sync. */
+  moveBlock(from, to) {
+    if (from === to) return;
+    if (from < 0 || from >= this.stack.length) return;
+    to = Math.max(0, Math.min(this.stack.length - 1, to));
+    const meta = AVAILABLE_BLOCKS.find(a => a.block_id === this.stack[from].block_id);
+    const name = meta ? meta.name : this.stack[from].block_id;
+
+    const item = this.stack.splice(from, 1)[0];
+    this.stack.splice(to, 0, item);
+
+    // keep the selection pointing at the same logical block
+    if (this.selectedIdx === from) this.selectedIdx = to;
+    else if (this.selectedIdx > from && this.selectedIdx <= to) this.selectedIdx--;
+    else if (this.selectedIdx < from && this.selectedIdx >= to) this.selectedIdx++;
+    // same for the running highlight
+    if (this._runningIdx === from) this._runningIdx = to;
+    else if (this._runningIdx > from && this._runningIdx <= to) this._runningIdx--;
+    else if (this._runningIdx < from && this._runningIdx >= to) this._runningIdx++;
+
+    this._renderStack();
+    const list = document.getElementById('stackList');
+    if (list && typeof StackDrag !== 'undefined') {
+      StackDrag.flashLanded(list, '.stack-item', to);
+    }
+    if (typeof LogConsole !== 'undefined') {
+      LogConsole.log(`↕ Moved “${name}” ${from + 1} → ${to + 1}`, 'info');
     }
   },
 
-  _createSortable() {
-    const list = document.getElementById('stackList');
-    this._sortable = new Sortable(list, {
-      animation: 150,
-      handle: '.drag-handle',
-      ghostClass: 'sortable-ghost',
-      chosenClass: 'sortable-chosen',
-      onEnd: (evt) => {
-        const item = this.stack.splice(evt.oldIndex, 1)[0];
-        this.stack.splice(evt.newIndex, 0, item);
-        this._renderStack();
-      },
+  /** Keyboard reordering: Alt+↑ / Alt+↓ on the selected block. */
+  _setupKeyboardReorder() {
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const i = this.selectedIdx;
+      if (i < 0 || i >= this.stack.length) return;
+      const to = e.key === 'ArrowUp' ? i - 1 : i + 1;
+      if (to < 0 || to >= this.stack.length) return;
+      e.preventDefault();
+      this.moveBlock(i, to);
     });
   },
 
