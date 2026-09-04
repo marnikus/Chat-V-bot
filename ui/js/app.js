@@ -27,9 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   setupHeader();
+  UserTable.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
+    // fill the people list on start, not only after connecting to a tab
+    App.bridge.refresh_users();
     // single payload with everything needed to restore the session (BUG #2)
     App.bridge.get_app_state((json) => restoreSession(json));
   }
@@ -121,8 +124,14 @@ function setupBridgeListeners() {
   });
 
   b.users_updated.connect((json) => {
-    const users = JSON.parse(json);
+    let users = [];
+    try { users = JSON.parse(json); } catch (e) { users = []; }
     UserTable.render(users);
+  });
+
+  // people list: deletions (single / selection / clear all)
+  b.users_deleted.connect((nicksJson, count) => {
+    UserTable.onDeleted(nicksJson);
   });
 
   b.stats_updated.connect((json) => {

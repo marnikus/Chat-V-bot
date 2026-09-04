@@ -96,3 +96,13 @@
   content: ' ▶';
   color: var(--green);
 }
+
+/* Position number badge (makes reordering results obvious) */
+.stack-item .block-pos {
+  flex-shrink: 0; min-width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-input); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.stack-item.active .block-pos { background: var(--accent); color: #fff; border-color: var(--accent); }

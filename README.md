@@ -73,7 +73,7 @@ The app window will open and **automatically detect** your open Chrome tabs.
 ## 5. Using the App
 
 ### Build an Action Stack
-Drag blocks from the **+ Add** menu into the stack area, or click them to add:
+Add blocks from the **+ Add** menu, or click them to add:
 - **Find & Click** — configurable search-and-click block (see below)
 - **Click Main Tab** — switch to a chat room tab
 - **Scroll Parse** — scroll through the user list and collect users
@@ -100,6 +100,23 @@ A generic reusable block that is configured entirely through the UI:
 5. Press **Save Block as Preset** — it becomes a chip under "Custom blocks"
    and an entry at the top of the **+ Add** menu for reuse in other stacks.
    Use **×** on a chip to remove a preset you no longer need.
+
+### Reorder Blocks (drag & drop)
+Grab any block (or its **⠿** handle) and drag it up or down. While you move
+the mouse you get full visual feedback:
+- the dragged block **lifts off** into a floating, tilted card that follows the
+  cursor, and its old position turns into a dashed, pulsing **drop slot**
+- the other blocks **slide apart** to open the gap
+- a **glowing insertion bar** marks exactly the position the block will take if
+  you release right now, and a badge next to the cursor shows `3 → 5`
+- releasing drops the block there and it **flashes** so you can see where it landed
+- the list **auto-scrolls** when you drag near the top/bottom edge
+- press **Esc** during a drag to cancel it; nothing is changed
+- keyboard alternative: select a block and press **Alt+↑ / Alt+↓**
+
+The reorder engine is bundled with the app (`ui/js/stack-drag.js`) and needs no
+internet connection. Reorders are saved to the session snapshot like any other
+stack edit.
 
 ### Save / Load Presets (full action stack)
 - **💾 Save** — name the preset and the **complete stack** (block order + every
@@ -135,6 +152,22 @@ terminal prompt returns. A watchdog force-exits after 3 s if anything blocks.
 ### Message Composer
 Type your message in the bottom composer area. Use `{{nick}}` to insert the
 user's nickname automatically.
+
+### Manage the People List (User Memory)
+The bottom-left panel lists every discovered user and is fully editable:
+- **Filter nick…** — type to narrow the list
+- **checkbox column** — tick individual rows; the header checkbox selects or
+  deselects all *currently visible* (filtered) rows
+- **🗑 Delete selected (n)** — deletes only the ticked nicks
+- **🗑 Delete** on a row — deletes that single nick
+- **✔ Done / ↩ Undo** on a row — flips that user's "messaged" flag
+- **Reset Messaged** — marks every user as new again (deletes nobody)
+- **Clear All** — removes every user from memory
+
+The list fills in as soon as the app starts (no need to connect to a Chrome
+tab first). Every destructive action asks for confirmation in an in-app dialog
+first. Nicks may contain quotes and emoji — row actions are delegated, never
+inlined, so they keep working for any nick.
 
 ### Set Filters (Criteria)
 Click the ✏️ edit button in the Filters sidebar to set criteria:

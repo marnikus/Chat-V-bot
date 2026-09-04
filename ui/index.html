@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/stack.css">
+<link rel="stylesheet" href="css/stack-drag.css">
 <link rel="stylesheet" href="css/table.css">
 <link rel="stylesheet" href="css/composer.css">
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
@@ -87,6 +88,7 @@
             <span class="preset-row-empty">no saved blocks — create a “Find &amp; Click” block and press Save Block</span>
           </div>
         </div>
+        <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>.</div>
         <div id="stackList" class="stack-list">
           <div class="stack-empty">Drag blocks here or click + to add</div>
         </div>
@@ -137,13 +139,22 @@
   <div class="bottom-area">
     <div class="panel table-panel">
       <h3><span class="material-icons">people</span> User Memory
+        <input id="userSearch" class="user-search" type="search"
+               placeholder="Filter nick…" spellcheck="false" autocomplete="off">
+        <span id="selCount" class="sel-count hidden"></span>
         <span class="spacer"></span>
-        <button id="resetMsgBtn" class="btn-small">Reset Messaged</button>
-        <button id="clearMemBtn" class="btn-small btn-danger-text">Clear All</button>
+        <button id="deleteSelectedBtn" class="btn-small btn-danger-text"
+                title="Delete only the ticked nicks" disabled>🗑 Delete selected</button>
+        <button id="resetMsgBtn" class="btn-small"
+                title="Mark every user as new again (nothing is deleted)">Reset Messaged</button>
+        <button id="clearMemBtn" class="btn-small btn-danger-text"
+                title="Delete every user from memory">Clear All</button>
       </h3>
       <div class="table-wrap">
         <table id="userTable">
           <thead><tr>
+            <th class="col-select"><input type="checkbox" id="selectAllUsers"
+                title="Select / deselect all visible rows"></th>
             <th>Nick</th><th>Gender</th><th>Reg?</th><th>Status</th>
             <th>First Seen</th><th>Messaged</th><th>Actions</th>
           </tr></thead>
@@ -200,6 +211,7 @@
 
 <script src="js/app.js"></script>
 <script src="js/user-table.js"></script>
+<script src="js/stack-drag.js"></script>
 <script src="js/stack-dnd.js"></script>
 <script src="js/presets-ui.js"></script>
 <script src="js/composer.js"></script>

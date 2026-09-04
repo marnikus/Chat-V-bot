@@ -282,19 +282,34 @@ const PresetsUI = {
   },
 
   confirmDelete(kindLabel, name, onYes) {
+    this.confirm(`Delete ${kindLabel}?`,
+      `“${name}” will be permanently removed.`, 'Delete', onYes);
+  },
+
+  /** Generic in-app confirmation (Qt WebEngine has no usable confirm()). */
+  confirm(title, text, okLabel, onYes) {
     const modal = document.getElementById('confirmModal');
-    document.getElementById('confirmModalTitle').textContent = `Delete ${kindLabel}?`;
-    document.getElementById('confirmModalText').textContent =
-      `“${name}” will be permanently removed.`;
+    const yes = document.getElementById('confirmModalYes');
+    const no = document.getElementById('confirmModalNo');
+    document.getElementById('confirmModalTitle').textContent = title || 'Confirm';
+    document.getElementById('confirmModalText').textContent = text || '';
+    yes.textContent = okLabel || 'Delete';
     modal.classList.remove('hidden');
 
     const cleanup = () => {
       modal.classList.add('hidden');
-      document.getElementById('confirmModalYes').onclick = null;
-      document.getElementById('confirmModalNo').onclick = null;
+      yes.onclick = null;
+      no.onclick = null;
+      document.removeEventListener('keydown', onKey, true);
     };
-    document.getElementById('confirmModalYes').onclick = () => { cleanup(); onYes(); };
-    document.getElementById('confirmModalNo').onclick = cleanup;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(); }
+      else if (e.key === 'Enter') { e.preventDefault(); cleanup(); onYes(); }
+    };
+    yes.onclick = () => { cleanup(); onYes(); };
+    no.onclick = cleanup;
+    document.addEventListener('keydown', onKey, true);
+    yes.focus();
   },
 };
 

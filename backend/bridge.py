@@ -30,6 +30,7 @@ class Bridge(QObject):
     url_presets_updated = Signal(str)        # JSON: url preset list
     custom_blocks_updated = Signal(str)      # JSON: custom block presets
     tab_match_result = Signal(str, str)      # query, JSON matches
+    users_deleted = Signal(str, int)         # JSON nicks, deleted count
     stack_loaded = Signal(str, str)          # name, JSON blocks
     template_loaded = Signal(str, str)       # name, body
 
@@ -219,6 +220,35 @@ class Bridge(QObject):
     @Slot()
     def clear_memory(self): asyncio.ensure_future(self._do_clear())
 
+    @Slot()
+    def refresh_users(self):
+        """Explicit refresh so the people list is filled on app start too."""
+        asyncio.ensure_future(self._refresh_users())
+
+    @Slot(str)
+    def delete_user(self, nick):
+        """Delete a single nick from user memory."""
+        asyncio.ensure_future(self._do_delete_one(nick))
+
+    @Slot(str)
+    def delete_users(self, nicks_json):
+        """Delete a selection of nicks (JSON array) from user memory."""
+        try:
+            nicks = json.loads(nicks_json or "[]")
+        except json.JSONDecodeError:
+            self.log_message.emit("❌ Delete aborted: bad selection payload",
+                                  "error")
+            return
+        if not isinstance(nicks, list):
+            self.log_message.emit("❌ Delete aborted: selection is not a list",
+                                  "error")
+            return
+        asyncio.ensure_future(self._do_delete_many([str(n) for n in nicks]))
+
+    @Slot(str, bool)
+    def set_user_messaged(self, nick, messaged):
+        asyncio.ensure_future(self._do_set_messaged(nick, bool(messaged)))
+
     async def _do_reset(self):
         c = await self._memory.reset_messaged()
         self.log_message.emit(f"🔄 Reset {c} users", "info")
@@ -227,6 +257,52 @@ class Bridge(QObject):
     async def _do_clear(self):
         c = await self._memory.clear_all()
         self.log_message.emit(f"🗑 Cleared {c} users", "warn")
+        self.users_deleted.emit("[]", c)
+        await self._refresh_users()
+
+    async def _do_delete_one(self, nick):
+        nick = (nick or "").strip()
+        if not nick:
+            self.log_message.emit("⚠ No nick given — nothing deleted", "warn")
+            return
+        try:
+            ok = await self._memory.delete_user(nick)
+        except Exception as exc:
+            self.log_message.emit(f"❌ Delete failed for “{nick}”: {exc}", "error")
+            return
+        if ok:
+            self.log_message.emit(f"🗑 Deleted user “{nick}”", "warn")
+            self.users_deleted.emit(json.dumps([nick], ensure_ascii=False), 1)
+        else:
+            self.log_message.emit(f"⚠ User “{nick}” not found", "warn")
+        await self._refresh_users()
+
+    async def _do_delete_many(self, nicks):
+        if not nicks:
+            self.log_message.emit("⚠ Nothing selected — nothing deleted", "warn")
+            return
+        try:
+            count = await self._memory.delete_users(nicks)
+        except Exception as exc:
+            self.log_message.emit(f"❌ Delete failed: {exc}", "error")
+            return
+        self.log_message.emit(
+            f"🗑 Deleted {count} selected user(s)"
+            + (f": {', '.join(nicks[:5])}" + ("…" if len(nicks) > 5 else "")
+               if count else ""), "warn")
+        self.users_deleted.emit(json.dumps(nicks, ensure_ascii=False), count)
+        await self._refresh_users()
+
+    async def _do_set_messaged(self, nick, messaged):
+        try:
+            ok = await self._memory.set_messaged(nick, messaged)
+        except Exception as exc:
+            self.log_message.emit(f"❌ Update failed for “{nick}”: {exc}", "error")
+            return
+        if ok:
+            self.log_message.emit(
+                f"{'✅' if messaged else '↩'} “{nick}” marked as "
+                f"{'messaged' if messaged else 'new'}", "info")
         await self._refresh_users()
 
     # ── stack presets ────────────────────────────────────────────
