@@ -8,6 +8,14 @@ def _endpoint(host: str, port: int) -> str:
     return f"http://{host}:{port}"
 
 
+def tab_matches(pattern: str, url: str) -> bool:
+    """Substring match; empty pattern or '*' means 'any real tab'."""
+    pat = (pattern or "").strip()
+    if pat in ("", "*"):
+        return bool(url) and url != "about:blank"
+    return pat in (url or "")
+
+
 async def _start_pw():
     from playwright.async_api import async_playwright
     return await async_playwright().start()
@@ -30,17 +38,25 @@ async def connect_and_find(settings) -> tuple:
         return pw, browser, page
     except Exception as e:
         await _stop_pw(pw)
-        raise OpError(f"CDP connect failed ({_endpoint(settings.cdp_host, settings.cdp_port)}): {e}")
+        hint = ""
+        if "ECONNREFUSED" in str(e) or "refused" in str(e).lower():
+            hint = (" — is Chrome running with --remote-debugging-port="
+                    f"{settings.cdp_port}? (Chrome 136+ also requires a "
+                    "separate --user-data-dir; verify at "
+                    f"http://{settings.cdp_host}:{settings.cdp_port}/json/version)")
+        raise OpError(f"CDP connect failed ({_endpoint(settings.cdp_host, settings.cdp_port)}): {e}{hint}")
 
 
 async def find_chat_page(browser, pattern: str):
-    """First page whose URL contains `pattern` (F-BR-02)."""
-    for context in browser.contexts:
-        for page in context.pages:
-            if pattern in (page.url or ""):
-                await page.bring_to_front()
-                return page
-    raise OpError(f"No open tab matches URL pattern '{pattern}' — open the chat site first")
+    """First page whose URL matches `pattern` (substring; '*' = any tab)."""
+    pages = [p for c in browser.contexts for p in c.pages]
+    for page in pages:
+        if tab_matches(pattern, page.url or ""):
+            await page.bring_to_front()
+            return page
+    open_urls = [p.url for p in pages if p.url and p.url != "about:blank"][:5]
+    raise OpError(f"No tab matches pattern '{pattern}'. Open tabs: "
+                  f"{open_urls or 'none (only blank tabs)'}")
 
 
 async def test_connection(settings) -> dict:
@@ -50,9 +66,9 @@ async def test_connection(settings) -> dict:
         browser = await pw.chromium.connect_over_cdp(
             _endpoint(settings.cdp_host, settings.cdp_port), timeout=5000)
         urls = [p.url for c in browser.contexts for p in c.pages]
-        return {"ok": True, "chat_tab_found":
-                any(settings.tab_url_pattern in u for u in urls),
-                "pages": len(urls), "tabs": [u for u in urls if u][:10]}
+        found = any(tab_matches(settings.tab_url_pattern, u) for u in urls)
+        return {"ok": True, "chat_tab_found": found, "pages": len(urls),
+                "tabs": [u for u in urls if u][:10]}
     except Exception as e:
         return {"ok": False, "error": str(e).splitlines()[0][:300]}
     finally:

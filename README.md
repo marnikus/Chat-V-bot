@@ -16,13 +16,24 @@ py -3.11 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-:: 2. Start Chrome with the debug port (in a separate profile if you like)
-::    chrome.exe --remote-debugging-port=9222
-::    ...open the chat site and log in manually
+:: 2. Start Chrome with the debug port.
+::    IMPORTANT (Chrome 136+): the flag is IGNORED with the default profile —
+::    you MUST pass a separate --user-data-dir. Log in once; the login then
+::    persists in that folder, so reuse the same path every time.
+::    "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+::        --remote-debugging-port=9222 --user-data-dir="C:\chatflow-chrome"
+
+::    Verify the port is live: open http://127.0.0.1:9222/json/version
+::    in that Chrome window — JSON with "webSocketDebuggerUrl" = CDP is up.
+::    Then open the chat site in that window and log in manually.
 
 :: 3. Run the app
 python -m chatflow.app.main
 ```
+
+**Settings → Connection:** host `127.0.0.1`, port `9222`, tab URL pattern
+`virt-chat.com` (plain substring match; `*` or empty = first open tab).
+**Tools → Test Connection** must say "OK … matching tab found" before you RUN.
 
 The app stores its data (SQLite DB, settings, logs) under
 `%LOCALAPPDATA%\ChatFlowOrchestrator` on Windows, `~/.local/share/ChatFlowOrchestrator` elsewhere.
