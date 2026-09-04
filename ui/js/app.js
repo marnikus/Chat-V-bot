@@ -10,6 +10,9 @@ const App = {
   tabs: [],
   urlPresets: [],
   finderPresets: [],
+  // A URL preset only auto-selects the matching tab after the user picks it.
+  // It must never auto-connect on startup.
+  urlPresetChosen: false,
 };
 
 // ── QWebChannel init ──────────────────────────────────────────
@@ -48,10 +51,9 @@ function setupHeader() {
   connectBtn.addEventListener('click', () => {
     if (!App.bridge) return;
     let wsUrl = tabSelect.value;
-    if (!wsUrl) {
-      // URL preset auto-select: try the active preset, then any saved preset
-      const active = getActiveUrlPreset();
-      const preset = active || (App.urlPresets.length ? App.urlPresets[0] : null);
+    if (!wsUrl && App.urlPresetChosen) {
+      // Only auto-pick a tab when the user has explicitly chosen a URL preset.
+      const preset = getActiveUrlPreset();
       if (preset) {
         const tab = autoSelectTabForPreset(preset);
         if (tab) wsUrl = tab.ws_url || tab.url;
@@ -73,14 +75,15 @@ function setupUrlPresets() {
   if (App.bridge) {
     App.bridge.get_url_presets((json) => {
       try { App.urlPresets = JSON.parse(json) || []; } catch (e) { App.urlPresets = []; }
+      // Do NOT default-select a preset or auto-connect on startup.
       renderUrlPresetSelect();
-      // Default to the first URL preset so the matching tab is auto-selected.
-      if (!sel.value && App.urlPresets.length) sel.value = App.urlPresets[0].name;
-      autoSelectByUrlPreset();
     });
   }
 
-  sel.addEventListener('change', () => autoSelectByUrlPreset());
+  sel.addEventListener('change', () => {
+    App.urlPresetChosen = !!sel.value;
+    autoSelectByUrlPreset();
+  });
 
   saveBtn.addEventListener('click', () => {
     const name = prompt('URL preset name:');
@@ -106,7 +109,12 @@ function renderUrlPresetSelect() {
     o.textContent = `${p.name} (${p.pattern})`;
     sel.appendChild(o);
   });
-  if (current && App.urlPresets.some(p => p.name === current)) sel.value = current;
+  if (current && App.urlPresets.some(p => p.name === current)) {
+    sel.value = current;
+  } else {
+    sel.value = '';
+    App.urlPresetChosen = false;
+  }
 }
 
 function getActiveUrlPreset() {
@@ -167,6 +175,7 @@ const UrlPresetManager = {
     if (!preset) return;
     const sel = document.getElementById('urlPresetSelect');
     if (sel) sel.value = name;
+    App.urlPresetChosen = true;
     autoSelectTabForPreset(preset);
     this.close();
   },
@@ -191,13 +200,15 @@ function setupBridgeListeners() {
       opt.textContent = `${t.title} — ${t.url}`.substring(0, 80);
       sel.appendChild(opt);
     });
-    autoSelectByUrlPreset();
+    // Only auto-select a matching tab if the user has explicitly chosen a preset.
+    if (App.urlPresetChosen) autoSelectByUrlPreset();
   });
 
   b.url_presets_updated.connect((json) => {
     try { App.urlPresets = JSON.parse(json) || []; } catch (e) { App.urlPresets = []; }
     renderUrlPresetSelect();
-    autoSelectByUrlPreset();
+    // Never auto-connect at startup; only re-select if the user chose one.
+    if (App.urlPresetChosen) autoSelectByUrlPreset();
     const modal = document.getElementById('urlPresetModal');
     if (modal && !modal.classList.contains('hidden')) UrlPresetManager.render();
   });
