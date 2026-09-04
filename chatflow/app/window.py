@@ -79,8 +79,10 @@ class MainWindow(QMainWindow):
 
     # --- tray --------------------------------------------------------------------
     def _build_tray(self) -> None:
+        icon = self._make_icon()
+        self.setWindowIcon(icon)
         self.tray = QSystemTrayIcon(self)
-        self.tray.setIcon(self._tray_icon)
+        self.tray.setIcon(icon)
         self.tray.setToolTip("ChatFlow Orchestrator")
         menu = QMenu(self)
         menu.addAction("Stop", lambda: self.sv.api.stop("{}"))
