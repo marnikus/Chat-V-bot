@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
@@ -27,6 +28,7 @@ class Bridge(QObject):
     preset_list_updated = Signal(str)        # JSON: stack presets
     template_list_updated = Signal(str)      # JSON: template presets
     url_presets_updated = Signal(str)        # JSON: url preset list
+    custom_blocks_updated = Signal(str)      # JSON: custom block presets
     tab_match_result = Signal(str, str)      # query, JSON matches
     stack_loaded = Signal(str, str)          # name, JSON blocks
     template_loaded = Signal(str, str)       # name, body
@@ -37,7 +39,9 @@ class Bridge(QObject):
         self._cdp, self._memory = cdp, memory
         self._criteria, self._engine = criteria, engine
         self._config, self._message_text = config, ""
-        self._presets = presets or PresetStore()
+        # Presets live in the SAME single JSON file as everything else.
+        self._presets = presets or PresetStore(config=self._config)
+        self._presets.import_legacy()
         self._cdp.connected.connect(lambda: self.connection_status.emit("connected"))
         self._cdp.disconnected.connect(lambda: self.connection_status.emit("disconnected"))
         self._cdp.error.connect(lambda e: self.connection_status.emit("error"))
@@ -46,6 +50,47 @@ class Bridge(QObject):
         self._engine.stack_complete.connect(self.stack_complete.emit)
         self._engine.log_msg.connect(lambda m: self.log_message.emit(m, "info"))
         self._engine.debug_msg.connect(lambda m, l: self.log_message.emit(m, l))
+
+    # ── unified app state (BUG #2 restore / single store) ────────
+    @Slot(result=str)
+    def get_app_state(self):
+        """Everything the UI needs to restore the last session: ONE payload."""
+        payload = {
+            "url_presets": list(self._config.get("url_presets", default=[])),
+            "custom_blocks": self._custom_blocks_raw(),
+            "stack_presets": self._presets.list_stacks(),
+            "template_presets": self._presets.list_templates(),
+            "state": {
+                "last_url_preset": self._config.get_state("last_url_preset", ""),
+                "last_stack_preset": self._config.get_state("last_stack_preset", ""),
+                "last_stack": self._config.get_state("last_stack", None),
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False)
+
+    @Slot(str)
+    def set_last_url_preset(self, url):
+        """Remember which URL preset/bookmark was selected (persisted)."""
+        url = (url or "").strip()
+        if not url:
+            return
+        self._config.set_state(last_url_preset=url)
+        self.log_message.emit(f"🔖 Bookmark remembered: {url}", "info")
+
+    @Slot(str)
+    def snapshot_stack(self, stack_json):
+        """Persist the current stack so the next session restores it."""
+        try:
+            blocks = json.loads(stack_json or "[]")
+        except json.JSONDecodeError:
+            return
+        if not isinstance(blocks, list):
+            return
+        self._config.set_state(last_stack=blocks)
+        self._config.set_state(last_stack_preset="")
+
+    def _remember_stack(self, name: str, blocks: list[dict]) -> None:
+        self._config.set_state(last_stack=blocks, last_stack_preset=name)
 
     # ── tab discovery / connection ───────────────────────────────
     @Slot(result=str)
@@ -126,6 +171,10 @@ class Bridge(QObject):
             self._engine.load_stack(blocks)
         except json.JSONDecodeError:
             self.log_message.emit("❌ Bad JSON", "error"); return
+        # remember what is being run for the next session
+        if isinstance(blocks, list):
+            self._config.set_state(last_stack=blocks,
+                                   last_stack_preset="")
         from backend.scroll_parser import ScrollParser
         # honor the SCROLL_PARSE block's own settings when present
         scroll_cfg = next((b for b in blocks
@@ -180,23 +229,7 @@ class Bridge(QObject):
         self.log_message.emit(f"🗑 Cleared {c} users", "warn")
         await self._refresh_users()
 
-    # ── settings ─────────────────────────────────────────────────
-    @Slot(result=str)
-    def get_settings(self): return self._config.to_dict()
-
-    @Slot(str)
-    def save_settings(self, j):
-        try:
-            for sec, vals in json.loads(j).items():
-                if isinstance(vals, dict):
-                    for k, v in vals.items():
-                        self._config.set(sec, k, v)
-            self._config.save()
-            self.log_message.emit("💾 Settings saved", "info")
-        except Exception as e:
-            self.log_message.emit(f"❌ Settings error: {e}", "error")
-
-    # ── stack presets (BUG #1) ───────────────────────────────────
+    # ── stack presets ────────────────────────────────────────────
     @Slot(str, str)
     def save_stack_preset(self, name, stack_json):
         """Save the FULL action stack received from the UI."""
@@ -206,11 +239,16 @@ class Bridge(QObject):
             self.log_message.emit("❌ Preset save aborted: stack is not valid JSON",
                                   "error")
             return
+        if not isinstance(blocks, list):
+            self.log_message.emit("❌ Preset save aborted: bad stack payload",
+                                  "error")
+            return
         try:
             self._presets.save_stack(name, blocks)
         except Exception as exc:
             self.log_message.emit(f"❌ Preset save failed: {exc}", "error")
             return
+        self._remember_stack(name, blocks)
         self._emit_presets()
         self.log_message.emit(
             f"💾 Preset “{name}” saved ({len(blocks)} block(s)) — reload anytime "
@@ -224,6 +262,7 @@ class Bridge(QObject):
             self.log_message.emit(f"❌ Preset “{name}” not found", "error")
             return "null"
         self._engine.load_stack(blocks)
+        self._remember_stack(name, blocks)
         payload = json.dumps(blocks, ensure_ascii=False)
         self.stack_loaded.emit(name, payload)
         self.log_message.emit(f"📂 Preset “{name}” loaded — {len(blocks)} block(s) "
@@ -295,7 +334,7 @@ class Bridge(QObject):
         self.template_list_updated.emit(
             json.dumps(self._presets.list_templates(), ensure_ascii=False))
 
-    # ── URL presets (FEATURE #2) ─────────────────────────────────
+    # ── URL presets ──────────────────────────────────────────────
     @Slot(result=str)
     def get_url_presets(self):
         return json.dumps(list(self._config.get("url_presets", default=[])),
@@ -326,6 +365,49 @@ class Bridge(QObject):
             self._config.save()
             self.log_message.emit(f"🗑 URL preset removed: {url}", "warn")
         self.url_presets_updated.emit(json.dumps(presets, ensure_ascii=False))
+
+    # ── custom Find & Click block presets (FEATURE) ──────────────
+    def _custom_blocks_raw(self) -> list[dict]:
+        raw = self._config.get("custom_blocks", default=[])
+        return raw if isinstance(raw, list) else []
+
+    @Slot(result=str)
+    def list_custom_blocks(self):
+        return json.dumps(self._custom_blocks_raw(), ensure_ascii=False)
+
+    @Slot(str, str)
+    def save_custom_block(self, name, block_json):
+        name = (name or "").strip()
+        try:
+            block = json.loads(block_json or "{}")
+        except json.JSONDecodeError:
+            self.log_message.emit("❌ Block preset save aborted: bad JSON", "error")
+            return
+        if not isinstance(block, dict) or not name:
+            self.log_message.emit("❌ Block preset needs a name and block config",
+                                  "error")
+            return
+        items = [b for b in self._custom_blocks_raw() if isinstance(b, dict)
+                 and b.get("name") != name]
+        items.append({"name": name, "block": block,
+                      "updated_at": datetime.now().isoformat(timespec="seconds")})
+        self._config.set("custom_blocks", items)
+        self._config.save()
+        self.custom_blocks_updated.emit(json.dumps(items, ensure_ascii=False))
+        self.log_message.emit(f"💾 Block preset “{name}” saved — reusable from "
+                              "the + Add menu and Custom Blocks chips", "success")
+
+    @Slot(str)
+    def delete_custom_block(self, name):
+        items = [b for b in self._custom_blocks_raw() if isinstance(b, dict)
+                 and b.get("name") != name]
+        if len(items) != len(self._custom_blocks_raw()):
+            self._config.set("custom_blocks", items)
+            self._config.save()
+            self.custom_blocks_updated.emit(json.dumps(items, ensure_ascii=False))
+            self.log_message.emit(f"🗑 Block preset “{name}” removed", "warn")
+        else:
+            self.log_message.emit(f"⚠ Block preset “{name}” not found", "warn")
 
     # ── engine current stack (compat helper) ─────────────────────
     @Slot(result=str)

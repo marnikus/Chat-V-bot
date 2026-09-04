@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   app.js — Main initialization, QWebChannel bridge, global state
+   app.js — Main initialization, QWebChannel bridge, session restore
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -30,18 +30,48 @@ function initApp() {
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
-    // initial data pull after backend is live
-    StackDnD.refreshPresets();
-    PresetsUI.refreshAll();
-    UrlToolbar.refresh();
+    // single payload with everything needed to restore the session (BUG #2)
+    App.bridge.get_app_state((json) => restoreSession(json));
   }
+}
+
+// ── Session restore (BUG #2 / single preset storage) ──────────
+function restoreSession(json) {
+  let payload = {};
+  try { payload = JSON.parse(json); } catch (e) { payload = {}; }
+
+  // seed chips from the single store
+  PresetsUI.setStackPresets(JSON.stringify(payload.stack_presets || []));
+  PresetsUI.setTemplatePresets(JSON.stringify(payload.template_presets || []));
+  PresetsUI.setCustomBlocks(payload.custom_blocks || []);
+  StackDnD.setCustomBlocks(payload.custom_blocks || []);
+  UrlToolbar.setPresets(JSON.stringify(payload.url_presets || []));
+
+  const state = payload.state || {};
+
+  // 1) restore the last stack (snapshot or the named preset)
+  const lastStack = Array.isArray(state.last_stack) ? state.last_stack : null;
+  const lastPreset = state.last_stack_preset || '';
+  if (Array.isArray(lastStack) && lastStack.length) {
+    StackDnD.setStack(lastStack, { silent: true });
+    LogConsole.log(`♻ Restored last stack (${lastStack.length} block(s))`, 'info');
+  } else if (lastPreset) {
+    PresetsUI.loadStack(lastPreset);
+  } else {
+    StackDnD.refreshPresets();
+  }
+
+  // 2) restore the last bookmark + try auto-connect with its URL
+  UrlToolbar.restoreSession(payload);
+
+  // refresh remaining lists
+  PresetsUI.refreshAll();
 }
 
 // ── Header: tabs + connect ────────────────────────────────────
 function setupHeader() {
   const refreshBtn = document.getElementById('refreshTabsBtn');
   const connectBtn = document.getElementById('connectBtn');
-  const settingsBtn = document.getElementById('settingsBtn');
   const tabSelect = document.getElementById('tabSelect');
 
   refreshBtn.addEventListener('click', () => {
@@ -55,8 +85,6 @@ function setupHeader() {
     if (!wsUrl) { LogConsole.log('⚠ Select a tab first', 'warn'); return; }
     App.bridge.connect_tab(wsUrl);
   });
-
-  settingsBtn.addEventListener('click', openSettings);
 }
 
 // ── Bridge signal listeners ───────────────────────────────────
@@ -67,6 +95,7 @@ function setupBridgeListeners() {
     const tabs = JSON.parse(json);
     App.tabs = tabs;
     const sel = document.getElementById('tabSelect');
+    const prev = sel.value;
     sel.innerHTML = '<option value="">— Select Chrome Tab —</option>';
     tabs.forEach(t => {
       const opt = document.createElement('option');
@@ -74,6 +103,10 @@ function setupBridgeListeners() {
       opt.textContent = `${t.title} — ${t.url}`.substring(0, 80);
       sel.appendChild(opt);
     });
+    // re-select the previous choice if it still exists
+    if (prev && Array.prototype.some.call(sel.options, (o) => o.value === prev)) {
+      sel.value = prev;
+    }
   });
 
   b.connection_status.connect((status) => {
@@ -82,13 +115,6 @@ function setupBridgeListeners() {
     dot.title = status.charAt(0).toUpperCase() + status.slice(1);
     if (status === 'connected') {
       LogConsole.log('🔗 Connected to Chrome tab', 'success');
-      // remember the connected tab URL in the URL field (FEATURE #2)
-      const sel = document.getElementById('tabSelect');
-      if (sel && sel.selectedOptions.length && sel.selectedOptions[0].value) {
-        const m = (sel.selectedOptions[0].textContent || '').match(/—\s*(\S+)\s*$/);
-        const input = document.getElementById('urlInput');
-        if (m && input) input.value = m[1];
-      }
     } else if (status === 'disconnected') {
       LogConsole.log('🔴 Disconnected', 'error');
     }
@@ -115,7 +141,7 @@ function setupBridgeListeners() {
     StackDnD.setRunningBlock(idx - 1);
   });
 
-  b.step_complete.connect((block, nick) => {
+  b.step_complete.connect(() => {
     // (log lines for each step are streamed via log_message)
   });
 
@@ -123,10 +149,17 @@ function setupBridgeListeners() {
     StackDnD.setRunning(false);
   });
 
-  // presets & templates live updates (BUG #1)
+  // presets / templates / custom blocks live updates
   b.preset_list_updated.connect((json) => PresetsUI.setStackPresets(json));
   b.template_list_updated.connect((json) => PresetsUI.setTemplatePresets(json));
   b.url_presets_updated.connect((json) => UrlToolbar.setPresets(json));
+  b.custom_blocks_updated.connect((json) => {
+    try {
+      const list = JSON.parse(json);
+      StackDnD.setCustomBlocks(list);
+      PresetsUI.setCustomBlocks(list);
+    } catch (e) { /* ignore */ }
+  });
   b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
 
   // Load initial criteria display
@@ -134,51 +167,4 @@ function setupBridgeListeners() {
     CriteriaEditor.loadFromJson(json);
     CriteriaEditor.renderDisplay();
   });
-}
-
-// ── Settings modal ────────────────────────────────────────────
-function openSettings() {
-  const modal = document.getElementById('settingsModal');
-  modal.classList.remove('hidden');
-  if (App.bridge) {
-    App.bridge.get_settings((json) => renderSettingsForm(JSON.parse(json)));
-  }
-  document.getElementById('settingsSaveBtn').onclick = () => {
-    const data = collectSettingsForm();
-    if (App.bridge) App.bridge.save_settings(JSON.stringify(data));
-    modal.classList.add('hidden');
-  };
-  document.getElementById('settingsCancelBtn').onclick = () => {
-    modal.classList.add('hidden');
-  };
-}
-
-function renderSettingsForm(settings) {
-  const form = document.getElementById('settingsForm');
-  form.innerHTML = '';
-  for (const [section, values] of Object.entries(settings)) {
-    if (typeof values !== 'object') continue;
-    const h = document.createElement('h4');
-    h.textContent = section.toUpperCase();
-    h.style.cssText = 'margin:12px 0 6px;color:var(--text-secondary);font-size:11px;letter-spacing:1px';
-    form.appendChild(h);
-    for (const [key, val] of Object.entries(values)) {
-      const row = document.createElement('div');
-      row.className = 'form-row';
-      row.innerHTML = `<label>${key}</label><input data-section="${section}" data-key="${key}" value="${val}" type="${typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'checkbox' : 'text'}" ${typeof val === 'boolean' && val ? 'checked' : ''}>`;
-      form.appendChild(row);
-    }
-  }
-}
-
-function collectSettingsForm() {
-  const data = {};
-  document.querySelectorAll('#settingsForm input[data-section]').forEach(inp => {
-    const s = inp.dataset.section, k = inp.dataset.key;
-    if (!data[s]) data[s] = {};
-    if (inp.type === 'checkbox') data[s][k] = inp.checked;
-    else if (inp.type === 'number') data[s][k] = Number(inp.value);
-    else data[s][k] = inp.value;
-  });
-  return data;
 }

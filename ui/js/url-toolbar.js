@@ -1,15 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════
-   url-toolbar.js — URL Parse Preset (FEATURE #2)
+   url-toolbar.js — URL Parse Preset (FEATURE #2) + bookmark restore
 
    Parses the URL / keyword in the field, matches it against the open
    Chrome tabs and auto-connects to the best match. Saved URL presets are
-   rendered as small chips (click ⇒ parse & connect).
+   rendered as small chips (click ⇒ parse & connect). The last selected
+   bookmark is highlighted and persisted via set_last_url_preset().
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
 const UrlToolbar = {
   presets: [],
+  selectedUrl: '',
+  _autoConnected: false,
 
   init() {
     const input = document.getElementById('urlInput');
@@ -21,15 +24,23 @@ const UrlToolbar = {
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doConnect(); });
     addBtn.addEventListener('click', () => this.addPreset(input.value.trim()));
 
-    // auto-fill the field with the connected tab's URL
+    // manual connect via the header: keep the URL field/bookmark in sync
     document.getElementById('connectBtn').addEventListener('click', () => {
-      const sel = document.getElementById('tabSelect');
-      if (sel && sel.selectedOptions.length && sel.selectedOptions[0].value) {
-        const label = sel.selectedOptions[0].textContent || '';
-        const m = label.match(/—\s*(\S+)\s*$/);
-        if (m) input.value = m[1];
+      const url = this._selectedTabUrl();
+      if (url) {
+        input.value = url;
+        this.rememberUrl(url);
       }
     });
+  },
+
+  // url of the currently selected option in the tab dropdown
+  _selectedTabUrl() {
+    const sel = document.getElementById('tabSelect');
+    if (!sel || !sel.selectedOptions.length || !sel.selectedOptions[0].value) return '';
+    const label = sel.selectedOptions[0].textContent || '';
+    const m = label.match(/—\s*(\S+)\s*$/);
+    return m ? m[1] : '';
   },
 
   setPresets(json) {
@@ -47,24 +58,22 @@ const UrlToolbar = {
     el.innerHTML = '';
     this.presets.forEach((url) => {
       const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.title = `Parse & connect: ${url}`;
+      const isSel = url === this.selectedUrl;
+      chip.className = 'chip' + (isSel ? ' chip-selected' : '');
+      chip.title = (isSel ? '✓ last bookmark — ' : 'Parse & connect: ') + url;
       const t = document.createElement('span');
       t.className = 'chip-title';
-      t.textContent = '🔗 ' + this.shortUrl(url);
+      t.textContent = (isSel ? '🔖 ' : '🔗 ') + this.shortUrl(url);
       const x = document.createElement('span');
       x.className = 'chip-x';
       x.textContent = '×';
       x.title = 'Remove preset';
       chip.appendChild(t);
       chip.appendChild(x);
-      chip.addEventListener('click', () => {
-        const input = document.getElementById('urlInput');
-        if (input) input.value = url;
-        this.connectNow(url);
-      });
+      chip.addEventListener('click', () => this.selectBookmark(url, { connect: true }));
       x.addEventListener('click', (ev) => {
         ev.stopPropagation();
+        if (this.selectedUrl === url) this.selectedUrl = '';
         if (App.bridge) App.bridge.remove_url_preset(url);
       });
       el.appendChild(chip);
@@ -72,6 +81,26 @@ const UrlToolbar = {
     if (!this.presets.length) {
       el.innerHTML = '<span class="preset-row-empty">no URL presets — type a URL above and press +</span>';
     }
+  },
+
+  // ── bookmark selection & persistence (BUG #2) ────────────────
+  selectBookmark(url, opts) {
+    opts = opts || {};
+    url = String(url || '').trim();
+    if (!url) return;
+    this.selectedUrl = url;
+    const input = document.getElementById('urlInput');
+    if (input) input.value = url;
+    this.renderChips();
+    if (opts.notify !== false && App.bridge) {
+      App.bridge.set_last_url_preset(url);
+    }
+    if (opts.connect) this.connectNow(url);
+  },
+
+  rememberUrl(url) {
+    // mark + persist the bookmark without triggering a new connect
+    this.selectBookmark(url, { connect: false, notify: true });
   },
 
   addPreset(url) {
@@ -113,10 +142,25 @@ const UrlToolbar = {
       }
     }
     LogConsole.log(`🎯 Auto-selected tab: ${best.title} — ${best.url}`, 'success');
+    if (best.url) this.selectBookmark(best.url, { connect: false, notify: true });
     if (App.bridge) {
       const dot = document.getElementById('connectionStatus');
       if (dot) dot.className = 'status-dot connecting';
       App.bridge.connect_tab(best.ws_url);
+    }
+  },
+
+  // ── session restore (BUG #2) ─────────────────────────────────
+  restoreSession(payload) {
+    const url = String(payload.state?.last_url_preset || '').trim();
+    if (url) {
+      this.selectBookmark(url, { connect: false, notify: false });
+      LogConsole.log(`🔖 Restored bookmark: ${url}`, 'info');
+      // attempt the auto-connect once after startup
+      if (!this._autoConnected && App.bridge) {
+        this._autoConnected = true;
+        setTimeout(() => this.connectNow(url), 600);
+      }
     }
   },
 

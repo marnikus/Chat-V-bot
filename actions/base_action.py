@@ -53,6 +53,14 @@ class BaseAction(ABC):
     def config_schema(self) -> dict:
         return {"pre_delay_ms": {"type": "number", "default": 500, "label": "Pre-delay (ms)"}}
 
+    @property
+    def display_name(self) -> str:
+        """Name shown in the stack/logs: custom block name if set."""
+        custom = getattr(self, "custom_name", None)
+        if isinstance(custom, str) and custom.strip():
+            return custom.strip()
+        return self.name
+
     def to_dict(self) -> dict:
         """Serialize the block with ALL of its settings (round-trip safe)."""
         d: dict[str, Any] = {"block_id": self.block_id}

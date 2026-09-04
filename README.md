@@ -74,6 +74,7 @@ The app window will open and **automatically detect** your open Chrome tabs.
 
 ### Build an Action Stack
 Drag blocks from the **+ Add** menu into the stack area, or click them to add:
+- **Find & Click** — configurable search-and-click block (see below)
 - **Click Main Tab** — switch to a chat room tab
 - **Scroll Parse** — scroll through the user list and collect users
 - **Click User** — click on a specific user to open private chat
@@ -85,18 +86,37 @@ Drag blocks from the **+ Add** menu into the stack area, or click them to add:
 - **Pause** — add a delay between actions
 - **Conditional Skip** — skip users already messaged
 
-### Configure Blocks
-Click on any block in the stack to open its **config panel** on the right.
-Each block has its own settings (selectors, text, delays, etc.).
+### Find & Click — configurable action block
+A generic reusable block that is configured entirely through the UI:
+1. Add **🔎 Find & Click** and click it to open its config panel.
+2. Two search fields (CSS selectors):
+   - **Element to find** — the clickable element (the "rectangle"),
+     e.g. `div[role='tab'].tab-item`.
+   - **Text element inside** — the element *inside* whose text is searched,
+     e.g. `p.chat-title`, plus an optional **text to match** (`Settings`).
+3. Tick **Click after found** to click it (or leave it to find-only).
+4. Give the block a **custom name** (e.g. "Find Settings Button") — the name
+   is shown in the stack and logs.
+5. Press **Save Block as Preset** — it becomes a chip under "Custom blocks"
+   and an entry at the top of the **+ Add** menu for reuse in other stacks.
+   Use **×** on a chip to remove a preset you no longer need.
 
 ### Save / Load Presets (full action stack)
 - **💾 Save** — name the preset and the **complete stack** (block order + every
-  block setting) is stored in `chatbot.db`.
+  block setting) is stored in the single preset file `config.json`.
 - Every saved preset appears as a small **chip** under "Saved presets" and in
   the **folder picker list** — click either to load it back. Chips survive an
   app restart (close → reopen → click chip → full stack restored).
 - **Save Template / Load Template ▾** work the same way for message templates.
 - Deletion is confirmed through an in-app dialog (no browser dialogs needed).
+
+### Session restore on startup
+On every start the app restores the previous session from the same single
+`config.json` store:
+- the **last bookmark** is selected again (chip highlighted, URL field filled);
+- an **auto-connect attempt** is made using that bookmark's URL;
+- the **last used stack** (or the last named preset) is loaded into the editor;
+- all preset/template/URL/custom-block chips are restored.
 
 ### URL Presets (auto-connect by URL)
 The toolbar below the header holds a **URL field** and quick-connect presets:
@@ -105,7 +125,12 @@ The toolbar below the header holds a **URL field** and quick-connect presets:
    open Chrome tab (exact URL → path → host → keyword) and **automatically
    selects and connects** to the best match.
 3. Press **+** to store the current URL as a new preset chip, **×** on a chip
-   to remove it.
+   to remove it. The last selected bookmark is remembered for next startup.
+
+### Closing the app
+Clicking the window close button (X) shuts the whole process down cleanly —
+background tasks are cancelled, the Chrome connection is closed and the
+terminal prompt returns. A watchdog force-exits after 3 s if anything blocks.
 
 ### Message Composer
 Type your message in the bottom composer area. Use `{{nick}}` to insert the
@@ -152,13 +177,14 @@ The **Log Console** is a live step-by-step debugger for every block:
 │   ├── scroll_parser.py     # Virtual scroll user extractor
 │   ├── message_injector.py  # Message typing via CDP
 │   ├── media_handler.py     # Image attachment via CDP
-│   ├── config_manager.py    # JSON settings manager
-│   ├── preset_store.py      # SQLite stack/template preset store
+│   ├── config_manager.py    # SINGLE JSON file: settings + presets + state
+│   ├── preset_store.py      # JSON-backed stack/template presets (same file)
 │   ├── dom_probe.py         # DOM probe JS + result interpreter (debugger)
 │   ├── tab_matcher.py       # URL → tab matching (URL presets)
 │   └── logger.py            # File + console logging
 ├── actions/
 │   ├── base_action.py       # Action base class + registry
+│   ├── custom_find.py       # Configurable Find & Click block (CUSTOM_FIND)
 │   ├── click_main_tab.py    # Switch chat tab
 │   ├── scroll_parse.py      # Scroll & collect users
 │   ├── click_user.py        # Open user private chat
@@ -172,9 +198,11 @@ The **Log Console** is a live step-by-step debugger for every block:
 ├── ui/
 │   ├── index.html           # Main UI shell
 │   ├── css/                 # Stylesheets (dark theme)
-│   └── js/                  # Frontend logic (stack, table, criteria, composer, log)
+│   └── js/                  # stack-dnd, presets-ui, url-toolbar, composer, log…
 ├── docs/
 │   ├── ARCHITECTURE.md      # Full architecture document
-│   └── DOM_SELECTORS.md     # DOM selector reference
+│   ├── DOM_SELECTORS.md     # DOM selector reference
+│   ├── FIXES_DESIGN_2026-09-04.md   # v1 fix design (presets/URL/debugger)
+│   └── FIXES2_DESIGN_2026-09-04.md  # v2 fix design (exit/restore/custom blocks)
 └── logs/                    # Runtime log files
 ```

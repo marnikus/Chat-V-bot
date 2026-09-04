@@ -230,13 +230,14 @@ class ActionEngine(QObject):
             if block.block_id == "SCROLL_PARSE":
                 continue  # already handled in parse phase
             self._ctx = {"step": idx, "total_steps": total,
-                         "block_id": block.block_id, "block_name": block.name,
+                         "block_id": block.block_id,
+                         "block_name": block.display_name,
                          "user": user.nick}
             self.step_started.emit(idx, block.block_id, user.nick)
             started = time.monotonic()
             self.debug_msg.emit(
-                f"▶▶ Step {idx}/{total} [{block.icon}] {block.name} — user: {user.nick}",
-                "info")
+                f"▶▶ Step {idx}/{total} [{block.icon}] {block.display_name} "
+                f"— user: {user.nick}", "info")
             self._tracer.note({"type": "step_start", **self._ctx})
             try:
                 result = await block.execute(user.nick, self._cdp, self)
@@ -244,8 +245,8 @@ class ActionEngine(QObject):
                 log.exception("Block error")
                 self._tracer.note({"type": "step_end", "status": "exception",
                                    "error": str(exc), **self._ctx})
-                self.debug_msg.emit(f"      ❌ {block.name} raised: {exc}", "error")
-                self.step_complete.emit(block.name, user.nick)
+                self.debug_msg.emit(f"      ❌ {block.display_name} raised: {exc}", "error")
+                self.step_complete.emit(block.display_name, user.nick)
                 self._ctx = {}
                 return False
             elapsed = time.monotonic() - started
@@ -254,11 +255,11 @@ class ActionEngine(QObject):
                 self.debug_msg.emit(f"      ✓ Step {idx} OK ({elapsed:.2f}s)", "success")
                 self._tracer.note({"type": "step_end", "status": "ok",
                                    "duration_s": round(elapsed, 3), **self._ctx})
-                self.step_complete.emit(block.name, user.nick)
+                self.step_complete.emit(block.display_name, user.nick)
             elif result == ActionResult.SKIP:
                 self.debug_msg.emit(f"      ⏭ Step {idx} skipped", "warn")
                 self._tracer.note({"type": "step_end", "status": "skip", **self._ctx})
-                self.step_complete.emit(block.name, user.nick)
+                self.step_complete.emit(block.display_name, user.nick)
                 self._ctx = {}
                 return False
             else:
@@ -267,7 +268,7 @@ class ActionEngine(QObject):
                     "error")
                 self._tracer.note({"type": "step_end", "status": "fail",
                                    "duration_s": round(elapsed, 3), **self._ctx})
-                self.step_complete.emit(block.name, user.nick)
+                self.step_complete.emit(block.display_name, user.nick)
                 self._ctx = {}
                 return False
             self._ctx = {}

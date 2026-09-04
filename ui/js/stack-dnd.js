@@ -4,7 +4,10 @@
 
 'use strict';
 
-const AVAILABLE_BLOCKS = [
+const BUILTIN_BLOCKS = [
+  { block_id:'CUSTOM_FIND',    name:'Find & Click',     icon:'🔎',
+    defaults:{custom_name:'', selector:"div[role='tab'].tab-item", label_selector:'p.chat-title', match_text:'', click_enabled:true, click_selector:'', pre_delay_ms:500},
+    labels:{custom_name:'Block name (shown in stack)', selector:'Element to find (CSS)', label_selector:'Text element inside (CSS)', match_text:'Text to match inside (optional)', click_enabled:'Click after found', click_selector:'Element inside to click (optional)', pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'CLICK_MAIN_TAB', name:'Click Main Tab',   icon:'🏠',
     defaults:{selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', pre_delay_ms:500},
     labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name (text match)', pre_delay_ms:'Pre-delay (ms)'} },
@@ -38,10 +41,13 @@ const AVAILABLE_BLOCKS = [
 const StackDnD = {
   stack: [],
   selectedIdx: -1,
+  customBlocks: [],       // reusable Find & Click presets: [{name, block, updated_at}]
   _sortable: null,
   _running: false,
   _runningIdx: -1,
   _paused: false,
+  _restoring: false,
+  _snapshotTimer: null,
 
   init() {
     this._initDefaultStack();
@@ -64,6 +70,46 @@ const StackDnD = {
     ];
   },
 
+  // ── display helpers ──────────────────────────────────────────
+  _meta(blockId) {
+    return BUILTIN_BLOCKS.find(a => a.block_id === blockId) || { name: blockId, icon:'?' };
+  },
+
+  _displayName(b) {
+    const meta = this._meta(b.block_id);
+    if (b.custom_name && String(b.custom_name).trim()) return String(b.custom_name).trim();
+    return meta.name;
+  },
+
+  _summary(b) {
+    const parts = [];
+    for (const [k, v] of Object.entries(b)) {
+      if (['block_id','pre_delay_ms'].includes(k)) continue;
+      if (k === 'custom_name') { parts.push(`name="${v}"`); continue; }
+      if (k === 'click_enabled') { parts.push(v ? 'click=on' : 'click=off'); continue; }
+      if (k === 'click_selector' && !v) continue;
+      parts.push(`${k}=${String(v).substring(0, 24)}`);
+    }
+    return parts.join(' · ') || `delay: ${b.pre_delay_ms || 0}ms`;
+  },
+
+  // ── custom Find & Click presets ──────────────────────────────
+  setCustomBlocks(list) {
+    this.customBlocks = Array.isArray(list)
+      ? list.map((c) => ({ ...c, block: c.block ? { ...c.block } : {} }))
+      : [];
+  },
+
+  // insert a configured block (from built-in defaults or a saved preset)
+  addBlockConfig(config) {
+    if (!config || typeof config !== 'object' || !config.block_id) return;
+    const c = { ...config };
+    if (typeof c.pre_delay_ms !== 'number') c.pre_delay_ms = 500;
+    this.stack.push(c);
+    this._renderStack();
+    this.notifyEdited();
+  },
+
   _renderStack() {
     const list = document.getElementById('stackList');
     if (!this.stack.length) {
@@ -71,18 +117,16 @@ const StackDnD = {
       return;
     }
     list.innerHTML = this.stack.map((b, i) => {
-      const meta = AVAILABLE_BLOCKS.find(a => a.block_id === b.block_id) || { name: b.block_id, icon:'?' };
-      const summary = Object.entries(b)
-        .filter(([k]) => !['block_id','pre_delay_ms'].includes(k))
-        .map(([k,v]) => `${k}=${String(v).substring(0,20)}`)
-        .join(' · ') || `delay: ${b.pre_delay_ms||0}ms`;
+      const meta = this._meta(b.block_id);
+      const title = this._displayName(b);
+      const summary = this._summary(b);
       const sel = i === this.selectedIdx ? ' active' : '';
       const run = i === this._runningIdx && this._running ? ' block-running' : '';
       return `<div class="stack-item${sel}${run}" data-idx="${i}">
         <span class="drag-handle">⠿</span>
         <span class="block-icon">${meta.icon}</span>
         <div class="block-info">
-          <div class="block-name">${meta.name}</div>
+          <div class="block-name">${title}</div>
           <div class="block-summary">${summary}</div>
         </div>
         <span class="block-remove" onclick="event.stopPropagation();StackDnD.removeBlock(${i})">✕</span>
@@ -116,45 +160,74 @@ const StackDnD = {
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       onEnd: (evt) => {
+        if (evt.oldIndex === evt.newIndex) return;
         const item = this.stack.splice(evt.oldIndex, 1)[0];
         this.stack.splice(evt.newIndex, 0, item);
         this._renderStack();
+        this.notifyEdited();
       },
     });
   },
 
+  // ── + Add menu (built-ins + saved custom Find & Click blocks) ─
   _setupAddMenu() {
     const btn = document.getElementById('addBlockBtn');
     const menu = document.getElementById('addBlockMenu');
-    btn.addEventListener('click', (e) => {
+    const open = (e) => {
       e.stopPropagation();
       menu.classList.toggle('hidden');
       if (!menu.classList.contains('hidden')) {
+        this._renderMenu(menu);
         const rect = btn.getBoundingClientRect();
-        menu.style.top = rect.bottom + 4 + 'px';
-        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.left = (rect.left + 4) + 'px';
       }
-    });
-    menu.innerHTML = AVAILABLE_BLOCKS.map(b =>
+    };
+    btn.addEventListener('click', open);
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+  },
+
+  _renderMenu(menu) {
+    let html = '';
+    if (this.customBlocks.length) {
+      html += '<div class="add-menu-section">Custom blocks</div>';
+      html += this.customBlocks.map((c, ci) => {
+        const blk = c.block || {};
+        const icon = '🔎';
+        const label = blk.custom_name || c.name || 'Custom block';
+        return `<div class="menu-item" data-custom="${ci}">
+          <span class="mi-icon">${icon}</span> ${label}
+        </div>`;
+      }).join('');
+      html += '<div class="add-menu-section">Built-in blocks</div>';
+    }
+    html += BUILTIN_BLOCKS.map(b =>
       `<div class="menu-item" data-block="${b.block_id}">
         <span class="mi-icon">${b.icon}</span> ${b.name}
       </div>`
     ).join('');
-    menu.querySelectorAll('.menu-item').forEach(el => {
+    menu.innerHTML = html;
+    menu.querySelectorAll('.menu-item[data-block]').forEach(el => {
       el.addEventListener('click', () => {
         const bid = el.dataset.block;
-        const meta = AVAILABLE_BLOCKS.find(b => b.block_id === bid);
-        this.stack.push({ block_id: bid, pre_delay_ms: 500, ...(meta?.defaults || {}) });
-        this._renderStack();
+        const meta = this._meta(bid);
+        this.addBlockConfig({ block_id: bid, pre_delay_ms: 500, ...(meta.defaults || {}) });
         menu.classList.add('hidden');
       });
     });
-    document.addEventListener('click', () => menu.classList.add('hidden'));
+    menu.querySelectorAll('.menu-item[data-custom]').forEach(el => {
+      el.addEventListener('click', () => {
+        const c = this.customBlocks[parseInt(el.dataset.custom)];
+        if (c && c.block) this.addBlockConfig(c.block);
+        menu.classList.add('hidden');
+      });
+    });
   },
 
   _setupButtons() {
     document.getElementById('runBtn').addEventListener('click', () => {
       if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+      if (!this.stack.length) { LogConsole.log('⚠ Stack is empty — add blocks first', 'warn'); return; }
       this._running = true;
       this._runningIdx = -1;
       this._paused = false;
@@ -208,15 +281,30 @@ const StackDnD = {
     });
   },
 
-  // ── programmatic stack replacement (preset load) ─────────────
-  setStack(blocks) {
+  // ── session snapshot (BUG #2) ────────────────────────────────
+  notifyEdited() {
+    if (this._running || this._restoring || !App.bridge) return;
+    clearTimeout(this._snapshotTimer);
+    this._snapshotTimer = setTimeout(() => {
+      if (!this._running && App.bridge) {
+        App.bridge.snapshot_stack(JSON.stringify(this.stack));
+      }
+    }, 800);
+  },
+
+  // ── programmatic stack replacement (preset load / session) ───
+  setStack(blocks, opts) {
     if (!Array.isArray(blocks)) return;
+    opts = opts || {};
+    const prev = this._restoring;
+    if (opts.silent) this._restoring = true;
     this.stack = blocks.map((b) => ({ ...b }));
     this.selectedIdx = -1;
     this._runningIdx = -1;
     this._renderStack();
     const panel = document.getElementById('blockConfigPanel');
     if (panel) panel.classList.add('hidden');
+    if (opts.silent) this._restoring = prev; else this.notifyEdited();
   },
 
   refreshPresets() {
@@ -249,7 +337,6 @@ const StackDnD = {
   setRunningBlock(idx) {
     this._runningIdx = idx;
     if (!this._running) this._running = true;
-    // toggle classes without a full re-render to keep DnD state
     const list = document.getElementById('stackList');
     if (!list) return;
     list.querySelectorAll('.stack-item').forEach((el) => {
@@ -268,6 +355,7 @@ const StackDnD = {
     this.stack.splice(idx, 1);
     if (this.selectedIdx >= this.stack.length) this.selectedIdx = this.stack.length - 1;
     this._renderStack();
+    this.notifyEdited();
   },
 
   _showConfig(idx) {
@@ -276,27 +364,61 @@ const StackDnD = {
     const block = this.stack[idx];
     if (!block) { panel.classList.add('hidden'); return; }
     panel.classList.remove('hidden');
-    const meta = AVAILABLE_BLOCKS.find(b => b.block_id === block.block_id) || {};
+    const meta = this._meta(block.block_id);
     const labels = meta.labels || {};
-    form.innerHTML = `<div class="form-row"><label>Block</label><span style="font-weight:600">${meta.icon||''} ${meta.name||block.block_id}</span></div>`;
+    form.innerHTML = `<div class="form-row"><label>Block</label><span style="font-weight:600">${meta.icon||''} ${this._displayName(block)}</span></div>`;
     for (const [key, val] of Object.entries(block)) {
       if (key === 'block_id') continue;
-      const inputType = typeof val === 'number' ? 'number' : 'text';
       const labelText = labels[key] || key;
-      const safeVal = String(val).replace(/"/g, '&quot;');
-      form.innerHTML += `<div class="form-row">
-        <label>${labelText}</label>
-        <input data-key="${key}" value="${safeVal}" type="${inputType}">
-      </div>`;
+      if (typeof val === 'boolean') {
+        form.innerHTML += `<div class="form-row form-row-check">
+          <label>${labelText}</label>
+          <input data-key="${key}" type="checkbox" ${val ? 'checked' : ''}>
+        </div>`;
+      } else {
+        const inputType = typeof val === 'number' ? 'number' : 'text';
+        const safeVal = String(val).replace(/"/g, '&quot;');
+        form.innerHTML += `<div class="form-row">
+          <label>${labelText}</label>
+          <input data-key="${key}" value="${safeVal}" type="${inputType}">
+        </div>`;
+      }
     }
     form.querySelectorAll('input[data-key]').forEach(inp => {
       inp.addEventListener('change', () => {
         const k = inp.dataset.key;
-        block[k] = inp.type === 'number' ? Number(inp.value) : inp.value;
+        if (inp.type === 'checkbox') block[k] = inp.checked;
+        else block[k] = inp.type === 'number' ? Number(inp.value) : inp.value;
         this._renderStack();
+        this.notifyEdited();
       });
     });
     document.getElementById('closeConfigBtn').onclick = () => panel.classList.add('hidden');
+
+    // Save Block preset action (only for configurable Find & Click blocks)
+    const actions = document.getElementById('customBlockActions');
+    if (block.block_id === 'CUSTOM_FIND' && App.bridge) {
+      actions.classList.remove('hidden');
+      const btn = document.getElementById('saveCustomBlockBtn');
+      btn.onclick = () => this._saveBlockPreset(block);
+    } else {
+      actions.classList.add('hidden');
+    }
+  },
+
+  _saveBlockPreset(block) {
+    if (!App.bridge) return;
+    const useName = (name) => {
+      block.custom_name = name;
+      this._renderStack();
+      App.bridge.save_custom_block(name, JSON.stringify(block));
+    };
+    if (block.custom_name && String(block.custom_name).trim()) {
+      useName(String(block.custom_name).trim());
+    } else {
+      PresetsUI.promptName('Save block as preset (also used as the block name)',
+        'e.g. Find Settings Button', 'Save', useName);
+    }
   },
 };
 

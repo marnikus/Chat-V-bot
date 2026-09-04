@@ -9,6 +9,7 @@
 const PresetsUI = {
   stackPresets: [],
   templatePresets: [],
+  customBlocks: [],
 
   // ── escaping / tiny helpers ─────────────────────────────────
   esc(s) {
@@ -155,6 +156,54 @@ const PresetsUI = {
     });
   },
 
+  // ── custom Find & Click block presets (FEATURE) ─────────────
+  setCustomBlocks(list) {
+    this.customBlocks = Array.isArray(list)
+      ? list.map((c) => ({ ...c, block: c.block ? { ...c.block } : {} }))
+      : [];
+    this.renderCustomChips();
+  },
+
+  setCustomBlocksJson(json) {
+    try { this.setCustomBlocks(JSON.parse(json)); }
+    catch (e) { this.setCustomBlocks([]); }
+  },
+
+  renderCustomChips() {
+    const el = document.getElementById('customBlockChips');
+    if (!el) return;
+    if (!this.customBlocks.length) {
+      el.innerHTML = '<span class="preset-row-empty">no saved blocks — create a “Find &amp; Click” block and press Save Block</span>';
+      return;
+    }
+    el.innerHTML = '';
+    this.customBlocks.forEach((c) => {
+      const blk = c.block || {};
+      const label = blk.custom_name || c.name || 'Custom block';
+      const icon = '🔎';
+      const chip = this._makeChip(
+        `${icon} ${label}`, '',
+        () => this.addCustomBlock(c),
+        () => this.deleteCustomBlock(c.name || label)
+      );
+      chip.title = 'Add this Find & Click block to the stack';
+      el.appendChild(chip);
+    });
+  },
+
+  addCustomBlock(entry) {
+    if (!entry || !entry.block) return;
+    if (StackDnD && typeof StackDnD.addBlockConfig === 'function') {
+      StackDnD.addBlockConfig(entry.block);
+      LogConsole.log(`🔎 Custom block “${entry.block.custom_name || entry.name}” added to the stack`, 'success');
+    }
+  },
+
+  deleteCustomBlock(name) {
+    if (!App.bridge) return;
+    this.confirmDelete('block preset', name, () => App.bridge.delete_custom_block(name));
+  },
+
   // ── shared ──────────────────────────────────────────────────
   _makeChip(title, meta, onLoad, onDelete) {
     const chip = document.createElement('span');
@@ -198,6 +247,7 @@ const PresetsUI = {
     if (!App.bridge) return;
     App.bridge.list_stack_presets((json) => this.setStackPresets(json));
     App.bridge.list_template_presets((json) => this.setTemplatePresets(json));
+    App.bridge.list_custom_blocks((json) => this.setCustomBlocksJson(json));
   },
 
   // ── modals (Qt WebEngine doesn't support prompt()/confirm()) ──

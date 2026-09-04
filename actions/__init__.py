@@ -14,6 +14,7 @@ from actions import (  # noqa: F401
     click_send,
     click_user,
     conditional_skip,
+    custom_find,
     pause,
     scroll_parse,
     type_message,

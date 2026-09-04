@@ -1,70 +1,30 @@
-"""Persistent preset store (SQLite) for action stacks and message templates.
+"""Preset store backed by the SINGLE config.json file.
 
-Deliberately synchronous: the data volumes are tiny (a few KB) and the
-bridge/QWebChannel API is synchronous, so save/load/list must return
-immediately without async race conditions. WAL mode + busy timeout keep
-it safe alongside UserMemory's aiosqlite connection on the same file.
+All presets (action stacks, message templates) are stored together with
+the rest of the settings/state in one place (ConfigManager → config.json),
+per the "single preset storage" requirement. A one-time import from the
+legacy SQLite tables keeps previously saved presets from older builds.
 """
 
 import json
 import logging
 import os
 import sqlite3
-import threading
 from datetime import datetime
 from typing import Any, Optional
 
-log = logging.getLogger("chatbot")
+from backend.config_manager import ConfigManager
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS stacks (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT UNIQUE NOT NULL,
-    blocks     TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS templates (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT UNIQUE NOT NULL,
-    body       TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-"""
+log = logging.getLogger("chatbot")
 
 
 class PresetStore:
-    """CRUD for stack presets and message templates."""
+    """CRUD for named stack presets and message templates (JSON-backed)."""
 
-    def __init__(self, db_path: str = "chatbot.db"):
-        self._db_path = db_path
-        self._lock = threading.Lock()
-        self._ensure_schema()
+    def __init__(self, config: Optional[ConfigManager] = None):
+        self._config = config or ConfigManager()
 
-    # ── connection helpers ───────────────────────────────────────
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout=8000")
-        try:
-            conn.execute("PRAGMA journal_mode=WAL")
-        except sqlite3.Error:
-            pass
-        return conn
-
-    def _ensure_schema(self) -> None:
-        with self._lock:
-            try:
-                conn = self._connect()
-                try:
-                    conn.executescript(_SCHEMA)
-                    conn.commit()
-                finally:
-                    conn.close()
-            except sqlite3.Error as exc:
-                log.error("PresetStore schema init failed: %s", exc)
-
+    # ── timestamp ────────────────────────────────────────────────
     @staticmethod
     def _now() -> str:
         return datetime.now().isoformat(timespec="seconds")
@@ -74,121 +34,118 @@ class PresetStore:
         name = (name or "").strip()
         if not name:
             raise ValueError("Preset name cannot be empty")
-        payload = json.dumps(list(blocks or []), ensure_ascii=False)
-        now = self._now()
-        with self._lock:
-            conn = self._connect()
-            try:
-                conn.execute(
-                    "INSERT INTO stacks(name, blocks, created_at, updated_at) "
-                    "VALUES(?,?,?,?) "
-                    "ON CONFLICT(name) DO UPDATE SET "
-                    "blocks=excluded.blocks, updated_at=excluded.updated_at",
-                    (name, payload, now, now))
-                conn.commit()
-            finally:
-                conn.close()
+        entry = {"blocks": list(blocks or []),
+                 "updated_at": self._now()}
+        self._config.named_set("stack_presets", name, entry)
         log.info("Stack preset saved: '%s' (%d blocks)", name, len(blocks or []))
 
     def load_stack(self, name: str) -> Optional[list[dict]]:
-        with self._lock:
-            conn = self._connect()
-            try:
-                cur = conn.execute("SELECT blocks FROM stacks WHERE name=?", (name,))
-                row = cur.fetchone()
-            finally:
-                conn.close()
-        if not row:
+        entry = self._config.named_get("stack_presets", name)
+        if not isinstance(entry, dict):
             return None
-        try:
-            data = json.loads(row["blocks"])
-            return data if isinstance(data, list) else None
-        except (json.JSONDecodeError, TypeError):
-            log.error("Stack preset '%s' has corrupt JSON", name)
+        blocks = entry.get("blocks")
+        if not isinstance(blocks, list):
             return None
+        return list(blocks)
 
     def list_stacks(self) -> list[dict[str, Any]]:
-        with self._lock:
-            conn = self._connect()
-            try:
-                cur = conn.execute(
-                    "SELECT name, blocks, updated_at FROM stacks "
-                    "ORDER BY updated_at DESC, name COLLATE NOCASE")
-                rows = cur.fetchall()
-            finally:
-                conn.close()
         out: list[dict[str, Any]] = []
-        for r in rows:
-            try:
-                count = len(json.loads(r["blocks"]))
-            except (json.JSONDecodeError, TypeError):
-                count = 0
-            out.append({"name": r["name"], "blocks": count,
-                        "updated_at": r["updated_at"] or ""})
+        for name, entry in self._config.named_all("stack_presets").items():
+            if not isinstance(entry, dict):
+                continue
+            blocks = entry.get("blocks")
+            out.append({
+                "name": name,
+                "blocks": len(blocks) if isinstance(blocks, list) else 0,
+                "updated_at": entry.get("updated_at", ""),
+            })
+        out.sort(key=lambda r: (r["updated_at"] or "", r["name"]), reverse=True)
         return out
 
     def delete_stack(self, name: str) -> bool:
-        with self._lock:
-            conn = self._connect()
-            try:
-                cur = conn.execute("DELETE FROM stacks WHERE name=?", (name,))
-                conn.commit()
-                return cur.rowcount > 0
-            finally:
-                conn.close()
+        return self._config.named_delete("stack_presets", name)
 
     # ── templates (message presets) ──────────────────────────────
     def save_template(self, name: str, body: str) -> None:
         name = (name or "").strip()
         if not name:
             raise ValueError("Template name cannot be empty")
-        now = self._now()
-        with self._lock:
-            conn = self._connect()
-            try:
-                conn.execute(
-                    "INSERT INTO templates(name, body, created_at, updated_at) "
-                    "VALUES(?,?,?,?) "
-                    "ON CONFLICT(name) DO UPDATE SET "
-                    "body=excluded.body, updated_at=excluded.updated_at",
-                    (name, body or "", now, now))
-                conn.commit()
-            finally:
-                conn.close()
+        entry = {"body": body or "", "updated_at": self._now()}
+        self._config.named_set("template_presets", name, entry)
         log.info("Template saved: '%s' (%d chars)", name, len(body or ""))
 
     def load_template(self, name: str) -> Optional[str]:
-        with self._lock:
-            conn = self._connect()
-            try:
-                cur = conn.execute("SELECT body FROM templates WHERE name=?", (name,))
-                row = cur.fetchone()
-            finally:
-                conn.close()
-        return row["body"] if row else None
+        entry = self._config.named_get("template_presets", name)
+        if not isinstance(entry, dict):
+            return None
+        body = entry.get("body")
+        return body if isinstance(body, str) else None
 
     def list_templates(self) -> list[dict[str, Any]]:
-        with self._lock:
-            conn = self._connect()
-            try:
-                cur = conn.execute(
-                    "SELECT name, body, updated_at FROM templates "
-                    "ORDER BY updated_at DESC, name COLLATE NOCASE")
-                rows = cur.fetchall()
-            finally:
-                conn.close()
-        return [{"name": r["name"], "len": len(r["body"] or ""),
-                 "updated_at": r["updated_at"] or ""} for r in rows]
+        out: list[dict[str, Any]] = []
+        for name, entry in self._config.named_all("template_presets").items():
+            if not isinstance(entry, dict):
+                continue
+            body = entry.get("body", "")
+            out.append({
+                "name": name,
+                "len": len(body) if isinstance(body, str) else 0,
+                "updated_at": entry.get("updated_at", ""),
+            })
+        out.sort(key=lambda r: (r["updated_at"] or "", r["name"]), reverse=True)
+        return out
 
     def delete_template(self, name: str) -> bool:
-        with self._lock:
-            conn = self._connect()
+        return self._config.named_delete("template_presets", name)
+
+    # ── one-time legacy import from the old SQLite tables ────────
+    def import_legacy(self, db_path: str = "chatbot.db") -> bool:
+        """Migrate presets from the old SQLite store into config.json.
+
+        Runs at most once (only when the JSON store is still empty).
+        Returns True when anything was imported.
+        """
+        if self._config.named_all("stack_presets") or \
+                self._config.named_all("template_presets"):
+            return False
+        if not os.path.exists(db_path):
+            return False
+        imported = False
+        try:
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.row_factory = sqlite3.Row
             try:
-                cur = conn.execute("DELETE FROM templates WHERE name=?", (name,))
-                conn.commit()
-                return cur.rowcount > 0
+                cur = conn.execute(
+                    "SELECT name, blocks FROM stacks")  # may not exist yet
+                for row in cur.fetchall():
+                    try:
+                        blocks = json.loads(row["blocks"])
+                        if isinstance(blocks, list):
+                            self._config.named_set("stack_presets",
+                                                   row["name"],
+                                                   {"blocks": blocks,
+                                                    "updated_at": self._now()},
+                                                   save=False)
+                            imported = True
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                cur = conn.execute(
+                    "SELECT name, body FROM templates")
+                for row in cur.fetchall():
+                    self._config.named_set("template_presets", row["name"],
+                                           {"body": row["body"],
+                                            "updated_at": self._now()},
+                                           save=False)
+                    imported = True
+            except sqlite3.OperationalError:
+                pass  # tables absent in this build
             finally:
                 conn.close()
-
-    def db_file(self) -> str:
-        return os.path.abspath(self._db_path)
+        except sqlite3.Error as exc:
+            log.warning("Legacy preset import failed: %s", exc)
+            return False
+        if imported:
+            self._config.save()
+            log.info("Legacy presets imported into %s",
+                     getattr(self._config, "_path", "config.json"))
+        return imported

@@ -1,5 +1,11 @@
-"""JSON configuration management with defaults and validation."""
+"""Single-file JSON settings + preset store.
 
+All settings AND all presets (URL presets, action-stack presets, message
+templates, custom blocks) plus the last-session state live in ONE file
+(config.json by default) so nothing is split across multiple stores.
+"""
+
+import copy
 import json
 import os
 import logging
@@ -33,11 +39,22 @@ DEFAULTS: dict[str, Any] = {
         "https://ru.virt-chat.com/chat",
         "https://ru.virt-chat.com/",
     ],
+    # named action-stack presets: name -> {"blocks": [...], "updated_at": ...}
+    "stack_presets": {},
+    # named message templates: name -> {"body": "...", "updated_at": ...}
+    "template_presets": {},
+    # reusable custom Find & Click blocks: [{name, block, updated_at}]
+    "custom_blocks": [],
+    # last-session state restored on startup:
+    #   last_url_preset   -> last selected/connected URL preset
+    #   last_stack_preset -> name of the last loaded/saved stack preset
+    #   last_stack        -> live snapshot of the last edited/run stack
+    "state": {},
 }
 
 
 class ConfigManager:
-    """Load, access, and persist configuration from a JSON file."""
+    """Load, access, and persist configuration from a single JSON file."""
 
     def __init__(self, path: str = "config.json"):
         self._path = path
@@ -83,6 +100,10 @@ class ConfigManager:
                 return node
         return node
 
+    def get_copy(self, *keys: str, default: Any = None) -> Any:
+        """Deep copy of the value so callers can mutate it safely."""
+        return copy.deepcopy(self.get(*keys, default=default))
+
     def set(self, *keys_and_value: Any) -> None:
         *keys, value = keys_and_value
         node = self._data
@@ -90,8 +111,54 @@ class ConfigManager:
             node = node.setdefault(key, {})
         node[keys[-1]] = value
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> str:
         return json.dumps(self._data, ensure_ascii=False)
+
+    def data(self) -> dict[str, Any]:
+        """Full JSON-serialisable data (for get_app_state etc.)."""
+        return copy.deepcopy(self._data)
+
+    # ── named sub-stores (presets keyed by name) ─────────────────
+    def named_all(self, section: str) -> dict[str, Any]:
+        raw = self.get_copy(section, default={})
+        return raw if isinstance(raw, dict) else {}
+
+    def named_get(self, section: str, name: str, default: Any = None) -> Any:
+        return self.named_all(section).get(name, default)
+
+    def named_set(self, section: str, name: str, value: Any, save: bool = True) -> None:
+        all_items = self.named_all(section)
+        all_items[str(name)] = value
+        self.set(section, all_items)
+        if save:
+            self.save()
+
+    def named_delete(self, section: str, name: str, save: bool = True) -> bool:
+        all_items = self.named_all(section)
+        if str(name) not in all_items:
+            return False
+        del all_items[str(name)]
+        self.set(section, all_items)
+        if save:
+            self.save()
+        return True
+
+    # ── last-session state ───────────────────────────────────────
+    def get_state(self, key: str, default: Any = None) -> Any:
+        state = self.get("state", default={})
+        if not isinstance(state, dict):
+            return default
+        return state.get(key, default)
+
+    def set_state(self, save: bool = True, **updates: Any) -> None:
+        state = self.get_copy("state", default={})
+        if not isinstance(state, dict):
+            state = {}
+        for key, value in updates.items():
+            state[key] = value
+        self.set("state", state)
+        if save:
+            self.save()
 
     # ── validation ───────────────────────────────────────────────
     def validate(self) -> list[str]:
@@ -100,7 +167,6 @@ class ConfigManager:
         if not (1 <= int(port) <= 65535):
             errors.append(f"chrome.port invalid: {port}")
         for key in ("scroll_pause_ms", "global_pre_action_ms"):
-            sec, k = key.rsplit("_", 1) if "_" in key else ("scroll", key)
             val = self.get("scroll" if "scroll" in key else "delays", key, default=0)
             if val < 0:
                 errors.append(f"{key} must be >= 0")

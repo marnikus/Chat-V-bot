@@ -332,3 +332,34 @@ button:disabled { opacity: .35; cursor: default; }
 .confirm-text { color: var(--text-secondary); font-size: var(--font-size-md); line-height: 1.5; }
 .btn-danger-solid { background: var(--red-dim); color: var(--red); border-radius: var(--radius-sm); padding: 6px 14px; font-weight: 500; }
 .btn-danger-solid:hover { background: #4a1e1e; }
+
+/* — Custom blocks row + chip states (FEATURE) — */
+.chip-selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.chip-selected .chip-title { font-weight: 600; }
+.chip-add {
+  border-style: dashed;
+  color: var(--text-secondary);
+}
+.chip-add:hover { color: var(--text-primary); }
+
+.config-actions {
+  display: flex; gap: var(--gap-sm); margin-top: var(--gap-sm);
+  padding-top: var(--gap-sm); border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.config-actions button {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.config-actions button .material-icons { font-size: 15px; color: var(--accent); }
+
+.add-menu-section {
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  padding: 8px 12px 2px; border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.add-menu-section:first-child { border-top: none; margin-top: 0; padding-top: 4px; }

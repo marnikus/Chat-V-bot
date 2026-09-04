@@ -26,7 +26,6 @@
       </div>
       <span id="connectionStatus" class="status-dot disconnected" title="Disconnected"></span>
       <button id="connectBtn" class="btn-primary"><span class="material-icons">link</span> Connect</button>
-      <button id="settingsBtn" class="btn-icon" title="Settings"><span class="material-icons">settings</span></button>
     </div>
   </header>
 
@@ -81,6 +80,13 @@
             <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
           </div>
         </div>
+        <!-- Custom Find & Click block presets: click to add to the stack -->
+        <div class="preset-row">
+          <span class="preset-row-label">Custom blocks</span>
+          <div id="customBlockChips" class="chip-wrap">
+            <span class="preset-row-empty">no saved blocks — create a “Find &amp; Click” block and press Save Block</span>
+          </div>
+        </div>
         <div id="stackList" class="stack-list">
           <div class="stack-empty">Drag blocks here or click + to add</div>
         </div>
@@ -92,6 +98,9 @@
       <div id="blockConfigPanel" class="panel config-panel hidden">
         <h3><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
         <div id="blockConfigForm"></div>
+        <div id="customBlockActions" class="config-actions hidden">
+          <button id="saveCustomBlockBtn" class="btn-small"><span class="material-icons">bookmark_add</span> Save Block as Preset</button>
+        </div>
       </div>
     </main>
   </div>
@@ -148,18 +157,6 @@
         <button id="clearLogBtn" class="btn-small" title="Clear console">Clear</button>
       </h3>
       <div id="logConsole" class="log-console"></div>
-    </div>
-  </div>
-</div>
-
-<!-- SETTINGS MODAL -->
-<div id="settingsModal" class="modal hidden">
-  <div class="modal-content">
-    <h3>Settings</h3>
-    <div id="settingsForm"></div>
-    <div class="modal-actions">
-      <button id="settingsSaveBtn" class="btn-primary">Save</button>
-      <button id="settingsCancelBtn" class="btn-small">Cancel</button>
     </div>
   </div>
 </div>
