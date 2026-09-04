@@ -109,6 +109,22 @@ function setupBridgeListeners() {
     CriteriaEditor.loadFromJson(json);
     CriteriaEditor.renderDisplay();
   });
+
+  // Preset signals — MUST be connected here (bridge is ready)
+  b.presets_loaded.connect((json) => {
+    StackDnD._renderPresetList(json);
+  });
+  b.stack_loaded.connect((json) => {
+    try {
+      StackDnD.stack = JSON.parse(json);
+      StackDnD._renderStack();
+      LogConsole.log('📂 Stack restored from preset', 'success');
+    } catch(e) {
+      LogConsole.log('❌ Failed to restore preset: ' + e, 'error');
+    }
+  });
+  // Load preset list on startup
+  b.get_preset_list();
 }
 
 // ── Settings modal ────────────────────────────────────────────

@@ -166,48 +166,36 @@ const StackDnD = {
       if (App.bridge) App.bridge.stop_stack();
     });
     document.getElementById('saveStackBtn').addEventListener('click', () => {
-      this._showPresetModal('save');
+      this._openPresetModal('save');
     });
     document.getElementById('loadStackBtn').addEventListener('click', () => {
-      this._showPresetModal('load');
+      this._openPresetModal('load');
     });
-    // Listen for bridge signals
-    if (App.bridge) {
-      App.bridge.presets_loaded.connect((json) => this._renderPresetList(json));
-      App.bridge.stack_loaded.connect((json) => {
-        try { this.stack = JSON.parse(json); this._renderStack();
-          LogConsole.log('📂 Stack restored from preset', 'success'); } catch(e) {}
-      });
-    }
   },
 
-  _showPresetModal(mode) {
-    const modal = document.getElementById('settingsModal');
-    const title = modal.querySelector('h3');
-    const form = document.getElementById('settingsForm');
-    const saveBtn = document.getElementById('settingsSaveBtn');
-    const cancelBtn = document.getElementById('settingsCancelBtn');
+  _openPresetModal(mode) {
+    const modal = document.getElementById('presetModal');
+    const title = document.getElementById('presetModalTitle');
+    const nameRow = document.getElementById('presetNameRow');
+    const saveBtn = document.getElementById('presetSaveBtn');
+    const closeBtn = document.getElementById('presetCloseBtn');
     title.textContent = mode === 'save' ? '💾 Save Stack Preset' : '📂 Load Stack Preset';
+    nameRow.style.display = mode === 'save' ? '' : 'none';
+    saveBtn.style.display = mode === 'save' ? '' : 'none';
     if (mode === 'save') {
-      form.innerHTML = `<div class="form-row"><label>Preset name</label>
-        <input id="presetNameInput" type="text" value="" placeholder="Enter preset name..."></div>
-        <div id="presetListArea" style="margin-top:12px"></div>`;
-      saveBtn.textContent = 'Save';
+      document.getElementById('presetNameInput').value = '';
       saveBtn.onclick = () => {
         const name = document.getElementById('presetNameInput').value.trim();
         if (name && App.bridge) {
           App.bridge.save_stack_preset(name);
-          modal.classList.add('hidden');
+          document.getElementById('presetNameInput').value = '';
+          LogConsole.log('💾 Saving preset: ' + name, 'info');
         }
       };
-    } else {
-      form.innerHTML = '<div id="presetListArea">Loading...</div>';
-      saveBtn.style.display = 'none';
     }
-    cancelBtn.textContent = 'Close';
-    cancelBtn.onclick = () => { modal.classList.add('hidden'); saveBtn.style.display = ''; };
+    closeBtn.onclick = () => modal.classList.add('hidden');
     modal.classList.remove('hidden');
-    // Load preset list
+    document.getElementById('presetListArea').innerHTML = '<div style="color:var(--text-muted);padding:8px">Loading...</div>';
     if (App.bridge) App.bridge.get_preset_list();
   },
 
@@ -217,27 +205,54 @@ const StackDnD = {
     let presets;
     try { presets = JSON.parse(json); } catch(e) { return; }
     if (!presets.length) {
-      area.innerHTML = '<div style="color:var(--text-muted);padding:8px">No saved presets</div>';
+      area.innerHTML = '<div style="color:var(--text-muted);padding:8px">No saved presets yet</div>';
+      this._updatePresetBar([]);
       return;
     }
-    area.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">Saved presets:</div>' +
-      presets.map(p => `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border)">
+    area.innerHTML = presets.map(p => {
+      const blockNames = p.blocks.map(b => {
+        const meta = AVAILABLE_BLOCKS.find(a => a.block_id === b.block_id);
+        return meta ? meta.icon + meta.name : b.block_id;
+      }).join(', ');
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border)">
         <span style="flex:1;font-weight:500">${p.name}</span>
         <span style="font-size:10px;color:var(--text-muted)">${p.blocks.length} blocks</span>
-        <button onclick="StackDnD._loadPresetByName('${p.name}')" class="btn-small" style="font-size:11px">Load</button>
-        <button onclick="StackDnD._deletePresetByName('${p.name}')" class="btn-small btn-danger-text" style="font-size:11px">✕</button>
-      </div>`).join('');
+        <button onclick="StackDnD._loadPreset('${p.name}')" class="btn-small" style="font-size:11px">📂 Load</button>
+        <button onclick="StackDnD._deletePreset('${p.name}')" class="btn-small btn-danger-text" style="font-size:11px">🗑</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-secondary);padding:0 4px 6px">${blockNames}</div>`;
+    }).join('');
+    this._updatePresetBar(presets);
   },
 
-  _loadPresetByName(name) {
-    if (App.bridge) App.bridge.load_stack_preset(name);
-    document.getElementById('settingsModal').classList.add('hidden');
+  _loadPreset(name) {
+    if (!App.bridge) return;
+    App.bridge.load_stack_preset(name);
+    document.getElementById('presetModal').classList.add('hidden');
+    LogConsole.log('📂 Loading preset: ' + name, 'info');
   },
 
-  _deletePresetByName(name) {
-    if (App.bridge && confirm(`Delete preset "${name}"?`)) {
-      App.bridge.delete_stack_preset(name);
+  _deletePreset(name) {
+    if (!App.bridge || !confirm('Delete preset "' + name + '"?')) return;
+    App.bridge.delete_stack_preset(name);
+    LogConsole.log('🗑 Deleted preset: ' + name, 'warn');
+  },
+
+  _updatePresetBar(presets) {
+    let bar = document.getElementById('presetBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'presetBar';
+      bar.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;padding:4px 0;border-top:1px solid var(--border);margin-top:4px';
+      const list = document.getElementById('stackList');
+      list.parentNode.insertBefore(bar, list.nextSibling);
     }
+    if (!presets || !presets.length) {
+      bar.innerHTML = '<span style="font-size:10px;color:var(--text-muted)">No presets saved</span>';
+      return;
+    }
+    bar.innerHTML = '<span style="font-size:10px;color:var(--text-secondary);line-height:24px">Presets:</span>' +
+      presets.map(p => `<button onclick="StackDnD._loadPreset('${p.name}')" class="btn-small" style="font-size:10px;padding:2px 8px">${p.name}</button>`).join('');
   },
 
   selectBlock(idx) {
