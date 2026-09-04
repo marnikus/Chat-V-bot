@@ -67,7 +67,7 @@
       <div class="panel stack-panel">
         <h3><span class="material-icons">view_list</span> Action Stack
           <span class="spacer"></span>
-          <button id="addBlockBtn" class="btn-icon-sm" title="Add block"><span class="material-icons">add_circle</span></button>
+          <button id="addBlockBtn" class="btn-round btn-round--accent" title="Add a new block to the stack"><span class="material-icons">add</span></button>
           <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
           <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
           <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
@@ -85,7 +85,7 @@
         <div class="preset-row">
           <span class="preset-row-label">Custom blocks</span>
           <div id="customBlockChips" class="chip-wrap">
-            <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
+            <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press the round save button</span>
           </div>
         </div>
         <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>.</div>
@@ -101,7 +101,9 @@
         <h3><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
         <div id="blockConfigForm"></div>
         <div id="customBlockActions" class="config-actions hidden">
-          <button id="saveCustomBlockBtn" class="btn-small" title="Store this block in config.json so it can be reused in any stack"><span class="material-icons">bookmark_add</span> <span class="btn-label" data-label>Save as new preset</span></button>
+          <button id="saveCustomBlockBtn" class="btn-round btn-round--accent" title="Save as new preset"><span class="material-icons">bookmark_add</span></button>
+          <button id="deleteBlockBtn" class="btn-round btn-round--danger" title="Remove this block from the stack"><span class="material-icons">delete</span></button>
+          <span class="config-action-note" data-note>Save as new preset</span>
         </div>
       </div>
     </main>

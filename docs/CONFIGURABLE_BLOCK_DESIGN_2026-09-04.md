@@ -90,7 +90,25 @@ alive.
    fields → click/verify → save → reuse → update/delete, including the
    example "Find Settings Button".
 
-## 5. Acceptance / verification plan
+## 5. Follow-up (user preference): circular create / save / delete buttons
+
+The stack header **＋ button** and the config panel's **save** control were
+initially small square/rectangular buttons. Per user preference the controls
+around newly added action blocks are now **round icon buttons**:
+
+- `#addBlockBtn` — circular accent **＋** (opens the + Add menu → create a new
+  constructor block);
+- `#saveCustomBlockBtn` — circular **bookmark** save/update button (tooltip +
+  inline caption still distinguish “Save as new preset” vs “Update preset
+  “name””);
+- `#deleteBlockBtn` — new circular **🗑** that removes the currently selected
+  block from the stack (re-render, panel close, session snapshot).
+
+Style lives in `layout.css` (`.btn-round`, `.btn-round--accent`,
+`.btn-round--danger`); verified by the constructor harness assertions 0a–0c
+and 16–17c.
+
+## 6. Acceptance / verification plan
 
 - jsdom workflow harness (extended from the audit probe): the full
   constructor lifecycle through the real DOM, asserting each bridge payload,

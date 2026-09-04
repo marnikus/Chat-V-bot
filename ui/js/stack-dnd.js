@@ -133,7 +133,8 @@ const StackDnD = {
   },
 
   // "Save as new preset" vs "Update preset “name”" depending on whether the
-  // currently selected block's name is already stored as a preset.
+  // currently selected block's name is already stored as a preset. Shown both
+  // as the round button's tooltip and as the caption next to it.
   _refreshSaveLabel() {
     const btn = document.getElementById('saveCustomBlockBtn');
     const actions = document.getElementById('customBlockActions');
@@ -145,8 +146,10 @@ const StackDnD = {
       const b = (c && c.block) || {};
       return String(c.name || '') === name || String(b.custom_name || '') === name;
     });
-    const lbl = btn.querySelector('[data-label]');
-    if (lbl) lbl.textContent = exists ? `Update preset “${name}”` : 'Save as new preset';
+    const label = exists ? `Update preset “${name}”` : 'Save as new preset';
+    btn.title = label;
+    const note = btn.parentElement ? btn.parentElement.querySelector('[data-note]') : null;
+    if (note) note.textContent = label;
   },
 
   // insert a configured block (from built-in defaults or a saved preset)
@@ -527,16 +530,34 @@ const StackDnD = {
     });
     document.getElementById('closeConfigBtn').onclick = () => panel.classList.add('hidden');
 
-    // Save / Update preset action (only for the configurable block)
+    // Save / Update preset + Delete-block actions (configurable block only)
     const actions = document.getElementById('customBlockActions');
     if (block.block_id === 'CUSTOM_FIND' && App.bridge) {
       actions.classList.remove('hidden');
       const btn = document.getElementById('saveCustomBlockBtn');
       btn.onclick = () => this._saveBlockPreset(block);
+      const del = document.getElementById('deleteBlockBtn');
+      if (del) del.onclick = () => this.deleteSelectedBlock();
       this._refreshSaveLabel();
     } else {
       actions.classList.add('hidden');
     }
+  },
+
+  /** Remove the currently selected block from the stack (round 🗑 button). */
+  deleteSelectedBlock() {
+    const i = this.selectedIdx;
+    if (i < 0 || i >= this.stack.length) return;
+    const name = this._displayName(this.stack[i]);
+    this.stack.splice(i, 1);
+    this.selectedIdx = -1;
+    this._renderStack();
+    const panel = document.getElementById('blockConfigPanel');
+    if (panel) panel.classList.add('hidden');
+    if (typeof LogConsole !== 'undefined') {
+      LogConsole.log(`🗑 Removed block “${name}” from the stack`, 'info');
+    }
+    this.notifyEdited();
   },
 
   _saveBlockPreset(block) {

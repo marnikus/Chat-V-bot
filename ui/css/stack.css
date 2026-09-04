@@ -107,7 +107,6 @@
   background: var(--bg-input); border-left: 2px solid var(--accent);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-.config-actions button .btn-label { white-space: normal; text-align: left; }
 
 /* Running-step highlight (debugger) */
 .stack-item.block-running {

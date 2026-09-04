@@ -170,6 +170,27 @@ button:disabled { opacity: .35; cursor: default; }
   padding: 2px; display: inline-flex; align-items: center;
 }
 .btn-icon-sm:hover { background: var(--bg-card); }
+
+/* Circular icon buttons (create / save / delete an action block) */
+.btn-round {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; cursor: pointer;
+  color: var(--text-secondary);
+  transition: background .15s, border-color .15s, color .15s, transform .15s;
+  flex-shrink: 0;
+}
+.btn-round .material-icons { font-size: 18px; }
+.btn-round:hover { background: var(--bg-card-hover); border-color: var(--border-light); }
+.btn-round:active { transform: scale(.94); }
+.btn-round:disabled { opacity: .35; cursor: default; }
+.btn-round--accent { color: var(--accent); border-color: var(--accent); }
+.btn-round--accent:hover { background: var(--accent-dim); color: #fff; border-color: var(--accent); }
+.btn-round--danger { color: var(--red); border-color: rgba(248, 113, 113, .4); }
+.btn-round--danger:hover { background: var(--red-dim); color: var(--red); border-color: var(--red); }
 .btn-small {
   background: var(--bg-card); border-radius: var(--radius-sm);
   padding: 4px 10px; font-size: var(--font-size-xs);
@@ -347,14 +368,15 @@ button:disabled { opacity: .35; cursor: default; }
 .chip-add:hover { color: var(--text-primary); }
 
 .config-actions {
-  display: flex; gap: var(--gap-sm); margin-top: var(--gap-sm);
+  display: flex; align-items: center; gap: var(--gap-sm); margin-top: var(--gap-sm);
   padding-top: var(--gap-sm); border-top: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.config-actions button {
-  display: inline-flex; align-items: center; gap: 4px;
+.config-actions .btn-round .material-icons { font-size: 18px; }
+.config-action-note {
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  align-self: center;
 }
-.config-actions button .material-icons { font-size: 15px; color: var(--accent); }
 
 .add-menu-section {
   font-size: var(--font-size-xs); color: var(--text-muted);
