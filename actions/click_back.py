@@ -12,35 +12,43 @@ class ClickBack(BaseAction):
     name = "Return to Main"
     icon = "🔙"
 
-    def __init__(self, tab_name: str = "Гостиная", pre_delay_ms: int = 800, **kw):
+    def __init__(self, selector: str = "div[role='tab'].tab-item",
+                 child_selector: str = "p.chat-title",
+                 tab_name: str = "Гостиная",
+                 pre_delay_ms: int = 800, **kw):
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
+        self.selector = selector
+        self.child_selector = child_selector
         self.tab_name = tab_name
 
     async def execute(self, user_nick: str, cdp: CDPClient) -> str:
         await self.pre_delay()
-        esc = self.tab_name.replace("'", "\\'")
+        sel = self.selector.replace("'", "\\'")
+        child = self.child_selector.replace("'", "\\'")
+        name = self.tab_name.replace("'", "\\'")
         js = f"""(function(){{
-            var icons = document.querySelectorAll("mat-icon[data-mat-icon-name='room']");
-            for(var i=0;i<icons.length;i++){{
-                var tab = icons[i].closest('.tab-item');
-                if(tab){{ tab.click(); return true; }}
-            }}
-            return false;
-        }})()"""
-        ok = await cdp.evaluate(js)
-        if ok:
-            log.info("Returned to main tab")
-            return ActionResult.OK
-        log.warning("Room tab icon not found, trying title match")
-        js2 = f"""(function(){{
-            var tabs = document.querySelectorAll('.tab-item');
-            for(var i=0;i<tabs.length++){{
-                var t = tabs[i].querySelector('.chat-title');
-                if(t && t.textContent.trim().indexOf('{esc}')>=0){{
+            var tabs = document.querySelectorAll('{sel}');
+            for(var i=0;i<tabs.length;i++){{
+                var el = tabs[i].querySelector('{child}');
+                if(el && el.textContent.trim().indexOf('{name}')>=0){{
                     tabs[i].click(); return true;
                 }}
             }}
             return false;
         }})()"""
-        ok2 = await cdp.evaluate(js2)
-        return ActionResult.OK if ok2 else ActionResult.FAIL
+        ok = await cdp.evaluate(js)
+        if ok:
+            log.info("Returned to tab '%s'", self.tab_name)
+            return ActionResult.OK
+        log.error("Back tab not found: '%s'", self.tab_name)
+        return ActionResult.FAIL
+
+    def config_schema(self) -> dict:
+        s = super().config_schema()
+        s["selector"] = {"type": "text", "default": "div[role='tab'].tab-item",
+                         "label": "Tab element selector"}
+        s["child_selector"] = {"type": "text", "default": "p.chat-title",
+                               "label": "Child text selector"}
+        s["tab_name"] = {"type": "text", "default": "Гостиная",
+                         "label": "Tab name (text match)"}
+        return s

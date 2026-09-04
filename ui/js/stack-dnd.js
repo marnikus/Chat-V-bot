@@ -5,16 +5,34 @@
 'use strict';
 
 const AVAILABLE_BLOCKS = [
-  { block_id:'CLICK_MAIN_TAB', name:'Click Main Tab',   icon:'🏠', defaults:{tab_name:'Гостиная',pre_delay_ms:500} },
-  { block_id:'SCROLL_PARSE',   name:'Scroll & Parse',    icon:'📜', defaults:{max_scrolls:50,scroll_pause_ms:800,pre_delay_ms:300} },
-  { block_id:'CONDITIONAL_SKIP',name:'If Messaged → Skip',icon:'🔀', defaults:{} },
-  { block_id:'CLICK_USER',     name:'Click User',        icon:'👤', defaults:{pre_delay_ms:1000} },
-  { block_id:'WAIT_PAGE_LOAD', name:'Wait for Page',     icon:'⏳', defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200} },
-  { block_id:'TYPE_MESSAGE',   name:'Type Message',      icon:'⌨️', defaults:{message:'',typing_speed_ms:30,pre_delay_ms:500} },
-  { block_id:'CLICK_SEND',     name:'Click Send',        icon:'📨', defaults:{pre_delay_ms:300} },
-  { block_id:'ATTACH_IMAGE',   name:'Attach Image',      icon:'🖼️', defaults:{folder_path:'',file_pattern:'*.jpg',pre_delay_ms:500} },
-  { block_id:'CLICK_BACK',     name:'Return to Main',    icon:'🔙', defaults:{tab_name:'Гостиная',pre_delay_ms:800} },
-  { block_id:'PAUSE',          name:'Custom Pause',      icon:'⏸️', defaults:{duration_ms:1000} },
+  { block_id:'CLICK_MAIN_TAB', name:'Click Main Tab',   icon:'🏠',
+    defaults:{selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', pre_delay_ms:500},
+    labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name (text match)', pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'SCROLL_PARSE',   name:'Scroll & Parse',    icon:'📜',
+    defaults:{max_scrolls:50,scroll_pause_ms:800,pre_delay_ms:300},
+    labels:{max_scrolls:'Max scrolls',scroll_pause_ms:'Scroll pause (ms)',pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'CONDITIONAL_SKIP',name:'If Messaged → Skip',icon:'🔀', defaults:{}, labels:{} },
+  { block_id:'CLICK_USER',     name:'Click User',        icon:'👤',
+    defaults:{pre_delay_ms:1000},
+    labels:{pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'WAIT_PAGE_LOAD', name:'Wait for Page',     icon:'⏳',
+    defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200},
+    labels:{target_selector:'Target CSS selector',timeout_ms:'Timeout (ms)',pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'TYPE_MESSAGE',   name:'Type Message',      icon:'⌨️',
+    defaults:{message:'',typing_speed_ms:30,pre_delay_ms:500},
+    labels:{message:'Message text (use {{nick}})',typing_speed_ms:'Typing speed (ms)',pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'CLICK_SEND',     name:'Click Send',        icon:'📨',
+    defaults:{pre_delay_ms:300},
+    labels:{pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'ATTACH_IMAGE',   name:'Attach Image',      icon:'🖼️',
+    defaults:{folder_path:'',file_pattern:'*.jpg',pre_delay_ms:500},
+    labels:{folder_path:'Image folder path',file_pattern:'File pattern',pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'CLICK_BACK',     name:'Return to Main',    icon:'🔙',
+    defaults:{selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', pre_delay_ms:800},
+    labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name', pre_delay_ms:'Pre-delay (ms)'} },
+  { block_id:'PAUSE',          name:'Custom Pause',      icon:'⏸️',
+    defaults:{duration_ms:1000},
+    labels:{duration_ms:'Duration (ms)'} },
 ];
 
 const StackDnD = {
@@ -33,14 +51,14 @@ const StackDnD = {
 
   _initDefaultStack() {
     this.stack = [
-      { block_id:'CLICK_MAIN_TAB', pre_delay_ms:500, tab_name:'Гостиная' },
+      { block_id:'CLICK_MAIN_TAB', pre_delay_ms:500, selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная' },
       { block_id:'SCROLL_PARSE',   pre_delay_ms:300, max_scrolls:50, scroll_pause_ms:800 },
       { block_id:'CONDITIONAL_SKIP',pre_delay_ms:0 },
       { block_id:'CLICK_USER',     pre_delay_ms:1000 },
       { block_id:'WAIT_PAGE_LOAD', pre_delay_ms:200, target_selector:"textarea[placeholder='Сообщение']", timeout_ms:5000 },
       { block_id:'TYPE_MESSAGE',   pre_delay_ms:500, message:'', typing_speed_ms:30 },
       { block_id:'CLICK_SEND',     pre_delay_ms:300 },
-      { block_id:'CLICK_BACK',     pre_delay_ms:800, tab_name:'Гостиная' },
+      { block_id:'CLICK_BACK',     pre_delay_ms:800, selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная' },
     ];
   },
 
@@ -190,12 +208,14 @@ const StackDnD = {
     if (!block) { panel.classList.add('hidden'); return; }
     panel.classList.remove('hidden');
     const meta = AVAILABLE_BLOCKS.find(b => b.block_id === block.block_id) || {};
+    const labels = meta.labels || {};
     form.innerHTML = `<div class="form-row"><label>Block</label><span style="font-weight:600">${meta.icon||''} ${meta.name||block.block_id}</span></div>`;
     for (const [key, val] of Object.entries(block)) {
       if (key === 'block_id') continue;
       const inputType = typeof val === 'number' ? 'number' : 'text';
+      const labelText = labels[key] || key;
       form.innerHTML += `<div class="form-row">
-        <label>${key}</label>
+        <label>${labelText}</label>
         <input data-key="${key}" value="${val}" type="${inputType}">
       </div>`;
     }
