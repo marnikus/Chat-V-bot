@@ -8,7 +8,7 @@ BUDGET = 150
 def test_all_python_files_under_budget():
     offenders = []
     for p in sorted(ROOT.rglob("*.py")):
-        if ".venv" in p.parts or "node_modules" in p.parts:
+        if any(part.startswith(".") for part in p.parts):  # .git, .venv*, .idea…
             continue
         n = len(p.read_text(encoding="utf-8").splitlines())
         if n >= BUDGET:
