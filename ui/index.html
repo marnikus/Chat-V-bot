@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatBot Automator</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/stack.css">
+<link rel="stylesheet" href="css/table.css">
+<link rel="stylesheet" href="css/composer.css">
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-left">
+      <span class="app-title">🤖 ChatBot Automator</span>
+    </div>
+    <div class="header-right">
+      <div class="tab-select-wrap">
+        <select id="tabSelect"><option value="">— Select Chrome Tab —</option></select>
+        <button id="refreshTabsBtn" class="btn-icon" title="Refresh tabs"><span class="material-icons">refresh</span></button>
+      </div>
+      <span id="connectionStatus" class="status-dot disconnected" title="Disconnected"></span>
+      <button id="connectBtn" class="btn-primary"><span class="material-icons">link</span> Connect</button>
+      <button id="settingsBtn" class="btn-icon" title="Settings"><span class="material-icons">settings</span></button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar-left">
+      <div class="panel stats-panel">
+        <h3><span class="material-icons">bar_chart</span> Stats</h3>
+        <div id="statsContainer">
+          <div class="stat"><span class="stat-label">Total</span><span id="statTotal" class="stat-value">0</span></div>
+          <div class="stat"><span class="stat-label">Queued</span><span id="statQueued" class="stat-value">0</span></div>
+          <div class="stat"><span class="stat-label">Done</span><span id="statDone" class="stat-value">0</span></div>
+        </div>
+      </div>
+      <div class="panel filters-panel">
+        <h3><span class="material-icons">filter_list</span> Filters <button id="editCriteriaBtn" class="btn-icon-sm" title="Edit criteria"><span class="material-icons">edit</span></button></h3>
+        <div id="criteriaDisplay"></div>
+      </div>
+    </aside>
+
+    <!-- CENTER -->
+    <main class="center-area">
+      <!-- ACTION STACK -->
+      <div class="panel stack-panel">
+        <h3><span class="material-icons">view_list</span> Action Stack
+          <span class="spacer"></span>
+          <button id="addBlockBtn" class="btn-icon-sm" title="Add block"><span class="material-icons">add_circle</span></button>
+          <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
+          <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
+          <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
+          <button id="saveStackBtn" class="btn-icon-sm" title="Save stack"><span class="material-icons">save</span></button>
+          <button id="loadStackBtn" class="btn-icon-sm" title="Load stack"><span class="material-icons">folder_open</span></button>
+        </h3>
+        <div id="stackList" class="stack-list">
+          <div class="stack-empty">Drag blocks here or click + to add</div>
+        </div>
+        <div id="addBlockMenu" class="add-block-menu hidden"></div>
+      </div>
+
+      <!-- BLOCK CONFIG EDITOR -->
+      <div id="blockConfigPanel" class="panel config-panel hidden">
+        <h3><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
+        <div id="blockConfigForm"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- COMPOSER -->
+  <div class="composer-area">
+    <div class="panel composer-panel">
+      <h3><span class="material-icons">chat</span> Message Composer</h3>
+      <textarea id="messageInput" placeholder="Type your message here... Use {{nick}} for username" maxlength="1000"></textarea>
+      <div class="composer-bar">
+        <button id="insertVarBtn" class="btn-small">Insert ▾</button>
+        <div id="varMenu" class="var-menu hidden">
+          <div class="var-item" data-var="{{nick}}">{{nick}}</div>
+          <div class="var-item" data-var="{{time}}">{{time}}</div>
+          <div class="var-item" data-var="{{date}}">{{date}}</div>
+        </div>
+        <button id="saveTemplateBtn" class="btn-small">Save Template</button>
+        <button id="loadTemplateBtn" class="btn-small">Load Template</button>
+        <span class="spacer"></span>
+        <span id="charCount">0 / 1000</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: USER TABLE + LOG -->
+  <div class="bottom-area">
+    <div class="panel table-panel">
+      <h3><span class="material-icons">people</span> User Memory
+        <span class="spacer"></span>
+        <button id="resetMsgBtn" class="btn-small">Reset Messaged</button>
+        <button id="clearMemBtn" class="btn-small btn-danger-text">Clear All</button>
+      </h3>
+      <div class="table-wrap">
+        <table id="userTable">
+          <thead><tr>
+            <th>Nick</th><th>Gender</th><th>Reg?</th><th>Status</th>
+            <th>First Seen</th><th>Messaged</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="userTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel log-panel">
+      <h3><span class="material-icons">terminal</span> Log Console</h3>
+      <div id="logConsole" class="log-console"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Settings</h3>
+    <div id="settingsForm"></div>
+    <div class="modal-actions">
+      <button id="settingsSaveBtn" class="btn-primary">Save</button>
+      <button id="settingsCancelBtn" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CRITERIA EDITOR MODAL -->
+<div id="criteriaModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Criteria Editor</h3>
+    <div id="criteriaEditor"></div>
+    <div class="modal-actions">
+      <button id="criteriaSaveBtn" class="btn-primary">Save</button>
+      <button id="criteriaCancelBtn" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script src="js/user-table.js"></script>
+<script src="js/stack-dnd.js"></script>
+<script src="js/criteria-editor.js"></script>
+<script src="js/composer.js"></script>
+<script src="js/log-console.js"></script>
+</body>
+</html>

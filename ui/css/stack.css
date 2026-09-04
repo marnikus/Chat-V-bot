@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════════
+   stack.css — Action Stack drag-and-drop styles
+   ═══════════════════════════════════════════════════════════════ */
+
+.stack-panel { flex: 1; overflow: hidden; }
+
+.stack-list {
+  flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--gap-xs);
+  min-height: 120px; padding: var(--gap-sm);
+  background: var(--bg-input); border-radius: var(--radius-sm);
+  border: 2px dashed transparent;
+  transition: border-color .2s;
+}
+.stack-list.drag-over { border-color: var(--accent); }
+.stack-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 80px; color: var(--text-muted);
+  font-size: var(--font-size-sm); font-style: italic;
+}
+
+.stack-item {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  padding: 8px 12px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  cursor: grab; transition: background .15s, border-color .15s;
+  user-select: none;
+}
+.stack-item:hover { background: var(--bg-card-hover); border-color: var(--border-light); }
+.stack-item.active { border-color: var(--accent); background: var(--accent-dim); }
+.stack-item.running { border-color: var(--green); background: var(--green-dim); }
+.stack-item.sortable-ghost { opacity: .3; }
+.stack-item.sortable-chosen { box-shadow: var(--shadow-md); }
+
+.stack-item .drag-handle {
+  color: var(--text-muted); cursor: grab;
+  font-size: 16px; line-height: 1;
+}
+.stack-item .block-icon { font-size: var(--font-size-lg); flex-shrink: 0; }
+.stack-item .block-info { flex: 1; min-width: 0; }
+.stack-item .block-name { font-weight: 600; font-size: var(--font-size-sm); }
+.stack-item .block-summary {
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stack-item .block-remove {
+  color: var(--text-muted); cursor: pointer; padding: 2px;
+  border-radius: var(--radius-sm); transition: color .15s, background .15s;
+}
+.stack-item .block-remove:hover { color: var(--red); background: var(--red-dim); }
+
+/* — Add Block Menu — */
+.add-block-menu {
+  position: absolute; z-index: 50;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--gap-xs);
+  box-shadow: var(--shadow-lg); min-width: 220px;
+  max-height: 300px; overflow-y: auto;
+}
+.add-block-menu .menu-item {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: var(--font-size-sm);
+}
+.add-block-menu .menu-item:hover { background: var(--bg-card-hover); }
+.add-block-menu .menu-item .mi-icon { font-size: var(--font-size-lg); }
+
+/* — Config Panel — */
+.config-panel { border-top: 1px solid var(--border); }
+.config-panel .form-row {
+  display: flex; align-items: center; gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
+}
+.config-panel label {
+  min-width: 130px; font-size: var(--font-size-sm);
+  color: var(--text-secondary); font-weight: 500;
+}
+.config-panel input, .config-panel textarea, .config-panel select {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px;
+  color: var(--text-primary); font-size: var(--font-size-sm);
+  font-family: var(--font);
+}
+.config-panel input:focus, .config-panel textarea:focus {
+  border-color: var(--border-focus); outline: none;
+}
+.config-panel textarea { min-height: 60px; resize: vertical; }

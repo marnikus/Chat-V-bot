@@ -1,0 +1,121 @@
+"""SQLite-backed user memory: discovery, status tracking, CRUD."""
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+import aiosqlite
+
+log = logging.getLogger("chatbot")
+
+_SCHEMA = """CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, nick TEXT UNIQUE NOT NULL,
+    gender TEXT DEFAULT 'unknown', registered BOOLEAN DEFAULT 0,
+    anonymous BOOLEAN DEFAULT 0, guest BOOLEAN DEFAULT 0,
+    first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    messaged BOOLEAN DEFAULT 0, message_count INTEGER DEFAULT 0,
+    last_messaged DATETIME, notes TEXT DEFAULT '');
+CREATE INDEX IF NOT EXISTS idx_users_nick ON users(nick);
+CREATE INDEX IF NOT EXISTS idx_users_messaged ON users(messaged);"""
+
+
+@dataclass
+class UserRecord:
+    nick: str
+    gender: str = "unknown"
+    registered: bool = False
+    anonymous: bool = False
+    guest: bool = False
+    first_seen: str = ""
+    last_seen: str = ""
+    messaged: bool = False
+    message_count: int = 0
+    last_messaged: Optional[str] = None
+    notes: str = ""
+    status: str = "new"
+
+
+class UserMemory:
+    def __init__(self, db_path: str = "chatbot.db"):
+        self._db_path = db_path
+        self._db: Optional[aiosqlite.Connection] = None
+
+    async def init(self) -> None:
+        self._db = await aiosqlite.connect(self._db_path)
+        await self._db.executescript(_SCHEMA)
+        await self._db.commit()
+        log.info("UserMemory DB ready: %s", self._db_path)
+
+    async def close(self) -> None:
+        if self._db:
+            await self._db.close()
+
+    async def upsert_user(self, user: UserRecord) -> str:
+        now = datetime.now().isoformat(timespec="seconds")
+        cur = await self._db.execute("SELECT id,messaged FROM users WHERE nick=?", (user.nick,))
+        row = await cur.fetchone()
+        if row:
+            await self._db.execute(
+                "UPDATE users SET last_seen=?,gender=?,registered=?,anonymous=?,guest=? WHERE nick=?",
+                (now, user.gender, user.registered, user.anonymous, user.guest, user.nick))
+            await self._db.commit()
+            return "known"
+        await self._db.execute(
+            "INSERT INTO users(nick,gender,registered,anonymous,guest,first_seen,last_seen,messaged) "
+            "VALUES(?,?,?,?,?,?,?,0)",
+            (user.nick, user.gender, user.registered, user.anonymous, user.guest, now, now))
+        await self._db.commit()
+        return "new"
+
+    async def upsert_many(self, users: list[UserRecord]) -> tuple[int, int]:
+        new_cnt = known_cnt = 0
+        for u in users:
+            if await self.upsert_user(u) == "new": new_cnt += 1
+            else: known_cnt += 1
+        return new_cnt, known_cnt
+
+    async def mark_messaged(self, nick: str) -> None:
+        now = datetime.now().isoformat(timespec="seconds")
+        await self._db.execute(
+            "UPDATE users SET messaged=1,message_count=message_count+1,last_messaged=? WHERE nick=?",
+            (now, nick))
+        await self._db.commit()
+
+    async def get_queue(self) -> list[UserRecord]:
+        cur = await self._db.execute(
+            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
+            "messaged,message_count,last_messaged,notes FROM users WHERE messaged=0 "
+            "ORDER BY first_seen DESC")
+        return [self._row(r) for r in await cur.fetchall()]
+
+    async def get_all(self) -> list[UserRecord]:
+        cur = await self._db.execute(
+            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
+            "messaged,message_count,last_messaged,notes FROM users ORDER BY first_seen DESC")
+        return [self._row(r) for r in await cur.fetchall()]
+
+    async def get_stats(self) -> dict:
+        cur = await self._db.execute("SELECT COUNT(*) FROM users")
+        total = (await cur.fetchone())[0]
+        cur = await self._db.execute("SELECT COUNT(*) FROM users WHERE messaged=0")
+        queued = (await cur.fetchone())[0]
+        return {"total": total, "queued": queued, "done": total - queued}
+
+    async def reset_messaged(self) -> int:
+        cur = await self._db.execute("UPDATE users SET messaged=0")
+        await self._db.commit()
+        return cur.rowcount
+
+    async def clear_all(self) -> int:
+        cur = await self._db.execute("DELETE FROM users")
+        await self._db.commit()
+        return cur.rowcount
+
+    @staticmethod
+    def _row(r: tuple) -> UserRecord:
+        return UserRecord(nick=r[0], gender=r[1], registered=bool(r[2]),
+                          anonymous=bool(r[3]), guest=bool(r[4]),
+                          first_seen=r[5] or "", last_seen=r[6] or "",
+                          messaged=bool(r[7]), message_count=r[8] or 0,
+                          last_messaged=r[9], notes=r[10] or "")

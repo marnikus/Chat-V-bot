@@ -1,0 +1,67 @@
+/* ═══════════════════════════════════════════════════════════════
+   composer.css — Message Composer area styles
+   ═══════════════════════════════════════════════════════════════ */
+
+.composer-panel {
+  background: var(--bg-panel);
+  padding: var(--gap-md) var(--gap-lg);
+}
+
+.composer-panel textarea {
+  width: 100%;
+  min-height: 60px;
+  max-height: 120px;
+  resize: vertical;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-family: var(--font);
+  line-height: 1.5;
+  outline: none;
+  transition: border-color .15s;
+}
+.composer-panel textarea:focus {
+  border-color: var(--border-focus);
+}
+.composer-panel textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
+}
+
+#charCount {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+#charCount.near-limit { color: var(--yellow); }
+#charCount.at-limit   { color: var(--red); }
+
+/* Variable insert dropdown */
+.var-menu {
+  position: absolute;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--gap-xs);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+}
+.var-item {
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+}
+.var-item:hover {
+  background: var(--bg-card-hover);
+}
