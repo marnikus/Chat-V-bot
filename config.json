@@ -1,1 +1,39 @@
-{}
+{
+  "stack_presets": {
+    "o": {
+      "blocks": [
+        {
+          "block_id": "CLICK_BACK",
+          "pre_delay_ms": 800,
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная"
+        }
+      ],
+      "updated_at": "2026-09-04T21:46:09"
+    }
+  },
+  "state": {
+    "last_url_preset": "https://ru.virt-chat.com/chat",
+    "last_stack": [
+      {
+        "block_id": "CLICK_MAIN_TAB",
+        "pre_delay_ms": 500,
+        "selector": "div[role='tab'].tab-item",
+        "child_selector": "p.chat-title",
+        "tab_name": "Гостиная"
+      },
+      {
+        "block_id": "CUSTOM_FIND",
+        "pre_delay_ms": 500,
+        "custom_name": "",
+        "selector": "div[role='tab'].tab-item",
+        "label_selector": "p.chat-title",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": ""
+      }
+    ],
+    "last_stack_preset": ""
+  }
+}
