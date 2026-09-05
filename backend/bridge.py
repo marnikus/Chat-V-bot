@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
-from backend.action_engine import ActionEngine
+from backend.action_engine import ActionEngine, normalize_blocks
 from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
@@ -71,6 +71,21 @@ class Bridge(QObject):
         """Live update: a person failed the filter and was purged."""
         self.person_removed.emit(payload)
         asyncio.ensure_future(self._refresh_users())
+
+    @staticmethod
+    def _clean_blocks(blocks):
+        """Strip retired block keys (e.g. use_panel_filters) before storing
+        or emitting a stack, so dead controls never round-trip back to the
+        UI. JS performs the fuller migration (it also back-fills missing
+        defaults); this is the server-side safety net."""
+        return normalize_blocks(blocks)
+
+    @classmethod
+    def _clean_history(cls, hist):
+        if not isinstance(hist, list):
+            return []
+        return [cls._clean_blocks(entry) for entry in hist
+                if isinstance(entry, list)]
 
     # ── one global undo history ─────────────────────────────────
     # Stack edits and grid edits share this timeline.  The old stack/grid
@@ -153,7 +168,18 @@ class Bridge(QObject):
 
     def _get_global_history(self) -> tuple[list, int]:
         history, index = self._migrate_global_history()
-        return copy.deepcopy(history), index
+        history = copy.deepcopy(history)
+        # Server-side safety net: scrub retired block keys from every stack
+        # snapshot as it is read back (undo/redo, history projections,
+        # app-state restore) so dead controls can never reach the UI.
+        cleaned = []
+        for entry in history:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("kind") == "stack":
+                entry["value"] = self._clean_blocks(entry["value"])
+            cleaned.append(entry)
+        return cleaned, index
 
     def _set_global_history(self, history: list, index: int) -> None:
         self._config.set_state(undo_history=copy.deepcopy(history),
@@ -188,7 +214,7 @@ class Bridge(QObject):
 
     def _set_history(self, history: list, index: int, save: bool = True) -> None:
         """Legacy compatibility; new code must use the global timeline."""
-        entries = [self._history_entry("stack", value)
+        entries = [self._history_entry("stack", self._clean_blocks(value))
                    for value in history if isinstance(value, list)]
         self._set_global_history(entries, max(-1, min(index, len(entries) - 1)))
 
@@ -203,11 +229,15 @@ class Bridge(QObject):
     def _set_hist(self, kind: str, hist: list, idx: int) -> None:
         # Deliberately not a separate history.  Preserve the API for old
         # callers by replacing the global timeline with these entries.
+        if kind == "stack":
+            hist = [self._clean_blocks(value) for value in hist]
         history = [self._history_entry(kind, value) for value in hist]
         self._set_global_history(history, max(-1, min(idx, len(history) - 1)))
 
     def _push_hist(self, kind: str, value) -> tuple[list, int]:
         """Compatibility name that always pushes to the global timeline."""
+        if kind == "stack":
+            value = self._clean_blocks(value)
         self._push_global(kind, value)
         return self._get_hist(kind)
 
@@ -402,6 +432,7 @@ class Bridge(QObject):
                 return False
             if not isinstance(value, list):
                 return False
+            value = self._clean_blocks(value)
         elif kind == "grid":
             value, err = self._canonical_grid_payload(value_json or "")
             if err:
@@ -426,7 +457,7 @@ class Bridge(QObject):
             self._config.set_state(grid_layout=entry["value"])
             self.grid_layout_changed.emit(entry["value"])
         else:
-            blocks = entry["value"]
+            blocks = self._clean_blocks(entry["value"])
             self._config.set_state(last_stack=blocks, last_stack_preset="")
             self._engine.load_stack(blocks)
             self.stack_loaded.emit("", json.dumps(blocks, ensure_ascii=False))
@@ -479,13 +510,7 @@ class Bridge(QObject):
         """Backward-compatible name; append the stack to global history."""
         if not isinstance(blocks, list):
             return self._get_history()
-        normalized = []
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            item = dict(block)
-            item.setdefault("enabled", True)
-            normalized.append(item)
+        normalized = self._clean_blocks(blocks)
         self._push_global("stack", normalized)
         return self._get_history()
 
@@ -495,6 +520,11 @@ class Bridge(QObject):
         """Everything the UI needs to restore the last session in one payload."""
         history, h_idx = self._get_global_history()
         stack_history, stack_idx = self._get_history()
+        # Cleaned here so a legacy config.json can never hand the UI dead
+        # controls (JS also migrates on receipt).
+        raw_last_stack = self._config.get_state("last_stack", None)
+        last_stack = (self._clean_blocks(raw_last_stack)
+                      if isinstance(raw_last_stack, list) else raw_last_stack)
         payload = {
             "url_presets": list(self._config.get("url_presets", default=[])),
             "custom_blocks": self._custom_blocks_raw(),
@@ -503,7 +533,7 @@ class Bridge(QObject):
             "state": {
                 "last_url_preset": self._config.get_state("last_url_preset", ""),
                 "last_stack_preset": self._config.get_state("last_stack_preset", ""),
-                "last_stack": self._config.get_state("last_stack", None),
+                "last_stack": last_stack,
                 # Legacy projection retained so older page bundles can still
                 # start; all new edits use the global fields below.
                 "stack_history": stack_history,
@@ -537,7 +567,8 @@ class Bridge(QObject):
         # App.recordGlobal() already recorded the edit. This call is only the
         # debounced last-session snapshot, so it must not create a second
         # history entry after a grid change has interleaved with the edit.
-        self._config.set_state(last_stack=blocks, last_stack_preset="")
+        self._config.set_state(last_stack=self._clean_blocks(blocks),
+                               last_stack_preset="")
 
     def _remember_stack(self, name: str, blocks: list[dict]) -> None:
         self._config.set_state(last_stack=blocks, last_stack_preset=name)
@@ -559,7 +590,7 @@ class Bridge(QObject):
         except json.JSONDecodeError:
             return
         if isinstance(blocks, list):
-            self._push_history(blocks)
+            self._push_history(self._clean_blocks(blocks))
 
     @Slot(str, int)
     def save_stack_history(self, history_json, index):
@@ -572,6 +603,8 @@ class Bridge(QObject):
             return
         if not isinstance(index, int):
             index = -1
+        # Strip retired keys from every stored snapshot on the way in.
+        hist = self._clean_history(hist)
         # Enforce max
         if len(hist) > MAX_STACK_HISTORY:
             overflow = len(hist) - MAX_STACK_HISTORY
@@ -678,9 +711,10 @@ class Bridge(QObject):
             self.log_message.emit("⚠ Already running", "warn"); return
         try:
             blocks = json.loads(stack_json)
-            self._engine.load_stack(blocks)
         except json.JSONDecodeError:
             self.log_message.emit("❌ Bad JSON", "error"); return
+        blocks = self._clean_blocks(blocks)
+        self._engine.load_stack(blocks)
         # remember what is being run for the next session
         if isinstance(blocks, list):
             self._config.set_state(last_stack=blocks,
@@ -818,6 +852,7 @@ class Bridge(QObject):
             self.log_message.emit("❌ Preset save aborted: bad stack payload",
                                   "error")
             return
+        blocks = self._clean_blocks(blocks)
         try:
             self._presets.save_stack(name, blocks)
         except Exception as exc:
@@ -836,6 +871,8 @@ class Bridge(QObject):
         if blocks is None:
             self.log_message.emit(f"❌ Preset “{name}” not found", "error")
             return "null"
+        # Legacy presets may still carry retired keys — clean before use.
+        blocks = self._clean_blocks(blocks)
         # Preserve current stack in history before overwriting (undo after preset load)
         try:
             current = self._config.get_state("last_stack", None)

@@ -250,9 +250,11 @@ class TestGlobalHistory(unittest.TestCase):
 
         # The next global undo crosses the grid/stack boundary and restores
         # the stack edit, proving there is no separate layout undo system.
+        # Blocks are normalized on every store/emit path (retired keys
+        # stripped, enabled defaulted true), so compare to the cleaned form.
         result = json.loads(br.undo())
         self.assertEqual(result["kind"], "stack")
-        self.assertEqual(result["value"], stack_b)
+        self.assertEqual(result["value"], br._clean_blocks(stack_b))
 
     def test_legacy_type_nodes_are_normalized_to_t(self):
         legacy = legacy_split("col", [legacy_leaf(i) for i in

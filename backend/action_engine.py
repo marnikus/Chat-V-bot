@@ -38,6 +38,39 @@ USER_SCOPED_BLOCKS = frozenset({
 #: Nick used for the synthetic user of a standalone (user-independent) run.
 STANDALONE_NICK = "—"
 
+#: Block settings that no longer exist for any block. Kept for backward
+#: compatibility — old config.json stacks / presets / undo history still
+#: carry them — but stripped on the way IN so they are never instantiated,
+#: persisted, or sent back to the UI (where the Tune panel renders one row
+#: per key). Mirrors RETIRED_KEYS in ui/js/stack-dnd.js and the dead-kwargs
+#: list popped by ScrollParse.__init__.
+RETIRED_BLOCK_KEYS = frozenset({
+    "use_panel_filters",   # duplicate of the four tri-state filter selects
+    "skip_if_backlog",     # replaced by the scroll_only seek mode
+    "backlog_threshold",
+})
+
+
+def normalize_blocks(blocks) -> list[dict]:
+    """Coerce a raw stack payload into clean block dicts.
+
+    Drops non-dict entries, removes retired keys, and ensures ``enabled``
+    defaults to True (backward compat). A safety net applied wherever a
+    stack enters the backend (run, snapshot, history, preset save/load);
+    the JS migration is the primary path that also back-fills missing
+    settings — this only guarantees dead keys never survive server-side.
+    """
+    clean: list[dict] = []
+    for b in blocks or []:
+        if not isinstance(b, dict):
+            continue
+        nb = {k: v for k, v in b.items()
+              if k not in RETIRED_BLOCK_KEYS and not str(k).startswith("_")}
+        if "enabled" not in nb or nb["enabled"] is None:
+            nb["enabled"] = True
+        clean.append(nb)
+    return clean
+
 
 class RunTracer:
     """Appends one JSON line per event to logs/run_trace_<run_id>.jsonl."""
@@ -108,13 +141,11 @@ class ActionEngine(QObject):
     def load_stack(self, blocks: list[dict]) -> None:
         """Build action list from block config dicts."""
         self._stack.clear()
-        for b in blocks or []:
+        for b in normalize_blocks(blocks):
             cls = get_action_class(b.get("block_id", ""))
             if cls:
-                # Ensure enabled defaults to True for backward compat
+                # enabled is guaranteed True-by-default by normalize_blocks
                 data = {k: v for k, v in b.items() if k != "block_id"}
-                if "enabled" not in data:
-                    data["enabled"] = True
                 self._stack.append(cls(**data))
         log.info("Stack loaded: %d blocks (%d enabled)", len(self._stack),
                  sum(1 for a in self._stack if getattr(a, "enabled", True)))

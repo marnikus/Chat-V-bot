@@ -35,7 +35,6 @@
           "filter_registered": "any",
           "filter_guest": "any",
           "filter_anonymous": "any",
-          "use_panel_filters": false,
           "enabled": true
         },
         {
@@ -92,7 +91,6 @@
         "filter_registered": "any",
         "filter_guest": "any",
         "filter_anonymous": "any",
-        "use_panel_filters": true,
         "enabled": true
       },
       {
@@ -146,7 +144,6 @@
           "filter_registered": "any",
           "filter_guest": "any",
           "filter_anonymous": "any",
-          "use_panel_filters": true,
           "enabled": true
         },
         {
@@ -198,7 +195,6 @@
           "filter_registered": "any",
           "filter_guest": "any",
           "filter_anonymous": "any",
-          "use_panel_filters": false,
           "enabled": true
         },
         {
@@ -255,7 +251,6 @@
             "filter_registered": "any",
             "filter_guest": "any",
             "filter_anonymous": "any",
-            "use_panel_filters": true,
             "enabled": true
           },
           {

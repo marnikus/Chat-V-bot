@@ -8,6 +8,19 @@
 
 'use strict';
 
+// Settings that no longer exist for any block. The Tune panel renders one
+// row per key present on a block object, so a key left over in an old
+// config.json / preset / history would keep showing a dead control — BUG #1
+// was exactly this: "use_panel_filters" duplicated the four tri-state
+// filter selects. Mirrors the retired kwargs popped in
+// actions/scroll_parse.py. Deleted on load by _migrateBlock() and skipped
+// defensively by _showConfig().
+const RETIRED_KEYS = [
+  'use_panel_filters',  // duplicate of the four filter selects
+  'skip_if_backlog',    // replaced by the scroll_only seek mode
+  'backlog_threshold',
+];
+
 const BUILTIN_BLOCKS = [
   { block_id:'CUSTOM_FIND',    name:'Find & Click',     icon:'🔎',
     defaults:{custom_name:'', selector:"div[role='tab'].tab-item", label_selector:'p.chat-title', match_text:'', click_enabled:true, click_selector:'', highlight_enabled:true, confirm_pause_ms:700, highlight_ms:1200, pre_delay_ms:500, enabled:true},
@@ -130,16 +143,19 @@ const StackDnD = {
   },
 
   _initDefaultStack() {
-    this.stack = [
-      { block_id:'CLICK_MAIN_TAB', pre_delay_ms:500, selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', enabled:true },
-      { block_id:'SCROLL_PARSE',   pre_delay_ms:300, max_scrolls:50, scroll_pause_ms:800, enabled:true },
-      { block_id:'CONDITIONAL_SKIP',pre_delay_ms:0, enabled:true },
-      { block_id:'CLICK_USER',     pre_delay_ms:1000, enabled:true },
-      { block_id:'WAIT_PAGE_LOAD', pre_delay_ms:200, target_selector:"textarea[placeholder='Сообщение']", timeout_ms:5000, enabled:true },
-      { block_id:'TYPE_MESSAGE',   pre_delay_ms:500, message:'', typing_speed_ms:30, enabled:true },
-      { block_id:'CLICK_SEND',     pre_delay_ms:300, enabled:true },
-      { block_id:'CLICK_BACK',     pre_delay_ms:800, selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', enabled:true },
-    ];
+    // Built from BUILTIN_BLOCKS defaults (via migration) so every block —
+    // including Scroll & Parse — starts with its full, current set of
+    // settings (filters, scroll_only, etc.).
+    this.stack = this._normalizeStack([
+      { block_id:'CLICK_MAIN_TAB', pre_delay_ms:500, tab_name:'Гостиная' },
+      { block_id:'SCROLL_PARSE',   pre_delay_ms:300, max_scrolls:50 },
+      { block_id:'CONDITIONAL_SKIP',pre_delay_ms:0 },
+      { block_id:'CLICK_USER',     pre_delay_ms:1000 },
+      { block_id:'WAIT_PAGE_LOAD', pre_delay_ms:200, timeout_ms:5000 },
+      { block_id:'TYPE_MESSAGE',   pre_delay_ms:500, message:'' },
+      { block_id:'CLICK_SEND',     pre_delay_ms:300 },
+      { block_id:'CLICK_BACK',     pre_delay_ms:800, tab_name:'Гостиная' },
+    ]);
   },
 
   // ── History helpers ──────────────────────────────────────────
@@ -153,16 +169,26 @@ const StackDnD = {
     }
   },
 
-  _normalizeBlock(b) {
-    if (!b || typeof b !== 'object') return null;
-    const nb = {...b};
-    if (!('enabled' in nb) || nb.enabled === undefined || nb.enabled === null) {
-      nb.enabled = true;
-    } else {
-      nb.enabled = !!nb.enabled;
-    }
+  // One migration chokepoint for raw block dicts (session restore, preset
+  // load, undo/redo, backend pushes, add-menu). It (a) strips retired keys
+  // so dead controls never render, (b) back-fills settings added after the
+  // block was saved from the block's current BUILTIN_BLOCKS defaults (e.g.
+  // scroll_only / purge_rejected missing on old stacks), and (c) normalises
+  // enabled. Unknown keys (CUSTOM_FIND fields) are preserved.
+  _migrateBlock(b) {
+    if (!b || typeof b !== 'object' || Array.isArray(b)) return null;
+    const meta = BUILTIN_BLOCKS.find((x) => x.block_id === b.block_id);
+    const defaults = (meta && meta.defaults) || null;
+    const nb = defaults ? {...defaults, ...b} : {...b};
+    RETIRED_KEYS.forEach((k) => { delete nb[k]; });
+    if (nb.enabled === undefined || nb.enabled === null) nb.enabled = true;
+    else nb.enabled = !!nb.enabled;
     if (typeof nb.pre_delay_ms !== 'number') nb.pre_delay_ms = 500;
     return nb;
+  },
+
+  _normalizeBlock(b) {
+    return this._migrateBlock(b);
   },
 
   _normalizeStack(stack) {
@@ -412,11 +438,8 @@ const StackDnD = {
   },
 
   addBlockConfig(config) {
-    if (!config || typeof config !== 'object' || !config.block_id) return;
-    const c = { ...config };
-    if (typeof c.pre_delay_ms !== 'number') c.pre_delay_ms = 500;
-    if (!('enabled' in c)) c.enabled = true;
-    else c.enabled = !!c.enabled;
+    const c = this._migrateBlock(config);
+    if (!c) return;
     this.stack.push(c);
     this._renderStack();
     this.pushHistory();
@@ -712,13 +735,10 @@ const StackDnD = {
     opts = opts || {};
     const prev = this._restoring;
     if (opts.silent) this._restoring = true;
-    // normalize enabled
-    this.stack = blocks.map((b) => {
-      const nb = {...b};
-      if (!('enabled' in nb)) nb.enabled = true;
-      else nb.enabled = !!nb.enabled;
-      return nb;
-    });
+    // Migrate every block: strip retired keys, back-fill missing defaults.
+    this.stack = blocks
+      .map((b) => this._migrateBlock(b))
+      .filter(Boolean);
     this.selectedIdx = -1;
     this._runningIdx = -1;
     this._renderStack();
@@ -825,6 +845,9 @@ const StackDnD = {
     const keys = this._configKeys(block, meta);
     for (const key of keys) {
       if (key === 'block_id') continue;
+      // Never render retired controls (e.g. the old use_panel_filters
+      // checkbox) even if a block somehow still carries the key.
+      if (RETIRED_KEYS.includes(key)) continue;
       const val = block[key];
       const labelText = labels[key] || key;
       const safeVal = String(val).replace(/"/g, '&quot;');
