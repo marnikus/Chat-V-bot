@@ -11,6 +11,11 @@ whose work happened in the engine):
   STEP 3  order the collected list A–Z with not-yet-messaged people first, and
           finish as soon as `min_new_users` new un-messaged people are found.
 
+Before any of that, the optional *backlog guard* (`skip_if_backlog`) skips the
+whole collection when at least `backlog_threshold` un-messaged people are
+already in the list — there is no point harvesting more while a pile is waiting.
+A skipped run still hands the existing backlog to the rest of the stack.
+
 The people it collects become the engine's messaging queue, which STEP 4
 (`CLICK_USER`) then works through.
 """
@@ -43,6 +48,8 @@ class ScrollParse(BaseAction):
                  highlight_ms: int = 900,
                  confirm_pause_ms: int = 500,
                  purge_rejected: bool = True,
+                 skip_if_backlog: bool = False,
+                 backlog_threshold: int = 5,
                  filter_female: str = YES, filter_registered: str = NO,
                  filter_guest: str = YES, filter_anonymous: str = NO,
                  use_panel_filters: bool = False,
@@ -63,6 +70,11 @@ class ScrollParse(BaseAction):
         # Destroy stored records for people confirmed NOT to pass the filter,
         # so a re-run can never resurrect them.
         self.purge_rejected = bool(purge_rejected)
+        # Backlog guard: do not collect NEW people while at least
+        # `backlog_threshold` un-messaged people are already in the list.
+        self.skip_if_backlog = bool(skip_if_backlog)
+        # A threshold of 0 with the guard on would block every run forever.
+        self.backlog_threshold = max(1, int(backlog_threshold or 1))
         # Tri-state filter rules ("any" | "yes" | "no") — stored as plain block
         # params so they round-trip through the preset machinery.
         self.filter_female = normalize(filter_female, YES)
@@ -107,16 +119,56 @@ class ScrollParse(BaseAction):
             log_cb=log_cb,
         )
 
+    @staticmethod
+    async def _read_backlog(engine) -> int:
+        """Ask the engine how many un-messaged people are already waiting.
+
+        Fails open (returns 0 → collect) so a counting problem can never
+        silently stop the block from working.
+        """
+        if engine is None:
+            return 0
+        counter = getattr(engine, "backlog_count", None)
+        if counter is None:
+            return 0
+        try:
+            return int(await counter())
+        except Exception as exc:
+            log.warning("Backlog count failed (collecting anyway): %s", exc)
+            return 0
+
     # ── the pipeline ─────────────────────────────────────────────
     async def run_pipeline(self, cdp: CDPClient, engine: Optional[object] = None,
                            panel_criteria=None,
                            known_messaged: set | None = None,
                            on_collect=None, on_reject=None,
-                           should_stop=None) -> CollectResult:
-        """Run scroll → filter → collect and return the ordered people."""
+                           should_stop=None,
+                           backlog: int | None = None) -> CollectResult:
+        """Run scroll → filter → collect and return the ordered people.
+
+        :param backlog: number of un-messaged people already in the list. When
+            omitted it is read from the engine. Used by the backlog guard.
+        """
         def say(message: str, level: str = "info") -> None:
             if engine is not None:
                 engine.report(message, level)
+
+        # ── backlog guard (STEP 0) ───────────────────────────────
+        # Checked BEFORE any scrolling: the whole point is to avoid the work.
+        if self.skip_if_backlog:
+            if backlog is None:
+                backlog = await self._read_backlog(engine)
+            if backlog >= self.backlog_threshold:
+                say(f"⏸ Backlog guard: {backlog} un-messaged person(s) in the "
+                    f"list ≥ threshold {self.backlog_threshold} — skipping "
+                    "collection, no new people will be added", "warn")
+                say("   Work through the backlog, or lower/disable the guard "
+                    "to collect more.", "info")
+                result = CollectResult(skipped=True, backlog=backlog)
+                self.last_result = result
+                return result
+            say(f"✅ Backlog guard: {backlog} un-messaged person(s) < threshold "
+                f"{self.backlog_threshold} — collecting", "info")
 
         say(f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
             f"(max {self.max_scrolls} scrolls, {self.scroll_pause_ms} ms pause)",
@@ -151,6 +203,9 @@ class ScrollParse(BaseAction):
         await self.pre_delay()
         panel = getattr(engine, "criteria", None) if engine else None
         result = await self.run_pipeline(cdp, engine, panel_criteria=panel)
+        if result.skipped:
+            # The guard firing is the block doing its job, not a failure.
+            return ActionResult.OK
         if not result.collected:
             if engine:
                 engine.report("⚠ No person matched the filter criteria", "warn")
@@ -188,6 +243,11 @@ class ScrollParse(BaseAction):
                                  "label": "Pause after detecting a person (ms)"}
         s["purge_rejected"] = {"type": "checkbox", "default": True,
                                "label": "Remove people that fail the filter"}
+        s["skip_if_backlog"] = {"type": "checkbox", "default": False,
+                                "label": "Don't add new people while a backlog "
+                                         "exists"}
+        s["backlog_threshold"] = {"type": "number", "default": 5,
+                                  "label": "…if at least N un-messaged in list"}
         choices = [ANY, YES, NO]
         s["filter_female"] = {"type": "select", "options": choices,
                               "default": YES, "label": "Female"}

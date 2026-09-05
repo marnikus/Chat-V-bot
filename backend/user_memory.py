@@ -95,6 +95,16 @@ class UserMemory:
             "messaged,message_count,last_messaged,notes FROM users ORDER BY first_seen DESC")
         return [self._row(r) for r in await cur.fetchall()]
 
+    async def count_unmessaged(self) -> int:
+        """Number of people still awaiting a message (the backlog).
+
+        A single COUNT rather than materialising every row through get_all().
+        """
+        cur = await self._db.execute(
+            "SELECT COUNT(*) FROM users WHERE messaged=0")
+        row = await cur.fetchone()
+        return int(row[0]) if row else 0
+
     async def get_stats(self) -> dict:
         cur = await self._db.execute("SELECT COUNT(*) FROM users")
         total = (await cur.fetchone())[0]

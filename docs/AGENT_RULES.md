@@ -166,3 +166,23 @@ JavaScript probes are tested by running them through `tests/js_harness.js`
 against a DOM stub, not by asserting on generated strings. Pipelines are tested
 against a fake CDP client that behaves like the real page, including lazy
 loading. If a test would pass with the feature deleted, it is not a test.
+
+## RULE 9 — a guard that skips work must not stall the stack
+
+A setting that makes a phase decline to do its work is only allowed to skip
+*that work*, never the phases downstream of it. When Scroll & Parse skips
+collection because of the backlog guard, `_run_collect_phase()` still returns
+`await self._memory.get_queue()`, so the people already waiting are worked
+through. If it returned `[]` instead, ticking the checkbox would quietly stop
+the entire pipeline — the exact opposite of what the user asked for.
+
+Two corollaries:
+
+* **Fail open.** Counting the backlog fails open to `0` at both layers
+  (`ActionEngine.backlog_count()` and `ScrollParse._read_backlog()`), so a
+  counting error can never silently stop collection.
+* **Skipping is success.** A skipped run returns `ActionResult.OK`, not a
+  failure — the guard firing is correct behaviour.
+
+Note the asymmetry, which is intended: a *normal* collect phase returns only the
+people it just collected, while a *skipped* one returns the whole waiting queue.

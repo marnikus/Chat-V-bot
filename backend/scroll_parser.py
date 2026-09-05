@@ -76,6 +76,8 @@ class CollectResult:
     reached_end: bool = False
     stopped_early: bool = False
     stopped: bool = False                            # halted by the user
+    skipped: bool = False                            # backlog guard fired
+    backlog: int = 0                                 # un-messaged already waiting
     rejected: dict = field(default_factory=dict)     # reason -> count
     rejected_people: list = field(default_factory=list)   # (record, reason)
     purged: list = field(default_factory=list)       # nicks destroyed
