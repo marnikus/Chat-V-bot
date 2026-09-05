@@ -49,8 +49,16 @@ DEFAULTS: dict[str, Any] = {
     #   last_url_preset   -> last selected/connected URL preset
     #   last_stack_preset -> name of the last loaded/saved stack preset
     #   last_stack        -> live snapshot of the last edited/run stack
-    "state": {},
+    #   stack_history     -> list of previous stacks for undo/redo (up to 100)
+    #   stack_history_index -> current pointer in history
+    "state": {
+        "stack_history": [],
+        "stack_history_index": -1,
+    },
 }
+
+# History limits
+MAX_STACK_HISTORY = 100
 
 
 class ConfigManager:
@@ -148,7 +156,13 @@ class ConfigManager:
         state = self.get("state", default={})
         if not isinstance(state, dict):
             return default
-        return state.get(key, default)
+        if key in state:
+            return state[key]
+        # fallback to DEFAULTS state if present
+        defaults_state = DEFAULTS.get("state", {})
+        if isinstance(defaults_state, dict) and key in defaults_state:
+            return copy.deepcopy(defaults_state[key])
+        return default
 
     def set_state(self, save: bool = True, **updates: Any) -> None:
         state = self.get_copy("state", default={})

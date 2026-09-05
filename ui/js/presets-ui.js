@@ -49,12 +49,19 @@ const PresetsUI = {
   loadStack(name) {
     if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
     LogConsole.log(`📂 Loading preset “${name}”…`, 'info');
+    // Push current stack to history before overwriting, so undo returns to previous custom settings
+    if (StackDnD && typeof StackDnD.pushHistory === 'function' && StackDnD.stack && StackDnD.stack.length) {
+      StackDnD.pushHistory(StackDnD.stack, {force:false});
+    }
     App.bridge.load_stack_preset(name, (payload) => {
       if (!payload || payload === 'null') return;
       try {
         const blocks = JSON.parse(payload);
-        if (StackDnD && typeof StackDnD.setStack === 'function') StackDnD.setStack(blocks);
-        LogConsole.log(`✅ Preset “${name}” restored — ${blocks.length} block(s)`, 'success');
+        if (StackDnD && typeof StackDnD.setStack === 'function') {
+          // setStack will auto-push history (new preset becomes new tip, undo returns to previous)
+          StackDnD.setStack(blocks);
+        }
+        LogConsole.log(`✅ Preset “${name}” restored — ${blocks.length} block(s) (↩ Undo to return)`, 'success');
       } catch (e) {
         LogConsole.log(`❌ Preset “${name}” could not be parsed`, 'error');
       }

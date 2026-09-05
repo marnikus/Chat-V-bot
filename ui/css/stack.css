@@ -129,3 +129,142 @@
   font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .stack-item.active .block-pos { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Feature #2: Enable/Disable Toggle Bar ─────────────────────── */
+.stack-item.disabled {
+  opacity: 0.55;
+  background: repeating-linear-gradient(45deg, var(--bg-card), var(--bg-card) 8px, var(--bg-input) 8px, var(--bg-input) 16px);
+  border-style: dashed;
+}
+.stack-item.disabled .block-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.stack-item.disabled .block-icon {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.stack-item .off-badge {
+  display: inline-block;
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.5px;
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background .2s, border-color .2s;
+}
+.toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform .2s, background .2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+  background: #fff;
+}
+.toggle-switch input:not(:checked) + .toggle-slider {
+  background: var(--bg-input);
+  border-color: var(--border);
+}
+.toggle-switch:hover .toggle-slider {
+  border-color: var(--border-light);
+}
+.toggle-switch input:checked + .toggle-slider:hover {
+  background: var(--accent-hover, var(--accent));
+}
+
+/* Config panel toggle for enabled */
+.form-row-enabled {
+  background: var(--bg-input);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+.form-row-enabled label {
+  flex: 1;
+}
+.form-row-enabled .toggle-switch {
+  width: 44px;
+  height: 24px;
+}
+.form-row-enabled .toggle-slider:before {
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+}
+.form-row-enabled .toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(18px);
+}
+
+/* Undo/Redo buttons */
+#undoBtn, #redoBtn {
+  opacity: 1;
+  transition: opacity .15s;
+}
+#undoBtn:disabled, #redoBtn:disabled {
+  opacity: 0.35;
+}
+.btn-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Stack hint update for history */
+.stack-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  padding: 4px 0 6px;
+}
+.stack-hint kbd {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+

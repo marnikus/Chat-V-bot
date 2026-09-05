@@ -67,6 +67,9 @@
       <div class="panel stack-panel">
         <h3><span class="material-icons">view_list</span> Action Stack
           <span class="spacer"></span>
+          <button id="undoBtn" class="btn-icon-sm" title="Undo (Ctrl+Z) — up to 100 steps" disabled><span class="material-icons">undo</span></button>
+          <button id="redoBtn" class="btn-icon-sm" title="Redo (Ctrl+Y) — up to 100 steps" disabled><span class="material-icons">redo</span></button>
+          <span class="btn-separator" style="width:1px;height:16px;background:var(--border);margin:0 4px;display:inline-block;"></span>
           <button id="addBlockBtn" class="btn-icon-sm" title="Add block"><span class="material-icons">add_circle</span></button>
           <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
           <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
@@ -88,7 +91,7 @@
             <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
           </div>
         </div>
-        <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>.</div>
+        <div class="stack-hint">Drag the <b>⠿</b> handle to reorder • Toggle <b>On/Off</b> to skip a block • <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> Redo (up to 100 steps) • <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> move block</div>
         <div id="stackList" class="stack-list">
           <div class="stack-empty">Drag blocks here or click + to add</div>
         </div>

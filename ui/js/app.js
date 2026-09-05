@@ -38,7 +38,7 @@ function initApp() {
   }
 }
 
-// ── Session restore (BUG #2 / single preset storage) ──────────
+// ── Session restore (BUG #2 / single preset storage + history) ──
 function restoreSession(json) {
   let payload = {};
   try { payload = JSON.parse(json); } catch (e) { payload = {}; }
@@ -52,12 +52,24 @@ function restoreSession(json) {
 
   const state = payload.state || {};
 
+  // 0) restore history first (persisted across sessions)
+  if (state.stack_history || state.stack_history_index !== undefined) {
+    StackDnD.loadHistoryFromState(state);
+  }
+
   // 1) restore the last stack (snapshot or the named preset)
   const lastStack = Array.isArray(state.last_stack) ? state.last_stack : null;
   const lastPreset = state.last_stack_preset || '';
   if (Array.isArray(lastStack) && lastStack.length) {
     StackDnD.setStack(lastStack, { silent: true });
+    // ensure history contains this stack if history was empty
+    if (!StackDnD.history.length) {
+      StackDnD.pushHistory(lastStack, {force:true});
+    }
     LogConsole.log(`♻ Restored last stack (${lastStack.length} block(s))`, 'info');
+    if (StackDnD.history.length > 1) {
+      LogConsole.log(`↩ History: ${StackDnD.history.length} steps, index ${StackDnD.historyIndex} — Undo/Redo available`, 'info');
+    }
   } else if (lastPreset) {
     PresetsUI.loadStack(lastPreset);
   } else {
@@ -170,6 +182,18 @@ function setupBridgeListeners() {
     } catch (e) { /* ignore */ }
   });
   b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
+  b.stack_loaded.connect((name, json) => {
+    try {
+      const blocks = JSON.parse(json);
+      if (Array.isArray(blocks)) {
+        // backend undo/redo emits this; treat as history navigation
+        StackDnD._isRestoringHistory = true;
+        StackDnD.setStack(blocks, {silent:true});
+        StackDnD._isRestoringHistory = false;
+        StackDnD.updateHistoryButtons();
+      }
+    } catch (e) { /* ignore */ }
+  });
 
   // Load initial criteria display
   b.get_criteria((json) => {
