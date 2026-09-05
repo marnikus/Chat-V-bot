@@ -56,25 +56,30 @@
     "last_url_preset": "https://ru.virt-chat.com/chat",
     "last_stack": [
       {
-        "block_id": "CLICK_BACK",
-        "pre_delay_ms": 800,
         "selector": "div[role='tab'].tab-item",
         "child_selector": "p.chat-title",
-        "tab_name": "Гостиная"
+        "tab_name": "Гостиная",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "pre_delay_ms": 800,
+        "enabled": true,
+        "block_id": "CLICK_BACK"
       },
       {
-        "block_id": "CUSTOM_FIND",
-        "pre_delay_ms": 500,
         "custom_name": "cdk-virtual-scroll-viewport",
         "selector": "cdk-virtual-scroll-viewport",
         "label_selector": "",
         "match_text": "",
         "click_enabled": true,
-        "click_selector": ""
+        "click_selector": "",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
       },
       {
-        "block_id": "SCROLL_PARSE",
-        "pre_delay_ms": 300,
         "max_scrolls": 1000,
         "scroll_pause_ms": 800,
         "scroll_delta_y": 1000,
@@ -82,15 +87,22 @@
         "load_timeout_ms": 2500,
         "stall_threshold": 100,
         "min_new_users": 2,
+        "person_selector": "user-item",
+        "nick_selector": ".primary-text",
+        "highlight_enabled": true,
+        "highlight_ms": 900,
+        "confirm_pause_ms": 500,
+        "purge_rejected": true,
+        "scroll_only": true,
         "filter_female": "yes",
         "filter_registered": "any",
         "filter_guest": "any",
         "filter_anonymous": "any",
-        "use_panel_filters": true
+        "pre_delay_ms": 300,
+        "enabled": true,
+        "block_id": "SCROLL_PARSE"
       },
       {
-        "block_id": "CLICK_USER",
-        "pre_delay_ms": 1000,
         "selector": "user-item",
         "label_selector": ".primary-text",
         "click_selector": ".user-container",
@@ -99,10 +111,142 @@
         "verify_new_tab": true,
         "tab_pause_ms": 800,
         "highlight_enabled": true,
-        "confirm_pause_ms": 700
+        "confirm_pause_ms": 700,
+        "pre_delay_ms": 1000,
+        "enabled": true,
+        "block_id": "CLICK_USER"
       }
     ],
-    "last_stack_preset": ""
+    "last_stack_preset": "",
+    "stack_history": [
+      [
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "cdk-virtual-scroll-viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 800,
+          "scroll_delta_y": 1000,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 2,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": false,
+          "filter_female": "yes",
+          "filter_registered": "any",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        }
+      ],
+      [
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "cdk-virtual-scroll-viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 800,
+          "scroll_delta_y": 1000,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 2,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "any",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        }
+      ]
+    ],
+    "stack_history_index": 1
   },
   "custom_blocks": [
     {
