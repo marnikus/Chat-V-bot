@@ -856,7 +856,15 @@ class Bridge(QObject):
 
     # ── message composer ─────────────────────────────────────────
     @Slot(str)
-    def save_message(self, text): self._message_text = text
+    def save_message(self, text):
+        self._message_text = text
+        # Mirror onto the engine so a Type Message block with
+        # use_composer=True sends the composer's CURRENT text at run time.
+        try:
+            self._engine.composer_text = text
+        except Exception:
+            pass
+
     @Slot(result=str)
     def get_message(self): return self._message_text
 

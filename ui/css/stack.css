@@ -106,6 +106,9 @@
   border-color: var(--border-focus); outline: none;
 }
 .config-panel textarea { min-height: 60px; resize: vertical; }
+.config-panel textarea:disabled, .config-panel input:disabled {
+  opacity: .45; cursor: not-allowed;
+}
 
 /* — Configurable constructor form (CUSTOM_FIND "Find & Click") — */
 .config-panel .form-row--head { align-items: center; }
