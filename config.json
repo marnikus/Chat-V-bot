@@ -217,7 +217,116 @@
         }
       ]
     ],
-    "stack_history_index": 0
+    "stack_history_index": 0,
+    "undo_history": [
+      {
+        "kind": "stack",
+        "value": [
+          {
+            "block_id": "CLICK_BACK",
+            "pre_delay_ms": 800,
+            "selector": "div[role='tab'].tab-item",
+            "child_selector": "p.chat-title",
+            "tab_name": "Гостиная",
+            "enabled": true
+          },
+          {
+            "block_id": "CUSTOM_FIND",
+            "pre_delay_ms": 500,
+            "custom_name": "cdk-virtual-scroll-viewport",
+            "selector": "cdk-virtual-scroll-viewport",
+            "label_selector": "",
+            "match_text": "",
+            "click_enabled": true,
+            "click_selector": "",
+            "enabled": true
+          },
+          {
+            "block_id": "SCROLL_PARSE",
+            "pre_delay_ms": 300,
+            "max_scrolls": 1000,
+            "scroll_pause_ms": 800,
+            "scroll_delta_y": 1000,
+            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+            "load_timeout_ms": 2500,
+            "stall_threshold": 100,
+            "min_new_users": 2,
+            "filter_female": "yes",
+            "filter_registered": "any",
+            "filter_guest": "any",
+            "filter_anonymous": "any",
+            "use_panel_filters": true,
+            "enabled": true
+          },
+          {
+            "block_id": "CLICK_USER",
+            "pre_delay_ms": 1000,
+            "selector": "user-item",
+            "label_selector": ".primary-text",
+            "click_selector": ".user-container",
+            "tab_selector": "div[role='tab'].tab-item",
+            "tab_title_selector": "p.chat-title",
+            "verify_new_tab": true,
+            "tab_pause_ms": 800,
+            "highlight_enabled": true,
+            "confirm_pause_ms": 700,
+            "enabled": true
+          }
+        ]
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[17,83]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[46,24,30]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[17,83]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[60.07303516028956,9.927611168562564,29.999353671147883]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[17,83]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[57.55138516532619,12.449731903485254,29.998882931188557]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[17,83]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[49.240393208221626,20.760723860589813,29.998882931188557]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[23.733162283515075,76.26683771648493]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[49.240393208221626,20.760723860589813,29.998882931188557]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[23.733162283515075,76.26683771648493]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[49.240393208221626,31.27792672028597,19.481680071492406]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[23.733162283515075,76.26683771648493]},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[23.733162283515075,76.26683771648493]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[50,50]}],\"sizes\":[46.3758819756254,53.6241180243746]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.33134711463537,36.66865288536462]}],\"sizes\":[46.3758819756254,53.6241180243746]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}"
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.33134711463537,36.66865288536462]}],\"sizes\":[13.625685199686766,86.37431480031323]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}"
+      }
+    ],
+    "undo_history_index": 11,
+    "grid_layout": "{\"v\":1,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,65]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.33134711463537,36.66865288536462]}],\"sizes\":[13.625685199686766,86.37431480031323]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[56.38963360142984,24.128686327077748,19.481680071492406]}}",
+    "window_geometry": {
+      "x": 0,
+      "y": 23,
+      "width": 2560,
+      "height": 1377
+    }
   },
   "custom_blocks": [
     {
