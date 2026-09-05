@@ -162,6 +162,10 @@ stays pinned; everything below it is rearrangeable.
   side column). Your manual arrangement always wins until the next preset.
 - The arrangement **persists** across app restarts (validated on load — a
   corrupted layout can never brick the UI).
+- Every panel/row has a usable minimum width and height; resizing cannot make
+  a neighboring row disappear.
+- Grid edits use the same global `Undo` / `Redo` controls and `Ctrl+Z` /
+  `Ctrl+Y` history as action-stack edits. There is no second grid history.
 
 Implementation: `ui/js/sash-core.js` (pure split-tree model),
 `ui/js/sash-grid.js` (rendering + drag/resize), `ui/css/sash-layout.css`;
@@ -184,7 +188,9 @@ On every start the app restores the previous session from the same single
 - the **last bookmark** is selected again (chip highlighted, URL field filled);
 - an **auto-connect attempt** is made using that bookmark's URL;
 - the **last used stack** (or the last named preset) is loaded into the editor;
-- all preset/template/URL/custom-block chips are restored.
+- all preset/template/URL/custom-block chips are restored;
+- the main window's last X/Y position and width/height are restored exactly;
+- the People table's current sort remains active while live user updates arrive.
 
 ### URL Presets (auto-connect by URL)
 The toolbar below the header holds a **URL field** and quick-connect presets:
@@ -214,6 +220,9 @@ The bottom-left panel lists every discovered user and is fully editable:
 - **✔ Done / ↩ Undo** on a row — flips that user's "messaged" flag
 - **Reset Messaged** — marks every user as new again (deletes nobody)
 - **Clear All** — removes every user from memory
+- Click **Nick, Gender, Reg?, Status, First Seen, or Messaged** headers to sort;
+  click the same header again to reverse the order. The `▲▼` arrows show the
+  active direction.
 
 The list fills in as soon as the app starts (no need to connect to a Chrome
 tab first). Every destructive action asks for confirmation in an in-app dialog

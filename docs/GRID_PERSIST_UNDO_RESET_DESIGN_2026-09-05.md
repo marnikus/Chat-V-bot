@@ -1,7 +1,11 @@
 # Flexible grid — backend persistence, undo/redo, and Reset to default
 
 Date: 2026-09-05
-Status: design, written before implementation
+Status: superseded by `docs/GRID_WINDOW_MEMORY_SORT_DESIGN_2026-09-05.md`
+
+This document records the earlier per-grid-history proposal. The implemented
+contract uses the single global `state.undo_history` timeline instead; the
+per-grid history sections below are historical context only.
 
 Follow-up to `docs/SASH_LAYOUT_DESIGN_2026-09-05.md`, merged from
 `arena/01a07253-chat-v-bot`. Four requirements:

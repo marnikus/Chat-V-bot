@@ -217,7 +217,10 @@ const StackDnD = {
     }
 
     this.updateHistoryButtons();
-    this.saveHistoryToBackend();
+    // StackDnD keeps a projection for compatibility, but App owns the only
+    // undo timeline shared with sash-grid.
+    if (typeof App !== 'undefined' && App.recordGlobal)
+      App.recordGlobal('stack', normalized);
     // console.log(`[History] pushed, len=${this.history.length} idx=${this.historyIndex}`);
   },
 
@@ -230,6 +233,9 @@ const StackDnD = {
   },
 
   undo() {
+    if (typeof App !== 'undefined' && App.undoGlobal && App.bridge) {
+      return App.undoGlobal();
+    }
     if (!this.canUndo()) {
       if (typeof LogConsole !== 'undefined') LogConsole.log('⚠ Nothing to undo', 'warn');
       return false;
@@ -253,6 +259,9 @@ const StackDnD = {
   },
 
   redo() {
+    if (typeof App !== 'undefined' && App.redoGlobal && App.bridge) {
+      return App.redoGlobal();
+    }
     if (!this.canRedo()) {
       if (typeof LogConsole !== 'undefined') LogConsole.log('⚠ Nothing to redo', 'warn');
       return false;
@@ -275,6 +284,10 @@ const StackDnD = {
   },
 
   updateHistoryButtons() {
+    if (typeof App !== 'undefined' && App._updateUndoButtons) {
+      App._updateUndoButtons();
+      return;
+    }
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
     if (undoBtn) {
@@ -288,13 +301,8 @@ const StackDnD = {
   },
 
   saveHistoryToBackend() {
-    if (!App.bridge) return;
-    clearTimeout(this._historySaveTimer);
-    this._historySaveTimer = setTimeout(() => {
-      try {
-        App.bridge.save_stack_history(JSON.stringify(this.history), this.historyIndex);
-      } catch (e) { /* ignore */ }
-    }, 300);
+    // Retained as a no-op compatibility hook. App.recordGlobal() persists
+    // every stack edit in the single global history immediately.
   },
 
   loadHistoryFromState(state) {
@@ -327,10 +335,10 @@ const StackDnD = {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
     if (undoBtn) {
-      undoBtn.addEventListener('click', () => this.undo());
+      undoBtn.addEventListener('click', () => App.undoGlobal());
     }
     if (redoBtn) {
-      redoBtn.addEventListener('click', () => this.redo());
+      redoBtn.addEventListener('click', () => App.redoGlobal());
     }
   },
 
@@ -544,21 +552,18 @@ const StackDnD = {
 
   _setupKeyboardReorder() {
     document.addEventListener('keydown', (e) => {
-      // Undo/Redo
+      // One global undo/redo timeline covers both the stack and the grid.
       if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-        const tag = (document.activeElement && document.activeElement.tagName) || '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          // allow undo in text fields? skip for stack
-          if (e.target && e.target.closest && e.target.closest('#blockConfigForm')) return;
-        }
-        if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (e.target && e.target.closest && e.target.closest('#blockConfigForm')) return;
+        const key = (e.key || '').toLowerCase();
+        if (key === 'z' && !e.shiftKey) {
           e.preventDefault();
-          this.undo();
+          App.undoGlobal();
           return;
         }
-        if ((e.key.toLowerCase() === 'y') || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+        if (key === 'y' || (key === 'z' && e.shiftKey)) {
           e.preventDefault();
-          this.redo();
+          App.redoGlobal();
           return;
         }
       }

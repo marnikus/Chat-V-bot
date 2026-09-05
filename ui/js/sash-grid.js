@@ -30,7 +30,7 @@ const SashGrid = {
   STORAGE_KEY: 'chatbot.sashLayout.v1',
 
   THRESHOLD: 4,   // px before a title-bar drag becomes a real drag
-  MIN_PX: 64,     // smallest a window can be shrunk to
+  MIN_PX: 96,     // smallest usable width/height for any grid child
   SASH_W: 6,      // px occupied by each sash in the layout math
 
   gridEl: null,
@@ -96,10 +96,18 @@ const SashGrid = {
     const payload = SashCore.serialize(this.root);
     try { localStorage.setItem(this.STORAGE_KEY, payload); }
     catch (e) { /* private profile without storage — in-memory only */ }
+    let backendAccepted = false;
     try {
-      if (typeof App !== 'undefined' && App.bridge && App.bridge.save_grid_layout)
-        App.bridge.save_grid_layout(payload);
+      if (typeof App !== 'undefined' && App.bridge && App.bridge.save_grid_layout) {
+        backendAccepted = App.bridge.save_grid_layout(payload) !== false;
+      }
     } catch (e) { /* backend absent — localStorage copy still stands */ }
+    // The backend is authoritative when present; standalone mode still gets
+    // an in-memory global timeline for the same keyboard semantics.
+    if (typeof App !== 'undefined' && App.recordGlobal &&
+        (!App.bridge || !App.bridge.save_grid_layout || backendAccepted)) {
+      App.recordGlobal('grid', payload, { localOnly: true });
+    }
   },
 
   /** Pull the authoritative layout from config.json once the bridge exists. */
@@ -119,12 +127,12 @@ const SashGrid = {
   },
 
   /** Apply a serialized tree coming back from undo/redo/reset. */
-  _applySerialized(raw) {
+  _applySerialized(raw, showAll) {
     if (!raw || raw === 'null') return false;
     const res = SashCore.deserialize(raw);
     if (!res.ok) return false;
     this.root = res.tree;
-    this.showAllWindows();
+    if (showAll) this.showAllWindows();
     this.render();
     try { localStorage.setItem(this.STORAGE_KEY, raw); } catch (e) {}
     return true;
@@ -152,8 +160,10 @@ const SashGrid = {
     let saved = false;
     try {
       if (typeof App !== 'undefined' && App.bridge && App.bridge.reset_grid_layout) {
-        App.bridge.reset_grid_layout((raw) => { if (raw) this._applySerialized(raw); });
+        App.bridge.reset_grid_layout((raw) => { if (raw) this._applySerialized(raw, true); });
         saved = true;
+        if (App.recordGlobal)
+          App.recordGlobal('grid', SashCore.serialize(this.root), { localOnly: true });
       }
     } catch (e) { /* fall through to the local save */ }
     if (!saved) this._save();
@@ -162,26 +172,8 @@ const SashGrid = {
     return true;
   },
 
-  /** Undo / redo the GRID (separate history from the action stack). */
-  undoLayout() {
-    if (typeof App === 'undefined' || !App.bridge || !App.bridge.undo_grid_layout) {
-      if (typeof LogConsole !== 'undefined')
-        LogConsole.log('⚠ Grid undo needs the backend', 'warn');
-      return;
-    }
-    App.bridge.undo_grid_layout((raw) => {
-      if (this._applySerialized(raw) && typeof LogConsole !== 'undefined')
-        LogConsole.log('↩ Grid layout undone', 'info');
-    });
-  },
-
-  redoLayout() {
-    if (typeof App === 'undefined' || !App.bridge || !App.bridge.redo_grid_layout) return;
-    App.bridge.redo_grid_layout((raw) => {
-      if (this._applySerialized(raw) && typeof LogConsole !== 'undefined')
-        LogConsole.log('↪ Grid layout redone', 'info');
-    });
-  },
+  // Layout edits are recorded by _save() in App's global history. There is
+  // intentionally no grid-specific undo/redo path.
 
   /** Apply a preset layout (Default / A / B / C). */
   setLayout(name) {
@@ -698,7 +690,7 @@ const SashGrid = {
     const sizes = z.childEls.map((el, i) => {
       const r = el.getBoundingClientRect();
       const w = z.isRow ? r.width : r.height;
-      if (w > 1) return (w / denom) * 100;
+      if (w > 1) return (Math.max(w, this.MIN_PX) / denom) * 100;
       return prev ? prev[i] : 100 / z.childEls.length; // hidden (display:none)
     });
     this.root = SashCore.setSplitSizesByPath(this.root, path, sizes);
@@ -765,18 +757,6 @@ const SashGrid = {
       menu.classList.add('hidden');
       this.resetToDefault();
     });
-    const uBtn = document.getElementById('gridUndoBtn');
-    if (uBtn) uBtn.addEventListener('click', () => this.undoLayout());
-    const rBtn = document.getElementById('gridRedoBtn');
-    if (rBtn) rBtn.addEventListener('click', () => this.redoLayout());
-    // Ctrl+Z/Y belong to the action stack; the grid uses Ctrl+SHIFT+Z/Y so
-    // the two undo systems can never be confused for one another.
-    document.addEventListener('keydown', (e) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
-      const k = (e.key || '').toLowerCase();
-      if (k === 'z') { e.preventDefault(); this.undoLayout(); }
-      else if (k === 'y') { e.preventDefault(); this.redoLayout(); }
-    });
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#layoutMenu') && !e.target.closest('#layoutMenuBtn'))
         menu.classList.add('hidden');
@@ -810,9 +790,11 @@ const SashGrid = {
     const p = SashCore.nodeAtPath(this.root, path);
     if (!p) throw new Error('simulateResize: bad path ' + pathStr);
     const sizes = p.sizes.slice();
-    sizes[0] = firstPct;
+    const min = SashCore.MIN_SIZE || 4;
+    const maxFirst = 100 - min * (sizes.length - 1);
+    sizes[0] = Math.max(min, Math.min(Number(firstPct) || min, maxFirst));
     // redistribute the rest of the space to the other children proportionally
-    const rest = 100 - firstPct;
+    const rest = 100 - sizes[0];
     const restSum = sizes.slice(1).reduce((a, b) => a + b, 0) || 1;
     for (let i = 1; i < sizes.length; i++) sizes[i] = rest * (sizes[i] / restSum);
     this.root = SashCore.setSplitSizesByPath(this.root, path, sizes);

@@ -26,16 +26,18 @@ log = logging.getLogger("chatbot")
 
 
 class MainWindow(QMainWindow):
-    """Main window. Closing it terminates the whole process (BUG #1)."""
+    """Main window with geometry persisted in the shared config settings."""
 
     closing = Signal()
 
-    def __init__(self):
+    def __init__(self, config: ConfigManager | None = None):
         super().__init__()
+        self._config = config
         self.setWindowTitle("🤖 ChatBot Automator")
         self.resize(1400, 900)
         self._view = QWebEngineView(self)
         self.setCentralWidget(self._view)
+        self._restore_window_geometry()
         # Watchdog: if Qt/WebEngine ever refuses to release, force-exit so the
         # terminal prompt always returns after the user closes the window.
         self._watchdog = QTimer(self)
@@ -43,7 +45,35 @@ class MainWindow(QMainWindow):
         self._watchdog.setInterval(3000)
         self._watchdog.timeout.connect(self._force_quit)
 
+    def _restore_window_geometry(self):
+        """Restore the last normal position/size when it is valid."""
+        if not self._config:
+            return
+        saved = self._config.get_state("window_geometry", None)
+        if not isinstance(saved, dict):
+            return
+        try:
+            x, y = int(saved["x"]), int(saved["y"])
+            width, height = int(saved["width"]), int(saved["height"])
+        except (KeyError, TypeError, ValueError):
+            return
+        if width > 0 and height > 0:
+            self.setGeometry(x, y, width, height)
+
+    def _save_window_geometry(self):
+        """Persist exact Qt geometry before shutdown starts."""
+        if not self._config:
+            return
+        geometry = self.geometry()
+        self._config.set_state(window_geometry={
+            "x": int(geometry.x()),
+            "y": int(geometry.y()),
+            "width": int(geometry.width()),
+            "height": int(geometry.height()),
+        })
+
     def closeEvent(self, event):
+        self._save_window_geometry()
         log.info("Main window closed — shutting down")
         self.closing.emit()
         self._watchdog.start()
@@ -77,7 +107,7 @@ def main() -> int:
     engine = ActionEngine(cdp=cdp, memory=memory, criteria=criteria)
 
     # Window + bridge
-    window = MainWindow()
+    window = MainWindow(config=config)
     bridge = Bridge(cdp=cdp, memory=memory, criteria=criteria,
                     engine=engine, config=config)
     channel = QWebChannel()

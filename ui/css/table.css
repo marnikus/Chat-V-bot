@@ -14,6 +14,19 @@
   text-align: left; border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
+#userTable th[data-sort] {
+  cursor: pointer; user-select: none; transition: color .12s, background .12s;
+}
+#userTable th[data-sort]:hover,
+#userTable th[data-sort]:focus-visible,
+#userTable th[data-sort].sort-active { color: var(--accent); background: var(--bg-card-hover); }
+#userTable th[data-sort]:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+.sort-arrow {
+  display: inline-block; min-width: 18px; margin-left: 3px;
+  color: var(--text-muted); font-size: 9px; letter-spacing: -2px;
+  text-transform: none; vertical-align: 1px;
+}
+.sort-active .sort-arrow { color: var(--accent); letter-spacing: 0; }
 #userTable td {
   padding: 6px 10px; border-bottom: 1px solid var(--border);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

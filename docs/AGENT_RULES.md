@@ -217,16 +217,17 @@ the list who is not yet messaged, and adds nobody. Two invariants:
 An empty target set falls through to normal collection, so the mode drains the
 backlog and then resumes harvesting instead of becoming a permanent off-switch.
 
-## RULE 12 — one history per kind of state
+## RULE 12 — one global history for every editable surface
 
-The action stack and the grid layout each get their OWN undo history
-(`stack_history` / `grid_layout_history`), never a shared one. Undoing a
-mis-dragged window must not silently revert a block edit, and vice versa. Both
-reuse `Bridge._push_hist(kind, value)` so the semantics (dedup,
-truncate-on-branch, 100-step cap) stay identical without copy-paste.
+The action stack and grid layout share ONE chronological undo history
+(`state.undo_history` / `state.undo_history_index`). Each entry is tagged with
+`kind: "stack"` or `kind: "grid"`, so one `Ctrl+Z` always reverses the most
+recent edit regardless of which panel produced it. There must be no separate
+grid undo/redo controls or shortcuts. The common push logic owns deduplication,
+truncate-on-branch, and the 100-entry cap.
 
-Because they are separate, their shortcuts must not collide: the stack owns
-`Ctrl+Z`/`Ctrl+Y`, the grid uses `Ctrl+Shift+Z`/`Ctrl+Shift+Y`.
+Legacy per-surface history keys may be read for migration only; new edits must
+never write them.
 
 ## RULE 13 — never persist state you cannot read back
 

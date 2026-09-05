@@ -8,6 +8,112 @@ const App = {
   bridge: null,
   ready: false,
   tabs: [],
+  // One chronological history for stack edits and grid edits alike.
+  globalHistory: [],
+  globalHistoryIndex: -1,
+
+  _copy(value) {
+    try { return JSON.parse(JSON.stringify(value)); }
+    catch (e) { return value; }
+  },
+
+  loadGlobalHistory(state) {
+    state = state || {};
+    let history = Array.isArray(state.undo_history) ? state.undo_history : [];
+    if (!history.length && Array.isArray(state.stack_history)) {
+      history = state.stack_history.map((value) => ({ kind: 'stack', value }));
+      if (state.grid_layout) history.push({ kind: 'grid', value: state.grid_layout });
+    }
+    this.globalHistory = history.filter((entry) =>
+      entry && (entry.kind === 'stack' || entry.kind === 'grid'))
+      .map((entry) => ({ kind: entry.kind, value: this._copy(entry.value) }));
+    const idx = Number.isInteger(state.undo_history_index)
+      ? state.undo_history_index
+      : this.globalHistory.length - 1;
+    this.globalHistoryIndex = Math.max(-1,
+      Math.min(idx, this.globalHistory.length - 1));
+    this._updateUndoButtons();
+  },
+
+  _same(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); }
+    catch (e) { return a === b; }
+  },
+
+  recordGlobal(kind, value, options) {
+    options = options || {};
+    const entry = { kind, value: this._copy(value) };
+    const current = this.globalHistory[this.globalHistoryIndex];
+    if (current && this._same(current, entry)) return;
+    if (this.globalHistoryIndex < this.globalHistory.length - 1) {
+      this.globalHistory = this.globalHistory.slice(0, this.globalHistoryIndex + 1);
+    }
+    this.globalHistory.push(entry);
+    this.globalHistoryIndex = this.globalHistory.length - 1;
+    if (this.globalHistory.length > 100) {
+      this.globalHistory.splice(0, this.globalHistory.length - 100);
+      this.globalHistoryIndex = this.globalHistory.length - 1;
+    }
+    this._updateUndoButtons();
+    if (!options.localOnly && this.bridge && this.bridge.push_global_history) {
+      try { this.bridge.push_global_history(kind, JSON.stringify(value)); }
+      catch (e) { /* local history still keeps the UI responsive */ }
+    }
+  },
+
+  _applyGlobalResult(raw) {
+    if (!raw || raw === 'null') return false;
+    let result;
+    try { result = JSON.parse(raw); } catch (e) { return false; }
+    if (!result || !result.kind) return false;
+    if (Number.isInteger(result.index)) this.globalHistoryIndex = result.index;
+    else if (result.kind) {
+      // Old bridges did not return an index.
+      this.globalHistoryIndex = Math.max(-1, this.globalHistoryIndex - 1);
+    }
+    if (result.kind === 'stack' && typeof StackDnD !== 'undefined') {
+      StackDnD._isRestoringHistory = true;
+      StackDnD.setStack(result.value, { silent: true });
+      StackDnD._isRestoringHistory = false;
+    } else if (result.kind === 'grid' && typeof SashGrid !== 'undefined') {
+      SashGrid._applySerialized(result.value, false);
+    }
+    this._updateUndoButtons();
+    return true;
+  },
+
+  undoGlobal() {
+    if (!this.bridge || !this.bridge.undo) return false;
+    this.bridge.undo((raw) => {
+      if (!this._applyGlobalResult(raw)) LogConsole.log('⚠ Nothing to undo', 'warn');
+    });
+    return true;
+  },
+
+  redoGlobal() {
+    if (!this.bridge || !this.bridge.redo) return false;
+    this.bridge.redo((raw) => {
+      if (!raw || raw === 'null') LogConsole.log('⚠ Nothing to redo', 'warn');
+      else this._applyGlobalResult(raw);
+    });
+    return true;
+  },
+
+  _updateUndoButtons() {
+    const undo = document.getElementById('undoBtn');
+    const redo = document.getElementById('redoBtn');
+    const canUndo = this.globalHistoryIndex > 0;
+    const canRedo = this.globalHistoryIndex >= 0 &&
+                    this.globalHistoryIndex < this.globalHistory.length - 1;
+    if (undo) {
+      undo.disabled = !canUndo;
+      undo.title = canUndo ? 'Undo (Ctrl+Z) — global history' : 'Nothing to undo';
+    }
+    if (redo) {
+      redo.disabled = !canRedo;
+      redo.title = canRedo ? 'Redo (Ctrl+Y) — global history' : 'Nothing to redo';
+    }
+  },
 };
 
 // ── QWebChannel init ──────────────────────────────────────────
@@ -31,6 +137,10 @@ function initApp() {
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
+    // sash-grid may have initialized before QWebChannel; load its
+    // authoritative config.json copy now that the bridge is available.
+    if (typeof SashGrid !== 'undefined' && SashGrid._loadFromBackend)
+      SashGrid._loadFromBackend();
     // fill the people list on start, not only after connecting to a tab
     App.bridge.refresh_users();
     // single payload with everything needed to restore the session (BUG #2)
@@ -52,7 +162,10 @@ function restoreSession(json) {
 
   const state = payload.state || {};
 
-  // 0) restore history first (persisted across sessions)
+  // 0) restore the one global history first (persisted across sessions)
+  App.loadGlobalHistory(state);
+  // Keep StackDnD's legacy projection populated for old integrations; its
+  // buttons and keyboard shortcuts delegate to App's global history below.
   if (state.stack_history || state.stack_history_index !== undefined) {
     StackDnD.loadHistoryFromState(state);
   }

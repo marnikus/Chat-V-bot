@@ -49,16 +49,19 @@ DEFAULTS: dict[str, Any] = {
     #   last_url_preset   -> last selected/connected URL preset
     #   last_stack_preset -> name of the last loaded/saved stack preset
     #   last_stack        -> live snapshot of the last edited/run stack
-    #   stack_history     -> list of previous stacks for undo/redo (up to 100)
-    #   stack_history_index -> current pointer in history
-    #   grid_layout       -> serialized sash-layout tree (flexible grid)
-    #   grid_layout_history / _index -> undo/redo for the grid, kept SEPARATE
-    #       from the stack history so undoing a window drag never reverts a
-    #       block edit (and vice versa)
+    #   undo_history       -> one chronological history for every editable
+    #       surface (action stack and sash grid), capped at 100 entries
+    #   undo_history_index -> current pointer in that single history
+    #   grid_layout        -> serialized sash-layout tree (flexible grid)
+    #   window_geometry    -> {x, y, width, height} for the desktop window
     "state": {
-        "stack_history": [],
-        "stack_history_index": -1,
+        "undo_history": [],
+        "undo_history_index": -1,
         "grid_layout": None,
+        "window_geometry": None,
+        # Legacy read-only migration keys. They are never updated by the
+        # global history implementation, but keeping defaults lets old config
+        # files load without inventing a second active history.
         "grid_layout_history": [],
         "grid_layout_history_index": -1,
     },
