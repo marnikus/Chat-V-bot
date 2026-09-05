@@ -73,6 +73,7 @@ const BUILTIN_BLOCKS = [
               tab_selector:"div[role='tab'].tab-item",
               tab_title_selector:'p.chat-title', verify_new_tab:true,
               tab_pause_ms:800, highlight_enabled:true, confirm_pause_ms:700,
+              respect_order:false,
               pre_delay_ms:1000, enabled:true},
     labels:{selector:'Person row selector (CSS)',
             label_selector:'Nickname element inside (CSS)',
@@ -83,6 +84,7 @@ const BUILTIN_BLOCKS = [
             tab_pause_ms:'Pause after click, before check (ms)',
             highlight_enabled:'Visual confirmation outlines',
             confirm_pause_ms:'Pause after found (ms)',
+            respect_order:'Respect the Order (#) column — message people 1, 2, 3… N in list order',
             pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
   { block_id:'WAIT_PAGE_LOAD', name:'Wait for Page',     icon:'⏳',
     defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200, enabled:true},
@@ -415,6 +417,10 @@ const StackDnD = {
       if (k === 'click_selector' && !v) continue;
       if (k === 'use_composer') {
         if (v) parts.push('text: Message Composer');
+        continue;  // checkbox off adds nothing to the summary
+      }
+      if (k === 'respect_order') {
+        if (v) parts.push('respect Order (#)');
         continue;  // checkbox off adds nothing to the summary
       }
       if (k === 'message' && b.use_composer) continue;  // composer text is used

@@ -48,6 +48,7 @@ class ClickUser(BaseAction):
                  tab_title_selector: str = "p.chat-title",
                  verify_new_tab: bool = True, tab_pause_ms: int = 800,
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,
+                 respect_order: bool = False,
                  pre_delay_ms: int = 1000, **kw):
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
         self.selector = selector
@@ -59,6 +60,10 @@ class ClickUser(BaseAction):
         self.tab_pause_ms = max(0, int(tab_pause_ms))
         self.highlight_enabled = bool(highlight_enabled)
         self.confirm_pause_ms = max(0, int(confirm_pause_ms))
+        # When ON, the engine works the Status-New people in the Order (#)
+        # column sequence (1 first, then 2 … N) instead of the order the
+        # page happened to show this run.
+        self.respect_order = bool(respect_order)
 
     async def _read_tabs(self, cdp: CDPClient) -> Optional[dict]:
         try:
@@ -161,4 +166,7 @@ class ClickUser(BaseAction):
                                   "label": "Draw confirmation outlines"}
         s["confirm_pause_ms"] = {"type": "number", "default": 700,
                                  "label": "Pause after found (ms)"}
+        s["respect_order"] = {"type": "checkbox", "default": False,
+                              "label": "Respect the Order (#) column — "
+                                       "message people 1, 2, 3… N in list order"}
         return s

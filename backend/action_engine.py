@@ -388,6 +388,10 @@ class ActionEngine(QObject):
         # Phase 2: build queue
         queue = collected if scroll_block is not None \
             else await self._memory.get_queue()
+        # Phase 2b: Click User "Respect the Order (#) column" override — when
+        # an enabled CLICK_USER asks for it, work the People list in Order (#)
+        # sequence (#1 first … #N) instead of whatever this run collected.
+        queue = await self._order_queue_by_column(queue)
         has_skip = any(b.block_id == "CONDITIONAL_SKIP"
                        and getattr(b, "enabled", True)
                        for b in self._stack)
@@ -445,6 +449,39 @@ class ActionEngine(QObject):
             if not standalone:
                 self.user_complete.emit(user.nick, ok)
         return "worked"
+
+    async def _order_queue_by_column(self, queue: list[UserRecord]) \
+            -> list[UserRecord]:
+        """Click User setting: replace the queue with the People-list order.
+
+        When an enabled CLICK_USER block has ``respect_order`` on, the run
+        must process every Status-New person strictly in the Order (#) column
+        sequence (#1 first, then #2 … N) — the exact order the grid derives
+        from :meth:`queue_order` — instead of whichever people the scroll
+        phase happened to collect/find this run. An empty queue stays empty:
+        if the page had nobody to click, memory-only rows (not currently
+        visible) must not turn into a run of failing clicks.
+        """
+        wants_order = any(
+            b.block_id == "CLICK_USER"
+            and getattr(b, "respect_order", False)
+            and getattr(b, "enabled", True)
+            for b in self._stack)
+        if not wants_order or not queue:
+            return queue
+        rows = await self._memory.get_all()
+        ordered_nicks = self.queue_order(rows)
+        by_nick = {getattr(r, "nick", ""): r for r in rows}
+        ranked = [by_nick[n] for n in ordered_nicks if n in by_nick]
+        if not ranked:
+            return queue
+        self.log_msg.emit(
+            f"🔢 Respecting the Order (#) column — running {len(ranked)} "
+            "person(s) in list order (#1 first)")
+        if self._tracer is not None:
+            self._tracer.note({"type": "queue_mode", "mode": "respect_order",
+                               "count": len(ranked)})
+        return ranked
 
     async def _wait_if_paused(self) -> None:
         while self._paused and not self._stop_requested:
