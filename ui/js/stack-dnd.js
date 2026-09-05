@@ -843,6 +843,11 @@ const StackDnD = {
         match. Give it a name, then save it as a preset for reuse.</p>`;
     }
     const keys = this._configKeys(block, meta);
+    // Zebra counter for two-column field rows (even rows get a slightly
+    // lighter tone so each label-value pair reads as one group). The header
+    // row, the stacked CUSTOM_FIND constructor rows and the On/Off bar are
+    // not striped — they keep their own distinct styling.
+    let zebra = 0;
     for (const key of keys) {
       if (key === 'block_id') continue;
       // Never render retired controls (e.g. the old use_panel_filters
@@ -852,6 +857,7 @@ const StackDnD = {
       const labelText = labels[key] || key;
       const safeVal = String(val).replace(/"/g, '&quot;');
       const choices = (meta.options && meta.options[key]) || null;
+      const stripe = ` zebra-${(zebra++) % 2}`;
       if (typeof val === 'boolean') {
         if (key === 'enabled') {
           // On/Off toggle bar: a disabled block stays in the stack but is
@@ -861,7 +867,7 @@ const StackDnD = {
             <label class="toggle-switch"><input data-key="${key}" type="checkbox" ${val ? 'checked' : ''}><span class="toggle-slider"></span></label>
           </div>`;
         } else {
-          html += `<div class="form-row form-row-check">
+          html += `<div class="form-row form-row-check${stripe}">
             <label>${labelText}</label>
             <input data-key="${key}" type="checkbox" ${val ? 'checked' : ''}>
           </div>`;
@@ -872,14 +878,14 @@ const StackDnD = {
           const sel = String(val) === String(o) ? ' selected' : '';
           return `<option value="${this._esc(o)}"${sel}>${this._esc(o)}</option>`;
         }).join('');
-        html += `<div class="form-row">
+        html += `<div class="form-row${stripe}">
           <label>${labelText}</label>
           <select data-key="${key}">${opts}</select>
         </div>`;
       } else {
         const inputType = typeof val === 'number' ? 'number' : 'text';
         const rowCls = isConstructor ? 'form-row form-row--stack' : 'form-row';
-        html += `<div class="${rowCls}">
+        html += `<div class="${rowCls}${isConstructor ? '' : stripe}">
           <label>${labelText}</label>
           <input data-key="${key}" value="${safeVal}" type="${inputType}">
         </div>`;

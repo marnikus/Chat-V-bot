@@ -67,16 +67,37 @@
 .add-block-menu .menu-item .mi-icon { font-size: var(--font-size-lg); }
 
 /* — Config Panel — */
-.config-panel .form-row {
-  display: flex; align-items: center; gap: var(--gap-sm);
-  margin-bottom: var(--gap-sm);
+/* Rows are a clean two-column grid: label column left, value/control column
+   right, so every control starts at the same x. Alternating field rows get
+   zebra-0 / zebra-1 (added by _showConfig) so each label–value pair reads as
+   one group. */
+.config-panel #blockConfigForm {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  gap: 6px;
+  padding: 2px 2px 0;
 }
+.config-panel .form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: center;
+  column-gap: var(--gap-md);
+  padding: 6px 10px;
+  margin: 0;
+  border-radius: var(--radius-sm);
+}
+/* Subtle zebra striping for two-column field rows */
+.config-panel .form-row.zebra-0 { background: rgba(255, 255, 255, .02); }
+.config-panel .form-row.zebra-1 { background: rgba(255, 255, 255, .05); }
 .config-panel label {
-  min-width: 130px; font-size: var(--font-size-sm);
+  min-width: 0; font-size: var(--font-size-sm);
   color: var(--text-secondary); font-weight: 500;
+  line-height: 1.35; overflow-wrap: anywhere;
 }
 .config-panel input, .config-panel textarea, .config-panel select {
-  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  width: 100%; min-width: 0;
+  background: var(--bg-input); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 6px 10px;
   color: var(--text-primary); font-size: var(--font-size-sm);
   font-family: var(--font);
@@ -88,17 +109,19 @@
 
 /* — Configurable constructor form (CUSTOM_FIND "Find & Click") — */
 .config-panel .form-row--head { align-items: center; }
-.config-panel .form-row--head label { min-width: 0; }
+.config-panel .form-row--head span {
+  min-width: 0; overflow-wrap: anywhere;
+}
 .config-panel .form-row--stack {
-  flex-direction: column; align-items: stretch;
+  display: flex; flex-direction: column; align-items: stretch;
   gap: var(--gap-xs);
 }
 .config-panel .form-row--stack label {
-  min-width: 0; width: 100%;
+  width: 100%;
 }
-.config-panel .form-row-check label { min-width: 130px; }
 .config-panel .form-row-check input[type="checkbox"] {
-  flex: 0 0 auto; width: 15px; height: 15px;
+  justify-self: start;
+  width: 15px; height: 15px;
   margin: 0; accent-color: var(--accent);
 }
 .form-hint {
@@ -107,6 +130,7 @@
   background: var(--bg-input); border-left: 2px solid var(--accent);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
+.config-actions { flex-shrink: 0; }
 .config-actions button .btn-label { white-space: normal; text-align: left; }
 
 /* Running-step highlight (debugger) */
@@ -211,28 +235,29 @@
   background: var(--accent-hover, var(--accent));
 }
 
-/* Config panel toggle for enabled */
-.form-row-enabled {
+/* Config panel toggle for enabled — an On/Off bar at the bottom of the
+   block's settings. The text label may flex-grow, but the switch itself must
+   keep a FIXED size identical to the stack-list toggles: without flex:0 the
+   `label { flex: 1 }` rule stretches it across half the panel and the blue
+   "on" highlight paints as a wide bar instead of a small pill. */
+.config-panel .form-row-enabled {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
   background: var(--bg-input);
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--accent);
 }
-.form-row-enabled label {
+.config-panel .form-row-enabled > label:first-child {
   flex: 1;
+  min-width: 0;
 }
-.form-row-enabled .toggle-switch {
-  width: 44px;
-  height: 24px;
-}
-.form-row-enabled .toggle-slider:before {
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-}
-.form-row-enabled .toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(18px);
+.config-panel .form-row-enabled .toggle-switch {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 36px;
+  height: 20px;
 }
 
 /* Undo/Redo buttons */
