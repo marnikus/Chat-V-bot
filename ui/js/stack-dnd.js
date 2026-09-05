@@ -110,6 +110,10 @@ const BUILTIN_BLOCKS = [
   { block_id:'PAUSE',          name:'Custom Pause',      icon:'⏸️',
     defaults:{duration_ms:1000, enabled:true},
     labels:{duration_ms:'Duration (ms)', enabled:'Enabled'} },
+  { block_id:'REPEAT_LOOP',    name:'Repeat Loop',       icon:'🔁',
+    defaults:{repeat_count:2, enabled:true},
+    labels:{repeat_count:'Number of loop cycles (whole run repeats N times, 1 = once)',
+            enabled:'Enabled'} },
 ];
 
 const StackDnD = {

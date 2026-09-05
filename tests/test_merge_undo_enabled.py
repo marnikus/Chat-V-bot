@@ -191,8 +191,12 @@ class TestBridgeSurface(unittest.TestCase):
         import inspect
         from backend.action_engine import ActionEngine
         src = inspect.getsource(ActionEngine.execute)
-        self.assertIn("_run_collect_phase", src)
-        self.assertNotIn("_run_parse_phase", src)
+        cycle = inspect.getsource(ActionEngine._execute_cycle)
+        self.assertIn("_execute_cycle", src,
+                      "execute drives each run cycle itself")
+        self.assertIn("_run_collect_phase", cycle,
+                      "the cycle owns the Scroll & Parse collect phase")
+        self.assertNotIn("_run_parse_phase", src + cycle)
 
 
 if __name__ == "__main__":

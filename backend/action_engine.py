@@ -240,8 +240,29 @@ class ActionEngine(QObject):
         return removed
 
     # ── main execution loop ──────────────────────────────────────
+    def _repeat_cycles(self) -> int:
+        """How many times the whole stack runs per Run press.
+
+        The first ENABLED Repeat Loop marker decides; with no marker (or it
+        is disabled / count ≤ 1) the run plays exactly once, as before.
+        """
+        marker = next((b for b in self._stack
+                       if b.block_id == "REPEAT_LOOP"
+                       and getattr(b, "enabled", True)), None)
+        if marker is None:
+            return 1
+        try:
+            return max(1, int(getattr(marker, "repeat_count", 1)))
+        except (TypeError, ValueError):
+            return 1
+
     async def execute(self, scroll_parser: ScrollParser | None = None) -> None:
-        """Run the full stack over the user queue."""
+        """Run the full stack over the user queue.
+
+        When a Repeat Loop marker is enabled with count N, the whole
+        pipeline (collect phase + per-user messaging) runs N cycles so one
+        press of Run keeps harvesting without being clicked again.
+        """
         if self._running:
             self.log_msg.emit("⚠ Already running")
             return
@@ -255,70 +276,47 @@ class ActionEngine(QObject):
         self.debug_msg.emit(f"📄 Trace file: {self._tracer.path}", "info")
         self._tracer.note({"type": "run_start",
                            "blocks": [b.block_id for b in self._stack]})
+        cycles = self._repeat_cycles()
         try:
-            # Phase 1: collect people — the SCROLL_PARSE block owns the whole
-            # scroll → filter → collect → order pipeline (STEPS 1-3).
-            # Only an ENABLED block runs (enable/disable toggle).
-            scroll_block = next((b for b in self._stack
-                                 if b.block_id == "SCROLL_PARSE"
-                                 and getattr(b, "enabled", True)), None)
-            collected: list[UserRecord] = []
-            if scroll_block is not None:
-                collected = await self._run_collect_phase(scroll_block)
-            # Phase 2: build queue
-            queue = collected if scroll_block is not None \
-                else await self._memory.get_queue()
-            has_skip = any(b.block_id == "CONDITIONAL_SKIP"
-                           and getattr(b, "enabled", True)
-                           for b in self._stack)
-            needs_user = [b.block_id for b in self._stack
-                          if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
-            standalone = False
-            if queue:
-                self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
-            elif not self._stack:
-                self.log_msg.emit("⚠ The stack is empty — add at least one block")
-                self.debug_msg.emit("⚠ Nothing to run: the action stack is empty",
-                                    "warn")
-            elif needs_user:
-                # The stack genuinely needs users but there are none. Say so
-                # loudly instead of the old misleading "0 user(s)" line.
-                self.log_msg.emit("⚠ No users in queue — nothing to run")
-                self.debug_msg.emit(
-                    "⚠ The queue is empty and this stack contains user-dependent "
-                    "block(s): " + ", ".join(sorted(set(needs_user)))
-                    + ". Add a Scroll & Parse block (or reset the 'messaged' flags) "
-                      "so there are users to run on.", "warn")
-                self._tracer.note({"type": "run_skip", "reason": "empty_queue",
-                                   "needs_user": sorted(set(needs_user))})
-            else:
-                # User-independent stack (e.g. a single "Find & Click" tab block):
-                # run it exactly once against a synthetic user.
-                standalone = True
-                queue = [UserRecord(nick=STANDALONE_NICK)]
-                self.log_msg.emit("▶ Running stack once (standalone — no user "
-                                  "context needed)")
-                self.debug_msg.emit(
-                    "ℹ Standalone run: this stack contains no user-dependent "
-                    "blocks, so it executes once independently of the user queue.",
-                    "info")
-                self._tracer.note({"type": "run_mode", "mode": "standalone"})
-            # Phase 3: per-user execution
-            for user in queue:
+            if cycles > 1:
+                self.log_msg.emit(
+                    f"🔁 Repeat Loop: the stack will run {cycles} cycles — "
+                    "Stop ends it at any time")
+                self._tracer.note({"type": "repeat", "cycles": cycles})
+            done = False
+            outcome = "worked"
+            for cycle in range(1, cycles + 1):
                 if self._stop_requested:
                     self.debug_msg.emit("⏹ Stack stopped by user", "warn")
                     self._tracer.note({"type": "run_end", "reason": "stopped"})
                     break
                 await self._wait_if_paused()
                 if self._stop_requested:
+                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
                     self._tracer.note({"type": "run_end", "reason": "stopped"})
                     break
-                ok = await self._execute_for_user(user, has_skip)
-                if ok and not standalone:
-                    await self._memory.mark_messaged(user.nick)
-                if not standalone:
-                    self.user_complete.emit(user.nick, ok)
-            else:
+                if cycles > 1:
+                    self.log_msg.emit(f"🔁 Cycle {cycle}/{cycles} — running…")
+                    self._tracer.note({"type": "cycle_start", "cycle": cycle,
+                                       "total": cycles})
+                outcome = await self._execute_cycle()
+                if outcome == "stopped":
+                    break
+                if outcome == "empty_stack":
+                    done = True   # nothing to run at all
+                    break
+                if outcome == "empty":
+                    # A user-scoped stack found nobody. Warned inside the
+                    # cycle; repeating it would only re-run empty cycles.
+                    if cycles > 1:
+                        self.log_msg.emit(
+                            "🔁 No users found — Repeat Loop ends the run "
+                            f"after cycle {cycle}")
+                    done = True
+                    break
+                if cycle >= cycles:
+                    done = True
+            if done:
                 self._tracer.note({"type": "run_end", "reason": "completed"})
         except Exception as exc:
             log.error("Stack execution error: %s", exc, exc_info=True)
@@ -335,6 +333,82 @@ class ActionEngine(QObject):
             self._ctx = {}
             self.stack_complete.emit()
             self.log_msg.emit("✅ Stack execution complete")
+
+    async def _execute_cycle(self) -> str:
+        """One full run cycle: collect → build queue → per-user execution.
+
+        Returns the outcome for the repeat-loop driver:
+          "worked"      — people (or a standalone synthetic user) ran;
+          "stopped"     — Stop was requested during the cycle;
+          "empty"       — the stack needs users but none are available;
+          "empty_stack" — there is nothing to run at all.
+        """
+        # Phase 1: collect people — the SCROLL_PARSE block owns the whole
+        # scroll → filter → collect → order pipeline (STEPS 1-3).
+        # Only an ENABLED block runs (enable/disable toggle).
+        scroll_block = next((b for b in self._stack
+                             if b.block_id == "SCROLL_PARSE"
+                             and getattr(b, "enabled", True)), None)
+        collected: list[UserRecord] = []
+        if scroll_block is not None:
+            collected = await self._run_collect_phase(scroll_block)
+        # Phase 2: build queue
+        queue = collected if scroll_block is not None \
+            else await self._memory.get_queue()
+        has_skip = any(b.block_id == "CONDITIONAL_SKIP"
+                       and getattr(b, "enabled", True)
+                       for b in self._stack)
+        needs_user = [b.block_id for b in self._stack
+                      if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
+        standalone = False
+        if queue:
+            self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
+        elif not self._stack:
+            self.log_msg.emit("⚠ The stack is empty — add at least one block")
+            self.debug_msg.emit("⚠ Nothing to run: the action stack is empty",
+                                "warn")
+            return "empty_stack"
+        elif needs_user:
+            # The stack genuinely needs users but there are none. Say so
+            # loudly instead of the old misleading "0 user(s)" line.
+            self.log_msg.emit("⚠ No users in queue — nothing to run")
+            self.debug_msg.emit(
+                "⚠ The queue is empty and this stack contains user-dependent "
+                "block(s): " + ", ".join(sorted(set(needs_user)))
+                + ". Add a Scroll & Parse block (or reset the 'messaged' flags) "
+                  "so there are users to run on.", "warn")
+            self._tracer.note({"type": "run_skip", "reason": "empty_queue",
+                               "needs_user": sorted(set(needs_user))})
+            return "empty"
+        else:
+            # User-independent stack (e.g. a single "Find & Click" tab block):
+            # run it exactly once against a synthetic user.
+            standalone = True
+            queue = [UserRecord(nick=STANDALONE_NICK)]
+            self.log_msg.emit("▶ Running stack once (standalone — no user "
+                              "context needed)")
+            self.debug_msg.emit(
+                "ℹ Standalone run: this stack contains no user-dependent "
+                "blocks, so it executes once independently of the user queue.",
+                "info")
+            self._tracer.note({"type": "run_mode", "mode": "standalone"})
+        # Phase 3: per-user execution
+        for user in queue:
+            if self._stop_requested:
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+                return "stopped"
+            await self._wait_if_paused()
+            if self._stop_requested:
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+                return "stopped"
+            ok = await self._execute_for_user(user, has_skip)
+            if ok and not standalone:
+                await self._memory.mark_messaged(user.nick)
+            if not standalone:
+                self.user_complete.emit(user.nick, ok)
+        return "worked"
 
     async def _wait_if_paused(self) -> None:
         while self._paused and not self._stop_requested:
@@ -440,6 +514,8 @@ class ActionEngine(QObject):
                 continue
             if block.block_id == "SCROLL_PARSE":
                 continue  # already handled in the collect phase
+            if block.block_id == "REPEAT_LOOP":
+                continue  # marker — the engine driver handles the cycle count
             self._ctx = {"step": idx, "total_steps": total,
                          "block_id": block.block_id,
                          "block_name": block.display_name,
