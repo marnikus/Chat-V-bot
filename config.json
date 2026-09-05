@@ -7,7 +7,8 @@
           "pre_delay_ms": 800,
           "selector": "div[role='tab'].tab-item",
           "child_selector": "p.chat-title",
-          "tab_name": "Гостиная"
+          "tab_name": "Гостиная",
+          "enabled": true
         },
         {
           "block_id": "CUSTOM_FIND",
@@ -17,7 +18,8 @@
           "label_selector": "",
           "match_text": "",
           "click_enabled": true,
-          "click_selector": ""
+          "click_selector": "",
+          "enabled": true
         },
         {
           "block_id": "SCROLL_PARSE",
@@ -33,7 +35,8 @@
           "filter_registered": "any",
           "filter_guest": "any",
           "filter_anonymous": "any",
-          "use_panel_filters": false
+          "use_panel_filters": false,
+          "enabled": true
         },
         {
           "block_id": "CLICK_USER",
@@ -46,10 +49,11 @@
           "verify_new_tab": true,
           "tab_pause_ms": 800,
           "highlight_enabled": true,
-          "confirm_pause_ms": 700
+          "confirm_pause_ms": 700,
+          "enabled": true
         }
       ],
-      "updated_at": "2026-09-05T18:40:20"
+      "updated_at": "2026-09-05T20:13:13"
     }
   },
   "state": {
@@ -60,7 +64,8 @@
         "pre_delay_ms": 800,
         "selector": "div[role='tab'].tab-item",
         "child_selector": "p.chat-title",
-        "tab_name": "Гостиная"
+        "tab_name": "Гостиная",
+        "enabled": true
       },
       {
         "block_id": "CUSTOM_FIND",
@@ -70,7 +75,8 @@
         "label_selector": "",
         "match_text": "",
         "click_enabled": true,
-        "click_selector": ""
+        "click_selector": "",
+        "enabled": true
       },
       {
         "block_id": "SCROLL_PARSE",
@@ -86,7 +92,8 @@
         "filter_registered": "any",
         "filter_guest": "any",
         "filter_anonymous": "any",
-        "use_panel_filters": true
+        "use_panel_filters": true,
+        "enabled": true
       },
       {
         "block_id": "CLICK_USER",
@@ -99,10 +106,118 @@
         "verify_new_tab": true,
         "tab_pause_ms": 800,
         "highlight_enabled": true,
-        "confirm_pause_ms": 700
+        "confirm_pause_ms": 700,
+        "enabled": true
       }
     ],
-    "last_stack_preset": ""
+    "last_stack_preset": "",
+    "stack_history": [
+      [
+        {
+          "block_id": "CLICK_BACK",
+          "pre_delay_ms": 800,
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "enabled": true
+        },
+        {
+          "block_id": "CUSTOM_FIND",
+          "pre_delay_ms": 500,
+          "custom_name": "cdk-virtual-scroll-viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "enabled": true
+        },
+        {
+          "block_id": "SCROLL_PARSE",
+          "pre_delay_ms": 300,
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 800,
+          "scroll_delta_y": 1000,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 2,
+          "filter_female": "yes",
+          "filter_registered": "any",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "use_panel_filters": true,
+          "enabled": true
+        },
+        {
+          "block_id": "CLICK_USER",
+          "pre_delay_ms": 1000,
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "enabled": true
+        }
+      ],
+      [
+        {
+          "block_id": "CLICK_BACK",
+          "pre_delay_ms": 800,
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "enabled": true
+        },
+        {
+          "block_id": "CUSTOM_FIND",
+          "pre_delay_ms": 500,
+          "custom_name": "cdk-virtual-scroll-viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "enabled": true
+        },
+        {
+          "block_id": "SCROLL_PARSE",
+          "pre_delay_ms": 300,
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 800,
+          "scroll_delta_y": 1000,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 2,
+          "filter_female": "yes",
+          "filter_registered": "any",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "use_panel_filters": false,
+          "enabled": true
+        },
+        {
+          "block_id": "CLICK_USER",
+          "pre_delay_ms": 1000,
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "enabled": true
+        }
+      ]
+    ],
+    "stack_history_index": 0
   },
   "custom_blocks": [
     {
