@@ -17,23 +17,70 @@
     "last_url_preset": "https://ru.virt-chat.com/chat",
     "last_stack": [
       {
-        "block_id": "CLICK_MAIN_TAB",
-        "pre_delay_ms": 500,
+        "block_id": "CUSTOM_FIND",
+        "pre_delay_ms": 100,
+        "custom_name": "Tab Main",
         "selector": "div[role='tab'].tab-item",
-        "child_selector": "p.chat-title",
-        "tab_name": "Гостиная"
+        "label_selector": "p.chat-title",
+        "match_text": "Гостиная",
+        "click_enabled": true,
+        "click_selector": "div[role='tab'].tab-item"
       },
       {
         "block_id": "CUSTOM_FIND",
         "pre_delay_ms": 500,
-        "custom_name": "",
-        "selector": "div[role='tab'].tab-item",
-        "label_selector": "p.chat-title",
+        "custom_name": "cdk-virtual-scroll-viewport",
+        "selector": "cdk-virtual-scroll-viewport",
+        "label_selector": "",
         "match_text": "",
         "click_enabled": true,
         "click_selector": ""
       }
     ],
     "last_stack_preset": ""
-  }
+  },
+  "custom_blocks": [
+    {
+      "name": "Temp",
+      "block": {
+        "block_id": "CUSTOM_FIND",
+        "pre_delay_ms": 500,
+        "custom_name": "Temp",
+        "selector": "cdk-virtual-scroll-viewport",
+        "label_selector": "",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": ""
+      },
+      "updated_at": "2026-09-04T23:10:44"
+    },
+    {
+      "name": "cdk-virtual-scroll-viewport",
+      "block": {
+        "block_id": "CUSTOM_FIND",
+        "pre_delay_ms": 500,
+        "custom_name": "cdk-virtual-scroll-viewport",
+        "selector": "cdk-virtual-scroll-viewport",
+        "label_selector": "",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": ""
+      },
+      "updated_at": "2026-09-04T23:10:54"
+    },
+    {
+      "name": "Tab Main",
+      "block": {
+        "block_id": "CUSTOM_FIND",
+        "pre_delay_ms": 500,
+        "custom_name": "Tab Main",
+        "selector": "div[role='tab'].tab-item",
+        "label_selector": "p.chat-title",
+        "match_text": "Гостиная",
+        "click_enabled": true,
+        "click_selector": "div[role='tab'].tab-item"
+      },
+      "updated_at": "2026-09-04T23:18:10"
+    }
+  ]
 }
