@@ -51,9 +51,16 @@ DEFAULTS: dict[str, Any] = {
     #   last_stack        -> live snapshot of the last edited/run stack
     #   stack_history     -> list of previous stacks for undo/redo (up to 100)
     #   stack_history_index -> current pointer in history
+    #   grid_layout       -> serialized sash-layout tree (flexible grid)
+    #   grid_layout_history / _index -> undo/redo for the grid, kept SEPARATE
+    #       from the stack history so undoing a window drag never reverts a
+    #       block edit (and vice versa)
     "state": {
         "stack_history": [],
         "stack_history_index": -1,
+        "grid_layout": None,
+        "grid_layout_history": [],
+        "grid_layout_history_index": -1,
     },
 }
 

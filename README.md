@@ -136,6 +136,39 @@ The reorder engine is bundled with the app (`ui/js/stack-drag.js`) and needs no
 internet connection. Reorders are saved to the session snapshot like any other
 stack edit.
 
+### Flexible Grid Layout (drag any window anywhere)
+Every content window — **Stats, Filters, Action Stack, Block Config,
+Message Composer, User Memory, Log Console** — is a draggable tile in a
+free-form grid. The top menu bar (app header + URL/Language/Presets toolbar)
+stays pinned; everything below it is rearrangeable.
+
+- **Move** — grab a window by its **title bar** (⠿ grip) and drag it:
+  - drop on an **edge** of a window → that window **splits in half** and you
+    land in the new half (e.g. Composer left | People right)
+  - drop on a window's **centre** → you **join its row/column** (the two
+    windows share its former space)
+  - drop on a **separator (sash)** → you are inserted between the two
+    neighbours
+  - a glowing line shows exactly where the split/insertion will land, a badge
+    next to the cursor names the outcome, **Esc** cancels
+- **Resize** — drag any sash; the two neighbours trade space while the rest of
+  the grid **adapts proportionally** (structure is never broken). Double-click
+  a sash to reset that split to even sizes.
+- **Span** — a window next to a group of windows automatically spans their
+  full height/width (e.g. the Log Console as a tall side column).
+- **Preset layouts** — the **▦ Layouts** button in the header applies ready
+  arrangements in one click: **Default**, **A** (stacked rows), **B**
+  (Composer | People side by side, Log below) and **C** (Log as full-height
+  side column). Your manual arrangement always wins until the next preset.
+- The arrangement **persists** across app restarts (validated on load — a
+  corrupted layout can never brick the UI).
+
+Implementation: `ui/js/sash-core.js` (pure split-tree model),
+`ui/js/sash-grid.js` (rendering + drag/resize), `ui/css/sash-layout.css`;
+design in `docs/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
+`tests/test_sash_core.py` (node) and `tests/test_sash_webengine.py`
+(real Qt WebEngine).
+
 ### Save / Load Presets (full action stack)
 - **💾 Save** — name the preset and the **complete stack** (block order + every
   block setting) is stored in the single preset file `config.json`.

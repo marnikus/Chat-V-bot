@@ -39,53 +39,10 @@
 .status-dot.connecting { background: var(--yellow); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .4; } }
 
-/* — Main content grid — */
-.main-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  gap: 1px;
-  background: var(--border);
-}
-
-/* — Sidebar — */
-.sidebar-left {
-  width: 220px;
-  min-width: 180px;
-  background: var(--bg-panel);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow-y: auto;
-}
-
-/* — Center area — */
-.center-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-panel);
-  overflow: hidden;
-}
-
-/* — Composer — */
-.composer-area {
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-/* — Bottom area — */
-.bottom-area {
-  display: flex;
-  height: 260px;
-  min-height: 180px;
-  border-top: 1px solid var(--border);
-  gap: 1px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
 /* — Panels — */
+/* (the zones .main-content / .sidebar-left / .center-area /
+   .composer-area / .bottom-area are gone — every panel now lives in the
+   flexible #sashGrid, see sash-layout.css) */
 .panel {
   background: var(--bg-panel);
   padding: var(--gap-md);
@@ -109,11 +66,11 @@
 .spacer { flex: 1; }
 
 /* — Table panel — */
-.table-panel { flex: 1; overflow: hidden; }
+.table-panel { overflow: hidden; }
 .table-wrap { flex: 1; overflow: auto; }
 
 /* — Log panel — */
-.log-panel { width: 380px; min-width: 280px; overflow: hidden; }
+.log-panel { overflow: hidden; }
 .log-console {
   flex: 1; overflow-y: auto;
   font-family: var(--font-mono);
@@ -280,9 +237,11 @@ button:disabled { opacity: .35; cursor: default; }
 .preset-row-empty { color: var(--text-muted); font-size: var(--font-size-xs); font-style: italic; }
 .template-row { margin-top: 2px; }
 
-/* preset picker dropdowns */
+/* preset picker dropdowns — fixed: panels move around in the sash grid,
+   coordinates are viewport-based so the pickers stay anchored correctly
+   and can never be clipped by their (overflow:hidden) panel */
 .preset-picker {
-  position: absolute; z-index: 90;
+  position: fixed; z-index: 90;
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
   min-width: 320px; max-width: 460px; max-height: 300px;

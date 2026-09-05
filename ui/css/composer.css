@@ -45,9 +45,10 @@
 #charCount.near-limit { color: var(--yellow); }
 #charCount.at-limit   { color: var(--red); }
 
-/* Variable insert dropdown */
+/* Variable insert dropdown (fixed: coords are viewport-based and the
+   composer window can move anywhere in the sash grid) */
 .var-menu {
-  position: absolute;
+  position: fixed;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

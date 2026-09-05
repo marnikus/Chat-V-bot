@@ -799,8 +799,10 @@ const StackDnD = {
     const panel = document.getElementById('blockConfigPanel');
     const form = document.getElementById('blockConfigForm');
     const block = this.stack[idx];
-    if (!block) { panel.classList.add('hidden'); return; }
+    if (!block) { panel.classList.remove('has-block'); panel.classList.add('hidden'); return; }
     panel.classList.remove('hidden');
+    // Marks the panel as populated so its empty-state hint hides.
+    panel.classList.add('has-block');
     const meta = this._meta(block.block_id);
     const labels = meta.labels || {};
     const isConstructor = block.block_id === 'CUSTOM_FIND';
@@ -877,7 +879,10 @@ const StackDnD = {
       inp.addEventListener('change', handler);
       // also listen to input for text to update summary live? but history on change only
     });
-    document.getElementById('closeConfigBtn').onclick = () => panel.classList.add('hidden');
+    document.getElementById('closeConfigBtn').onclick = () => {
+      panel.classList.add('hidden');
+      panel.classList.remove('has-block');
+    };
 
     const actions = document.getElementById('customBlockActions');
     if (block.block_id === 'CUSTOM_FIND' && App.bridge) {

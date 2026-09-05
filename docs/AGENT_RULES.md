@@ -216,3 +216,27 @@ the list who is not yet messaged, and adds nobody. Two invariants:
 
 An empty target set falls through to normal collection, so the mode drains the
 backlog and then resumes harvesting instead of becoming a permanent off-switch.
+
+## RULE 12 — one history per kind of state
+
+The action stack and the grid layout each get their OWN undo history
+(`stack_history` / `grid_layout_history`), never a shared one. Undoing a
+mis-dragged window must not silently revert a block edit, and vice versa. Both
+reuse `Bridge._push_hist(kind, value)` so the semantics (dedup,
+truncate-on-branch, 100-step cap) stay identical without copy-paste.
+
+Because they are separate, their shortcuts must not collide: the stack owns
+`Ctrl+Z`/`Ctrl+Y`, the grid uses `Ctrl+Shift+Z`/`Ctrl+Shift+Y`.
+
+## RULE 13 — never persist state you cannot read back
+
+`Bridge.save_grid_layout()` validates the tree (version, node shape, sizes
+summing to 100, and the exact window set) and REJECTS anything invalid, leaving
+the previously stored layout untouched. Storing an unreadable layout would
+brick the UI on every subsequent start — a bad payload must cost the user one
+failed save, not their whole layout.
+
+Corollary for "reset to default": restoring the default tree is not enough when
+a hidden panel releases its grid space. `resetToDefault()` also un-hides every
+window, and any window that can be shown while empty needs an empty state
+(RULE 4) so it does not look broken.

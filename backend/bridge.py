@@ -101,6 +101,185 @@ class Bridge(QObject):
         except Exception:
             return a == b
 
+    # ── generic history engine ───────────────────────────────────
+    # Both the action stack and the grid layout need identical semantics
+    # (dedup, truncate-on-branch, 100-step cap). They keep SEPARATE
+    # histories: undoing a window drag must never revert a block edit.
+    def _hist_keys(self, kind: str) -> tuple[str, str]:
+        base = "stack_history" if kind == "stack" else "grid_layout_history"
+        return base, base + "_index"
+
+    def _get_hist(self, kind: str) -> tuple[list, int]:
+        hk, ik = self._hist_keys(kind)
+        hist = self._config.get_state(hk, []) or []
+        idx = self._config.get_state(ik, -1)
+        if not isinstance(hist, list):
+            hist, idx = [], -1
+        if not isinstance(idx, int):
+            idx = len(hist) - 1
+        return hist, max(-1, min(idx, len(hist) - 1))
+
+    def _set_hist(self, kind: str, hist: list, idx: int) -> None:
+        hk, ik = self._hist_keys(kind)
+        self._config.set_state(**{hk: hist, ik: idx})
+
+    def _push_hist(self, kind: str, value) -> tuple[list, int]:
+        """Append a snapshot, deduping and capping. Returns (history, index)."""
+        hist, idx = self._get_hist(kind)
+        if not hist:
+            hist = [copy.deepcopy(value)]
+            self._set_hist(kind, hist, 0)
+            return hist, 0
+        if 0 <= idx < len(hist) and self._stacks_equal(hist[idx], value):
+            return hist, idx            # no-op edit
+        if idx < len(hist) - 1:
+            hist = hist[:idx + 1]       # branching discards the redo tail
+        hist.append(copy.deepcopy(value))
+        idx = len(hist) - 1
+        if len(hist) > MAX_STACK_HISTORY:
+            overflow = len(hist) - MAX_STACK_HISTORY
+            hist = hist[overflow:]
+            idx = max(0, idx - overflow)
+        self._set_hist(kind, hist, idx)
+        return hist, idx
+
+    # ── grid layout (flexible grid / sash layout) ────────────────
+    WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
+                  "people", "log"}
+
+    @classmethod
+    def _validate_grid_tree(cls, node, depth: int = 0):
+        """Mirror of SashCore.validate — never store a tree we cannot read back."""
+        if depth > 12:
+            return "tree too deep"
+        if not isinstance(node, dict):
+            return "node must be an object"
+        if node.get("type") == "leaf":
+            return None if node.get("id") else "leaf without id"
+        if node.get("type") != "split":
+            return "unknown node type"
+        if node.get("dir") not in ("row", "col"):
+            return "bad dir"
+        kids, sizes = node.get("children"), node.get("sizes")
+        if not isinstance(kids, list) or len(kids) < 2:
+            return "split needs >=2 children"
+        if not isinstance(sizes, list) or len(sizes) != len(kids):
+            return "sizes must match children"
+        for size in sizes:
+            if not isinstance(size, (int, float)) or size <= 0:
+                return "bad size value"
+        if not 99.5 <= sum(sizes) <= 100.5:
+            return "sizes must sum to 100"
+        for kid in kids:
+            err = cls._validate_grid_tree(kid, depth + 1)
+            if err:
+                return err
+        return None
+
+    @classmethod
+    def _leaf_ids(cls, node, out=None):
+        out = [] if out is None else out
+        if isinstance(node, dict):
+            if node.get("type") == "leaf":
+                out.append(node.get("id"))
+            else:
+                for kid in node.get("children") or []:
+                    cls._leaf_ids(kid, out)
+        return out
+
+    @classmethod
+    def _parse_grid_payload(cls, raw: str):
+        """Return (tree, None) or (None, error)."""
+        try:
+            data = json.loads(raw)
+        except Exception as exc:
+            return None, f"bad JSON ({exc})"
+        if not isinstance(data, dict):
+            return None, "payload must be an object"
+        if data.get("v") != 1:
+            return None, f"unsupported version {data.get('v')!r}"
+        tree = data.get("tree")
+        err = cls._validate_grid_tree(tree)
+        if err:
+            return None, err
+        got = sorted(i for i in cls._leaf_ids(tree) if i)
+        if got != sorted(cls.WINDOW_IDS):
+            return None, "window set mismatch (every window must appear once)"
+        return tree, None
+
+    @Slot(result=str)
+    def get_grid_layout(self):
+        """Serialized grid tree, or "" when the user has never customised it."""
+        raw = self._config.get_state("grid_layout", None)
+        return raw if isinstance(raw, str) and raw else ""
+
+    @Slot(str, result=bool)
+    def save_grid_layout(self, layout_json):
+        """Validate and persist the grid, pushing an undo step."""
+        tree, err = self._parse_grid_payload(layout_json or "")
+        if err:
+            # Reject rather than store: a bad tree would brick every start.
+            log.warning("Grid layout rejected: %s", err)
+            self.log_message.emit(f"⚠ Grid layout not saved: {err}", "warn")
+            return False
+        payload = json.dumps({"v": 1, "tree": tree}, ensure_ascii=False)
+        self._config.set_state(grid_layout=payload)
+        self._push_hist("grid", payload)
+        return True
+
+    @Slot(result=str)
+    def reset_grid_layout(self):
+        """Restore the default grid with EVERY window visible."""
+        payload = json.dumps({"v": 1, "tree": self._default_grid_tree()},
+                             ensure_ascii=False)
+        self._config.set_state(grid_layout=payload)
+        self._push_hist("grid", payload)
+        self.log_message.emit("↺ Grid layout reset to default "
+                              "(all windows visible)", "info")
+        return payload
+
+    @Slot(result=str)
+    def undo_grid_layout(self):
+        hist, idx = self._get_hist("grid")
+        if idx <= 0 or not hist:
+            self.log_message.emit("⚠ Nothing to undo in the grid layout", "warn")
+            return "null"
+        idx -= 1
+        self._set_hist("grid", hist, idx)
+        self._config.set_state(grid_layout=hist[idx])
+        self.log_message.emit("↩ Grid layout undo", "info")
+        return hist[idx]
+
+    @Slot(result=str)
+    def redo_grid_layout(self):
+        hist, idx = self._get_hist("grid")
+        if idx < 0 or idx >= len(hist) - 1:
+            self.log_message.emit("⚠ Nothing to redo in the grid layout", "warn")
+            return "null"
+        idx += 1
+        self._set_hist("grid", hist, idx)
+        self._config.set_state(grid_layout=hist[idx])
+        self.log_message.emit("↪ Grid layout redo", "info")
+        return hist[idx]
+
+    @staticmethod
+    def _default_grid_tree() -> dict:
+        """Mirror of SashCore.defaultTree(): all seven windows, classic order."""
+        def leaf(i):
+            return {"type": "leaf", "id": i}
+
+        def split(d, kids, sizes):
+            return {"type": "split", "dir": d, "children": kids, "sizes": sizes}
+
+        return split("col", [
+            split("row", [
+                split("col", [leaf("stats"), leaf("filters")], [35, 65]),
+                split("col", [leaf("stack"), leaf("config")], [72, 28]),
+            ], [17, 83]),
+            leaf("composer"),
+            split("row", [leaf("people"), leaf("log")], [70, 30]),
+        ], [46, 24, 30])
+
     def _push_history(self, blocks: list[dict]) -> tuple[list, int]:
         """Push a stack snapshot to history, handling dedup, truncation, max limit.
         Returns (new_history, new_index).
@@ -165,6 +344,7 @@ class Bridge(QObject):
                 "last_stack": self._config.get_state("last_stack", None),
                 "stack_history": history,
                 "stack_history_index": h_idx,
+                "grid_layout": self._config.get_state("grid_layout", None),
             },
         }
         return json.dumps(payload, ensure_ascii=False)

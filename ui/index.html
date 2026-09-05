@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/sash-layout.css">
 <link rel="stylesheet" href="css/stack.css">
 <link rel="stylesheet" href="css/stack-drag.css">
 <link rel="stylesheet" href="css/table.css">
@@ -21,6 +22,8 @@
       <span class="app-title">🤖 ChatBot Automator</span>
     </div>
     <div class="header-right">
+      <button id="layoutMenuBtn" class="btn-icon"
+              title="Grid layouts — drag any window by its title bar, or pick a preset arrangement"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
         <select id="tabSelect"><option value="">— Select Chrome Tab —</option></select>
         <button id="refreshTabsBtn" class="btn-icon" title="Refresh tabs"><span class="material-icons">refresh</span></button>
@@ -43,77 +46,82 @@
     <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
   </div>
 
-  <!-- MAIN CONTENT -->
-  <div class="main-content">
-    <!-- LEFT SIDEBAR -->
-    <aside class="sidebar-left">
-      <div class="panel stats-panel">
-        <h3><span class="material-icons">bar_chart</span> Stats</h3>
-        <div id="statsContainer">
-          <div class="stat"><span class="stat-label">Total</span><span id="statTotal" class="stat-value">0</span></div>
-          <div class="stat"><span class="stat-label">Queued</span><span id="statQueued" class="stat-value">0</span></div>
-          <div class="stat"><span class="stat-label">Done</span><span id="statDone" class="stat-value">0</span></div>
-        </div>
-      </div>
-      <div class="panel filters-panel">
-        <h3><span class="material-icons">filter_list</span> Filters <button id="editCriteriaBtn" class="btn-icon-sm" title="Edit criteria"><span class="material-icons">edit</span></button></h3>
-        <div id="criteriaDisplay"></div>
-      </div>
-    </aside>
+  <!-- ═══════════════════════════════════════════════════════════
+       FLEXIBLE GRID ("SASH LAYOUT") — FEATURE
+       Every window below is draggable (title bar), splittable,
+       mergeable and resizable (sashes). The header + URL toolbar
+       above stay pinned. Presets: 📐 menu in the header.
+       See docs/SASH_LAYOUT_DESIGN_2026-09-05.md.
+       ═══════════════════════════════════════════════════════════ -->
+  <main class="sash-grid" id="sashGrid">
 
-    <!-- CENTER -->
-    <main class="center-area">
-      <!-- ACTION STACK -->
-      <div class="panel stack-panel">
-        <h3><span class="material-icons">view_list</span> Action Stack
-          <span class="spacer"></span>
-          <button id="undoBtn" class="btn-icon-sm" title="Undo (Ctrl+Z) — up to 100 steps" disabled><span class="material-icons">undo</span></button>
-          <button id="redoBtn" class="btn-icon-sm" title="Redo (Ctrl+Y) — up to 100 steps" disabled><span class="material-icons">redo</span></button>
-          <span class="btn-separator" style="width:1px;height:16px;background:var(--border);margin:0 4px;display:inline-block;"></span>
-          <button id="addBlockBtn" class="btn-icon-sm" title="Add block"><span class="material-icons">add_circle</span></button>
-          <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
-          <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
-          <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
-          <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
-          <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
-        </h3>
-        <!-- Saved preset chips: click to load (BUG #1) -->
-        <div class="preset-row">
-          <span class="preset-row-label">Saved presets</span>
-          <div id="presetChips" class="chip-wrap">
-            <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
-          </div>
-        </div>
-        <!-- Custom Find & Click block presets: click to add to the stack -->
-        <div class="preset-row">
-          <span class="preset-row-label">Custom blocks</span>
-          <div id="customBlockChips" class="chip-wrap">
-            <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
-          </div>
-        </div>
-        <div class="stack-hint">Drag the <b>⠿</b> handle to reorder • Toggle <b>On/Off</b> to skip a block • <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> Redo (up to 100 steps) • <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> move block</div>
-        <div id="stackList" class="stack-list">
-          <div class="stack-empty">Drag blocks here or click + to add</div>
-        </div>
-        <div id="addBlockMenu" class="add-block-menu hidden"></div>
-        <div id="presetPicker" class="preset-picker hidden"></div>
+    <!-- STATS -->
+    <div class="panel stats-panel" id="winStats">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move · drop on an edge to split · drop in the middle to join a row/column">drag_indicator</span><span class="material-icons">bar_chart</span> Stats</h3>
+      <div id="statsContainer">
+        <div class="stat"><span class="stat-label">Total</span><span id="statTotal" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Queued</span><span id="statQueued" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Done</span><span id="statDone" class="stat-value">0</span></div>
       </div>
+    </div>
 
-      <!-- BLOCK CONFIG EDITOR -->
-      <div id="blockConfigPanel" class="panel config-panel hidden">
-        <h3><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
-        <div id="blockConfigForm"></div>
-        <div id="customBlockActions" class="config-actions hidden">
-          <button id="saveCustomBlockBtn" class="btn-small" title="Store this block in config.json so it can be reused in any stack"><span class="material-icons">bookmark_add</span> <span class="btn-label" data-label>Save as new preset</span></button>
+    <!-- FILTERS -->
+    <div class="panel filters-panel" id="winFilters">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">filter_list</span> Filters <button id="editCriteriaBtn" class="btn-icon-sm" title="Edit criteria"><span class="material-icons">edit</span></button></h3>
+      <div id="criteriaDisplay"></div>
+    </div>
+
+    <!-- ACTION STACK -->
+    <div class="panel stack-panel" id="winStack">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">view_list</span> Action Stack
+        <span class="spacer"></span>
+        <button id="undoBtn" class="btn-icon-sm" title="Undo (Ctrl+Z) — up to 100 steps" disabled><span class="material-icons">undo</span></button>
+        <button id="redoBtn" class="btn-icon-sm" title="Redo (Ctrl+Y) — up to 100 steps" disabled><span class="material-icons">redo</span></button>
+        <span class="btn-separator" style="width:1px;height:16px;background:var(--border);margin:0 4px;display:inline-block;"></span>
+        <button id="addBlockBtn" class="btn-icon-sm" title="Add block"><span class="material-icons">add_circle</span></button>
+        <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
+        <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
+        <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
+        <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
+        <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
+      </h3>
+      <!-- Saved preset chips: click to load (BUG #1) -->
+      <div class="preset-row">
+        <span class="preset-row-label">Saved presets</span>
+        <div id="presetChips" class="chip-wrap">
+          <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
         </div>
       </div>
-    </main>
-  </div>
+      <!-- Custom Find & Click block presets: click to add to the stack -->
+      <div class="preset-row">
+        <span class="preset-row-label">Custom blocks</span>
+        <div id="customBlockChips" class="chip-wrap">
+          <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
+        </div>
+      </div>
+      <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Toggle <b>On/Off</b> to skip a block. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>; <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> Redo (up to 100 steps). Drag the window by its <b>title bar</b> to rearrange the grid.</div>
+      <div id="stackList" class="stack-list">
+        <div class="stack-empty">Drag blocks here or click + to add</div>
+      </div>
+      <div id="addBlockMenu" class="add-block-menu hidden"></div>
+      <div id="presetPicker" class="preset-picker hidden"></div>
+    </div>
 
-  <!-- COMPOSER -->
-  <div class="composer-area">
-    <div class="panel composer-panel">
-      <h3><span class="material-icons">chat</span> Message Composer</h3>
+    <!-- BLOCK CONFIG EDITOR (hidden until a block is selected) -->
+    <div id="blockConfigPanel" class="panel config-panel hidden">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
+      <!-- Empty state: "Reset to default" un-hides this window, so it must
+           explain itself instead of looking broken (AGENT_RULES RULE 4). -->
+      <div id="blockConfigEmpty" class="config-empty">Select a block in the Action Stack to edit its settings here.</div>
+      <div id="blockConfigForm"></div>
+      <div id="customBlockActions" class="config-actions hidden">
+        <button id="saveCustomBlockBtn" class="btn-small" title="Store this block in config.json so it can be reused in any stack"><span class="material-icons">bookmark_add</span> <span class="btn-label" data-label>Save as new preset</span></button>
+      </div>
+    </div>
+
+    <!-- MESSAGE COMPOSER -->
+    <div class="panel composer-panel" id="winComposer">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">chat</span> Message Composer</h3>
       <textarea id="messageInput" placeholder="Type your message here... Use {{nick}} for username" maxlength="1000"></textarea>
       <div class="composer-bar">
         <button id="insertVarBtn" class="btn-small">Insert ▾</button>
@@ -136,12 +144,10 @@
       </div>
       <div id="templatePicker" class="preset-picker hidden"></div>
     </div>
-  </div>
 
-  <!-- BOTTOM: USER TABLE + LOG -->
-  <div class="bottom-area">
-    <div class="panel table-panel">
-      <h3><span class="material-icons">people</span> User Memory
+    <!-- USER MEMORY (people table) -->
+    <div class="panel table-panel" id="winPeople">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">people</span> User Memory
         <input id="userSearch" class="user-search" type="search"
                placeholder="Filter nick…" spellcheck="false" autocomplete="off">
         <span id="selCount" class="sel-count hidden"></span>
@@ -165,14 +171,32 @@
         </table>
       </div>
     </div>
-    <div class="panel log-panel">
-      <h3><span class="material-icons">terminal</span> Log Console
+
+    <!-- LOG CONSOLE -->
+    <div class="panel log-panel" id="winLog">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">terminal</span> Log Console
         <span class="spacer"></span>
         <button id="clearLogBtn" class="btn-small" title="Clear console">Clear</button>
       </h3>
       <div id="logConsole" class="log-console"></div>
     </div>
+
+  </main>
+</div>
+
+<!-- LAYOUTS MENU (belongs to the pinned header, positioned fixed) -->
+<div id="layoutMenu" class="layout-menu hidden">
+  <div class="layout-menu-title">Grid layouts — or drag windows yourself</div>
+  <button data-layout="default">Default<span class="lm-sub">Classic arrangement</span></button>
+  <button data-layout="a">A — Stacked rows<span class="lm-sub">Composer / People / Log, each a full-width row</span></button>
+  <button data-layout="b">B — Split top row<span class="lm-sub">Composer | People side by side, Log below</span></button>
+  <button data-layout="c">C — Side column<span class="lm-sub">Log spans full height on the right</span></button>
+  <div class="layout-menu-sep"></div>
+  <div class="layout-menu-row">
+    <button id="gridUndoBtn" class="lm-mini" title="Undo grid change (Ctrl+Shift+Z)"><span class="material-icons">undo</span> Undo</button>
+    <button id="gridRedoBtn" class="lm-mini" title="Redo grid change (Ctrl+Shift+Y)"><span class="material-icons">redo</span> Redo</button>
   </div>
+  <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible</span></button>
 </div>
 
 <!-- CRITERIA EDITOR MODAL -->
@@ -212,6 +236,8 @@
   </div>
 </div>
 
+<script src="js/sash-core.js"></script>
+<script src="js/sash-grid.js"></script>
 <script src="js/app.js"></script>
 <script src="js/user-table.js"></script>
 <script src="js/stack-drag.js"></script>
