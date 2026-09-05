@@ -285,10 +285,10 @@ class TestScrollParseBlock(unittest.TestCase):
     def test_filters_round_trip_through_presets(self):
         block = ScrollParse(filter_female=NO, filter_registered=YES,
                             filter_guest=ANY, filter_anonymous=YES,
-                            min_new_users=5, use_panel_filters=True)
+                            min_new_users=5, scroll_only=True)
         d = block.to_dict()
         for key in ("filter_female", "filter_registered", "filter_guest",
-                    "filter_anonymous", "use_panel_filters", "min_new_users",
+                    "filter_anonymous", "scroll_only", "min_new_users",
                     "viewport_selector", "load_timeout_ms"):
             self.assertIn(key, d, f"{key} must be preset-storable")
             self.assertIn(key, block.config_schema())
@@ -296,7 +296,7 @@ class TestScrollParseBlock(unittest.TestCase):
         self.assertEqual(clone.filter_female, NO)
         self.assertEqual(clone.filter_registered, YES)
         self.assertEqual(clone.min_new_users, 5)
-        self.assertTrue(clone.use_panel_filters)
+        self.assertTrue(clone.scroll_only)
 
     def test_legacy_preset_without_new_keys_still_loads(self):
         block = ScrollParse(**{"max_scrolls": 20, "scroll_pause_ms": 500,
@@ -304,12 +304,12 @@ class TestScrollParseBlock(unittest.TestCase):
         self.assertEqual(block.filter_female, YES)
         self.assertEqual(block.max_scrolls, 20)
 
-    def test_panel_filters_off_by_default(self):
+    def test_panel_criteria_are_never_applied(self):
+        """The "Also apply Filter panel criteria" checkbox was removed: the
+        four tri-state selects are the only source of truth now."""
         block = ScrollParse()
         self.assertIsNone(block.build_filter("SOME_ENGINE").panel_criteria)
-        block.use_panel_filters = True
-        self.assertEqual(block.build_filter("SOME_ENGINE").panel_criteria,
-                         "SOME_ENGINE")
+        self.assertFalse(hasattr(block, "use_panel_filters"))
 
 
 # ── STEP 4 ───────────────────────────────────────────────────────

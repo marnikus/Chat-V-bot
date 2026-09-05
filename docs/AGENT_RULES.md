@@ -186,3 +186,33 @@ Two corollaries:
 
 Note the asymmetry, which is intended: a *normal* collect phase returns only the
 people it just collected, while a *skipped* one returns the whole waiting queue.
+
+## RULE 10 — one control per decision
+
+A setting must not duplicate a decision another setting already makes. The
+Scroll & Parse block used to have both four tri-state filter selects *and* an
+"Also apply Filter panel criteria" checkbox, so a person could be rejected by
+rules that were not visible in the block being looked at — which makes "why was
+this person dropped?" unanswerable from the block config. The selects are now
+the only source of truth.
+
+When a setting is retired, the constructor must accept and **discard** its key
+(`kw.pop(dead, None)`), because `BaseAction.to_dict()` re-emits `self.config`
+and would otherwise write the dead key back into presets forever.
+
+## RULE 11 — "don't add" must still mean "do the work"
+
+Scroll-only mode (`scroll_only`) scrolls the page hunting for someone already in
+the list who is not yet messaged, and adds nobody. Two invariants:
+
+* **A seek writes nothing.** No `on_collect`, no `on_reject`, no purge. A target
+  that fails the filter is passed over, never destroyed — it is being judged for
+  suitability right now, not for membership.
+* **A seek still counts newly rendered people** for stall detection. Seek mode
+  cannot short-circuit on `nick in known_nicks` (a target is by definition
+  already known, so that guard would skip exactly who we are hunting), but if it
+  also stopped counting new arrivals the scroll would stall out before reaching
+  a target further down the list.
+
+An empty target set falls through to normal collection, so the mode drains the
+backlog and then resumes harvesting instead of becoming a permanent off-switch.

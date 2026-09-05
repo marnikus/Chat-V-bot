@@ -76,8 +76,8 @@ class CollectResult:
     reached_end: bool = False
     stopped_early: bool = False
     stopped: bool = False                            # halted by the user
-    skipped: bool = False                            # backlog guard fired
-    backlog: int = 0                                 # un-messaged already waiting
+    seeking: bool = False                            # scroll-only seek run
+    found: object = None                             # person located by a seek
     rejected: dict = field(default_factory=dict)     # reason -> count
     rejected_people: list = field(default_factory=list)   # (record, reason)
     purged: list = field(default_factory=list)       # nicks destroyed
@@ -296,22 +296,30 @@ class ScrollParser:
 
     # ── the pipeline ─────────────────────────────────────────────
     async def collect(self, progress_cb=None, min_new_users: int = 0,
-                      known_messaged: set | None = None) -> CollectResult:
+                      known_messaged: set | None = None,
+                      seek_nicks: set | None = None) -> CollectResult:
         """Run scroll → detect → filter → collect.
 
         :param min_new_users: finish as soon as this many new *un-messaged*
             people have been collected (0 = always scroll to the end).
         :param known_messaged: nicks already messaged, used to mark records.
+        :param seek_nicks: scroll-only mode. Instead of adding new people,
+            scroll hunting for one of these already-known nicks and stop on
+            the first that passes the filter. Nothing is written or purged.
         """
         known_messaged = known_messaged or set()
+        seeking = bool(seek_nicks)
         person_filter = self._filter or PersonFilter(
             female="any", registered="any", guest="any", anonymous="any",
             panel_criteria=self._criteria)
-        result = CollectResult()
+        result = CollectResult(seeking=seeking)
         collected_nicks: set[str] = set()
 
         self._say(f"🔍 Viewport selector: {self._vp_sel}", "info")
         self._say(f"🧮 Filter: {person_filter.describe()}", "info")
+        if seeking:
+            self._say(f"🔎 Seeking {len(seek_nicks)} un-messaged person(s) — "
+                      "no new people will be added", "warn")
 
         snap = await self._snapshot()
         if snap is None:
@@ -334,10 +342,48 @@ class ScrollParser:
 
             for item in items:
                 nick = (item.get("nick") or "").strip()
-                if not nick or nick in self.known_nicks:
+                if not nick:
                     continue
-                self.known_nicks.add(nick)
-                new_this_scroll += 1
+
+                # Track newly RENDERED people even in seek mode: this is what
+                # drives stall detection, and a seek that stopped counting
+                # would stall out before reaching a target further down.
+                is_new = nick not in self.known_nicks
+                if is_new:
+                    self.known_nicks.add(nick)
+                    new_this_scroll += 1
+
+                if seeking:
+                    # A target is by definition ALREADY known, so the
+                    # known_nicks short-circuit below would skip exactly the
+                    # people we are hunting for. Test membership instead.
+                    if nick not in seek_nicks:
+                        continue
+                    verdict = person_filter.check(self._to_dict(item))
+                    if not verdict.passed:
+                        # Not being judged for membership, only for
+                        # suitability right now — so pass over, never purge.
+                        self._say(f"  ↷ “{nick}” is waiting but does not pass "
+                                  f"the filter ({verdict.reason}) — skipping",
+                                  "info")
+                        seek_nicks = seek_nicks - {nick}
+                        continue
+                    record = self._to_record(item)
+                    record.messaged = False
+                    shown = await self._confirm_person(nick)
+                    self._say(f"  🎯 Found “{nick}” on the page — "
+                              f"{verdict.reason}"
+                              + (" — outline drawn" if shown else ""),
+                              "success")
+                    if shown and self._confirm_pause_ms:
+                        await asyncio.sleep(self._confirm_pause_ms / 1000.0)
+                    result.found = record
+                    result.collected.append(record)
+                    result.all_people.append(record)
+                    break
+
+                if not is_new:
+                    continue
                 record = self._to_record(item)
                 result.all_people.append(record)
 
@@ -371,6 +417,10 @@ class ScrollParser:
                 # Refresh the UI immediately — do not wait for the scroll
                 # cycle to finish.
                 await self._notify_collected(record, result)
+
+            if result.found is not None:
+                result.stopped_early = True
+                break
 
             if progress_cb:
                 progress_cb(scroll_i + 1, len(result.all_people), new_this_scroll)
