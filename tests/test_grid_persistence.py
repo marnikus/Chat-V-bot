@@ -332,6 +332,14 @@ class TestUIWiring(unittest.TestCase):
         self.assertNotIn("redo_grid_layout", self.grid)
         self.assertNotIn("e.shiftKey", self.grid)
 
+    def test_close_flushes_the_current_tree_before_shutdown(self):
+        main = open(os.path.join(os.path.dirname(__file__), "..", "main.py"),
+                    encoding="utf-8").read()
+        self.assertIn("flushPersistence", self.grid)
+        self.assertIn("_request_grid_flush", main)
+        self.assertIn("grid_layout_persisted", main)
+        self.assertIn("_layout_flush_pending", main)
+
     def test_sortable_people_headers_cover_required_columns(self):
         for key in ("nick", "gender", "registered", "status", "first_seen",
                     "last_messaged"):

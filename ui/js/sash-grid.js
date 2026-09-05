@@ -89,6 +89,30 @@ const SashGrid = {
     }
   },
 
+  /**
+   * Final close-time persistence. Returns true when Python must acknowledge
+   * the QWebChannel save before the desktop window is allowed to close.
+   */
+  flushPersistence() {
+    if (!this.root) return false;
+    const payload = SashCore.serialize(this.root);
+    try { localStorage.setItem(this.STORAGE_KEY, payload); }
+    catch (e) { /* browser storage is only the fallback */ }
+    try {
+      if (typeof App !== 'undefined' && App.bridge &&
+          typeof App.bridge.save_grid_layout === 'function') {
+        App.bridge.save_grid_layout(payload);
+        return true;
+      }
+    } catch (e) {
+      console.warn('sash-grid: close-time backend save failed', e);
+    }
+    if (typeof App !== 'undefined' && App.recordGlobal) {
+      App.recordGlobal('grid', payload, { localOnly: true });
+    }
+    return false;
+  },
+
   _save() {
     // Write BOTH: localStorage is synchronous and works with no backend
     // (plain browser, tests); the bridge is the copy that lives in
