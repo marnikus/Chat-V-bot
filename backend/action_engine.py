@@ -111,8 +111,13 @@ class ActionEngine(QObject):
         for b in blocks or []:
             cls = get_action_class(b.get("block_id", ""))
             if cls:
-                self._stack.append(cls(**{k: v for k, v in b.items() if k != "block_id"}))
-        log.info("Stack loaded: %d blocks", len(self._stack))
+                # Ensure enabled defaults to True for backward compat
+                data = {k: v for k, v in b.items() if k != "block_id"}
+                if "enabled" not in data:
+                    data["enabled"] = True
+                self._stack.append(cls(**data))
+        log.info("Stack loaded: %d blocks (%d enabled)", len(self._stack),
+                 sum(1 for a in self._stack if getattr(a, "enabled", True)))
 
     def get_stack(self) -> list[dict]:
         return [a.to_dict() for a in self._stack]
@@ -222,17 +227,21 @@ class ActionEngine(QObject):
         try:
             # Phase 1: collect people — the SCROLL_PARSE block owns the whole
             # scroll → filter → collect → order pipeline (STEPS 1-3).
+            # Only an ENABLED block runs (enable/disable toggle).
             scroll_block = next((b for b in self._stack
-                                 if b.block_id == "SCROLL_PARSE"), None)
+                                 if b.block_id == "SCROLL_PARSE"
+                                 and getattr(b, "enabled", True)), None)
             collected: list[UserRecord] = []
             if scroll_block is not None:
                 collected = await self._run_collect_phase(scroll_block)
             # Phase 2: build queue
             queue = collected if scroll_block is not None \
                 else await self._memory.get_queue()
-            has_skip = any(b.block_id == "CONDITIONAL_SKIP" for b in self._stack)
+            has_skip = any(b.block_id == "CONDITIONAL_SKIP"
+                           and getattr(b, "enabled", True)
+                           for b in self._stack)
             needs_user = [b.block_id for b in self._stack
-                          if b.block_id in USER_SCOPED_BLOCKS]
+                          if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
             standalone = False
             if queue:
                 self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
@@ -371,10 +380,25 @@ class ActionEngine(QObject):
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return False
         total = len(self._stack)
+        enabled_count = sum(1 for b in self._stack if getattr(b, "enabled", True))
+        if enabled_count == 0:
+            self.debug_msg.emit("⚠ All blocks are disabled — nothing to run", "warn")
+            self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
+            return True
         for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
                 return False
             await self._wait_if_paused()
+            # Skip disabled blocks
+            if not getattr(block, "enabled", True):
+                self.debug_msg.emit(
+                    f"      ⏭ Skipped disabled block [{block.block_id}] {block.display_name}",
+                    "warn")
+                self._tracer.note({"type": "step_skip", "reason": "disabled",
+                                   "block_id": block.block_id,
+                                   "block_name": block.display_name,
+                                   "step": idx})
+                continue
             if block.block_id == "CONDITIONAL_SKIP":
                 if user.messaged:
                     self.debug_msg.emit(

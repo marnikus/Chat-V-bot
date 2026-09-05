@@ -24,8 +24,14 @@ class BaseAction(ABC):
     name: str = ""
     icon: str = ""
 
-    def __init__(self, pre_delay_ms: int = 500, **kwargs):
+    def __init__(self, pre_delay_ms: int = 500, enabled: bool = True, **kwargs):
+        # 'enabled' and 'pre_delay_ms' may arrive inside kwargs when built from dict (load_stack)
+        if "enabled" in kwargs:
+            enabled = kwargs.pop("enabled")
+        if "pre_delay_ms" in kwargs:
+            pre_delay_ms = kwargs.pop("pre_delay_ms")
         self.pre_delay_ms = pre_delay_ms
+        self.enabled = bool(enabled) if enabled is not None else True
         self.config = kwargs
 
     def __init_subclass__(cls, **kwargs):
@@ -65,10 +71,11 @@ class BaseAction(ABC):
         """Serialize the block with ALL of its settings (round-trip safe)."""
         d: dict[str, Any] = {"block_id": self.block_id}
         for key, value in vars(self).items():
-            if key.startswith("_") or key in ("config", "pre_delay_ms"):
+            if key.startswith("_") or key in ("config", "pre_delay_ms", "enabled"):
                 continue
             d[key] = value
         d["pre_delay_ms"] = getattr(self, "pre_delay_ms", 500)
+        d["enabled"] = getattr(self, "enabled", True)
         if self.config:
             d.update(self.config)
         return d

@@ -1,6 +1,7 @@
 """QWebChannel bridge: routes calls between JS and Python backend."""
 
 import asyncio
+import copy
 import json
 import logging
 from datetime import datetime
@@ -9,7 +10,7 @@ from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine
-from backend.config_manager import ConfigManager
+from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
 
@@ -69,10 +70,90 @@ class Bridge(QObject):
         self.person_removed.emit(payload)
         asyncio.ensure_future(self._refresh_users())
 
+    # ── history helpers (Feature #1 Undo/Redo) ───────────────────
+    def _get_history(self) -> tuple[list, int]:
+        """Return (history list, current index) with defaults."""
+        hist = self._config.get_state("stack_history", [])
+        idx = self._config.get_state("stack_history_index", -1)
+        if not isinstance(hist, list):
+            hist = []
+        if not isinstance(idx, int):
+            idx = -1
+        # Normalize: ensure each entry is a list
+        clean_hist = []
+        for entry in hist:
+            if isinstance(entry, list):
+                clean_hist.append(entry)
+        return clean_hist, idx
+
+    def _set_history(self, history: list, index: int, save: bool = True) -> None:
+        """Persist history and index."""
+        # Ensure deep copy and enforce max limit already done by caller
+        self._config.set_state(save=save,
+                               stack_history=history,
+                               stack_history_index=index)
+
+    @staticmethod
+    def _stacks_equal(a: list, b: list) -> bool:
+        try:
+            return json.dumps(a, sort_keys=True, ensure_ascii=False) == \
+                   json.dumps(b, sort_keys=True, ensure_ascii=False)
+        except Exception:
+            return a == b
+
+    def _push_history(self, blocks: list[dict]) -> tuple[list, int]:
+        """Push a stack snapshot to history, handling dedup, truncation, max limit.
+        Returns (new_history, new_index).
+        """
+        if not isinstance(blocks, list):
+            return self._get_history()
+        # Normalize enabled field for backward compat
+        norm_blocks = []
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            nb = dict(b)
+            if "enabled" not in nb:
+                nb["enabled"] = True
+            norm_blocks.append(nb)
+
+        history, idx = self._get_history()
+
+        # If history empty, init
+        if not history:
+            history = [copy.deepcopy(norm_blocks)]
+            idx = 0
+            self._set_history(history, idx)
+            return history, idx
+
+        # If current index points to same stack, don't push duplicate
+        if 0 <= idx < len(history):
+            if self._stacks_equal(history[idx], norm_blocks):
+                return history, idx
+
+        # Truncate future if we are not at tip (undo then new edit)
+        if idx < len(history) - 1:
+            history = history[:idx + 1]
+
+        # Append new
+        history.append(copy.deepcopy(norm_blocks))
+        idx = len(history) - 1
+
+        # Enforce max limit
+        if len(history) > MAX_STACK_HISTORY:
+            overflow = len(history) - MAX_STACK_HISTORY
+            history = history[overflow:]
+            idx = max(0, idx - overflow)
+
+        self._set_history(history, idx)
+        log.info("History pushed: %d entries, index %d", len(history), idx)
+        return history, idx
+
     # ── unified app state (BUG #2 restore / single store) ────────
     @Slot(result=str)
     def get_app_state(self):
         """Everything the UI needs to restore the last session: ONE payload."""
+        history, h_idx = self._get_history()
         payload = {
             "url_presets": list(self._config.get("url_presets", default=[])),
             "custom_blocks": self._custom_blocks_raw(),
@@ -82,6 +163,8 @@ class Bridge(QObject):
                 "last_url_preset": self._config.get_state("last_url_preset", ""),
                 "last_stack_preset": self._config.get_state("last_stack_preset", ""),
                 "last_stack": self._config.get_state("last_stack", None),
+                "stack_history": history,
+                "stack_history_index": h_idx,
             },
         }
         return json.dumps(payload, ensure_ascii=False)
@@ -97,18 +180,92 @@ class Bridge(QObject):
 
     @Slot(str)
     def snapshot_stack(self, stack_json):
-        """Persist the current stack so the next session restores it."""
+        """Persist the current stack so the next session restores it + push history."""
         try:
             blocks = json.loads(stack_json or "[]")
         except json.JSONDecodeError:
             return
         if not isinstance(blocks, list):
             return
-        self._config.set_state(last_stack=blocks)
-        self._config.set_state(last_stack_preset="")
+        # Save last_stack
+        self._config.set_state(last_stack=blocks, last_stack_preset="")
+        # Push to history (auto-save history)
+        self._push_history(blocks)
 
     def _remember_stack(self, name: str, blocks: list[dict]) -> None:
         self._config.set_state(last_stack=blocks, last_stack_preset=name)
+        # Also push to history when preset is loaded/saved
+        self._push_history(blocks)
+
+    # ── history slots (Feature #1) ─────────────────────────────────
+    @Slot(result=str)
+    def get_stack_history(self):
+        """Return JSON {history: [...], index: N} for undo/redo."""
+        hist, idx = self._get_history()
+        return json.dumps({"history": hist, "index": idx}, ensure_ascii=False)
+
+    @Slot(str)
+    def push_stack_history(self, stack_json):
+        """Push a stack to history from frontend (explicit)."""
+        try:
+            blocks = json.loads(stack_json or "[]")
+        except json.JSONDecodeError:
+            return
+        if isinstance(blocks, list):
+            self._push_history(blocks)
+
+    @Slot(str, int)
+    def save_stack_history(self, history_json, index):
+        """Bulk save history from frontend (sync)."""
+        try:
+            hist = json.loads(history_json or "[]")
+        except json.JSONDecodeError:
+            return
+        if not isinstance(hist, list):
+            return
+        if not isinstance(index, int):
+            index = -1
+        # Enforce max
+        if len(hist) > MAX_STACK_HISTORY:
+            overflow = len(hist) - MAX_STACK_HISTORY
+            hist = hist[overflow:]
+            index = max(0, index - overflow)
+        self._set_history(hist, index)
+        log.info("History saved from frontend: %d entries, index %d", len(hist), index)
+
+    @Slot(result=str)
+    def undo_stack(self):
+        """Undo to previous stack, return its JSON or null if not possible."""
+        hist, idx = self._get_history()
+        if idx <= 0 or not hist:
+            self.log_message.emit("⚠ Nothing to undo", "warn")
+            return "null"
+        idx -= 1
+        blocks = hist[idx]
+        self._set_history(hist, idx)
+        self._config.set_state(last_stack=blocks, last_stack_preset="")
+        self._engine.load_stack(blocks)
+        payload = json.dumps(blocks, ensure_ascii=False)
+        self.stack_loaded.emit("", payload)
+        self.log_message.emit(f"↩ Undo — restored {len(blocks)} block(s)", "info")
+        return payload
+
+    @Slot(result=str)
+    def redo_stack(self):
+        """Redo to next stack, return its JSON or null if not possible."""
+        hist, idx = self._get_history()
+        if idx < 0 or idx >= len(hist) - 1:
+            self.log_message.emit("⚠ Nothing to redo", "warn")
+            return "null"
+        idx += 1
+        blocks = hist[idx]
+        self._set_history(hist, idx)
+        self._config.set_state(last_stack=blocks, last_stack_preset="")
+        self._engine.load_stack(blocks)
+        payload = json.dumps(blocks, ensure_ascii=False)
+        self.stack_loaded.emit("", payload)
+        self.log_message.emit(f"↪ Redo — restored {len(blocks)} block(s)", "info")
+        return payload
 
     # ── tab discovery / connection ───────────────────────────────
     @Slot(result=str)
@@ -195,7 +352,8 @@ class Bridge(QObject):
                                    last_stack_preset="")
         # The SCROLL_PARSE block now owns the whole scroll/filter/collect
         # pipeline and builds its own parser from its own settings, so the
-        # bridge no longer constructs a ScrollParser here.
+        # bridge no longer constructs a ScrollParser here. Whether the block
+        # is enabled is decided by the engine, which skips disabled blocks.
         asyncio.ensure_future(self._engine.execute())
 
     @Slot()
@@ -343,12 +501,20 @@ class Bridge(QObject):
         if blocks is None:
             self.log_message.emit(f"❌ Preset “{name}” not found", "error")
             return "null"
+        # Preserve current stack in history before overwriting (undo after preset load)
+        try:
+            current = self._config.get_state("last_stack", None)
+            if isinstance(current, list) and current:
+                if not self._stacks_equal(current, blocks):
+                    self._push_history(current)
+        except Exception:
+            pass
         self._engine.load_stack(blocks)
         self._remember_stack(name, blocks)
         payload = json.dumps(blocks, ensure_ascii=False)
         self.stack_loaded.emit(name, payload)
         self.log_message.emit(f"📂 Preset “{name}” loaded — {len(blocks)} block(s) "
-                              "restored", "success")
+                              "restored (↩ Undo to return to previous)", "success")
         return payload
 
     @Slot(result=str)
