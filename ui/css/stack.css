@@ -49,9 +49,10 @@
 }
 .stack-item .block-remove:hover { color: var(--red); background: var(--red-dim); }
 
-/* — Add Block Menu — */
+/* — Add Block Menu — (fixed: panel moves in the sash grid, coords are
+   viewport-based — see .preset-picker in layout.css) */
 .add-block-menu {
-  position: absolute; z-index: 50;
+  position: fixed; z-index: 50;
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: var(--gap-xs);
   box-shadow: var(--shadow-lg); min-width: 220px;
@@ -66,7 +67,6 @@
 .add-block-menu .menu-item .mi-icon { font-size: var(--font-size-lg); }
 
 /* — Config Panel — */
-.config-panel { border-top: 1px solid var(--border); }
 .config-panel .form-row {
   display: flex; align-items: center; gap: var(--gap-sm);
   margin-bottom: var(--gap-sm);

@@ -1,0 +1,217 @@
+/* ═══════════════════════════════════════════════════════════════
+   sash-layout.css — Flexible grid window system ("sash layout")
+
+   #sashGrid (everything below the pinned header + URL toolbar) is a
+   rendered split tree:
+
+     .sash-split   flex row/column container (one node of the tree)
+     .sash-window  frame around ONE persistent panel (a leaf)
+     .sash         6px draggable separator between two siblings
+
+   See docs/SASH_LAYOUT_DESIGN_2026-09-05.md for the data model.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* — grid container (fills the space under the pinned top row) — */
+.sash-grid {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+/* — split nodes — */
+.sash-split {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.sash-row { flex-direction: row; }
+.sash-col { flex-direction: column; }
+.sash-split > .sash-window,
+.sash-split > .sash-split {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* — window (leaf) — */
+.sash-window {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-panel);
+}
+/* A window whose panel carries .hidden (Block Config) collapses fully and
+   the visible siblings absorb its space (flexbox redistribution). */
+.sash-window:has(> .hidden) { display: none; }
+.sash-window > .panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* — title bar = drag handle (full-bleed via negative margins) — */
+.sash-window > .panel > .win-title {
+  margin: calc(-1 * var(--gap-md)) calc(-1 * var(--gap-md)) var(--gap-sm);
+  padding: 4px 6px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.sash-window > .panel > .win-title:active { cursor: grabbing; }
+.sash-window .win-title .win-grip {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.sash-window > .panel > .win-title:hover .win-grip { color: var(--accent); }
+
+/* — sashes (draggable separators) — */
+.sash {
+  flex: 0 0 6px;
+  position: relative;
+  z-index: 5;
+  background: transparent;
+  touch-action: none;
+}
+.sash-v { cursor: col-resize; }
+.sash-h { cursor: row-resize; }
+.sash::before {
+  content: '';
+  position: absolute;
+  background: var(--border);
+  transition: background .12s;
+}
+.sash-v::before { inset: 0 2px; }
+.sash-h::before { inset: 2px 0; }
+.sash:hover::before,
+.sash-active::before,
+.sash-target::before { background: var(--accent); }
+
+/* — drag & drop visuals — */
+body.sash-dragging,
+body.sash-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.sash-drag-source { opacity: .35; }
+.sash-drag-source > .panel {
+  outline: 2px dashed var(--accent-dim);
+  outline-offset: -2px;
+}
+.sash-drag-target > .panel {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* floating clone that follows the cursor */
+.sash-drag-clone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 160;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  outline: 1px solid var(--accent);
+  opacity: .96;
+  background: var(--bg-panel);
+}
+/* compact ghost for very large windows (full table, long log) */
+.sash-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 160;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 230px;
+  height: 56px;
+  background: var(--bg-panel-hover);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.sash-drag-ghost .material-icons { color: var(--accent); font-size: 20px; }
+
+/* glowing line showing exactly where the split/insert will land */
+.sash-drop-indicator {
+  position: fixed;
+  z-index: 150;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(108, 140, 255, .9);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* "Composer → left of Action Stack" badge next to the cursor */
+.sash-drag-badge {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 170;
+  pointer-events: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+}
+
+/* the just-dropped window pulses once */
+.sash-landed > .panel { animation: sash-land .6s ease; }
+@keyframes sash-land {
+  0%   { outline: 3px solid var(--accent); outline-offset: -3px; }
+  100% { outline: 3px solid transparent; outline-offset: -3px; }
+}
+
+/* — sash resize cursor lock — */
+body.sash-resizing-row, body.sash-resizing-row * { cursor: col-resize; user-select: none !important; }
+body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-select: none !important; }
+
+/* — Layouts menu (in the pinned header) — */
+.layout-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--gap-xs);
+  min-width: 240px;
+}
+.layout-menu-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  padding: 6px 10px 4px;
+}
+.layout-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+.layout-menu button:hover { background: var(--bg-card-hover); }
+.layout-menu button .lm-sub {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
