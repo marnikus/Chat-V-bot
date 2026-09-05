@@ -1,13 +1,9 @@
-"""Flexible grid: config.json persistence, its own undo history, and reset.
+"""Flexible grid persistence, global undo/redo, and reset.
 
-The merged sash layout persisted only to localStorage and had no undo and no
-reset. This suite covers the four follow-up requirements:
-
-  1. the layout is STORABLE — it lives in config.json, not just the browser;
-  2. it participates in an UNDO system — a separate history from the action
-     stack, so undoing a window drag never reverts a block edit;
-  3. RESET TO DEFAULT exists;
-  4. the default layout contains EVERY window.
+The sash layout is stored in config.json and participates in the same tagged
+undo timeline as action-stack edits. Legacy `type` node payloads and legacy
+history keys are accepted only during migration; new persisted trees use the
+canonical `t` key and new edits use `undo_history`.
 
 Run with:  python3 tests/test_grid_persistence.py
 """
@@ -16,6 +12,7 @@ import json
 import os
 import sys
 import tempfile
+import types
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,10 +26,18 @@ ALL_WINDOWS = {"stats", "filters", "stack", "config", "composer", "people",
 
 
 def leaf(i):
-    return {"type": "leaf", "id": i}
+    return {"t": "leaf", "id": i}
 
 
 def split(d, kids, sizes):
+    return {"t": "split", "dir": d, "children": kids, "sizes": sizes}
+
+
+def legacy_leaf(i):
+    return {"type": "leaf", "id": i}
+
+
+def legacy_split(d, kids, sizes):
     return {"type": "split", "dir": d, "children": kids, "sizes": sizes}
 
 
@@ -57,6 +62,7 @@ def make_bridge():
     from PySide6.QtCore import QObject
     QObject.__init__(br)
     br._config = cfg
+    br._engine = types.SimpleNamespace(load_stack=lambda _blocks: None)
     return br, cfg
 
 
@@ -145,22 +151,23 @@ class TestPersistence(unittest.TestCase):
     def test_layout_is_exposed_in_app_state(self):
         """restoreSession() must be able to see the stored layout."""
         import backend.config_manager as cm
-        for key in ("grid_layout", "grid_layout_history",
-                    "grid_layout_history_index"):
+        for key in ("grid_layout", "undo_history", "undo_history_index",
+                    "window_geometry"):
             self.assertIn(key, cm.DEFAULTS["state"], key)
         import inspect
         src = inspect.getsource(Bridge.get_app_state)
+        self.assertIn("undo_history", src)
         self.assertIn("grid_layout", src)
 
 
-# ── requirement 2: undo/redo, separate from the stack ────────────
-class TestGridHistory(unittest.TestCase):
-    def test_save_pushes_a_history_step(self):
+# ── requirement 2: one global, tagged undo timeline ──────────────
+class TestGlobalHistory(unittest.TestCase):
+    def test_save_pushes_a_tagged_global_history_step(self):
         br, _ = make_bridge()
         br.save_grid_layout(payload(Bridge._default_grid_tree()))
         br.save_grid_layout(payload(a_valid_tree()))
-        hist, idx = br._get_hist("grid")
-        self.assertEqual(len(hist), 2)
+        history, idx = br._get_global_history()
+        self.assertEqual([entry["kind"] for entry in history], ["grid", "grid"])
         self.assertEqual(idx, 1)
 
     def test_undo_returns_the_previous_layout(self):
@@ -169,8 +176,9 @@ class TestGridHistory(unittest.TestCase):
         second = payload(a_valid_tree())
         br.save_grid_layout(first)
         br.save_grid_layout(second)
-        got = br.undo_grid_layout()
-        self.assertEqual(json.loads(got), json.loads(first))
+        result = json.loads(br.undo())
+        self.assertEqual(result["kind"], "grid")
+        self.assertEqual(json.loads(result["value"]), json.loads(first))
         self.assertEqual(json.loads(br.get_grid_layout()), json.loads(first))
 
     def test_redo_walks_forward_again(self):
@@ -179,37 +187,38 @@ class TestGridHistory(unittest.TestCase):
         second = payload(a_valid_tree())
         br.save_grid_layout(first)
         br.save_grid_layout(second)
-        br.undo_grid_layout()
-        self.assertEqual(json.loads(br.redo_grid_layout()), json.loads(second))
+        br.undo()
+        result = json.loads(br.redo())
+        self.assertEqual(result["kind"], "grid")
+        self.assertEqual(json.loads(result["value"]), json.loads(second))
 
     def test_undo_at_the_start_is_null(self):
         br, _ = make_bridge()
         br.save_grid_layout(payload(a_valid_tree()))
-        self.assertEqual(br.undo_grid_layout(), "null")
+        self.assertEqual(br.undo(), "null")
 
     def test_redo_at_the_tip_is_null(self):
         br, _ = make_bridge()
         br.save_grid_layout(payload(a_valid_tree()))
-        self.assertEqual(br.redo_grid_layout(), "null")
+        self.assertEqual(br.redo(), "null")
 
     def test_saving_the_same_layout_twice_is_not_two_steps(self):
         br, _ = make_bridge()
         same = payload(a_valid_tree())
         br.save_grid_layout(same)
         br.save_grid_layout(same)
-        hist, _ = br._get_hist("grid")
-        self.assertEqual(len(hist), 1)
+        history, _ = br._get_global_history()
+        self.assertEqual(len(history), 1)
 
     def test_editing_after_an_undo_discards_the_redo_tail(self):
         br, _ = make_bridge()
         br.save_grid_layout(payload(Bridge._default_grid_tree()))
         br.save_grid_layout(payload(a_valid_tree()))
-        br.undo_grid_layout()
+        br.undo()
         other = a_valid_tree()
         other["sizes"] = [20, 10, 14, 14, 14, 14, 14]
         br.save_grid_layout(payload(other))
-        self.assertEqual(br.redo_grid_layout(), "null",
-                         "the old redo branch must be gone")
+        self.assertEqual(br.redo(), "null", "the old redo branch must be gone")
 
     def test_history_is_capped(self):
         br, _ = make_bridge()
@@ -217,25 +226,58 @@ class TestGridHistory(unittest.TestCase):
             tree = a_valid_tree()
             tree["sizes"] = [16 + (i % 5), 14, 14, 14, 14, 14, 14 - (i % 5)]
             br.save_grid_layout(payload(tree))
-        hist, idx = br._get_hist("grid")
-        self.assertLessEqual(len(hist), MAX_STACK_HISTORY)
-        self.assertEqual(idx, len(hist) - 1)
+        history, idx = br._get_global_history()
+        self.assertLessEqual(len(history), MAX_STACK_HISTORY)
+        self.assertEqual(idx, len(history) - 1)
 
-    def test_grid_and_stack_histories_are_independent(self):
-        """Undoing a window drag must not revert a block edit."""
+    def test_interleaved_grid_and_stack_edits_share_one_timeline(self):
         br, _ = make_bridge()
-        br._push_hist("stack", [{"block_id": "SCROLL_PARSE"}])
-        br._push_hist("stack", [{"block_id": "CLICK_USER"}])
-        s_hist_before, s_idx_before = br._get_hist("stack")
-
+        stack_a = [{"block_id": "SCROLL_PARSE"}]
+        stack_b = [{"block_id": "CLICK_USER"}]
+        br._push_hist("stack", stack_a)
+        br._push_hist("stack", stack_b)
         br.save_grid_layout(payload(Bridge._default_grid_tree()))
         br.save_grid_layout(payload(a_valid_tree()))
-        br.undo_grid_layout()
 
-        s_hist_after, s_idx_after = br._get_hist("stack")
-        self.assertEqual(s_hist_before, s_hist_after)
-        self.assertEqual(s_idx_before, s_idx_after,
-                         "grid undo moved the STACK history index")
+        result = json.loads(br.undo())
+        self.assertEqual(result["kind"], "grid")
+        self.assertEqual(json.loads(result["value"]),
+                         json.loads(payload(Bridge._default_grid_tree())))
+        history, index = br._get_global_history()
+        self.assertEqual([entry["kind"] for entry in history],
+                         ["stack", "stack", "grid", "grid"])
+        self.assertEqual(index, 2)
+
+        # The next global undo crosses the grid/stack boundary and restores
+        # the stack edit, proving there is no separate layout undo system.
+        result = json.loads(br.undo())
+        self.assertEqual(result["kind"], "stack")
+        self.assertEqual(result["value"], stack_b)
+
+    def test_legacy_type_nodes_are_normalized_to_t(self):
+        legacy = legacy_split("col", [legacy_leaf(i) for i in
+                                      ["stats", "filters", "stack", "config",
+                                       "composer", "people", "log"]],
+                              [16, 14, 14, 14, 14, 14, 14])
+        br, _ = make_bridge()
+        self.assertTrue(br.save_grid_layout(payload(legacy)))
+        tree = json.loads(br.get_grid_layout())["tree"]
+        self.assertEqual(tree["t"], "split")
+        self.assertNotIn("type", tree)
+        self.assertEqual(tree["children"][0]["t"], "leaf")
+
+    def test_legacy_history_is_migrated_once(self):
+        br, cfg = make_bridge()
+        legacy = payload(legacy_split("col", [legacy_leaf(i) for i in
+                                               ["stats", "filters", "stack", "config",
+                                                "composer", "people", "log"]],
+                                     [16, 14, 14, 14, 14, 14, 14]))
+        cfg.set_state(grid_layout_history=[legacy], grid_layout_history_index=0)
+        history, index = br._get_global_history()
+        self.assertEqual(index, 0)
+        self.assertEqual([entry["kind"] for entry in history], ["grid"])
+        self.assertEqual(json.loads(history[0]["value"])["tree"]["t"], "split")
+        self.assertEqual(cfg.get_state("undo_history_index", None), 0)
 
 
 # ── requirement 3: reset to default ──────────────────────────────
@@ -253,7 +295,9 @@ class TestReset(unittest.TestCase):
         custom = payload(a_valid_tree())
         br.save_grid_layout(custom)
         br.reset_grid_layout()
-        self.assertEqual(json.loads(br.undo_grid_layout()), json.loads(custom),
+        result = json.loads(br.undo())
+        self.assertEqual(result["kind"], "grid")
+        self.assertEqual(json.loads(result["value"]), json.loads(custom),
                          "a mis-clicked reset must be recoverable")
 
 
@@ -265,9 +309,12 @@ class TestUIWiring(unittest.TestCase):
         self.grid = open(os.path.join(base, "js", "sash-grid.js"),
                          encoding="utf-8").read()
 
-    def test_reset_and_undo_controls_exist(self):
-        for el in ("resetLayoutBtn", "gridUndoBtn", "gridRedoBtn"):
-            self.assertIn(el, self.html, el)
+    def test_reset_and_global_undo_controls_exist(self):
+        self.assertIn("resetLayoutBtn", self.html)
+        self.assertNotIn("gridUndoBtn", self.html)
+        self.assertNotIn("gridRedoBtn", self.html)
+        self.assertIn("undoBtn", self.html)
+        self.assertIn("redoBtn", self.html)
 
     def test_grid_saves_through_the_bridge_not_only_localstorage(self):
         self.assertIn("save_grid_layout", self.grid)
@@ -278,9 +325,19 @@ class TestUIWiring(unittest.TestCase):
         self.assertIn("showAllWindows", self.grid)
         self.assertIn("resetToDefault", self.grid)
 
-    def test_grid_shortcuts_do_not_collide_with_stack_undo(self):
-        """Stack owns Ctrl+Z/Y; the grid must require Shift."""
-        self.assertIn("e.shiftKey", self.grid)
+    def test_grid_uses_global_history_without_grid_shortcuts(self):
+        """Grid edits use App's global timeline, not a second shortcut path."""
+        self.assertIn("App.recordGlobal", self.grid)
+        self.assertNotIn("undo_grid_layout", self.grid)
+        self.assertNotIn("redo_grid_layout", self.grid)
+        self.assertNotIn("e.shiftKey", self.grid)
+
+    def test_sortable_people_headers_cover_required_columns(self):
+        for key in ("nick", "gender", "registered", "status", "first_seen",
+                    "last_messaged"):
+            self.assertIn(f'data-sort="{key}"', self.html)
+        self.assertGreaterEqual(self.html.count('class="sort-button"'), 6)
+        self.assertIn("Actions", self.html)
 
     def test_config_panel_has_an_empty_state(self):
         self.assertIn("blockConfigEmpty", self.html)
