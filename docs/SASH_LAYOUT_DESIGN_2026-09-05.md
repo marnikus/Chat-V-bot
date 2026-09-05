@@ -137,8 +137,18 @@ persistent panels — C1).
   header/URL toolbar. **Nothing above the grid is a drag target** (requirement 4).
 * `.sash-split` — `display:flex; flex-direction: row|col`; children get
   `flex: <size> 1 0%` (percent drives proportional layout at any window size).
-* `.sash-window` — leaf frame; `:has(> .hidden)` hides a window and lets
-  flexbox redistribute (C3).
+  The **root** node additionally gets `flex: 1 1 0%` so it always fills the
+  grid container. Without that, a split sizes to its *content* width and —
+  once a hidden window or a small-natural-width window is the only "wide"
+  child — the grid leaves a fixed empty gap on the right (regression found
+  by a user screenshot; reproduced at 442px root in a 1400px window).
+* `.sash-window` — leaf frame. A window whose panel is currently hidden
+  (Block Config before its first open) is marked `.sash-win-hidden` by
+  `sash-grid.js` (MutationObserver on every panel) → `display:none`, and the
+  sashes touching it get `.sash-hidden`. The sizes stay in the tree, so
+  showing the window later restores its stored share. The `:has(> .hidden)`
+  CSS rule is kept as belt-and-braces on modern engines; the class-based
+  path is what makes it work on **any** Chromium version.
 * `.sash` — 6px flex child, visual 2px line; `cursor: col-resize|row-resize`.
 
 ---
@@ -299,12 +309,13 @@ the DOM, never re-created.
 |---|---|
 | Panel state lost by re-render | Panels are persistent DOM nodes re-parented into leaf wrappers; only wrapper skeleton is rebuilt (C1). |
 | Floating pickers clipped/misplaced after a move | `position: fixed` + already-viewport-based coordinates (C2). |
-| Hidden Block-Config window leaves a hole | `:has(> .hidden)` → `display:none`; flexbox redistributes (C3). |
+| Hidden Block-Config window leaves a hole | JS-managed `.sash-win-hidden` class (works on every Chromium) + adjacent-sash hiding; `:has()` only as extra safety (C3). |
+| **Fixed gap on the right of the grid** (found post-release: root split shrank to content width when the only wide child was hidden/small) | root node always gets `flex: 1 1 0%` (see §2.3); regression-tested in `test_sash_webengine.py` phase 7. |
 | Drag vs. in-title buttons conflict | ignoreSelector on `button,input,select,textarea` (C4); 4px threshold keeps clicks clean. |
 | Big clone (500-row table) janks the drag | ghost-card fallback above 350 descendants. |
 | Corrupt localStorage layout | full structural validation, versioned key, default fallback (§6). |
 | Resize math drift at small sizes | 64px hard minimum per child; commit recomputes sizes from measured px. |
-| Qt WebEngine feature gaps | only Chromium ≥105 features used (§1, C5). |
+| Qt WebEngine feature gaps | no engine-specific CSS/JS required — everything degrades to plain classes/pointer events (§1, C5). |
 
 ---
 
@@ -333,6 +344,11 @@ the DOM, never re-created.
    * double-click a sash → split resets to even sizes
    * preset C → log window's rendered height ≥ composer+people (real span)
    * full page **reload** restores the persisted layout
+   * **hidden-window / no-gap regression**: root split always fills the
+     grid; with the hidden Block Config window the visible sibling absorbs
+     its share and the touching sash disappears; showing the window gives it
+     back its stored share (50% in the repro layout) and the sash returns;
+     hiding again releases the space
 3. Verified on real Chromium 112 (Qt WebEngine, PySide6 6.6.3): screenshots
    of Default / A / B / C all match the spec scenarios.
 4. Manual smoke checklist: drag each window to every position, resize every

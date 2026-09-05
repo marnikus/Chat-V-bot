@@ -44,9 +44,14 @@
   position: relative;
   background: var(--bg-panel);
 }
-/* A window whose panel carries .hidden (Block Config) collapses fully and
-   the visible siblings absorb its space (flexbox redistribution). */
+/* A window whose panel is currently hidden (Block Config before its first
+   open) releases its grid space — the visible siblings expand to fill it.
+   The class is set by sash-grid.js (plain class, works on every Chromium
+   version); the :has() rule is belt-and-braces on modern engines. */
+.sash-window.sash-win-hidden { display: none; }
 .sash-window:has(> .hidden) { display: none; }
+/* sashes touching a hidden window disappear too */
+.sash.sash-hidden { display: none; }
 .sash-window > .panel {
   flex: 1;
   min-width: 0;

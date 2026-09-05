@@ -517,6 +517,105 @@ class TestSashWebEngine(unittest.TestCase):
         after = run_js("__r = SashCore.serialize(SashGrid.getTree());")
         self.assertEqual(after, before, "persisted layout survives a reload")
 
+        # ── 7. hidden windows release their space; grid always fills ──
+        # (regression: with the hidden Block Config window as the only
+        #  "wide" child, the root split shrank to content width and left a
+        #  fixed empty gap on the right)
+        r = run_js(r"""
+            const grid = document.getElementById('sashGrid');
+            const rootEl = grid.firstElementChild;
+            const cfg = document.querySelector('.sash-window[data-win="config"]');
+            const stackSash = cfg.parentElement.querySelector('.sash');
+            __r = {
+              gridW: grid.offsetWidth,
+              rootW: rootEl.offsetWidth,
+              cfgW: cfg.offsetWidth,
+              cfgHiddenClass: cfg.classList.contains('sash-win-hidden'),
+              cfgDisplay: getComputedStyle(cfg).display,
+              cfgSashHidden: stackSash.classList.contains('sash-hidden'),
+              stackW: document.querySelector('.sash-window[data-win="stack"]').offsetWidth,
+            };
+        """)
+        self.assertAlmostEqual(r["rootW"], r["gridW"], delta=2,
+                               msg="root split fills the grid (default layout)")
+        self.assertEqual(r["cfgW"], 0, "hidden Block Config takes no space")
+        self.assertTrue(r["cfgHiddenClass"], "wrapper marked sash-win-hidden")
+        self.assertEqual(r["cfgDisplay"], "none")
+        self.assertTrue(r["cfgSashHidden"], "sash next to the hidden window is hidden")
+        self.assertGreater(r["stackW"], 700,
+                           "stack absorbed the hidden config's share (1400px window)")
+
+        # the user's repro: root row [ log | config(hidden) ] — the log must
+        # fill the whole grid, no gap
+        r = run_js(r"""
+            SashGrid.root = SashCore.split('row',
+              [SashCore.leaf('log'), SashCore.leaf('config')], [50, 50]);
+            SashGrid.render();
+            const grid = document.getElementById('sashGrid');
+            __r = {
+              gridW: grid.offsetWidth,
+              rootW: grid.firstElementChild.offsetWidth,
+              logW: document.querySelector('.sash-window[data-win="log"]').offsetWidth,
+              cfgW: document.querySelector('.sash-window[data-win="config"]').offsetWidth,
+              sashHidden: document.querySelector('.sash').classList.contains('sash-hidden'),
+            };
+        """)
+        self.assertAlmostEqual(r["rootW"], r["gridW"], delta=2,
+                               msg="root fills the grid even when the only wide child is hidden")
+        self.assertAlmostEqual(r["logW"], r["gridW"], delta=10,
+                               msg="visible window expands to the full width — no fixed gap")
+        self.assertEqual(r["cfgW"], 0, "hidden window collapsed")
+        self.assertTrue(r["sashHidden"], "sash touching the hidden window is gone")
+
+        # showing Block Config gives it back its stored share (50%) and the
+        # sash reappears (MutationObserver — wait for the microtask)
+        run_js("__r = (document.getElementById('blockConfigPanel').classList.remove('hidden'), 'ok');")
+        time.sleep(0.15)
+        app.processEvents()
+        r = run_js(r"""
+            const grid = document.getElementById('sashGrid');
+            const sash = document.querySelector('.sash');
+            __r = {
+              gridW: grid.offsetWidth,
+              logW: document.querySelector('.sash-window[data-win="log"]').offsetWidth,
+              cfgW: document.querySelector('.sash-window[data-win="config"]').offsetWidth,
+              cfgHiddenClass: document.querySelector('.sash-window[data-win="config"]')
+                              .classList.contains('sash-win-hidden'),
+              sashHidden: sash.classList.contains('sash-hidden'),
+              sashDisplay: getComputedStyle(sash).display,
+            };
+        """)
+        half = r["gridW"] / 2
+        self.assertAlmostEqual(r["cfgW"], half, delta=half * 0.05,
+                               msg="shown config regained its stored 50% share")
+        self.assertAlmostEqual(r["logW"], half, delta=half * 0.05,
+                               msg="log shrank to give the config its share")
+        self.assertFalse(r["cfgHiddenClass"], "wrapper no longer marked hidden")
+        self.assertFalse(r["sashHidden"], "sash back between the two visible windows")
+        self.assertEqual(r["sashDisplay"], "block")
+
+        # hiding it again releases the space once more
+        run_js("__r = (document.getElementById('blockConfigPanel').classList.add('hidden'), 'ok');")
+        time.sleep(0.15)
+        app.processEvents()
+        r = run_js(r"""
+            const grid = document.getElementById('sashGrid');
+            __r = {
+              gridW: grid.offsetWidth,
+              rootW: grid.firstElementChild.offsetWidth,
+              logW: document.querySelector('.sash-window[data-win="log"]').offsetWidth,
+              cfgW: document.querySelector('.sash-window[data-win="config"]').offsetWidth,
+              sashHidden: document.querySelector('.sash').classList.contains('sash-hidden'),
+            };
+        """)
+        self.assertAlmostEqual(r["logW"], r["gridW"], delta=10,
+                               msg="hiding the window releases its space again")
+        self.assertEqual(r["cfgW"], 0)
+        self.assertTrue(r["sashHidden"])
+
+        # restore the default layout for a clean final state
+        run_js("__r = SashGrid.setLayout('default');")
+
         # ── 6. no JS errors ─────────────────────────────────────────
         js_errors = [m for lvl, m in console if "Uncaught" in m]
         self.assertEqual(js_errors, [], "JS console errors: " + repr(js_errors))

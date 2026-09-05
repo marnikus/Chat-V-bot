@@ -68,6 +68,7 @@ const SashGrid = {
     this.gridEl.addEventListener('pointerdown', this._onDown = this._pointerDown.bind(this));
     this.gridEl.addEventListener('dblclick', this._onDbl = this._onDblClick.bind(this));
     this._setupLayoutMenu();
+    this._setupVisibilityWatch();
   },
 
   // ── tree persistence ─────────────────────────────────────────
@@ -110,8 +111,13 @@ const SashGrid = {
   /** Rebuild the wrapper skeleton, re-parenting the persistent panels. */
   render() {
     const frag = this._buildNode(this.root, []);
-    if (SashCore.isLeaf(this.root)) frag.style.flex = '1 1 0%';
+    // The root node must always FILL the grid container. Without an explicit
+    // flex grow the split sizes to its content width and — once a window with
+    // a small natural width (or a hidden window) is the only wide child — a
+    // fixed empty gap appears on the right. (flex-basis 0% + grow 1)
+    frag.style.flex = '1 1 0%';
     this.gridEl.replaceChildren(frag);
+    this._syncHidden();
   },
 
   _buildNode(node, path) {
@@ -143,6 +149,60 @@ const SashGrid = {
 
   _parsePath(p) {
     return String(p == null ? '' : p).split('-').filter((s) => s !== '').map(Number);
+  },
+
+  // ── hidden windows (e.g. Block Config before its first open) ─────
+  // A window whose panel is currently hidden must RELEASE its grid space:
+  // the visible siblings expand to fill it, and the sashes touching it
+  // disappear. The size stays in the tree, so showing the window later
+  // restores the arrangement exactly. Managed by class (not :has()) so it
+  // works on every Chromium version.
+
+  _panelIsHidden(panel) {
+    if (!panel) return false;
+    if (panel.classList.contains('hidden')) return true;
+    if (panel.style.display === 'none') return true;
+    try { return getComputedStyle(panel).display === 'none'; }
+    catch (e) { return false; }
+  },
+
+  _syncHidden() {
+    if (!this.gridEl) return;
+    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const panel = winEl.querySelector(':scope > .panel');
+      winEl.classList.toggle('sash-win-hidden', this._panelIsHidden(panel));
+    });
+    this.gridEl.querySelectorAll('.sash-split').forEach((pEl) => {
+      const kids = Array.from(pEl.children);
+      kids.forEach((el, i) => {
+        if (!el.classList || !el.classList.contains('sash')) return;
+        const prev = kids[i - 1], next = kids[i + 1];
+        const nearHidden = (prev && prev.classList.contains('sash-win-hidden')) ||
+                           (next && next.classList.contains('sash-win-hidden'));
+        el.classList.toggle('sash-hidden', !!nearHidden);
+      });
+    });
+  },
+
+  _setupVisibilityWatch() {
+    // The app shows/hides Block Config by toggling its class/style — keep
+    // the grid in sync whenever that happens (no re-render needed: the
+    // siblings expand purely through flexbox).
+    const mo = new MutationObserver(() => {
+      let changed = false;
+      this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+        const panel = winEl.querySelector(':scope > .panel');
+        const hidden = this._panelIsHidden(panel);
+        // note: toggle(cls, force) returns false when REMOVING the class,
+        // so track the transition explicitly
+        if (winEl.classList.contains('sash-win-hidden') !== hidden) changed = true;
+        winEl.classList.toggle('sash-win-hidden', hidden);
+      });
+      if (changed) this._syncHidden();
+    });
+    Object.values(this.winEls).forEach((el) => {
+      mo.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
+    });
   },
 
   // ── unified pointerdown (sash resize vs. window drag) ────────
