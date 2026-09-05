@@ -628,25 +628,75 @@ const SashGrid = {
     const childEls = [];
     for (let i = 0; i * 2 < pEl.children.length; i++) childEls.push(pEl.children[i * 2]);
 
+    const axisSize = (el) => {
+      const r = el.getBoundingClientRect();
+      return isRow ? r.width : r.height;
+    };
+    const childSizes = childEls.map(axisSize);
+    const sashSizes = Array.from(pEl.children)
+      .filter((el) => el.classList.contains('sash'))
+      .map(axisSize);
     const z = {
       pEl, sashEl, sIdx, isRow, childEls, pointerId: ev.pointerId,
-      otherWidths: {},
+      childSizes, sashSizes, otherWidths: {},
+      originalFlex: childEls.map((child) => child.style.flex),
+      pointerCaptured: false,
     };
-    // the non-resized children keep their absolute px size
-    for (let i = 0; i < childEls.length; i++) {
+    // Unchanged children keep their measured pixel extent throughout the
+    // gesture. Do not mix these pixels with the percentage-like flex-grow
+    // values used by the normal render path.
+    for (let i = 0; i < childSizes.length; i++) {
       if (i === sIdx || i === sIdx + 1) continue;
-      const r = childEls[i].getBoundingClientRect();
-      z.otherWidths[i] = isRow ? r.width : r.height;
+      z.otherWidths[i] = childSizes[i];
     }
     this._resize = z;
+    if (ev.pointerId != null && typeof sashEl.setPointerCapture === 'function') {
+      try {
+        sashEl.setPointerCapture(ev.pointerId);
+        z.pointerCaptured = true;
+      } catch (e) { /* document listeners remain the fallback */ }
+    }
     sashEl.classList.add('sash-active');
     document.body.classList.add(isRow ? 'sash-resizing-row' : 'sash-resizing-col');
     this._onResizeMove = this._resizeMove.bind(this);
     this._onResizeUp = this._resizeUp.bind(this);
     document.addEventListener('pointermove', this._onResizeMove, { passive: false });
     document.addEventListener('pointerup', this._onResizeUp);
-    document.addEventListener('pointercancel', this._onResizeCancel = this._cancelResize.bind(this));
+    document.addEventListener('pointercancel', this._onResizeCancel = () => this._cancelResize(true));
+    document.addEventListener('keydown', this._onResizeKey = (keyEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.preventDefault();
+        this._cancelResize(true);
+      }
+    }, true);
     ev.preventDefault();
+  },
+
+  /**
+   * Calculate a complete pixel allocation for an active sash gesture.
+   * Every child uses the same pixel unit so unrelated rows cannot lose flex
+   * space just because the active pair is being resized.
+   */
+  _resizePixelAllocation(z, pointer, rect) {
+    const axis = z.isRow ? rect.width : rect.height;
+    const sashTotal = z.sashSizes.reduce((sum, size) => sum + Math.max(0, size), 0);
+    let others = 0;
+    for (const k of Object.keys(z.otherWidths)) others += Math.max(0, z.otherWidths[k]);
+    const span = axis - others - sashTotal;
+    if (span < this.MIN_PX * 2) return null;
+
+    let prefix = 0;
+    for (let i = 0; i < z.sIdx; i++) {
+      prefix += Math.max(0, z.childSizes[i]);
+      prefix += Math.max(0, z.sashSizes[i] || 0);
+    }
+    const start = (z.isRow ? rect.left : rect.top) + prefix;
+    const requested = pointer - start;
+    const first = Math.min(Math.max(requested, this.MIN_PX), span - this.MIN_PX);
+    const allocation = z.childSizes.slice();
+    allocation[z.sIdx] = first;
+    allocation[z.sIdx + 1] = span - first;
+    return allocation;
   },
 
   _resizeMove(ev) {
@@ -654,35 +704,28 @@ const SashGrid = {
     if (!z) return;
     ev.preventDefault();
     const rect = z.pEl.getBoundingClientRect();
-    const n = z.childEls.length;
-    const sashTotal = (n - 1) * this.SASH_W;
-    let others = 0;
-    for (const k of Object.keys(z.otherWidths)) others += z.otherWidths[k];
-    const span = (z.isRow ? rect.width : rect.height) - others - sashTotal;
-    if (span <= this.MIN_PX * 2) return;
+    const allocation = this._resizePixelAllocation(
+      z, z.isRow ? ev.clientX : ev.clientY, rect);
+    if (!allocation) return;
 
-    // absolute px position where child sIdx starts
-    let prefix = 0;
-    for (let i = 0; i < z.sIdx; i++) prefix += (z.otherWidths[i] || 0) + this.SASH_W;
-    const start = (z.isRow ? rect.left : rect.top) + prefix;
-    const pos = z.isRow ? ev.clientX : ev.clientY;
-    const wA = Math.min(Math.max(pos - start, this.MIN_PX), span - this.MIN_PX);
-    const wB = span - wA;
-
-    // live: only the two siblings change their flex-grow; flexbox normalises
-    // the rest, so neighbours adapt proportionally and structure is preserved
-    z.childEls[z.sIdx].style.flexGrow = String(wA);
-    z.childEls[z.sIdx + 1].style.flexGrow = String(wB);
+    // Use fixed pixel flex values for ALL children during the gesture. The
+    // old implementation assigned pixel measurements only to the active pair
+    // while leaving the other children with percentage-like flex-grow values;
+    // that made an unrelated row collapse to a sliver.
+    z.childEls.forEach((child, i) => {
+      const px = allocation[i];
+      child.style.flex = px > 0 ? `0 0 ${px}px` : '0 0 0px';
+    });
   },
 
   _resizeUp() {
     const z = this._resize;
     if (!z) return;
-    this._cancelResize();
+    this._cancelResize(false);
     // commit: convert measured px to percents (hidden child keeps its share)
     const rect = z.pEl.getBoundingClientRect();
     const total = z.isRow ? rect.width : rect.height;
-    const sashTotal = (z.childEls.length - 1) * this.SASH_W;
+    const sashTotal = z.sashSizes.reduce((sum, size) => sum + Math.max(0, size), 0);
     const denom = Math.max(1, total - sashTotal);
     const path = this._parsePath(z.pEl.dataset.path);
     const p = SashCore.nodeAtPath(this.root, path);
@@ -700,12 +743,20 @@ const SashGrid = {
       LogConsole.log('📏 Grid resized', 'info');
   },
 
-  _cancelResize() {
+  _cancelResize(restore = true) {
     const z = this._resize;
     if (!z) return;
     document.removeEventListener('pointermove', this._onResizeMove, { passive: false });
     document.removeEventListener('pointerup', this._onResizeUp);
     document.removeEventListener('pointercancel', this._onResizeCancel);
+    document.removeEventListener('keydown', this._onResizeKey, true);
+    if (restore) {
+      z.childEls.forEach((child, i) => { child.style.flex = z.originalFlex[i]; });
+    }
+    if (z.pointerCaptured && typeof z.sashEl.releasePointerCapture === 'function') {
+      try { z.sashEl.releasePointerCapture(z.pointerId); }
+      catch (e) { /* pointer may already have been released */ }
+    }
     z.sashEl.classList.remove('sash-active');
     document.body.classList.remove('sash-resizing-row', 'sash-resizing-col');
     this._resize = null;
