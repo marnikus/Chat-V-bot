@@ -176,21 +176,10 @@ class Bridge(QObject):
         if isinstance(blocks, list):
             self._config.set_state(last_stack=blocks,
                                    last_stack_preset="")
-        from backend.scroll_parser import ScrollParser
-        # honor the SCROLL_PARSE block's own settings when present
-        scroll_cfg = next((b for b in blocks
-                           if b.get("block_id") == "SCROLL_PARSE"), {})
-        sp = ScrollParser(
-            cdp=self._cdp, criteria=self._criteria,
-            viewport_sel=self._config.get("scroll", "viewport_selector",
-                default="cdk-virtual-scroll-viewport.users-list-viewport"),
-            scroll_dy=self._config.get("scroll", "scroll_delta_y", default=300),
-            pause_ms=int(scroll_cfg.get("scroll_pause_ms") or
-                self._config.get("scroll", "scroll_pause_ms", default=800)),
-            stall_threshold=self._config.get("scroll", "stall_threshold", default=3),
-            max_scrolls=int(scroll_cfg.get("max_scrolls") or
-                self._config.get("scroll", "max_scrolls", default=50)))
-        asyncio.ensure_future(self._engine.execute(sp))
+        # The SCROLL_PARSE block now owns the whole scroll/filter/collect
+        # pipeline and builds its own parser from its own settings, so the
+        # bridge no longer constructs a ScrollParser here.
+        asyncio.ensure_future(self._engine.execute())
 
     @Slot()
     def stop_stack(self): self._engine.stop()

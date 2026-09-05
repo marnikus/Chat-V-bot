@@ -22,12 +22,42 @@ const BUILTIN_BLOCKS = [
     defaults:{selector:"div[role='tab'].tab-item", child_selector:"p.chat-title", tab_name:'Гостиная', highlight_enabled:true, confirm_pause_ms:700, pre_delay_ms:500},
     labels:{selector:'Tab element selector', child_selector:'Child text selector', tab_name:'Tab name (text match)', highlight_enabled:'Visual confirmation outlines', confirm_pause_ms:'Pause after found (ms)', pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'SCROLL_PARSE',   name:'Scroll & Parse',    icon:'📜',
-    defaults:{max_scrolls:50,scroll_pause_ms:800,pre_delay_ms:300},
-    labels:{max_scrolls:'Max scrolls',scroll_pause_ms:'Scroll pause (ms)',pre_delay_ms:'Pre-delay (ms)'} },
+    defaults:{max_scrolls:50, scroll_pause_ms:800, scroll_delta_y:300,
+              viewport_selector:'cdk-virtual-scroll-viewport.users-list-viewport',
+              load_timeout_ms:2500, stall_threshold:3, min_new_users:1,
+              filter_female:'yes', filter_registered:'no', filter_guest:'yes',
+              filter_anonymous:'no', use_panel_filters:false, pre_delay_ms:300},
+    options:{filter_female:['any','yes','no'], filter_registered:['any','yes','no'],
+             filter_guest:['any','yes','no'], filter_anonymous:['any','yes','no']},
+    labels:{max_scrolls:'Max scrolls (safety cap)',
+            scroll_pause_ms:'Pause after each scroll (ms)',
+            scroll_delta_y:'Scroll step (px)',
+            viewport_selector:'Scroll viewport (CSS)',
+            load_timeout_ms:'Max wait for lazy load (ms)',
+            stall_threshold:'Scrolls with no new people = end',
+            min_new_users:'Finish after N new un-messaged (0 = all)',
+            filter_female:'① Female', filter_registered:'② Registered',
+            filter_guest:'③ Guest', filter_anonymous:'④ Anonymous',
+            use_panel_filters:'Also apply Filter panel criteria',
+            pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'CONDITIONAL_SKIP',name:'If Messaged → Skip',icon:'🔀', defaults:{}, labels:{} },
   { block_id:'CLICK_USER',     name:'Click User',        icon:'👤',
-    defaults:{pre_delay_ms:1000},
-    labels:{pre_delay_ms:'Pre-delay (ms)'} },
+    defaults:{selector:'user-item', label_selector:'.primary-text',
+              click_selector:'.user-container',
+              tab_selector:"div[role='tab'].tab-item",
+              tab_title_selector:'p.chat-title', verify_new_tab:true,
+              tab_pause_ms:800, highlight_enabled:true, confirm_pause_ms:700,
+              pre_delay_ms:1000},
+    labels:{selector:'Person row selector (CSS)',
+            label_selector:'Nickname element inside (CSS)',
+            click_selector:'Element to click inside (CSS)',
+            tab_selector:'Chat tab selector (for verification)',
+            tab_title_selector:'Tab title element (CSS)',
+            verify_new_tab:'Confirm a new tab opened',
+            tab_pause_ms:'Pause after click, before check (ms)',
+            highlight_enabled:'Visual confirmation outlines',
+            confirm_pause_ms:'Pause after found (ms)',
+            pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'WAIT_PAGE_LOAD', name:'Wait for Page',     icon:'⏳',
     defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200},
     labels:{target_selector:'Target CSS selector',timeout_ms:'Timeout (ms)',pre_delay_ms:'Pre-delay (ms)'} },
@@ -35,8 +65,15 @@ const BUILTIN_BLOCKS = [
     defaults:{message:'',typing_speed_ms:30,pre_delay_ms:500},
     labels:{message:'Message text (use {{nick}})',typing_speed_ms:'Typing speed (ms)',pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'CLICK_SEND',     name:'Click Send',        icon:'📨',
-    defaults:{pre_delay_ms:300},
-    labels:{pre_delay_ms:'Pre-delay (ms)'} },
+    defaults:{selector:"button[type='submit']",
+              fallback_selector:'button:has(mat-icon)', fallback_text:'send',
+              highlight_enabled:true, confirm_pause_ms:700, pre_delay_ms:300},
+    labels:{selector:'Send button selector (CSS)',
+            fallback_selector:'Fallback button selector (CSS)',
+            fallback_text:'Fallback icon text',
+            highlight_enabled:'Visual confirmation outlines',
+            confirm_pause_ms:'Pause after found (ms)',
+            pre_delay_ms:'Pre-delay (ms)'} },
   { block_id:'ATTACH_IMAGE',   name:'Attach Image',      icon:'🖼️',
     defaults:{folder_path:'',file_pattern:'*.jpg',pre_delay_ms:500},
     labels:{folder_path:'Image folder path',file_pattern:'File pattern',pre_delay_ms:'Pre-delay (ms)'} },
@@ -504,10 +541,21 @@ const StackDnD = {
       const val = block[key];
       const labelText = labels[key] || key;
       const safeVal = String(val).replace(/"/g, '&quot;');
+      const choices = (meta.options && meta.options[key]) || null;
       if (typeof val === 'boolean') {
         html += `<div class="form-row form-row-check">
           <label>${labelText}</label>
           <input data-key="${key}" type="checkbox" ${val ? 'checked' : ''}>
+        </div>`;
+      } else if (choices) {
+        // tri-state / enumerated setting -> dropdown
+        const opts = choices.map((o) => {
+          const sel = String(val) === String(o) ? ' selected' : '';
+          return `<option value="${this._esc(o)}"${sel}>${this._esc(o)}</option>`;
+        }).join('');
+        html += `<div class="form-row">
+          <label>${labelText}</label>
+          <select data-key="${key}">${opts}</select>
         </div>`;
       } else {
         const inputType = typeof val === 'number' ? 'number' : 'text';
@@ -519,10 +567,11 @@ const StackDnD = {
       }
     }
     form.innerHTML = html;
-    form.querySelectorAll('input[data-key]').forEach(inp => {
+    form.querySelectorAll('input[data-key], select[data-key]').forEach(inp => {
       inp.addEventListener('change', () => {
         const k = inp.dataset.key;
-        if (inp.type === 'checkbox') block[k] = inp.checked;
+        if (inp.tagName === 'SELECT') block[k] = inp.value;
+        else if (inp.type === 'checkbox') block[k] = inp.checked;
         else block[k] = inp.type === 'number' ? Number(inp.value) : inp.value;
         this._renderStack();
         this.notifyEdited();

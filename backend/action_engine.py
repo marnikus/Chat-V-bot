@@ -92,6 +92,8 @@ class ActionEngine(QObject):
         self._cdp = cdp
         self._memory = memory
         self._criteria = criteria
+        #: exposed so blocks can reach the global Filter panel criteria
+        self.criteria = criteria
         self._stack: list[BaseAction] = []
         self._running = False
         self._paused = False
@@ -153,16 +155,16 @@ class ActionEngine(QObject):
         self._tracer.note({"type": "run_start",
                            "blocks": [b.block_id for b in self._stack]})
         try:
-            # Phase 1: parse users if SCROLL_PARSE block exists
-            has_scroll = any(b.block_id == "SCROLL_PARSE" for b in self._stack)
-            if has_scroll and scroll_parser:
-                all_u, filtered = await self._run_parse_phase(scroll_parser)
-                for u in all_u:
-                    await self._memory.upsert_user(u)
-                self.log_msg.emit(
-                    f"📜 Parsed {len(all_u)} users, {len(filtered)} passed criteria")
+            # Phase 1: collect people — the SCROLL_PARSE block owns the whole
+            # scroll → filter → collect → order pipeline (STEPS 1-3).
+            scroll_block = next((b for b in self._stack
+                                 if b.block_id == "SCROLL_PARSE"), None)
+            collected: list[UserRecord] = []
+            if scroll_block is not None:
+                collected = await self._run_collect_phase(scroll_block)
             # Phase 2: build queue
-            queue = await self._memory.get_queue()
+            queue = collected if scroll_block is not None \
+                else await self._memory.get_queue()
             has_skip = any(b.block_id == "CONDITIONAL_SKIP" for b in self._stack)
             needs_user = [b.block_id for b in self._stack
                           if b.block_id in USER_SCOPED_BLOCKS]
@@ -233,23 +235,46 @@ class ActionEngine(QObject):
         while self._paused and not self._stop_requested:
             await asyncio.sleep(0.2)
 
-    async def _run_parse_phase(self, sp: ScrollParser) -> tuple[list, list]:
-        self.log_msg.emit("📜 Starting user parse (SCROLL_PARSE step)...")
-        self._tracer.note({"type": "phase", "phase": "parse"})
-
-        def progress(scroll_i: int, total: int, new_count: int) -> None:
-            self._tracer.note({"type": "scroll", "scroll": scroll_i,
-                               "total_users": total, "new": new_count,
-                               "phase": "parse"})
-
-        def parse_log(message: str, level: str = "info") -> None:
-            self.debug_msg.emit("      " + message, norm_level(level))
-            self._tracer.note({"type": "detail", "level": norm_level(level),
-                               "message": message, "phase": "parse"})
-
-        sp.set_log_cb(parse_log)
-        all_u, filtered = await sp.parse(progress_cb=progress)
-        return all_u, filtered
+    async def _run_collect_phase(self, block) -> list[UserRecord]:
+        """Run the SCROLL_PARSE block's pipeline and return the ordered queue."""
+        self.log_msg.emit("📜 Collecting people (Scroll & Parse)…")
+        self._tracer.note({"type": "phase", "phase": "collect"})
+        self._ctx = {"block_id": block.block_id, "block_name": block.display_name,
+                     "phase": "collect"}
+        self.step_started.emit(1, block.block_id, "—")
+        try:
+            known = {u.nick for u in await self._memory.get_all() if u.messaged}
+        except Exception:
+            known = set()
+        try:
+            result = await block.run_pipeline(
+                self._cdp, self, panel_criteria=self._criteria,
+                known_messaged=known)
+        except Exception as exc:
+            log.exception("Collect phase failed")
+            self.debug_msg.emit(f"      ❌ Scroll & Parse raised: {exc}", "error")
+            self._tracer.note({"type": "phase_end", "phase": "collect",
+                               "status": "exception", "error": str(exc)})
+            self._ctx = {}
+            return []
+        # Persist everyone we saw, so the "already messaged" memory keeps working.
+        for person in result.all_people:
+            try:
+                await self._memory.upsert_user(person)
+            except Exception as exc:
+                log.warning("upsert failed for %s: %s", person.nick, exc)
+        self.log_msg.emit(
+            f"📜 Seen {len(result.all_people)} person(s), "
+            f"{len(result.collected)} matched the filter")
+        self._tracer.note({"type": "phase_end", "phase": "collect",
+                           "seen": len(result.all_people),
+                           "collected": len(result.collected),
+                           "scrolls": result.scrolls,
+                           "reached_end": result.reached_end,
+                           "stopped_early": result.stopped_early})
+        self.step_complete.emit(block.display_name, "—")
+        self._ctx = {}
+        return [p for p in result.collected if not p.messaged]
 
     async def _execute_for_user(self, user: UserRecord, has_skip: bool) -> bool:
         """Execute all blocks for one user."""
@@ -270,7 +295,7 @@ class ActionEngine(QObject):
                     return False
                 continue
             if block.block_id == "SCROLL_PARSE":
-                continue  # already handled in parse phase
+                continue  # already handled in the collect phase
             self._ctx = {"step": idx, "total_steps": total,
                          "block_id": block.block_id,
                          "block_name": block.display_name,
