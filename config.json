@@ -8,9 +8,48 @@
           "selector": "div[role='tab'].tab-item",
           "child_selector": "p.chat-title",
           "tab_name": "Гостиная"
+        },
+        {
+          "block_id": "CUSTOM_FIND",
+          "pre_delay_ms": 500,
+          "custom_name": "cdk-virtual-scroll-viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": ""
+        },
+        {
+          "block_id": "SCROLL_PARSE",
+          "pre_delay_ms": 300,
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 800,
+          "scroll_delta_y": 1000,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 2,
+          "filter_female": "yes",
+          "filter_registered": "any",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "use_panel_filters": false
+        },
+        {
+          "block_id": "CLICK_USER",
+          "pre_delay_ms": 1000,
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700
         }
       ],
-      "updated_at": "2026-09-04T21:46:09"
+      "updated_at": "2026-09-05T18:40:20"
     }
   },
   "state": {
@@ -42,12 +81,25 @@
         "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
         "load_timeout_ms": 2500,
         "stall_threshold": 100,
-        "min_new_users": 100,
+        "min_new_users": 2,
         "filter_female": "yes",
         "filter_registered": "any",
         "filter_guest": "any",
         "filter_anonymous": "any",
-        "use_panel_filters": false
+        "use_panel_filters": true
+      },
+      {
+        "block_id": "CLICK_USER",
+        "pre_delay_ms": 1000,
+        "selector": "user-item",
+        "label_selector": ".primary-text",
+        "click_selector": ".user-container",
+        "tab_selector": "div[role='tab'].tab-item",
+        "tab_title_selector": "p.chat-title",
+        "verify_new_tab": true,
+        "tab_pause_ms": 800,
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700
       }
     ],
     "last_stack_preset": ""
