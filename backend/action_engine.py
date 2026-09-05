@@ -25,6 +25,19 @@ from actions.base_action import BaseAction, ActionResult, get_action_class
 
 log = logging.getLogger("chatbot")
 
+#: Blocks that only make sense in the context of a concrete queued user.
+#: A stack made exclusively of other blocks (tab clicks, waits, DOM checks) is
+#: user-independent and must still run exactly once even with an empty queue —
+#: otherwise it silently does nothing (see docs/FIND_CLICK_VISUAL_
+#: CONFIRMATION_DESIGN_2026-09-05.md).
+USER_SCOPED_BLOCKS = frozenset({
+    "SCROLL_PARSE", "CONDITIONAL_SKIP", "CLICK_USER",
+    "TYPE_MESSAGE", "CLICK_SEND", "ATTACH_IMAGE",
+})
+
+#: Nick used for the synthetic user of a standalone (user-independent) run.
+STANDALONE_NICK = "—"
+
 
 class RunTracer:
     """Appends one JSON line per event to logs/run_trace_<run_id>.jsonl."""
@@ -127,7 +140,7 @@ class ActionEngine(QObject):
     async def execute(self, scroll_parser: ScrollParser | None = None) -> None:
         """Run the full stack over the user queue."""
         if self._running:
-            self.log_msg.emit("⚠ Already running", "warn")
+            self.log_msg.emit("⚠ Already running")
             return
         self._running = True
         self._stop_requested = False
@@ -151,10 +164,38 @@ class ActionEngine(QObject):
             # Phase 2: build queue
             queue = await self._memory.get_queue()
             has_skip = any(b.block_id == "CONDITIONAL_SKIP" for b in self._stack)
-            if has_scroll and scroll_parser and not queue:
-                self.log_msg.emit("⚠ No users in queue — nothing to run", "warn")
-            else:
+            needs_user = [b.block_id for b in self._stack
+                          if b.block_id in USER_SCOPED_BLOCKS]
+            standalone = False
+            if queue:
                 self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
+            elif not self._stack:
+                self.log_msg.emit("⚠ The stack is empty — add at least one block")
+                self.debug_msg.emit("⚠ Nothing to run: the action stack is empty",
+                                    "warn")
+            elif needs_user:
+                # The stack genuinely needs users but there are none. Say so
+                # loudly instead of the old misleading "0 user(s)" line.
+                self.log_msg.emit("⚠ No users in queue — nothing to run")
+                self.debug_msg.emit(
+                    "⚠ The queue is empty and this stack contains user-dependent "
+                    "block(s): " + ", ".join(sorted(set(needs_user)))
+                    + ". Add a Scroll & Parse block (or reset the 'messaged' flags) "
+                      "so there are users to run on.", "warn")
+                self._tracer.note({"type": "run_skip", "reason": "empty_queue",
+                                   "needs_user": sorted(set(needs_user))})
+            else:
+                # User-independent stack (e.g. a single "Find & Click" tab block):
+                # run it exactly once against a synthetic user.
+                standalone = True
+                queue = [UserRecord(nick=STANDALONE_NICK)]
+                self.log_msg.emit("▶ Running stack once (standalone — no user "
+                                  "context needed)")
+                self.debug_msg.emit(
+                    "ℹ Standalone run: this stack contains no user-dependent "
+                    "blocks, so it executes once independently of the user queue.",
+                    "info")
+                self._tracer.note({"type": "run_mode", "mode": "standalone"})
             # Phase 3: per-user execution
             for user in queue:
                 if self._stop_requested:
@@ -166,9 +207,10 @@ class ActionEngine(QObject):
                     self._tracer.note({"type": "run_end", "reason": "stopped"})
                     break
                 ok = await self._execute_for_user(user, has_skip)
-                if ok:
+                if ok and not standalone:
                     await self._memory.mark_messaged(user.nick)
-                self.user_complete.emit(user.nick, ok)
+                if not standalone:
+                    self.user_complete.emit(user.nick, ok)
             else:
                 self._tracer.note({"type": "run_end", "reason": "completed"})
         except Exception as exc:
