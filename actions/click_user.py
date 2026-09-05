@@ -106,6 +106,13 @@ class ClickUser(BaseAction):
         if outcome != ActionResult.OK:
             return outcome
 
+        # The click selected this person: remember the nickname for every
+        # {{nick}} field in the rest of this run, until the next selection.
+        if engine is not None:
+            note = getattr(engine, "note_selected", None)
+            if note is not None:
+                note(user_nick)
+
         if not self.verify_new_tab:
             return ActionResult.OK
 

@@ -141,6 +141,10 @@ class ActionEngine(QObject):
         # every composer keystroke here so blocks (TYPE_MESSAGE with
         # use_composer) read the CURRENT text at run time.
         self.composer_text = ""
+        # Nickname of the person a CLICK_USER block selected most recently.
+        # Remembered for the whole run ({{nick}} in any block field resolves
+        # to it) until the next selection happens; reset on every run press.
+        self.selected_nick = ""
 
     # ── stack management ─────────────────────────────────────────
     def load_stack(self, blocks: list[dict]) -> None:
@@ -305,6 +309,8 @@ class ActionEngine(QObject):
         self._run_seq += 1
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{self._run_seq}"
         self._tracer = RunTracer(run_id)
+        # A fresh run press starts with no remembered selection.
+        self.selected_nick = ""
         self.log_msg.emit(f"▶▶ Run #{run_id} started")
         self.debug_msg.emit(f"📄 Trace file: {self._tracer.path}", "info")
         self._tracer.note({"type": "run_start",
@@ -449,6 +455,43 @@ class ActionEngine(QObject):
             if not standalone:
                 self.user_complete.emit(user.nick, ok)
         return "worked"
+
+    def note_selected(self, nick: str) -> None:
+        """Remember the person a Click User block just selected.
+
+        Every ``{{nick}}`` in any block field of this run resolves to this
+        nickname until another Click User selects someone else (or the run
+        ends). Empty nicks are ignored so a cleanup pass can never clear a
+        live selection.
+        """
+        if not nick:
+            return
+        self.selected_nick = nick
+        if self._tracer is not None:
+            self._tracer.note({"type": "nick_selected", "nick": nick})
+
+    def _expand_nick_on_block(self, block: BaseAction, nick: str) -> dict:
+        """Temporarily replace ``{{nick}}`` in the block's string settings.
+
+        Returns {attr: original_value} for every attribute that contained the
+        marker so the caller can restore them after the step. Only plain
+        string attributes are touched; the block object itself is mutated
+        just for the duration of one step (never persisted).
+        """
+        changed: dict = {}
+        for key, value in vars(block).items():
+            if key.startswith("_") or not isinstance(value, str):
+                continue
+            if "{{nick}}" not in value:
+                continue
+            changed[key] = value
+            setattr(block, key, value.replace("{{nick}}", nick))
+        return changed
+
+    @staticmethod
+    def _restore_block_attrs(block: BaseAction, originals: dict) -> None:
+        for key, value in originals.items():
+            setattr(block, key, value)
 
     async def _order_queue_by_column(self, queue: list[UserRecord]) \
             -> list[UserRecord]:
@@ -599,9 +642,15 @@ class ActionEngine(QObject):
                 f"▶▶ Step {idx}/{total} [{block.icon}] {block.display_name} "
                 f"— user: {user.nick}", "info")
             self._tracer.note({"type": "step_start", **self._ctx})
+            # {{nick}} marker: resolve against the remembered selection (or
+            # this step's user when nothing was selected yet) for the whole
+            # duration of this one step, then put the literal marker back.
+            originals = self._expand_nick_on_block(
+                block, self.selected_nick or user.nick)
             try:
                 result = await block.execute(user.nick, self._cdp, self)
             except Exception as exc:
+                self._restore_block_attrs(block, originals)
                 log.exception("Block error")
                 self._tracer.note({"type": "step_end", "status": "exception",
                                    "error": str(exc), **self._ctx})
@@ -609,6 +658,7 @@ class ActionEngine(QObject):
                 self.step_complete.emit(block.display_name, user.nick)
                 self._ctx = {}
                 return False
+            self._restore_block_attrs(block, originals)
             elapsed = time.monotonic() - started
             if result == ActionResult.OK:
                 status = "ok"

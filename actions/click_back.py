@@ -53,7 +53,8 @@ class ClickBack(BaseAction):
         s["child_selector"] = {"type": "text", "default": "p.chat-title",
                                "label": "Child text selector"}
         s["tab_name"] = {"type": "text", "default": "Гостиная",
-                         "label": "Tab name (text match)"}
+                         "label": "Tab name (text match) — "
+                                  "{{nick}} = selected user"}
         s["highlight_enabled"] = {"type": "checkbox", "default": True,
                                   "label": "Draw confirmation outlines"}
         s["confirm_pause_ms"] = {"type": "number", "default": 700,

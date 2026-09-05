@@ -41,7 +41,12 @@ class TypeMessage(BaseAction):
             text = composer_text
         else:
             text = self.message
-        text = text.replace("{{nick}}", user_nick)
+        # {{nick}} → the remembered selected user (Click User) of this run;
+        # falls back to the queued user of this step, as before.
+        nick = user_nick
+        if engine is not None:
+            nick = getattr(engine, "selected_nick", "") or user_nick
+        text = text.replace("{{nick}}", nick)
         report = engine.report if engine else None
         ok = await type_message(cdp, text, self.typing_speed_ms, report)
         return ActionResult.OK if ok else ActionResult.FAIL
@@ -51,6 +56,7 @@ class TypeMessage(BaseAction):
         s["use_composer"] = {"type": "bool", "default": False,
                              "label": "Use text from the Message Composer "
                                       "window (ignores the text below)"}
-        s["message"] = {"type": "textarea", "default": "", "label": "Message text"}
+        s["message"] = {"type": "textarea", "default": "",
+               "label": "Message text — {{nick}} = selected user"}
         s["typing_speed_ms"] = {"type": "number", "default": 30, "label": "Speed (ms/char)"}
         return s

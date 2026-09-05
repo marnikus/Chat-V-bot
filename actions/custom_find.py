@@ -93,7 +93,8 @@ class CustomFind(BaseAction):
         s["label_selector"] = {"type": "text", "default": "",
                                "label": "Text element inside (CSS)"}
         s["match_text"] = {"type": "text", "default": "",
-                           "label": "Text to match inside (optional)"}
+                           "label": "Text to match inside (optional — "
+                                    "{{nick}} = selected user)"}
         s["click_enabled"] = {"type": "checkbox", "default": True,
                               "label": "Click after found"}
         s["click_selector"] = {"type": "text", "default": "",
