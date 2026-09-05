@@ -130,7 +130,37 @@ Two matching requirements:
 
 ---
 
-## RULE 6 — Tests execute the real thing
+## RULE 6 — Filtered-out entities must not persist
+
+When a pipeline filters items, only the items that **pass** may be written to
+storage. Never persist "everything we saw" for bookkeeping convenience — that is
+exactly how rejected people ended up in the users table and survived across
+runs.
+
+Symmetry is the rule: if there is an `on_collect` hook, there must be an
+`on_reject` hook that *destroys* any stored record for the rejected item. A
+re-run under a stricter filter must make the list **shrink**, never grow.
+
+Invariant to preserve: *after any run, storage contains only entities that pass
+the currently configured filter.*
+
+---
+
+## RULE 7 — Stop must be honoured by every long-running loop
+
+A stop flag checked only in the outermost loop is not a stop. Long-running
+phases must accept a `should_stop` predicate and check it:
+
+* at the top of each iteration, **and**
+* inside any inner wait/poll loop, so a stop during a multi-second timeout is
+  prompt.
+
+Distinguish "stopped" from "failed" in the return value — reusing `None` for
+both produced a bogus "lost the page context" error.
+
+---
+
+## RULE 8 — Tests execute the real thing
 
 JavaScript probes are tested by running them through `tests/js_harness.js`
 against a DOM stub, not by asserting on generated strings. Pipelines are tested

@@ -140,6 +140,11 @@ function setupBridgeListeners() {
     UserTable.onPersonFound(payload);
   });
 
+  // a person failed the filter and was destroyed — drop the row immediately
+  b.person_removed.connect((payload) => {
+    UserTable.onPersonRemoved(payload);
+  });
+
   b.stats_updated.connect((json) => {
     const s = JSON.parse(json);
     document.getElementById('statTotal').textContent = s.total || 0;

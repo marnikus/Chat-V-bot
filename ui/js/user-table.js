@@ -253,6 +253,21 @@ const UserTable = {
     setTimeout(() => row.classList.remove('row-flash'), 1600);
   },
 
+  /**
+   * React to the backend's person_removed signal: the person failed the
+   * filter and their record was destroyed. Drop the row right away.
+   */
+  onPersonRemoved(payloadJson) {
+    let p = null;
+    try { p = JSON.parse(payloadJson || 'null'); } catch (e) { p = null; }
+    if (!p || !p.nick) return;
+    this.selected.delete(p.nick);
+    this.users = this.users.filter((u) => u.nick !== p.nick);
+    const reason = p.reason ? ` — ${p.reason}` : '';
+    LogConsole.log(`🗑 Removed “${p.nick}”${reason}`, 'warn');
+    this.render(this.users);
+  },
+
   /** React to the backend's users_deleted signal. */
   onDeleted(nicksJson) {
     try {

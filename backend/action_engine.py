@@ -86,6 +86,7 @@ class ActionEngine(QObject):
     debug_msg = Signal(str, str)          # message, level (info|success|warn|error)
     step_started = Signal(int, str, str)  # step index (1-based), block_id, user_nick
     person_found = Signal(str)            # JSON: one newly collected person
+    person_removed = Signal(str)          # JSON: one purged (filtered-out) person
 
     def __init__(self, cdp: CDPClient, memory: UserMemory,
                  criteria: CriteriaEngine, parent: QObject | None = None):
@@ -160,6 +161,34 @@ class ActionEngine(QObject):
         self.person_found.emit(json.dumps(payload, ensure_ascii=False))
         if self._tracer is not None:
             self._tracer.note({"type": "person_collected", **payload})
+
+    def is_stopping(self) -> bool:
+        """Predicate handed to long-running phases so Stop is honoured."""
+        return self._stop_requested
+
+    async def person_rejected(self, record, reason: str) -> bool:
+        """Destroy any stored record for a person that FAILED the filter.
+
+        Prevents a filtered-out person from lingering in the list after an
+        earlier run (or a run under a laxer filter). Returns True when a stored
+        record was actually removed.
+        """
+        removed = False
+        try:
+            deleter = getattr(self._memory, "delete_user", None)
+            if deleter is not None:
+                removed = bool(await deleter(record.nick))
+        except Exception as exc:
+            log.warning("Purge failed for %s: %s", record.nick, exc)
+            return False
+        if removed:
+            payload = {"nick": record.nick, "reason": reason}
+            self.person_removed.emit(json.dumps(payload, ensure_ascii=False))
+            self.debug_msg.emit(
+                f"      🗑 Removed “{record.nick}” — {reason}", "warn")
+            if self._tracer is not None:
+                self._tracer.note({"type": "person_purged", **payload})
+        return removed
 
     # ── main execution loop ──────────────────────────────────────
     async def execute(self, scroll_parser: ScrollParser | None = None) -> None:
@@ -280,23 +309,35 @@ class ActionEngine(QObject):
                                "status": "exception", "error": str(exc)})
             self._ctx = {}
             return []
-        # Persist everyone we saw, so the "already messaged" memory keeps working.
-        for person in result.all_people:
+        # Persist ONLY the people that passed the filter. Storing every person
+        # we merely *saw* is what used to put filtered-out people (e.g. men
+        # under a "female only" filter) into the list, where they survived
+        # across runs. Collected people are already upserted live; this pass is
+        # an idempotent safety net.
+        for person in result.collected:
             try:
                 await self._memory.upsert_user(person)
             except Exception as exc:
                 log.warning("upsert failed for %s: %s", person.nick, exc)
-        self.log_msg.emit(
-            f"📜 Seen {len(result.all_people)} person(s), "
-            f"{len(result.collected)} matched the filter")
+        summary = (f"📜 Seen {len(result.all_people)} person(s), "
+                   f"{len(result.collected)} matched the filter")
+        if result.purged:
+            summary += f", {len(result.purged)} removed"
+        self.log_msg.emit(summary)
         self._tracer.note({"type": "phase_end", "phase": "collect",
                            "seen": len(result.all_people),
                            "collected": len(result.collected),
                            "scrolls": result.scrolls,
                            "reached_end": result.reached_end,
-                           "stopped_early": result.stopped_early})
+                           "stopped_early": result.stopped_early,
+                           "stopped": result.stopped,
+                           "purged": len(result.purged)})
         self.step_complete.emit(block.display_name, "—")
         self._ctx = {}
+        if result.stopped or self._stop_requested:
+            self.debug_msg.emit("      ⏹ Collection stopped by user — not "
+                                "queueing anyone from this run", "warn")
+            return []
         return [p for p in result.collected if not p.messaged]
 
     async def _execute_for_user(self, user: UserRecord, has_skip: bool) -> bool:

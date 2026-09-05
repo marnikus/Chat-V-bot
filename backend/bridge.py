@@ -32,6 +32,7 @@ class Bridge(QObject):
     tab_match_result = Signal(str, str)      # query, JSON matches
     users_deleted = Signal(str, int)         # JSON nicks, deleted count
     person_found = Signal(str)               # JSON: one newly collected person
+    person_removed = Signal(str)             # JSON: one purged (filtered-out) person
     stack_loaded = Signal(str, str)          # name, JSON blocks
     template_loaded = Signal(str, str)       # name, body
 
@@ -55,10 +56,17 @@ class Bridge(QObject):
         # A person was collected mid-scroll: surface it and refresh the table
         # right away rather than at the end of the run.
         self._engine.person_found.connect(self._on_person_found)
+        # A person failed the filter and was destroyed: drop them from the table.
+        self._engine.person_removed.connect(self._on_person_removed)
 
     def _on_person_found(self, payload: str) -> None:
         """Live update: a person just passed the filter during Scroll & Parse."""
         self.person_found.emit(payload)
+        asyncio.ensure_future(self._refresh_users())
+
+    def _on_person_removed(self, payload: str) -> None:
+        """Live update: a person failed the filter and was purged."""
+        self.person_removed.emit(payload)
         asyncio.ensure_future(self._refresh_users())
 
     # ── unified app state (BUG #2 restore / single store) ────────

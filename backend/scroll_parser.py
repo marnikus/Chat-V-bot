@@ -61,6 +61,12 @@ _EXTRACT_JS = """(function(){
 })()""" 
 
 
+#: Returned by :meth:`ScrollParser._settle` when the user stopped the run
+#: before any snapshot could be taken — distinct from ``None``, which means
+#: the page context was genuinely lost.
+STOPPED = object()
+
+
 @dataclass
 class CollectResult:
     """Outcome of one full scroll-parse pipeline run."""
@@ -69,7 +75,10 @@ class CollectResult:
     scrolls: int = 0
     reached_end: bool = False
     stopped_early: bool = False
+    stopped: bool = False                            # halted by the user
     rejected: dict = field(default_factory=dict)     # reason -> count
+    rejected_people: list = field(default_factory=list)   # (record, reason)
+    purged: list = field(default_factory=list)       # nicks destroyed
 
     @property
     def new_unmessaged(self) -> list:
@@ -91,6 +100,8 @@ class ScrollParser:
                  highlight_ms: int = 900,
                  confirm_pause_ms: int = 500,
                  on_collect=None,
+                 on_reject=None,
+                 should_stop=None,
                  log_cb=None):
         self._cdp = cdp
         self._criteria = criteria
@@ -110,6 +121,11 @@ class ScrollParser:
         #: async callback invoked right after each person is collected, so the
         #: UI list can refresh immediately instead of at the end of the run
         self._on_collect = on_collect
+        #: async callback for people that FAIL the filter, so the caller can
+        #: destroy any stored record for them
+        self._on_reject = on_reject
+        #: predicate returning True when the user asked the run to stop
+        self._should_stop = should_stop
         self.known_nicks: set[str] = set()
         self._log_cb = log_cb
 
@@ -209,6 +225,11 @@ class ScrollParser:
         snap = None
         stable = 0
         while waited < self._load_timeout_ms:
+            if self._stop_requested():
+                # Distinguish "user stopped" from "page context lost": return
+                # the last good snapshot, or the STOPPED sentinel if we never
+                # got one, so the caller does not report a bogus page error.
+                return snap if snap is not None else STOPPED
             await asyncio.sleep(self._poll_ms / 1000.0)
             waited += self._poll_ms
             snap = await self._snapshot()
@@ -244,6 +265,33 @@ class ScrollParser:
             log.warning("on_collect callback failed for %s: %s",
                         record.nick, exc)
 
+    async def _notify_rejected(self, record, reason: str, result) -> None:
+        """Tell the caller a person FAILED the filter.
+
+        The caller destroys any stored record for them, so a person who does
+        not pass the filter can never linger in the list from an earlier run.
+        """
+        result.rejected_people.append((record, reason))
+        if self._on_reject is None:
+            return
+        try:
+            outcome = self._on_reject(record, reason)
+            if asyncio.iscoroutine(outcome):
+                outcome = await outcome
+            if outcome:
+                result.purged.append(record.nick)
+        except Exception as exc:      # a purge hiccup must never kill the parse
+            log.warning("on_reject callback failed for %s: %s",
+                        record.nick, exc)
+
+    def _stop_requested(self) -> bool:
+        if self._should_stop is None:
+            return False
+        try:
+            return bool(self._should_stop())
+        except Exception:
+            return False
+
     # ── the pipeline ─────────────────────────────────────────────
     async def collect(self, progress_cb=None, min_new_users: int = 0,
                       known_messaged: set | None = None) -> CollectResult:
@@ -274,6 +322,10 @@ class ScrollParser:
 
         no_new_count = 0
         for scroll_i in range(self.max_scrolls):
+            if self._stop_requested():
+                result.stopped = True
+                self._say("⏹ Stopped by user — halting the scroll", "warn")
+                break
             result.scrolls = scroll_i + 1
             items = snap.get("users", []) or []
             new_this_scroll = 0
@@ -291,6 +343,9 @@ class ScrollParser:
                 if not verdict.passed:
                     result.rejected[verdict.reason] = \
                         result.rejected.get(verdict.reason, 0) + 1
+                    # Confirmed NOT to pass: destroy any stored record so the
+                    # person cannot survive from an earlier / laxer run.
+                    await self._notify_rejected(record, verdict.reason, result)
                     continue
                 if nick in collected_nicks:          # belt and braces
                     continue
@@ -353,6 +408,10 @@ class ScrollParser:
             if self._pause_ms > 0:
                 await asyncio.sleep(self._pause_ms / 1000.0)
             settled = await self._settle(set(self.known_nicks), prev_top)
+            if settled is STOPPED or self._stop_requested():
+                result.stopped = True
+                self._say("⏹ Stopped by user — halting the scroll", "warn")
+                break
             if settled is None:
                 self._say("❌ Lost the page context while scrolling", "error")
                 break
@@ -365,6 +424,11 @@ class ScrollParser:
             detail = ", ".join(f"{n}× {reason}"
                                for reason, n in sorted(result.rejected.items()))
             self._say(f"🚫 Filtered out: {detail}", "info")
+        if result.purged:
+            self._say(f"🗑 Removed {len(result.purged)} stored record(s) for "
+                      f"people that do not pass the filter: "
+                      + ", ".join(f"“{n}”" for n in result.purged[:8])
+                      + ("…" if len(result.purged) > 8 else ""), "warn")
         self._say(f"📊 Parse finished: {len(result.all_people)} person(s) seen, "
                   f"{len(result.collected)} matched the filter "
                   f"({len(result.new_unmessaged)} not yet messaged)", "success")
