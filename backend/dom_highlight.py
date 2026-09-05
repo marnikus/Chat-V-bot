@@ -24,6 +24,8 @@ from backend.dom_probe import MATCH_CONTAINS, MATCH_EXACT, _js_str  # noqa: F401
 COLOR_FIND = "#ff2d2d"      # red
 #: Outline colour used for the CLICK phase.
 COLOR_CLICK = "#ff9500"     # orange
+#: Outline colour used when a person matches the filter and is collected.
+COLOR_COLLECT = "#00c853"   # green
 
 #: Attribute marking every overlay node so they can be bulk-removed.
 HIGHLIGHT_ATTR = "data-cf-highlight"
@@ -297,6 +299,78 @@ def build_click_probe(
         "caption": _js_str(caption),
         "hms": int(highlight_ms),
         "stash": STASH_KEY,
+    }
+
+
+def build_highlight_probe(
+    selector: str,
+    label_selector: Optional[str] = None,
+    match_text: Optional[str] = None,
+    match_mode: str = MATCH_EXACT,
+    color: str = COLOR_COLLECT,
+    caption: str = "MATCH",
+    highlight_ms: int = 900,
+    clear_first: bool = True,
+) -> str:
+    """Highlight an element WITHOUT clicking it or touching the click stash.
+
+    Used for pure visual confirmation — e.g. showing which person just matched
+    the filter during Scroll & Parse. Deliberately does NOT call
+    ``scrollIntoView``: moving the viewport mid-scroll would corrupt the
+    parser's position tracking.
+    """
+    return """
+(function(){
+%(out)s
+%(helpers)s
+  try {
+    out.phase = 'highlight';
+    var sel = %(selector)s;
+    var childSel = %(label_selector)s;
+    var matchText = %(match_text)s;
+    var exact = %(exact)s;
+    out.query = sel;
+    if (%(clear)s) clearHighlights();
+    var nodes = Array.prototype.slice.call(document.querySelectorAll(sel));
+    out.total = nodes.length;
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var el = node;
+      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
+      if (childSel) {
+        var c = node.querySelector(childSel);
+        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
+      }
+      if (matchText !== null && matchText !== undefined && matchText !== '') {
+        if (exact) { if (label !== matchText) { continue; } }
+        else { if (label.indexOf(matchText) < 0) { continue; } }
+      }
+      var vi = probeVisible(node);
+      out.found = true; out.index = i; out.text = label;
+      out.visible = vi.visible; out.disabled = vi.disabled;
+      out.clickable = vi.visible && !vi.disabled;
+      out.target_desc = describe(node);
+      var rect = highlight(node, %(color)s, %(hms)s, %(caption)s);
+      out.rect = rect;
+      out.highlighted = !!rect;
+      break;
+    }
+  } catch (err) {
+    out.error = String(err && err.message || err);
+  }
+  return JSON.stringify(out);
+})()
+""" % {
+        "out": _base_out_js(),
+        "helpers": _HELPERS_JS,
+        "selector": _js_str(selector),
+        "label_selector": _js_str(label_selector) if label_selector else "null",
+        "match_text": _js_str(match_text) if match_text else "null",
+        "exact": "true" if match_mode == MATCH_EXACT else "false",
+        "clear": "true" if clear_first else "false",
+        "color": _js_str(color),
+        "caption": _js_str(caption),
+        "hms": int(highlight_ms),
     }
 
 

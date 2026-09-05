@@ -67,6 +67,19 @@ confirm_pause_ms: int = 700        # pause after FIND so the user can look
 Blocks currently compliant: `CUSTOM_FIND`, `CLICK_MAIN_TAB`, `CLICK_BACK`,
 `CLICK_USER`, `CLICK_SEND`.
 
+### Overlay colour convention
+
+| Colour | Constant | Meaning |
+|---|---|---|
+| **RED** `#ff2d2d` | `COLOR_FIND` | element detected during the FIND phase |
+| **ORANGE** `#ff9500` | `COLOR_CLICK` | the area about to be clicked |
+| **GREEN** `#00c853` | `COLOR_COLLECT` | a person matched the filter and was collected |
+
+For pure visual confirmation with **no** click, use
+`backend.dom_highlight.build_highlight_probe(...)`. It never touches the click
+stash and never calls `scrollIntoView` — moving the viewport during a parse
+would corrupt the scroll position tracking.
+
 ---
 
 ## RULE 2 — Report every step through `engine.report()`
@@ -101,7 +114,23 @@ too. Never let a no-op path end with a success-looking log line.
 
 ---
 
-## RULE 5 — Tests execute the real thing
+## RULE 5 — Long-running work reports progress incrementally
+
+Anything that loops over many items (scrolling, parsing, batch actions) must
+surface each result **as it happens**, not in a batch when the loop ends. The
+Scroll & Parse pipeline takes an `on_collect` callback, which the engine wires
+to `person_collected()` → `person_found` signal → `users_updated`, so the table
+updates live.
+
+Two matching requirements:
+
+* a callback into the UI must never be able to kill the pipeline — wrap it in
+  `try/except` and log a warning;
+* support both sync and async callbacks (`asyncio.iscoroutine(...)`).
+
+---
+
+## RULE 6 — Tests execute the real thing
 
 JavaScript probes are tested by running them through `tests/js_harness.js`
 against a DOM stub, not by asserting on generated strings. Pipelines are tested

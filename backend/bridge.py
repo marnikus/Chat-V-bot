@@ -31,6 +31,7 @@ class Bridge(QObject):
     custom_blocks_updated = Signal(str)      # JSON: custom block presets
     tab_match_result = Signal(str, str)      # query, JSON matches
     users_deleted = Signal(str, int)         # JSON nicks, deleted count
+    person_found = Signal(str)               # JSON: one newly collected person
     stack_loaded = Signal(str, str)          # name, JSON blocks
     template_loaded = Signal(str, str)       # name, body
 
@@ -51,6 +52,14 @@ class Bridge(QObject):
         self._engine.stack_complete.connect(self.stack_complete.emit)
         self._engine.log_msg.connect(lambda m: self.log_message.emit(m, "info"))
         self._engine.debug_msg.connect(lambda m, l: self.log_message.emit(m, l))
+        # A person was collected mid-scroll: surface it and refresh the table
+        # right away rather than at the end of the run.
+        self._engine.person_found.connect(self._on_person_found)
+
+    def _on_person_found(self, payload: str) -> None:
+        """Live update: a person just passed the filter during Scroll & Parse."""
+        self.person_found.emit(payload)
+        asyncio.ensure_future(self._refresh_users())
 
     # ── unified app state (BUG #2 restore / single store) ────────
     @Slot(result=str)

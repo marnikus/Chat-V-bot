@@ -85,6 +85,7 @@ class ActionEngine(QObject):
     log_msg = Signal(str)
     debug_msg = Signal(str, str)          # message, level (info|success|warn|error)
     step_started = Signal(int, str, str)  # step index (1-based), block_id, user_nick
+    person_found = Signal(str)            # JSON: one newly collected person
 
     def __init__(self, cdp: CDPClient, memory: UserMemory,
                  criteria: CriteriaEngine, parent: QObject | None = None):
@@ -137,6 +138,28 @@ class ActionEngine(QObject):
         if self._tracer is not None:
             self._tracer.note({"type": "detail", "level": level,
                                "message": message, **self._ctx})
+
+    # ── live collection hook (used by SCROLL_PARSE) ──────────────
+    async def person_collected(self, record, collected: list) -> None:
+        """Persist a just-collected person and refresh the UI immediately.
+
+        Called by the Scroll & Parse pipeline the moment a person passes the
+        filter, so the list updates in real time instead of only when the
+        whole scroll cycle finishes.
+        """
+        try:
+            await self._memory.upsert_user(record)
+        except Exception as exc:
+            log.warning("Live upsert failed for %s: %s", record.nick, exc)
+        payload = {"nick": record.nick, "gender": record.gender,
+                   "registered": bool(record.registered),
+                   "anonymous": bool(record.anonymous),
+                   "guest": bool(record.guest),
+                   "messaged": bool(record.messaged),
+                   "collected": len(collected)}
+        self.person_found.emit(json.dumps(payload, ensure_ascii=False))
+        if self._tracer is not None:
+            self._tracer.note({"type": "person_collected", **payload})
 
     # ── main execution loop ──────────────────────────────────────
     async def execute(self, scroll_parser: ScrollParser | None = None) -> None:

@@ -105,3 +105,19 @@
 .row-actions button.btn-row-danger:hover {
   background: var(--red-dim); color: var(--red); border-color: var(--red);
 }
+
+
+/* A row that was just collected during Scroll & Parse flashes green so the
+   new entry is immediately noticeable in the live-updating list. */
+@keyframes rowFlash {
+  0%   { background: rgba(0, 200, 83, 0.55); }
+  100% { background: transparent; }
+}
+
+tr.row-flash {
+  animation: rowFlash 1.5s ease-out;
+}
+
+tr.row-flash td:first-child {
+  box-shadow: inset 3px 0 0 var(--green, #00c853);
+}

@@ -223,6 +223,36 @@ const UserTable = {
     LogConsole.log(`👤 Manual message: ${nick}`, 'info');
   },
 
+  /**
+   * React to the backend's person_found signal: a person was just collected
+   * mid-scroll. Briefly flash their row so the new entry is noticeable.
+   */
+  onPersonFound(payloadJson) {
+    let p = null;
+    try { p = JSON.parse(payloadJson || 'null'); } catch (e) { p = null; }
+    if (!p || !p.nick) return;
+    this._flashNick = p.nick;
+    // The table is re-rendered by users_updated right after this signal, so
+    // flash on the next frame once the new row actually exists.
+    requestAnimationFrame(() => this.flashRow(p.nick));
+  },
+
+  /** Briefly highlight one row by nickname. */
+  flashRow(nick) {
+    const tbody = document.getElementById('userTableBody');
+    if (!tbody) return;
+    const cb = tbody.querySelector(`input[data-nick="${CSS.escape(nick)}"]`);
+    const row = cb ? cb.closest('tr')
+                   : Array.from(tbody.querySelectorAll('tr')).find(
+                       (tr) => tr.textContent.includes(nick));
+    if (!row) return;
+    row.classList.remove('row-flash');
+    void row.offsetWidth;            // restart the animation
+    row.classList.add('row-flash');
+    row.scrollIntoView({ block: 'nearest' });
+    setTimeout(() => row.classList.remove('row-flash'), 1600);
+  },
+
   /** React to the backend's users_deleted signal. */
   onDeleted(nicksJson) {
     try {

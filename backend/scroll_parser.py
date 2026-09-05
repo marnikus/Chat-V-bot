@@ -18,6 +18,8 @@ import logging
 from dataclasses import dataclass, field
 
 from backend.cdp_client import CDPClient
+from backend.dom_highlight import COLOR_COLLECT, build_highlight_probe
+from backend.dom_probe import MATCH_EXACT
 from backend.person_filter import PersonFilter, sort_people
 from backend.user_memory import UserRecord
 
@@ -83,6 +85,12 @@ class ScrollParser:
                  stall_threshold: int = 3, max_scrolls: int = 50,
                  load_timeout_ms: int = 2500, poll_ms: int = 150,
                  person_filter: PersonFilter | None = None,
+                 person_selector: str = "user-item",
+                 nick_selector: str = ".primary-text",
+                 highlight_enabled: bool = True,
+                 highlight_ms: int = 900,
+                 confirm_pause_ms: int = 500,
+                 on_collect=None,
                  log_cb=None):
         self._cdp = cdp
         self._criteria = criteria
@@ -94,6 +102,14 @@ class ScrollParser:
         self._load_timeout_ms = load_timeout_ms
         self._poll_ms = poll_ms
         self._filter = person_filter
+        self._person_sel = person_selector
+        self._nick_sel = nick_selector
+        self._highlight_enabled = bool(highlight_enabled)
+        self._highlight_ms = max(0, int(highlight_ms))
+        self._confirm_pause_ms = max(0, int(confirm_pause_ms))
+        #: async callback invoked right after each person is collected, so the
+        #: UI list can refresh immediately instead of at the end of the run
+        self._on_collect = on_collect
         self.known_nicks: set[str] = set()
         self._log_cb = log_cb
 
@@ -143,6 +159,33 @@ class ScrollParser:
                 "registered": bool(item.get("registered")),
                 "anonymous": bool(item.get("anonymous"))}
 
+    async def _confirm_person(self, nick: str) -> bool:
+        """Draw a GREEN overlay on the person that just matched the filter.
+
+        Pure visual confirmation: it never clicks and never scrolls the
+        viewport (that would corrupt the parser's scroll tracking).
+        """
+        if not self._highlight_enabled:
+            return False
+        try:
+            raw = await self._cdp.evaluate(build_highlight_probe(
+                selector=self._person_sel,
+                label_selector=self._nick_sel or None,
+                match_text=nick,
+                match_mode=MATCH_EXACT,
+                color=COLOR_COLLECT,
+                caption="MATCH",
+                highlight_ms=self._highlight_ms,
+            ))
+        except Exception as exc:
+            log.warning("Highlight probe failed for %s: %s", nick, exc)
+            return False
+        try:
+            res = json.loads(raw) if raw else None
+        except (json.JSONDecodeError, TypeError):
+            res = None
+        return bool(res and res.get("highlighted"))
+
     async def _do_scroll(self) -> bool:
         """Dispatch a mouseWheel event on the viewport center."""
         vp = await self._cdp.get_element_rect(self._vp_sel)
@@ -188,6 +231,18 @@ class ScrollParser:
         self._say(f"⏳ Still nothing new after {self._load_timeout_ms} ms — "
                   "treating as loaded", "info")
         return snap
+
+    async def _notify_collected(self, record, result) -> None:
+        """Tell the caller a person was added, so the UI can refresh now."""
+        if self._on_collect is None:
+            return
+        try:
+            outcome = self._on_collect(record, list(result.collected))
+            if asyncio.iscoroutine(outcome):
+                await outcome
+        except Exception as exc:      # a UI hiccup must never kill the parse
+            log.warning("on_collect callback failed for %s: %s",
+                        record.nick, exc)
 
     # ── the pipeline ─────────────────────────────────────────────
     async def collect(self, progress_cb=None, min_new_users: int = 0,
@@ -239,10 +294,26 @@ class ScrollParser:
                     continue
                 if nick in collected_nicks:          # belt and braces
                     continue
+
+                # Visual confirmation BEFORE adding: show the user exactly
+                # which person was detected, then hold so it can be seen.
+                shown = await self._confirm_person(nick)
+                self._say(
+                    f"  🟢 Match “{nick}” — {verdict.reason}"
+                    + (" — green outline drawn" if shown else ""),
+                    "success")
+                if shown and self._confirm_pause_ms:
+                    await asyncio.sleep(self._confirm_pause_ms / 1000.0)
+
                 collected_nicks.add(nick)
                 record.messaged = nick in known_messaged
                 result.collected.append(record)
-                self._say(f"  ✅ Collected “{nick}” — {verdict.reason}", "success")
+                self._say(f"  ✅ Added “{nick}” to the list "
+                          f"({len(result.collected)} collected)", "success")
+
+                # Refresh the UI immediately — do not wait for the scroll
+                # cycle to finish.
+                await self._notify_collected(record, result)
 
             if progress_cb:
                 progress_cb(scroll_i + 1, len(result.all_people), new_this_scroll)

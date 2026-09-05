@@ -134,6 +134,12 @@ function setupBridgeListeners() {
     UserTable.onDeleted(nicksJson);
   });
 
+  // live collection: a person just matched the filter during Scroll & Parse.
+  // users_updated fires right after, so the row exists when we flash it.
+  b.person_found.connect((payload) => {
+    UserTable.onPersonFound(payload);
+  });
+
   b.stats_updated.connect((json) => {
     const s = JSON.parse(json);
     document.getElementById('statTotal').textContent = s.total || 0;

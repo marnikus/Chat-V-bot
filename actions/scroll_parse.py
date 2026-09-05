@@ -37,6 +37,11 @@ class ScrollParse(BaseAction):
                  "cdk-virtual-scroll-viewport.users-list-viewport",
                  load_timeout_ms: int = 2500, stall_threshold: int = 3,
                  min_new_users: int = 1,
+                 person_selector: str = "user-item",
+                 nick_selector: str = ".primary-text",
+                 highlight_enabled: bool = True,
+                 highlight_ms: int = 900,
+                 confirm_pause_ms: int = 500,
                  filter_female: str = YES, filter_registered: str = NO,
                  filter_guest: str = YES, filter_anonymous: str = NO,
                  use_panel_filters: bool = False,
@@ -49,6 +54,11 @@ class ScrollParse(BaseAction):
         self.load_timeout_ms = int(load_timeout_ms)
         self.stall_threshold = int(stall_threshold)
         self.min_new_users = max(0, int(min_new_users))
+        self.person_selector = person_selector
+        self.nick_selector = nick_selector
+        self.highlight_enabled = bool(highlight_enabled)
+        self.highlight_ms = max(0, int(highlight_ms))
+        self.confirm_pause_ms = max(0, int(confirm_pause_ms))
         # Tri-state filter rules ("any" | "yes" | "no") — stored as plain block
         # params so they round-trip through the preset machinery.
         self.filter_female = normalize(filter_female, YES)
@@ -70,7 +80,7 @@ class ScrollParse(BaseAction):
         )
 
     def build_parser(self, cdp: CDPClient, panel_criteria=None,
-                     log_cb=None) -> ScrollParser:
+                     log_cb=None, on_collect=None) -> ScrollParser:
         return ScrollParser(
             cdp=cdp,
             criteria=panel_criteria if self.use_panel_filters else None,
@@ -81,13 +91,20 @@ class ScrollParse(BaseAction):
             max_scrolls=self.max_scrolls,
             load_timeout_ms=self.load_timeout_ms,
             person_filter=self.build_filter(panel_criteria),
+            person_selector=self.person_selector,
+            nick_selector=self.nick_selector,
+            highlight_enabled=self.highlight_enabled,
+            highlight_ms=self.highlight_ms,
+            confirm_pause_ms=self.confirm_pause_ms,
+            on_collect=on_collect,
             log_cb=log_cb,
         )
 
     # ── the pipeline ─────────────────────────────────────────────
     async def run_pipeline(self, cdp: CDPClient, engine: Optional[object] = None,
                            panel_criteria=None,
-                           known_messaged: set | None = None) -> CollectResult:
+                           known_messaged: set | None = None,
+                           on_collect=None) -> CollectResult:
         """Run scroll → filter → collect and return the ordered people."""
         def say(message: str, level: str = "info") -> None:
             if engine is not None:
@@ -96,7 +113,11 @@ class ScrollParse(BaseAction):
         say(f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
             f"(max {self.max_scrolls} scrolls, {self.scroll_pause_ms} ms pause)",
             "info")
-        parser = self.build_parser(cdp, panel_criteria, log_cb=say)
+        # Prefer the engine's own hook so the user table refreshes live.
+        if on_collect is None and engine is not None:
+            on_collect = getattr(engine, "person_collected", None)
+        parser = self.build_parser(cdp, panel_criteria, log_cb=say,
+                                   on_collect=on_collect)
         result = await parser.collect(min_new_users=self.min_new_users,
                                       known_messaged=known_messaged or set())
         self.last_result = result
@@ -141,6 +162,16 @@ class ScrollParse(BaseAction):
                                 "label": "Scrolls with no new people = end"}
         s["min_new_users"] = {"type": "number", "default": 1,
                               "label": "Finish after N new un-messaged (0 = all)"}
+        s["person_selector"] = {"type": "text", "default": "user-item",
+                                "label": "Person row selector (CSS)"}
+        s["nick_selector"] = {"type": "text", "default": ".primary-text",
+                              "label": "Nickname element inside (CSS)"}
+        s["highlight_enabled"] = {"type": "checkbox", "default": True,
+                                  "label": "Highlight each detected person"}
+        s["highlight_ms"] = {"type": "number", "default": 900,
+                             "label": "Highlight duration (ms)"}
+        s["confirm_pause_ms"] = {"type": "number", "default": 500,
+                                 "label": "Pause after detecting a person (ms)"}
         choices = [ANY, YES, NO]
         s["filter_female"] = {"type": "select", "options": choices,
                               "default": YES, "label": "Female"}

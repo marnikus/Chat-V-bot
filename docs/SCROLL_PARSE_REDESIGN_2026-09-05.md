@@ -215,6 +215,37 @@ person row, and the new-tab confirmation.
 
 ---
 
+## 3.1 Follow-up fixes (same day)
+
+**BUG A — no visual confirmation when a person was detected.** `collect()`
+appended a passing person immediately, with only a log line. It now, per person:
+draws a **GREEN** (`#00c853`) `MATCH` outline via the new
+`build_highlight_probe()`, holds for `confirm_pause_ms` (default 500 ms, user
+configurable), and only then adds them. The probe is deliberately inert — no
+click, and no `scrollIntoView`, since moving the viewport mid-parse would
+corrupt the parser's scroll tracking. A failing highlight never blocks
+collection.
+
+**BUG B — the list did not refresh until the run ended.** `_refresh_users()`
+(the only emitter of `users_updated`) was called on connect/delete/clear only,
+and the engine upserted people *after* the pipeline returned. New chain:
+
+```
+ScrollParser.on_collect(record, collected)      # per person, mid-scroll
+  → ActionEngine.person_collected()             # upsert + emit
+    → person_found signal → Bridge._on_person_found()
+      → person_found (UI) + _refresh_users() → users_updated
+        → UserTable.render() + flashRow()       # green row flash
+```
+
+Both the parser callback and the engine hook are exception-guarded, so a UI or
+storage failure can never abort a scroll.
+
+New block params (all preset-storable): `highlight_enabled`, `highlight_ms`,
+`confirm_pause_ms`, `person_selector`, `nick_selector`.
+
+---
+
 ## 4. Backwards compatibility
 
 * Old presets lacking the new keys get the constructor defaults.
