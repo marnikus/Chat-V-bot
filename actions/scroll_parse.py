@@ -11,10 +11,11 @@ whose work happened in the engine):
   STEP 3  order the collected list A–Z with not-yet-messaged people first, and
           finish as soon as `min_new_users` new un-messaged people are found.
 
-Before any of that, the optional *backlog guard* (`skip_if_backlog`) skips the
-whole collection when at least `backlog_threshold` un-messaged people are
-already in the list — there is no point harvesting more while a pile is waiting.
-A skipped run still hands the existing backlog to the rest of the stack.
+The optional *scroll-only* mode (`scroll_only`) turns STEP 2 inside out: instead
+of adding new people it scrolls hunting for someone who is ALREADY in the list
+and not yet messaged, stops the scroll on the first one that passes the filter,
+and writes nothing. When nobody is waiting it collects new people as usual, so
+running the stack in a loop drains the backlog and then resumes harvesting.
 
 The people it collects become the engine's messaging queue, which STEP 4
 (`CLICK_USER`) then works through.
@@ -48,12 +49,15 @@ class ScrollParse(BaseAction):
                  highlight_ms: int = 900,
                  confirm_pause_ms: int = 500,
                  purge_rejected: bool = True,
-                 skip_if_backlog: bool = False,
-                 backlog_threshold: int = 5,
+                 scroll_only: bool = False,
                  filter_female: str = YES, filter_registered: str = NO,
                  filter_guest: str = YES, filter_anonymous: str = NO,
-                 use_panel_filters: bool = False,
                  pre_delay_ms: int = 300, **kw):
+        # Retired settings. Accepted so old presets still load, then dropped
+        # so they stop being written back by to_dict().
+        for dead in ("use_panel_filters", "skip_if_backlog",
+                     "backlog_threshold"):
+            kw.pop(dead, None)
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
         self.max_scrolls = int(max_scrolls)
         self.scroll_pause_ms = int(scroll_pause_ms)
@@ -70,29 +74,34 @@ class ScrollParse(BaseAction):
         # Destroy stored records for people confirmed NOT to pass the filter,
         # so a re-run can never resurrect them.
         self.purge_rejected = bool(purge_rejected)
-        # Backlog guard: do not collect NEW people while at least
-        # `backlog_threshold` un-messaged people are already in the list.
-        self.skip_if_backlog = bool(skip_if_backlog)
-        # A threshold of 0 with the guard on would block every run forever.
-        self.backlog_threshold = max(1, int(backlog_threshold or 1))
+        # Scroll-only / seek mode: never add new people; instead scroll the
+        # page hunting for someone already in the list who is not yet
+        # messaged. Falls back to normal collection when nobody is waiting.
+        self.scroll_only = bool(scroll_only)
         # Tri-state filter rules ("any" | "yes" | "no") — stored as plain block
         # params so they round-trip through the preset machinery.
         self.filter_female = normalize(filter_female, YES)
         self.filter_registered = normalize(filter_registered, NO)
         self.filter_guest = normalize(filter_guest, YES)
         self.filter_anonymous = normalize(filter_anonymous, NO)
-        self.use_panel_filters = bool(use_panel_filters)
         #: last pipeline result, read by the engine to build its queue
         self.last_result: Optional[CollectResult] = None
 
     # ── collaborators ────────────────────────────────────────────
     def build_filter(self, panel_criteria=None) -> PersonFilter:
+        """Build the person filter from this block's own four rules.
+
+        :param panel_criteria: accepted for call-compatibility and IGNORED.
+            The global Filter-panel criteria used to be applied on top of the
+            block's rules, which meant two sources of truth for one decision.
+            The four selects below are now the only ones.
+        """
         return PersonFilter(
             female=self.filter_female,
             registered=self.filter_registered,
             guest=self.filter_guest,
             anonymous=self.filter_anonymous,
-            panel_criteria=panel_criteria if self.use_panel_filters else None,
+            panel_criteria=None,
         )
 
     def build_parser(self, cdp: CDPClient, panel_criteria=None,
@@ -100,7 +109,7 @@ class ScrollParse(BaseAction):
                      should_stop=None) -> ScrollParser:
         return ScrollParser(
             cdp=cdp,
-            criteria=panel_criteria if self.use_panel_filters else None,
+            criteria=None,          # panel criteria intentionally not applied
             viewport_sel=self.viewport_selector,
             scroll_dy=self.scroll_delta_y,
             pause_ms=self.scroll_pause_ms,
@@ -120,22 +129,22 @@ class ScrollParse(BaseAction):
         )
 
     @staticmethod
-    async def _read_backlog(engine) -> int:
-        """Ask the engine how many un-messaged people are already waiting.
+    async def _read_unmessaged(engine) -> set:
+        """Nicks of people already in the list who have not been messaged.
 
-        Fails open (returns 0 → collect) so a counting problem can never
-        silently stop the block from working.
+        Fails open (empty set → normal collection) so a read problem can never
+        leave the block doing nothing at all.
         """
         if engine is None:
-            return 0
-        counter = getattr(engine, "backlog_count", None)
-        if counter is None:
-            return 0
+            return set()
+        reader = getattr(engine, "unmessaged_nicks", None)
+        if reader is None:
+            return set()
         try:
-            return int(await counter())
+            return set(await reader())
         except Exception as exc:
-            log.warning("Backlog count failed (collecting anyway): %s", exc)
-            return 0
+            log.warning("Un-messaged read failed (collecting instead): %s", exc)
+            return set()
 
     # ── the pipeline ─────────────────────────────────────────────
     async def run_pipeline(self, cdp: CDPClient, engine: Optional[object] = None,
@@ -143,32 +152,34 @@ class ScrollParse(BaseAction):
                            known_messaged: set | None = None,
                            on_collect=None, on_reject=None,
                            should_stop=None,
-                           backlog: int | None = None) -> CollectResult:
+                           seek_nicks: set | None = None) -> CollectResult:
         """Run scroll → filter → collect and return the ordered people.
 
-        :param backlog: number of un-messaged people already in the list. When
-            omitted it is read from the engine. Used by the backlog guard.
+        :param panel_criteria: accepted for call-compatibility and ignored.
+        :param seek_nicks: scroll-only targets. When omitted they are read
+            from the engine's People Memory.
         """
         def say(message: str, level: str = "info") -> None:
             if engine is not None:
                 engine.report(message, level)
 
-        # ── backlog guard (STEP 0) ───────────────────────────────
-        # Checked BEFORE any scrolling: the whole point is to avoid the work.
-        if self.skip_if_backlog:
-            if backlog is None:
-                backlog = await self._read_backlog(engine)
-            if backlog >= self.backlog_threshold:
-                say(f"⏸ Backlog guard: {backlog} un-messaged person(s) in the "
-                    f"list ≥ threshold {self.backlog_threshold} — skipping "
-                    "collection, no new people will be added", "warn")
-                say("   Work through the backlog, or lower/disable the guard "
-                    "to collect more.", "info")
-                result = CollectResult(skipped=True, backlog=backlog)
-                self.last_result = result
-                return result
-            say(f"✅ Backlog guard: {backlog} un-messaged person(s) < threshold "
-                f"{self.backlog_threshold} — collecting", "info")
+        # ── mode decision (STEP 0) ───────────────────────────────
+        # Scroll-only: hunt for someone already in the list rather than
+        # adding anybody. An empty target set falls through to normal
+        # collection — the mode is not a permanent off-switch.
+        if self.scroll_only:
+            if seek_nicks is None:
+                seek_nicks = await self._read_unmessaged(engine)
+            if seek_nicks:
+                say(f"🔎 Scroll-only mode: {len(seek_nicks)} un-messaged "
+                    "person(s) in the list — searching the page for one of "
+                    "them, no new people will be added", "warn")
+            else:
+                say("🔎 Scroll-only mode: no un-messaged people in the list "
+                    "— collecting new people as usual", "info")
+                seek_nicks = None
+        else:
+            seek_nicks = None
 
         say(f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
             f"(max {self.max_scrolls} scrolls, {self.scroll_pause_ms} ms pause)",
@@ -185,8 +196,19 @@ class ScrollParse(BaseAction):
                                    on_collect=on_collect, on_reject=on_reject,
                                    should_stop=should_stop)
         result = await parser.collect(min_new_users=self.min_new_users,
-                                      known_messaged=known_messaged or set())
+                                      known_messaged=known_messaged or set(),
+                                      seek_nicks=seek_nicks)
         self.last_result = result
+
+        if result.seeking:
+            if result.found is not None:
+                say(f"⏹ Scroll-only: stopping the scroll at “{result.found.nick}”"
+                    " — no new people were added", "success")
+            elif not result.stopped:
+                say(f"⚠ Scroll-only: reached the end of the list, none of the "
+                    f"{len(seek_nicks or ())} un-messaged people are on the "
+                    "page", "warn")
+            return result
 
         if result.collected:
             preview = ", ".join(
@@ -203,9 +225,11 @@ class ScrollParse(BaseAction):
         await self.pre_delay()
         panel = getattr(engine, "criteria", None) if engine else None
         result = await self.run_pipeline(cdp, engine, panel_criteria=panel)
-        if result.skipped:
-            # The guard firing is the block doing its job, not a failure.
-            return ActionResult.OK
+        if result.seeking and not result.collected:
+            if engine:
+                engine.report("⚠ Scroll-only: no un-messaged person from the "
+                              "list is currently on the page", "warn")
+            return ActionResult.FAIL
         if not result.collected:
             if engine:
                 engine.report("⚠ No person matched the filter criteria", "warn")
@@ -243,11 +267,10 @@ class ScrollParse(BaseAction):
                                  "label": "Pause after detecting a person (ms)"}
         s["purge_rejected"] = {"type": "checkbox", "default": True,
                                "label": "Remove people that fail the filter"}
-        s["skip_if_backlog"] = {"type": "checkbox", "default": False,
-                                "label": "Don't add new people while a backlog "
-                                         "exists"}
-        s["backlog_threshold"] = {"type": "number", "default": 5,
-                                  "label": "…if at least N un-messaged in list"}
+        s["scroll_only"] = {
+            "type": "checkbox", "default": False,
+            "label": "Only scroll, no people adding (find existing "
+                     "un-messaged person)"}
         choices = [ANY, YES, NO]
         s["filter_female"] = {"type": "select", "options": choices,
                               "default": YES, "label": "Female"}
@@ -257,6 +280,4 @@ class ScrollParse(BaseAction):
                              "default": YES, "label": "Guest"}
         s["filter_anonymous"] = {"type": "select", "options": choices,
                                  "default": NO, "label": "Anonymous"}
-        s["use_panel_filters"] = {"type": "checkbox", "default": False,
-                                  "label": "Also apply Filter panel criteria"}
         return s

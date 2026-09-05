@@ -162,21 +162,18 @@ class ActionEngine(QObject):
         if self._tracer is not None:
             self._tracer.note({"type": "person_collected", **payload})
 
-    async def backlog_count(self) -> int:
-        """How many un-messaged people are already in the list.
+    async def unmessaged_nicks(self) -> set[str]:
+        """Nicks already in the list that have not been messaged yet.
 
-        Used by the Scroll & Parse backlog guard. Fails open (0 → collect) so
-        a counting problem can never silently stop collection.
+        Used by Scroll & Parse's scroll-only mode. Fails open (empty set →
+        normal collection) so a read problem can never leave the block idle.
         """
         try:
-            counter = getattr(self._memory, "count_unmessaged", None)
-            if counter is not None:
-                return int(await counter())
-            return len([u for u in await self._memory.get_all()
-                        if not u.messaged])
+            return {u.nick for u in await self._memory.get_all()
+                    if not u.messaged}
         except Exception as exc:
-            log.warning("Backlog count failed (collecting anyway): %s", exc)
-            return 0
+            log.warning("Un-messaged read failed (collecting instead): %s", exc)
+            return set()
 
     def is_stopping(self) -> bool:
         """Predicate handed to long-running phases so Stop is honoured."""
@@ -335,10 +332,15 @@ class ActionEngine(QObject):
                 await self._memory.upsert_user(person)
             except Exception as exc:
                 log.warning("upsert failed for %s: %s", person.nick, exc)
-        if result.skipped:
-            self.log_msg.emit(
-                f"⏸ Scroll & Parse skipped by the backlog guard "
-                f"({result.backlog} un-messaged already in the list)")
+        if result.seeking:
+            if result.found is not None:
+                self.log_msg.emit(
+                    f"🎯 Scroll-only: found “{result.found.nick}” on the page "
+                    "— no new people were added")
+            else:
+                self.log_msg.emit(
+                    "🔎 Scroll-only: no un-messaged person from the list is "
+                    "currently on the page")
         else:
             summary = (f"📜 Seen {len(result.all_people)} person(s), "
                        f"{len(result.collected)} matched the filter")
@@ -352,8 +354,8 @@ class ActionEngine(QObject):
                            "reached_end": result.reached_end,
                            "stopped_early": result.stopped_early,
                            "stopped": result.stopped,
-                           "skipped": result.skipped,
-                           "backlog": result.backlog,
+                           "seeking": result.seeking,
+                           "found": getattr(result.found, "nick", None),
                            "purged": len(result.purged)})
         self.step_complete.emit(block.display_name, "—")
         self._ctx = {}
@@ -361,14 +363,6 @@ class ActionEngine(QObject):
             self.debug_msg.emit("      ⏹ Collection stopped by user — not "
                                 "queueing anyone from this run", "warn")
             return []
-        if result.skipped:
-            # The guard blocked ADDING people — the ones already waiting must
-            # still be worked through, or enabling it would stall the stack.
-            queue = await self._memory.get_queue()
-            self.log_msg.emit(
-                f"⏸ Collection skipped (backlog {result.backlog}) — working "
-                f"through {len(queue)} person(s) already in the list")
-            return queue
         return [p for p in result.collected if not p.messaged]
 
     async def _execute_for_user(self, user: UserRecord, has_skip: bool) -> bool:
