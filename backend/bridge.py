@@ -36,6 +36,7 @@ class Bridge(QObject):
     person_removed = Signal(str)             # JSON: one purged (filtered-out) person
     stack_loaded = Signal(str, str)          # name, JSON blocks
     grid_layout_changed = Signal(str)        # JSON canonical grid payload
+    grid_layout_persisted = Signal(bool)     # close-time save acknowledgment
     template_loaded = Signal(str, str)       # name, body
 
     def __init__(self, cdp, memory, criteria, engine, config,
@@ -319,9 +320,13 @@ class Bridge(QObject):
         if err:
             log.warning("Grid layout rejected: %s", err)
             self.log_message.emit(f"⚠ Grid layout not saved: {err}", "warn")
+            self.grid_layout_persisted.emit(False)
             return False
         self._config.set_state(grid_layout=payload)
         self._push_global("grid", payload)
+        # Emit only after config.json and the global history have both been
+        # updated. MainWindow uses this as the close-time flush acknowledgment.
+        self.grid_layout_persisted.emit(True)
         return True
 
     @Slot(result=str)

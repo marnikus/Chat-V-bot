@@ -33,6 +33,10 @@ class MainWindow(QMainWindow):
     def __init__(self, config: ConfigManager | None = None):
         super().__init__()
         self._config = config
+        self._bridge = None
+        self._close_requested = False
+        self._close_finished = False
+        self._layout_flush_pending = False
         self.setWindowTitle("🤖 ChatBot Automator")
         self.resize(1400, 900)
         self._view = QWebEngineView(self)
@@ -44,6 +48,17 @@ class MainWindow(QMainWindow):
         self._watchdog.setSingleShot(True)
         self._watchdog.setInterval(3000)
         self._watchdog.timeout.connect(self._force_quit)
+        self._layout_flush_timer = QTimer(self)
+        self._layout_flush_timer.setSingleShot(True)
+        self._layout_flush_timer.setInterval(1000)
+        self._layout_flush_timer.timeout.connect(self._on_layout_flush_timeout)
+
+    def set_bridge(self, bridge):
+        """Attach the WebChannel bridge used by the close-time grid flush."""
+        self._bridge = bridge
+        persisted = getattr(bridge, "grid_layout_persisted", None)
+        if persisted is not None:
+            persisted.connect(self._on_grid_layout_persisted)
 
     def _restore_window_geometry(self):
         """Restore the last normal position/size when it is valid."""
@@ -74,12 +89,76 @@ class MainWindow(QMainWindow):
             "height": int(geometry.height()),
         })
 
+    def _request_grid_flush(self):
+        """Ask the live WebEngine page to persist its final grid tree."""
+        if not self._bridge or not self._view or not self._view.page():
+            self._finish_close()
+            return
+        self._layout_flush_pending = True
+        self._layout_flush_timer.start()
+        script = """
+            (function () {
+                try {
+                    if (window.SashGrid &&
+                        typeof window.SashGrid.flushPersistence === 'function') {
+                        return !!window.SashGrid.flushPersistence();
+                    }
+                } catch (e) {}
+                return false;
+            })();
+        """
+        try:
+            self._view.page().runJavaScript(
+                script, self._on_grid_flush_dispatched)
+        except Exception as exc:
+            log.warning("Grid close flush could not be dispatched: %s", exc)
+            self._finish_close()
+
+    def _on_grid_flush_dispatched(self, expects_ack):
+        """Finish immediately only when JS has no backend save to await."""
+        if self._close_finished or not self._layout_flush_pending:
+            return
+        if expects_ack is not True:
+            self._finish_close()
+
+    def _on_grid_layout_persisted(self, success):
+        """Bridge acknowledgment that the final grid payload reached config."""
+        if not self._layout_flush_pending:
+            return
+        if not success:
+            log.warning("Final grid layout was rejected while closing")
+        self._finish_close()
+
+    def _on_layout_flush_timeout(self):
+        if self._layout_flush_pending:
+            log.warning("Timed out waiting for final grid layout save; closing safely")
+            self._finish_close()
+
+    def _finish_close(self):
+        if self._close_finished:
+            return
+        self._layout_flush_pending = False
+        self._layout_flush_timer.stop()
+        self._close_finished = True
+        # Re-enter closeEvent so Qt owns a live close event when it is
+        # accepted. The first close request was intentionally ignored while
+        # the WebEngine save was in flight.
+        self.close()
+
     def closeEvent(self, event):
+        if self._close_finished:
+            event.accept()
+            log.info("Main window closed — shutting down")
+            self.closing.emit()
+            self._watchdog.start()
+            return
+        if self._close_requested:
+            event.ignore()
+            return
+        self._close_requested = True
         self._save_window_geometry()
-        log.info("Main window closed — shutting down")
-        self.closing.emit()
-        self._watchdog.start()
-        event.accept()
+        event.ignore()
+        self._request_grid_flush()
 
     def _force_quit(self):
         log.warning("Shutdown watchdog fired — forcing process exit")
@@ -112,6 +191,7 @@ def main() -> int:
     window = MainWindow(config=config)
     bridge = Bridge(cdp=cdp, memory=memory, criteria=criteria,
                     engine=engine, config=config)
+    window.set_bridge(bridge)
     channel = QWebChannel()
     channel.registerObject("bridge", bridge)
     window._view.page().setWebChannel(channel)
