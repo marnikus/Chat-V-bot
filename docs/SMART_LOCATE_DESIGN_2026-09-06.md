@@ -263,7 +263,50 @@ current stack byte-identical.
 4. **Internal user ids** — optional later feature: record the users XHR/WS
    payload once, store `id` next to each nick, and jump straight by index.
 
-## 6. Suggested implementation slice (when approved)
+## 7. FAQ — "can't we just create a fake row and click it directly?"
+
+Asked: *"Is it impossible to create our own item identical to the real ones,
+fill it with the needed unique info (User name or Id if present), then click
+this fake item directly — no searching or scrolling?"*
+
+**No — a forged row can never open a real chat.** This is not an effort
+limit, it is how the page is built. Verified facts:
+
+* **The rows carry no identity.** No `user-item` / `container-item` /
+  `.user-container` in the saved HTML has an `id` or `data-*` attribute,
+  and there is no `"id"` / `user_id` anywhere in the users-list region.
+  The only unique text is the display nick; the avatar/badge are CSS
+  classes. So there is nothing in the DOM to copy into a "fake" that the
+  app could act on.
+* **Behavior is bound to the app's data, not the DOM.** The Angular click
+  handler that opens a private chat is compiled per rendered row against
+  that row's *user object from the app's own in-memory list*
+  (Angular `(click)`/`cdkVirtualFor`), not against the text on screen.
+  A node we inject is outside Angular's view — it has no component
+  binding, so clicking it runs nothing. Even *cloning a real row* and
+  clicking the clone does nothing (listeners are attached to the original
+  element instances), and editing a real row's text doesn't change which
+  user its handler holds.
+* **Production Angular build** (hashed `main-*.js`, no `ng` debug global),
+  so there is no sanctioned handle to reach into the component and call
+  `openChat` with a forged user object — and even then we have no id to
+  forge (see first bullet), so the server would reject/ignore it.
+
+**What this means for the design:** the only click that opens a chat is a
+real UI click on a *real row that the app rendered for the target user*.
+That is precisely what Smart Locate provides — make the app itself render
+the target's real row (site's own Поиск box = the app's built-in
+"direct to user" mechanism; failing that a few `scrollTop` jumps), then
+click it with the existing visual confirmation. Nothing in this design
+injects, clones, or fabricates DOM.
+
+**The one true "direct, no page" path would be speaking the site's own
+protocol** (websocket/API) with a captured user id — that is outside UI
+automation, depends on internals that are not visible in the saved HTML,
+and is deliberately out of scope (no network sniffing without explicit
+user approval; the feature list in §3.4 already says so).
+
+## 8. Suggested implementation slice (when approved)
 
 1. `backend/page_locator.py`: geometry probes, jump, search injection,
    binary search, stride scan — each unit-testable against a fake CDP that
