@@ -37,7 +37,9 @@
   const WINDOW_TITLES = Object.fromEntries(WINDOWS.map((w) => [w.id, w.title]));
 
   const MAX_DEPTH = 12;
-  const MIN_SIZE = 0.5; // percent — a child may never take (near) zero space
+  // Persisted floor. The DOM layer additionally clamps to MIN_PX because
+  // the usable percentage depends on the current window dimensions.
+  const MIN_SIZE = 4; // percent — prevents a child from becoming a sliver
 
   // ── constructors ─────────────────────────────────────────────
 
@@ -122,15 +124,24 @@
 
   // ── sizes ───────────────────────────────────────────────────
 
-  /** Clamp each size ≥ MIN_SIZE and scale so the array sums to 100. */
+  /** Clamp every child to MIN_SIZE and scale the remaining space to 100. */
   function normalizeSizes(sizes) {
     if (!Array.isArray(sizes) || !sizes.length) return sizes;
-    const clamped = sizes.map((s) => {
+    const base = sizes.map((s) => {
       const n = Number(s);
       return Number.isFinite(n) && n > 0 ? n : MIN_SIZE;
     });
-    const sum = clamped.reduce((a, b) => a + b, 0) || 1;
-    return clamped.map((s) => Math.max(MIN_SIZE, (s / sum) * 100));
+    const sum = base.reduce((a, b) => a + b, 0) || 1;
+    if (Math.abs(sum - 100) < 1e-9 && base.every((s) => s >= MIN_SIZE)) return base;
+    const scaled = base.map((s) => (s / sum) * 100);
+    if (scaled.every((s) => s >= MIN_SIZE)) return scaled;
+    const floorTotal = MIN_SIZE * base.length;
+    if (floorTotal >= 100) return base.map(() => 100 / base.length);
+    const excess = base.map((s) => Math.max(0, s - MIN_SIZE));
+    const excessTotal = excess.reduce((a, b) => a + b, 0);
+    const remaining = 100 - floorTotal;
+    if (!excessTotal) return base.map(() => 100 / base.length);
+    return excess.map((s) => MIN_SIZE + (s / excessTotal) * remaining);
   }
 
   // ── traversal ────────────────────────────────────────────────
@@ -227,6 +238,7 @@
     p.children.splice(index, 0, leaf(newId));
     p.sizes.splice(index, 0, half);
     p.sizes[donorIdx >= index ? donorIdx + 1 : donorIdx] = half;
+    p.sizes = normalizeSizes(p.sizes);
     return root;
   }
 
@@ -308,6 +320,7 @@
     p.children.splice(index, 0, leaf(newId));
     p.sizes.splice(index, 0, half);
     p.sizes[donorIdx >= index ? donorIdx + 1 : donorIdx] = half;
+    p.sizes = normalizeSizes(p.sizes);
     return root;
   }
 
@@ -432,6 +445,7 @@
       lca.children.splice(insertIdx, 0, leaf(draggedId));
       lca.sizes.splice(insertIdx, 0, half);
       lca.sizes[insertIdx + 1] = half;
+      lca.sizes = normalizeSizes(lca.sizes);
     } else {
       throw new Error('moveWindow: unknown drop kind ' + drop.kind);
     }
@@ -461,7 +475,8 @@
       if (!Array.isArray(node.sizes) || node.sizes.length !== node.children.length)
         return 'sizes must match children';
       for (const s of node.sizes)
-        if (!Number.isFinite(s) || s <= 0) return 'bad size value';
+        if (!Number.isFinite(s) || s < MIN_SIZE)
+          return 'bad size value (panel below minimum size)';
       const sum = node.sizes.reduce((a, b) => a + b, 0);
       if (sum < 99.5 || sum > 100.5) return 'sizes must sum to 100 (got ' + sum + ')';
       for (const c of node.children) {

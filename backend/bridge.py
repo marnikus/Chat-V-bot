@@ -35,6 +35,7 @@ class Bridge(QObject):
     person_found = Signal(str)               # JSON: one newly collected person
     person_removed = Signal(str)             # JSON: one purged (filtered-out) person
     stack_loaded = Signal(str, str)          # name, JSON blocks
+    grid_layout_changed = Signal(str)        # JSON canonical grid payload
     template_loaded = Signal(str, str)       # name, body
 
     def __init__(self, cdp, memory, criteria, engine, config,
@@ -70,126 +71,214 @@ class Bridge(QObject):
         self.person_removed.emit(payload)
         asyncio.ensure_future(self._refresh_users())
 
-    # ── history helpers (Feature #1 Undo/Redo) ───────────────────
-    def _get_history(self) -> tuple[list, int]:
-        """Return (history list, current index) with defaults."""
-        hist = self._config.get_state("stack_history", [])
-        idx = self._config.get_state("stack_history_index", -1)
-        if not isinstance(hist, list):
-            hist = []
-        if not isinstance(idx, int):
-            idx = -1
-        # Normalize: ensure each entry is a list
-        clean_hist = []
-        for entry in hist:
-            if isinstance(entry, list):
-                clean_hist.append(entry)
-        return clean_hist, idx
-
-    def _set_history(self, history: list, index: int, save: bool = True) -> None:
-        """Persist history and index."""
-        # Ensure deep copy and enforce max limit already done by caller
-        self._config.set_state(save=save,
-                               stack_history=history,
-                               stack_history_index=index)
-
+    # ── one global undo history ─────────────────────────────────
+    # Stack edits and grid edits share this timeline.  The old stack/grid
+    # histories are accepted only as a one-time migration source; no new
+    # edit writes either legacy key.
     @staticmethod
-    def _stacks_equal(a: list, b: list) -> bool:
+    def _values_equal(a, b) -> bool:
         try:
             return json.dumps(a, sort_keys=True, ensure_ascii=False) == \
                    json.dumps(b, sort_keys=True, ensure_ascii=False)
         except Exception:
             return a == b
 
-    # ── generic history engine ───────────────────────────────────
-    # Both the action stack and the grid layout need identical semantics
-    # (dedup, truncate-on-branch, 100-step cap). They keep SEPARATE
-    # histories: undoing a window drag must never revert a block edit.
-    def _hist_keys(self, kind: str) -> tuple[str, str]:
-        base = "stack_history" if kind == "stack" else "grid_layout_history"
-        return base, base + "_index"
+    _stacks_equal = _values_equal
+
+    @staticmethod
+    def _history_entry(kind, value):
+        return {"kind": kind, "value": copy.deepcopy(value)}
+
+    def _migrate_global_history(self) -> tuple[list, int]:
+        """Build the global timeline from pre-global-history config once.
+
+        This keeps existing presets usable after the history model changes.
+        The returned list is also written to the new keys so subsequent edits
+        never need the legacy per-surface histories.
+        """
+        raw = self._config.get_state("undo_history", None)
+        if isinstance(raw, list) and raw:
+            history = []
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("kind") == "stack" and isinstance(entry.get("value"), list):
+                    history.append(self._history_entry("stack", entry["value"]))
+                elif entry.get("kind") == "grid" and isinstance(entry.get("value"), str):
+                    canonical, err = self._canonical_grid_payload(entry["value"])
+                    if not err:
+                        history.append(self._history_entry("grid", canonical))
+            index = self._config.get_state("undo_history_index", len(history) - 1)
+            index = index if isinstance(index, int) else len(history) - 1
+            index = max(-1, min(index, len(history) - 1))
+            return history, index
+
+        history = []
+        legacy_stacks = self._config.get_state("stack_history", [])
+        if isinstance(legacy_stacks, list):
+            history.extend(self._history_entry("stack", s)
+                           for s in legacy_stacks if isinstance(s, list))
+        legacy_grids = self._config.get_state("grid_layout_history", [])
+        if isinstance(legacy_grids, list):
+            for grid_value in legacy_grids:
+                if not isinstance(grid_value, str):
+                    continue
+                canonical, err = self._canonical_grid_payload(grid_value)
+                if not err:
+                    history.append(self._history_entry("grid", canonical))
+        grid = self._config.get_state("grid_layout", None)
+        if isinstance(grid, str) and grid:
+            canonical, err = self._canonical_grid_payload(grid)
+            if not err:
+                # A stored grid is a current application state. Add it after
+                # migrated stack entries so it can participate in the next undo.
+                current = history[-1]["value"] if history and history[-1]["kind"] == "grid" else None
+                if canonical != current:
+                    history.append(self._history_entry("grid", canonical))
+                self._config.set_state(grid_layout=canonical)
+        if len(history) > MAX_STACK_HISTORY:
+            history = history[-MAX_STACK_HISTORY:]
+        has_grid = bool(history and history[-1].get("kind") == "grid")
+        legacy_index = self._config.get_state("stack_history_index", -1)
+        if has_grid:
+            index = len(history) - 1
+        elif isinstance(legacy_index, int):
+            index = max(-1, min(legacy_index, len(history) - 1))
+        else:
+            index = len(history) - 1
+        self._config.set_state(undo_history=history,
+                               undo_history_index=index)
+        return history, index
+
+    def _get_global_history(self) -> tuple[list, int]:
+        history, index = self._migrate_global_history()
+        return copy.deepcopy(history), index
+
+    def _set_global_history(self, history: list, index: int) -> None:
+        self._config.set_state(undo_history=copy.deepcopy(history),
+                               undo_history_index=index)
+
+    def _push_global(self, kind: str, value) -> tuple[list, int]:
+        if kind not in ("stack", "grid"):
+            raise ValueError(f"unknown history kind: {kind}")
+        history, index = self._get_global_history()
+        entry = self._history_entry(kind, value)
+        if (0 <= index < len(history) and
+                self._values_equal(history[index], entry)):
+            return history, index
+        if index < len(history) - 1:
+            history = history[:index + 1]
+        history.append(entry)
+        index = len(history) - 1
+        if len(history) > MAX_STACK_HISTORY:
+            overflow = len(history) - MAX_STACK_HISTORY
+            history = history[overflow:]
+            index -= overflow
+        self._set_global_history(history, index)
+        return history, index
+
+    def _get_history(self) -> tuple[list, int]:
+        """Compatibility projection of stack entries from the global history."""
+        history, global_index = self._get_global_history()
+        stacks = [e["value"] for e in history if e.get("kind") == "stack"]
+        stack_index = sum(1 for e in history[:global_index + 1]
+                          if e.get("kind") == "stack") - 1
+        return stacks, max(-1, min(stack_index, len(stacks) - 1))
+
+    def _set_history(self, history: list, index: int, save: bool = True) -> None:
+        """Legacy compatibility; new code must use the global timeline."""
+        entries = [self._history_entry("stack", value)
+                   for value in history if isinstance(value, list)]
+        self._set_global_history(entries, max(-1, min(index, len(entries) - 1)))
 
     def _get_hist(self, kind: str) -> tuple[list, int]:
-        hk, ik = self._hist_keys(kind)
-        hist = self._config.get_state(hk, []) or []
-        idx = self._config.get_state(ik, -1)
-        if not isinstance(hist, list):
-            hist, idx = [], -1
-        if not isinstance(idx, int):
-            idx = len(hist) - 1
-        return hist, max(-1, min(idx, len(hist) - 1))
+        """Compatibility projection used by older integrations and tests."""
+        history, global_index = self._get_global_history()
+        values = [e["value"] for e in history if e.get("kind") == kind]
+        local_index = sum(1 for e in history[:global_index + 1]
+                          if e.get("kind") == kind) - 1
+        return values, max(-1, min(local_index, len(values) - 1))
 
     def _set_hist(self, kind: str, hist: list, idx: int) -> None:
-        hk, ik = self._hist_keys(kind)
-        self._config.set_state(**{hk: hist, ik: idx})
+        # Deliberately not a separate history.  Preserve the API for old
+        # callers by replacing the global timeline with these entries.
+        history = [self._history_entry(kind, value) for value in hist]
+        self._set_global_history(history, max(-1, min(idx, len(history) - 1)))
 
     def _push_hist(self, kind: str, value) -> tuple[list, int]:
-        """Append a snapshot, deduping and capping. Returns (history, index)."""
-        hist, idx = self._get_hist(kind)
-        if not hist:
-            hist = [copy.deepcopy(value)]
-            self._set_hist(kind, hist, 0)
-            return hist, 0
-        if 0 <= idx < len(hist) and self._stacks_equal(hist[idx], value):
-            return hist, idx            # no-op edit
-        if idx < len(hist) - 1:
-            hist = hist[:idx + 1]       # branching discards the redo tail
-        hist.append(copy.deepcopy(value))
-        idx = len(hist) - 1
-        if len(hist) > MAX_STACK_HISTORY:
-            overflow = len(hist) - MAX_STACK_HISTORY
-            hist = hist[overflow:]
-            idx = max(0, idx - overflow)
-        self._set_hist(kind, hist, idx)
-        return hist, idx
+        """Compatibility name that always pushes to the global timeline."""
+        self._push_global(kind, value)
+        return self._get_hist(kind)
 
     # ── grid layout (flexible grid / sash layout) ────────────────
     WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
                   "people", "log"}
+    MIN_GRID_SIZE = 4
+
+    @classmethod
+    def _node_type(cls, node):
+        """Read both spellings, with SashCore's `t` as the canonical one."""
+        return node.get("t", node.get("type")) if isinstance(node, dict) else None
+
+    @classmethod
+    def _normalize_grid_tree(cls, node, depth: int = 0):
+        """Return a canonical `t` tree or an explanatory validation error."""
+        if depth > 12:
+            return None, "tree too deep"
+        if not isinstance(node, dict):
+            return None, "node must be an object"
+        node_type = cls._node_type(node)
+        if node_type == "leaf":
+            if not isinstance(node.get("id"), str) or not node.get("id"):
+                return None, "leaf without id"
+            return {"t": "leaf", "id": node["id"]}, None
+        if node_type != "split":
+            return None, "unknown node type"
+        if node.get("dir") not in ("row", "col"):
+            return None, "bad dir"
+        kids, sizes = node.get("children"), node.get("sizes")
+        if not isinstance(kids, list) or len(kids) < 2:
+            return None, "split needs >=2 children"
+        if not isinstance(sizes, list) or len(sizes) != len(kids):
+            return None, "sizes must match children"
+        clean_sizes = []
+        for size in sizes:
+            if (isinstance(size, bool) or not isinstance(size, (int, float)) or
+                    size < cls.MIN_GRID_SIZE):
+                return None, "bad size value (panel below minimum size)"
+            clean_sizes.append(size)
+        if not 99.5 <= sum(clean_sizes) <= 100.5:
+            return None, "sizes must sum to 100"
+        clean_kids = []
+        for kid in kids:
+            clean, err = cls._normalize_grid_tree(kid, depth + 1)
+            if err:
+                return None, err
+            clean_kids.append(clean)
+        return {"t": "split", "dir": node["dir"],
+                "children": clean_kids, "sizes": clean_sizes}, None
 
     @classmethod
     def _validate_grid_tree(cls, node, depth: int = 0):
-        """Mirror of SashCore.validate — never store a tree we cannot read back."""
-        if depth > 12:
-            return "tree too deep"
-        if not isinstance(node, dict):
-            return "node must be an object"
-        if node.get("type") == "leaf":
-            return None if node.get("id") else "leaf without id"
-        if node.get("type") != "split":
-            return "unknown node type"
-        if node.get("dir") not in ("row", "col"):
-            return "bad dir"
-        kids, sizes = node.get("children"), node.get("sizes")
-        if not isinstance(kids, list) or len(kids) < 2:
-            return "split needs >=2 children"
-        if not isinstance(sizes, list) or len(sizes) != len(kids):
-            return "sizes must match children"
-        for size in sizes:
-            if not isinstance(size, (int, float)) or size <= 0:
-                return "bad size value"
-        if not 99.5 <= sum(sizes) <= 100.5:
-            return "sizes must sum to 100"
-        for kid in kids:
-            err = cls._validate_grid_tree(kid, depth + 1)
-            if err:
-                return err
-        return None
+        """Validate both legacy `type` and current SashCore `t` nodes."""
+        _, err = cls._normalize_grid_tree(node, depth)
+        return err
 
     @classmethod
     def _leaf_ids(cls, node, out=None):
         out = [] if out is None else out
         if isinstance(node, dict):
-            if node.get("type") == "leaf":
+            node_type = cls._node_type(node)
+            if node_type == "leaf":
                 out.append(node.get("id"))
-            else:
+            elif node_type == "split":
                 for kid in node.get("children") or []:
                     cls._leaf_ids(kid, out)
         return out
 
     @classmethod
     def _parse_grid_payload(cls, raw: str):
-        """Return (tree, None) or (None, error)."""
+        """Return (canonical tree, None) or (None, error)."""
         try:
             data = json.loads(raw)
         except Exception as exc:
@@ -198,8 +287,7 @@ class Bridge(QObject):
             return None, "payload must be an object"
         if data.get("v") != 1:
             return None, f"unsupported version {data.get('v')!r}"
-        tree = data.get("tree")
-        err = cls._validate_grid_tree(tree)
+        tree, err = cls._normalize_grid_tree(data.get("tree"))
         if err:
             return None, err
         got = sorted(i for i in cls._leaf_ids(tree) if i)
@@ -207,69 +295,171 @@ class Bridge(QObject):
             return None, "window set mismatch (every window must appear once)"
         return tree, None
 
+    @classmethod
+    def _canonical_grid_payload(cls, raw: str):
+        tree, err = cls._parse_grid_payload(raw)
+        if err:
+            return None, err
+        return json.dumps({"v": 1, "tree": tree}, ensure_ascii=False,
+                          separators=(",", ":")), None
+
     @Slot(result=str)
     def get_grid_layout(self):
-        """Serialized grid tree, or "" when the user has never customised it."""
+        """Serialized canonical grid tree, or empty before first customization."""
         raw = self._config.get_state("grid_layout", None)
-        return raw if isinstance(raw, str) and raw else ""
+        if not isinstance(raw, str) or not raw:
+            return ""
+        payload, err = self._canonical_grid_payload(raw)
+        return payload if not err else ""
 
     @Slot(str, result=bool)
     def save_grid_layout(self, layout_json):
-        """Validate and persist the grid, pushing an undo step."""
-        tree, err = self._parse_grid_payload(layout_json or "")
+        """Validate and persist a grid as one entry in global undo history."""
+        payload, err = self._canonical_grid_payload(layout_json or "")
         if err:
-            # Reject rather than store: a bad tree would brick every start.
             log.warning("Grid layout rejected: %s", err)
             self.log_message.emit(f"⚠ Grid layout not saved: {err}", "warn")
             return False
-        payload = json.dumps({"v": 1, "tree": tree}, ensure_ascii=False)
         self._config.set_state(grid_layout=payload)
-        self._push_hist("grid", payload)
+        self._push_global("grid", payload)
         return True
 
     @Slot(result=str)
     def reset_grid_layout(self):
-        """Restore the default grid with EVERY window visible."""
+        """Restore the default grid with every window visible."""
         payload = json.dumps({"v": 1, "tree": self._default_grid_tree()},
-                             ensure_ascii=False)
+                             ensure_ascii=False, separators=(",", ":"))
         self._config.set_state(grid_layout=payload)
-        self._push_hist("grid", payload)
+        self._push_global("grid", payload)
         self.log_message.emit("↺ Grid layout reset to default "
                               "(all windows visible)", "info")
         return payload
 
+    @classmethod
+    def _legacy_grid_payload(cls, raw):
+        """Render a canonical payload in the old `type` spelling only for
+        callers of the retired compatibility slots. The active UI always uses
+        the canonical `t` payload.
+        """
+        try:
+            data = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return raw
+
+        def convert(node):
+            if not isinstance(node, dict):
+                return node
+            if cls._node_type(node) == "leaf":
+                return {"type": "leaf", "id": node.get("id")}
+            return {"type": "split", "dir": node.get("dir"),
+                    "children": [convert(k) for k in node.get("children", [])],
+                    "sizes": node.get("sizes", [])}
+
+        if isinstance(data, dict) and data.get("v") == 1:
+            data["tree"] = convert(data.get("tree"))
+        return json.dumps(data, ensure_ascii=False)
+
+    # Kept as a compatibility shim for older pages. It delegates to the same
+    # global undo timeline; the page no longer renders grid-specific controls.
     @Slot(result=str)
     def undo_grid_layout(self):
-        hist, idx = self._get_hist("grid")
-        if idx <= 0 or not hist:
-            self.log_message.emit("⚠ Nothing to undo in the grid layout", "warn")
+        raw = self.undo()
+        try:
+            result = json.loads(raw)
+            return (self._legacy_grid_payload(result.get("value", "null"))
+                    if isinstance(result, dict) and result.get("kind") == "grid" else "null")
+        except (TypeError, json.JSONDecodeError):
             return "null"
-        idx -= 1
-        self._set_hist("grid", hist, idx)
-        self._config.set_state(grid_layout=hist[idx])
-        self.log_message.emit("↩ Grid layout undo", "info")
-        return hist[idx]
 
     @Slot(result=str)
     def redo_grid_layout(self):
-        hist, idx = self._get_hist("grid")
-        if idx < 0 or idx >= len(hist) - 1:
-            self.log_message.emit("⚠ Nothing to redo in the grid layout", "warn")
+        raw = self.redo()
+        try:
+            result = json.loads(raw)
+            return (self._legacy_grid_payload(result.get("value", "null"))
+                    if isinstance(result, dict) and result.get("kind") == "grid" else "null")
+        except (TypeError, json.JSONDecodeError):
             return "null"
-        idx += 1
-        self._set_hist("grid", hist, idx)
-        self._config.set_state(grid_layout=hist[idx])
-        self.log_message.emit("↪ Grid layout redo", "info")
-        return hist[idx]
+
+    @Slot(result=str)
+    def get_undo_history(self):
+        history, index = self._get_global_history()
+        return json.dumps({"history": history, "index": index},
+                          ensure_ascii=False)
+
+    @Slot(str, str, result=bool)
+    def push_global_history(self, kind, value_json):
+        """Record a frontend edit in the one global timeline."""
+        if kind == "stack":
+            try:
+                value = json.loads(value_json or "[]")
+            except json.JSONDecodeError:
+                return False
+            if not isinstance(value, list):
+                return False
+        elif kind == "grid":
+            value, err = self._canonical_grid_payload(value_json or "")
+            if err:
+                return False
+        else:
+            return False
+        self._push_global(kind, value)
+        if kind == "grid":
+            self._config.set_state(grid_layout=value)
+        elif kind == "stack":
+            self._config.set_state(last_stack=value, last_stack_preset="")
+        return True
+
+    def _global_result(self, entry, index=None):
+        result = {"kind": entry["kind"], "value": entry["value"]}
+        if index is not None:
+            result["index"] = index
+        return json.dumps(result, ensure_ascii=False)
+
+    def _apply_global_entry(self, entry):
+        if entry["kind"] == "grid":
+            self._config.set_state(grid_layout=entry["value"])
+            self.grid_layout_changed.emit(entry["value"])
+        else:
+            blocks = entry["value"]
+            self._config.set_state(last_stack=blocks, last_stack_preset="")
+            self._engine.load_stack(blocks)
+            self.stack_loaded.emit("", json.dumps(blocks, ensure_ascii=False))
+
+    @Slot(result=str)
+    def undo(self):
+        history, index = self._get_global_history()
+        if index <= 0 or not history:
+            self.log_message.emit("⚠ Nothing to undo", "warn")
+            return "null"
+        index -= 1
+        self._set_global_history(history, index)
+        entry = history[index]
+        self._apply_global_entry(entry)
+        self.log_message.emit("↩ Undo — restored " + entry["kind"], "info")
+        return self._global_result(entry, index)
+
+    @Slot(result=str)
+    def redo(self):
+        history, index = self._get_global_history()
+        if index < 0 or index >= len(history) - 1:
+            self.log_message.emit("⚠ Nothing to redo", "warn")
+            return "null"
+        index += 1
+        self._set_global_history(history, index)
+        entry = history[index]
+        self._apply_global_entry(entry)
+        self.log_message.emit("↪ Redo — restored " + entry["kind"], "info")
+        return self._global_result(entry, index)
 
     @staticmethod
     def _default_grid_tree() -> dict:
         """Mirror of SashCore.defaultTree(): all seven windows, classic order."""
         def leaf(i):
-            return {"type": "leaf", "id": i}
+            return {"t": "leaf", "id": i}
 
         def split(d, kids, sizes):
-            return {"type": "split", "dir": d, "children": kids, "sizes": sizes}
+            return {"t": "split", "dir": d, "children": kids, "sizes": sizes}
 
         return split("col", [
             split("row", [
@@ -281,58 +471,25 @@ class Bridge(QObject):
         ], [46, 24, 30])
 
     def _push_history(self, blocks: list[dict]) -> tuple[list, int]:
-        """Push a stack snapshot to history, handling dedup, truncation, max limit.
-        Returns (new_history, new_index).
-        """
+        """Backward-compatible name; append the stack to global history."""
         if not isinstance(blocks, list):
             return self._get_history()
-        # Normalize enabled field for backward compat
-        norm_blocks = []
-        for b in blocks:
-            if not isinstance(b, dict):
+        normalized = []
+        for block in blocks:
+            if not isinstance(block, dict):
                 continue
-            nb = dict(b)
-            if "enabled" not in nb:
-                nb["enabled"] = True
-            norm_blocks.append(nb)
-
-        history, idx = self._get_history()
-
-        # If history empty, init
-        if not history:
-            history = [copy.deepcopy(norm_blocks)]
-            idx = 0
-            self._set_history(history, idx)
-            return history, idx
-
-        # If current index points to same stack, don't push duplicate
-        if 0 <= idx < len(history):
-            if self._stacks_equal(history[idx], norm_blocks):
-                return history, idx
-
-        # Truncate future if we are not at tip (undo then new edit)
-        if idx < len(history) - 1:
-            history = history[:idx + 1]
-
-        # Append new
-        history.append(copy.deepcopy(norm_blocks))
-        idx = len(history) - 1
-
-        # Enforce max limit
-        if len(history) > MAX_STACK_HISTORY:
-            overflow = len(history) - MAX_STACK_HISTORY
-            history = history[overflow:]
-            idx = max(0, idx - overflow)
-
-        self._set_history(history, idx)
-        log.info("History pushed: %d entries, index %d", len(history), idx)
-        return history, idx
+            item = dict(block)
+            item.setdefault("enabled", True)
+            normalized.append(item)
+        self._push_global("stack", normalized)
+        return self._get_history()
 
     # ── unified app state (BUG #2 restore / single store) ────────
     @Slot(result=str)
     def get_app_state(self):
-        """Everything the UI needs to restore the last session: ONE payload."""
-        history, h_idx = self._get_history()
+        """Everything the UI needs to restore the last session in one payload."""
+        history, h_idx = self._get_global_history()
+        stack_history, stack_idx = self._get_history()
         payload = {
             "url_presets": list(self._config.get("url_presets", default=[])),
             "custom_blocks": self._custom_blocks_raw(),
@@ -342,9 +499,14 @@ class Bridge(QObject):
                 "last_url_preset": self._config.get_state("last_url_preset", ""),
                 "last_stack_preset": self._config.get_state("last_stack_preset", ""),
                 "last_stack": self._config.get_state("last_stack", None),
-                "stack_history": history,
-                "stack_history_index": h_idx,
-                "grid_layout": self._config.get_state("grid_layout", None),
+                # Legacy projection retained so older page bundles can still
+                # start; all new edits use the global fields below.
+                "stack_history": stack_history,
+                "stack_history_index": stack_idx,
+                "undo_history": history,
+                "undo_history_index": h_idx,
+                "grid_layout": self.get_grid_layout() or None,
+                "window_geometry": self._config.get_state("window_geometry", None),
             },
         }
         return json.dumps(payload, ensure_ascii=False)
@@ -367,10 +529,10 @@ class Bridge(QObject):
             return
         if not isinstance(blocks, list):
             return
-        # Save last_stack
+        # App.recordGlobal() already recorded the edit. This call is only the
+        # debounced last-session snapshot, so it must not create a second
+        # history entry after a grid change has interleaved with the edit.
         self._config.set_state(last_stack=blocks, last_stack_preset="")
-        # Push to history (auto-save history)
-        self._push_history(blocks)
 
     def _remember_stack(self, name: str, blocks: list[dict]) -> None:
         self._config.set_state(last_stack=blocks, last_stack_preset=name)
@@ -415,37 +577,25 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def undo_stack(self):
-        """Undo to previous stack, return its JSON or null if not possible."""
-        hist, idx = self._get_history()
-        if idx <= 0 or not hist:
-            self.log_message.emit("⚠ Nothing to undo", "warn")
+        """Compatibility alias for the one global undo operation."""
+        raw = self.undo()
+        try:
+            result = json.loads(raw)
+            return json.dumps(result["value"], ensure_ascii=False) \
+                if isinstance(result, dict) and result.get("kind") == "stack" else "null"
+        except (TypeError, KeyError, json.JSONDecodeError):
             return "null"
-        idx -= 1
-        blocks = hist[idx]
-        self._set_history(hist, idx)
-        self._config.set_state(last_stack=blocks, last_stack_preset="")
-        self._engine.load_stack(blocks)
-        payload = json.dumps(blocks, ensure_ascii=False)
-        self.stack_loaded.emit("", payload)
-        self.log_message.emit(f"↩ Undo — restored {len(blocks)} block(s)", "info")
-        return payload
 
     @Slot(result=str)
     def redo_stack(self):
-        """Redo to next stack, return its JSON or null if not possible."""
-        hist, idx = self._get_history()
-        if idx < 0 or idx >= len(hist) - 1:
-            self.log_message.emit("⚠ Nothing to redo", "warn")
+        """Compatibility alias for the one global redo operation."""
+        raw = self.redo()
+        try:
+            result = json.loads(raw)
+            return json.dumps(result["value"], ensure_ascii=False) \
+                if isinstance(result, dict) and result.get("kind") == "stack" else "null"
+        except (TypeError, KeyError, json.JSONDecodeError):
             return "null"
-        idx += 1
-        blocks = hist[idx]
-        self._set_history(hist, idx)
-        self._config.set_state(last_stack=blocks, last_stack_preset="")
-        self._engine.load_stack(blocks)
-        payload = json.dumps(blocks, ensure_ascii=False)
-        self.stack_loaded.emit("", payload)
-        self.log_message.emit(f"↪ Redo — restored {len(blocks)} block(s)", "info")
-        return payload
 
     # ── tab discovery / connection ───────────────────────────────
     @Slot(result=str)

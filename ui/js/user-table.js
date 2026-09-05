@@ -19,6 +19,9 @@ const UserTable = {
   users: [],
   selected: new Set(),
   filter: '',
+  // Sort state is intentionally in-memory: it survives every backend refresh
+  // while the app is open and resets only when the page is recreated.
+  sort: { key: null, direction: 1 },
   _wired: false,
 
   // ── setup ───────────────────────────────────────────────────
@@ -41,6 +44,23 @@ const UserTable = {
       this.filter = (e.target.value || '').trim().toLowerCase();
       this.render(this.users);
     });
+    document.querySelectorAll('#userTable th[data-sort]').forEach((th) => {
+      const button = th.querySelector('.sort-button');
+      const target = button || th;
+      target.addEventListener('click', (e) => {
+        if (button) e.stopPropagation();
+        this.sortBy(th.dataset.sort);
+      });
+      if (!button) {
+        th.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.sortBy(th.dataset.sort);
+          }
+        });
+      }
+    });
+    this._updateSortHeaders();
 
     // delegated row events (safe for any nick content)
     const tbody = document.getElementById('userTableBody');
@@ -74,7 +94,8 @@ const UserTable = {
 
     const tbody = document.getElementById('userTableBody');
     if (!tbody) return;
-    const rows = this._visible();
+    const rows = this._visible().slice().sort((a, b) => this._compare(a, b));
+    this._updateSortHeaders();
 
     if (!this.users.length) {
       tbody.innerHTML = '<tr><td colspan="8" class="table-placeholder">' +
@@ -86,6 +107,59 @@ const UserTable = {
       tbody.innerHTML = rows.map((u) => this._row(u)).join('');
     }
     this._syncSelectionUI();
+  },
+
+  sortBy(key) {
+    if (!key) return;
+    if (this.sort.key === key) this.sort.direction *= -1;
+    else {
+      this.sort.key = key;
+      this.sort.direction = 1;
+    }
+    this.render(this.users);
+  },
+
+  _sortValue(user, key) {
+    if (key === 'gender') {
+      return ({ female: 'female', male: 'male' }[user.gender] || 'unknown');
+    }
+    if (key === 'registered' || key === 'messaged' || key === 'status') {
+      return key === 'status' ? (user.messaged ? 1 : 0) : (user[key] ? 1 : 0);
+    }
+    if (key === 'first_seen' || key === 'last_messaged') {
+      const raw = user[key];
+      if (!raw) return null;
+      const timestamp = Date.parse(raw);
+      return Number.isNaN(timestamp) ? String(raw).toLowerCase() : timestamp;
+    }
+    return String(user[key] || '').toLowerCase();
+  },
+
+  _compare(a, b) {
+    const key = this.sort.key;
+    if (!key) return 0;
+    const av = this._sortValue(a, key);
+    const bv = this._sortValue(b, key);
+    // Empty dates/values stay at the end in either direction.
+    if (av === null || av === '') return (bv === null || bv === '') ? 0 : 1;
+    if (bv === null || bv === '') return -1;
+    let result;
+    if (typeof av === 'number' && typeof bv === 'number') result = av - bv;
+    else result = String(av).localeCompare(String(bv), undefined,
+      { sensitivity: 'base', numeric: true });
+    return result === 0 ? 0 : result * this.sort.direction;
+  },
+
+  _updateSortHeaders() {
+    document.querySelectorAll('#userTable th[data-sort]').forEach((th) => {
+      const active = th.dataset.sort === this.sort.key;
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = active
+        ? (this.sort.direction > 0 ? '▲' : '▼') : '▲▼';
+      th.setAttribute('aria-sort', active
+        ? (this.sort.direction > 0 ? 'ascending' : 'descending') : 'none');
+      th.classList.toggle('sort-active', active);
+    });
   },
 
   _visible() {

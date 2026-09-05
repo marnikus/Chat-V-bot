@@ -113,7 +113,7 @@ Add Undo/Redo buttons in stack panel header:
 - Maybe add history info.
 
 #### Keyboard shortcuts
-- Ctrl+Z → Undo, Ctrl+Y / Ctrl+Shift+Z → Redo (listen in `stack-dnd.js`).
+- Ctrl+Z → global Undo, Ctrl+Y → global Redo (the current implementation uses the single app history for stack and grid edits; no Ctrl+Shift variant).
 
 ### 2.4 Edge Cases
 - Duplicate detection: don't push if new stack JSON equals current history tip.

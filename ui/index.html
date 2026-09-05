@@ -164,8 +164,13 @@
           <thead><tr>
             <th class="col-select"><input type="checkbox" id="selectAllUsers"
                 title="Select / deselect all visible rows"></th>
-            <th>Nick</th><th>Gender</th><th>Reg?</th><th>Status</th>
-            <th>First Seen</th><th>Messaged</th><th>Actions</th>
+            <th data-sort="nick" aria-sort="none"><button type="button" class="sort-button">Nick <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="gender" aria-sort="none"><button type="button" class="sort-button">Gender <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="registered" aria-sort="none"><button type="button" class="sort-button">Registered <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="status" aria-sort="none"><button type="button" class="sort-button">Status <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="first_seen" aria-sort="none"><button type="button" class="sort-button">First Seen <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="last_messaged" aria-sort="none"><button type="button" class="sort-button">Messaged <span class="sort-arrow">▲▼</span></button></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody id="userTableBody"></tbody>
         </table>
@@ -192,11 +197,7 @@
   <button data-layout="b">B — Split top row<span class="lm-sub">Composer | People side by side, Log below</span></button>
   <button data-layout="c">C — Side column<span class="lm-sub">Log spans full height on the right</span></button>
   <div class="layout-menu-sep"></div>
-  <div class="layout-menu-row">
-    <button id="gridUndoBtn" class="lm-mini" title="Undo grid change (Ctrl+Shift+Z)"><span class="material-icons">undo</span> Undo</button>
-    <button id="gridRedoBtn" class="lm-mini" title="Redo grid change (Ctrl+Shift+Y)"><span class="material-icons">redo</span> Redo</button>
-  </div>
-  <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible</span></button>
+  <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible (Undo with the global button)</span></button>
 </div>
 
 <!-- CRITERIA EDITOR MODAL -->
