@@ -88,8 +88,9 @@ const BUILTIN_BLOCKS = [
     defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200, enabled:true},
     labels:{target_selector:'Target CSS selector',timeout_ms:'Timeout (ms)',pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
   { block_id:'TYPE_MESSAGE',   name:'Type Message',      icon:'⌨️',
-    defaults:{message:'',typing_speed_ms:30,pre_delay_ms:500, enabled:true},
-    labels:{message:'Message text (use {{nick}})',typing_speed_ms:'Typing speed (ms)',pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
+    defaults:{message:'',use_composer:false,typing_speed_ms:30,pre_delay_ms:500, enabled:true},
+    labels:{message:'Message text (use {{nick}})',use_composer:'Use text from the Message Composer window',
+            typing_speed_ms:'Typing speed (ms)',pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
   { block_id:'CLICK_SEND',     name:'Click Send',        icon:'📨',
     defaults:{selector:"button[type='submit']",
               fallback_selector:'button:has(mat-icon)', fallback_text:'send',
@@ -412,6 +413,11 @@ const StackDnD = {
       if (k === 'custom_name') { parts.push(`name=\"${v}\"`); continue; }
       if (k === 'click_enabled') { parts.push(v ? 'click=on' : 'click=off'); continue; }
       if (k === 'click_selector' && !v) continue;
+      if (k === 'use_composer') {
+        if (v) parts.push('text: Message Composer');
+        continue;  // checkbox off adds nothing to the summary
+      }
+      if (k === 'message' && b.use_composer) continue;  // composer text is used
       parts.push(`${k}=${String(v).substring(0, 24)}`);
     }
     const base = parts.join(' · ') || `delay: ${b.pre_delay_ms || 0}ms`;
@@ -862,6 +868,18 @@ const StackDnD = {
       const safeVal = String(val).replace(/"/g, '&quot;');
       const choices = (meta.options && meta.options[key]) || null;
       const stripe = ` zebra-${(zebra++) % 2}`;
+      // Type Message's own text is a real multi-line textarea; with the
+      // “use composer” checkbox on it is disabled because the Message
+      // Composer window supplies the text at run time.
+      if (block.block_id === 'TYPE_MESSAGE' && key === 'message') {
+        const fromComposer = !!block.use_composer;
+        html += `<div class="form-row form-row--stack${stripe}">
+          <label>${labelText}${fromComposer ? ' — disabled: text comes from the Message Composer window' : ''}</label>
+          <textarea data-key="message" rows="3"${fromComposer ? ' disabled' : ''}
+            placeholder="Message text — or tick “Use Message Composer” above">${this._esc(String(val || ''))}</textarea>
+        </div>`;
+        continue;
+      }
       if (typeof val === 'boolean') {
         if (key === 'enabled') {
           // On/Off toggle bar: a disabled block stays in the stack but is
@@ -896,9 +914,10 @@ const StackDnD = {
       }
     }
     form.innerHTML = html;
-    // NOTE: must include select[data-key] — the tri-state filter dropdowns
-    // are <select>, and binding only inputs would silently drop their edits.
-    form.querySelectorAll('input[data-key], select[data-key]').forEach(inp => {
+    // NOTE: must include select[data-key] and textarea[data-key] — the
+    // tri-state filter dropdowns are <select> and the Type Message text is
+    // a <textarea>; binding only inputs would silently drop their edits.
+    form.querySelectorAll('input[data-key], select[data-key], textarea[data-key]').forEach(inp => {
       const handler = () => {
         const k = inp.dataset.key;
         if (inp.tagName === 'SELECT') block[k] = inp.value;
@@ -912,6 +931,11 @@ const StackDnD = {
           if (typeof LogConsole !== 'undefined') {
             LogConsole.log(block.enabled ? `✅ Enabled “${name}”` : `⏸ Disabled “${name}” — will be skipped`, block.enabled ? 'success' : 'warn');
           }
+        }
+        // “Use Message Composer” toggles the own-text field: re-render the
+        // panel so the textarea follows (enabled/disabled).
+        if (block.block_id === 'TYPE_MESSAGE' && k === 'use_composer') {
+          this._showConfig(this.selectedIdx);
         }
       };
       inp.addEventListener('change', handler);

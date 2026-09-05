@@ -137,6 +137,10 @@ class ActionEngine(QObject):
         self._tracer: Optional[RunTracer] = None
         self._ctx: dict = {}       # current step context for report()
         self._run_seq = 0
+        # Live copy of the Message Composer window text. The Bridge mirrors
+        # every composer keystroke here so blocks (TYPE_MESSAGE with
+        # use_composer) read the CURRENT text at run time.
+        self.composer_text = ""
 
     # ── stack management ─────────────────────────────────────────
     def load_stack(self, blocks: list[dict]) -> None:

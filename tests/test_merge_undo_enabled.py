@@ -138,8 +138,10 @@ class TestMergedUI(unittest.TestCase):
 
     def test_select_dropdowns_are_still_bound(self):
         """The incoming branch bound only input[data-key], which would have
-        silently dropped every tri-state filter edit."""
-        self.assertIn("form.querySelectorAll('input[data-key], select[data-key]')",
+        silently dropped every tri-state filter edit. The binding also covers
+        textarea[data-key] (Type Message's own message text)."""
+        self.assertIn("form.querySelectorAll("
+                      "'input[data-key], select[data-key], textarea[data-key]')",
                       self.js)
         self.assertIn("inp.tagName === 'SELECT'", self.js)
 
