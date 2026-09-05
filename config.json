@@ -17,14 +17,11 @@
     "last_url_preset": "https://ru.virt-chat.com/chat",
     "last_stack": [
       {
-        "block_id": "CUSTOM_FIND",
-        "pre_delay_ms": 100,
-        "custom_name": "Tab Main",
+        "block_id": "CLICK_BACK",
+        "pre_delay_ms": 800,
         "selector": "div[role='tab'].tab-item",
-        "label_selector": "p.chat-title",
-        "match_text": "Гостиная",
-        "click_enabled": true,
-        "click_selector": "div[role='tab'].tab-item"
+        "child_selector": "p.chat-title",
+        "tab_name": "Гостиная"
       },
       {
         "block_id": "CUSTOM_FIND",
@@ -35,6 +32,22 @@
         "match_text": "",
         "click_enabled": true,
         "click_selector": ""
+      },
+      {
+        "block_id": "SCROLL_PARSE",
+        "pre_delay_ms": 300,
+        "max_scrolls": 1000,
+        "scroll_pause_ms": 800,
+        "scroll_delta_y": 1000,
+        "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+        "load_timeout_ms": 2500,
+        "stall_threshold": 100,
+        "min_new_users": 100,
+        "filter_female": "yes",
+        "filter_registered": "any",
+        "filter_guest": "any",
+        "filter_anonymous": "any",
+        "use_panel_filters": false
       }
     ],
     "last_stack_preset": ""
