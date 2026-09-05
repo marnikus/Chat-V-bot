@@ -449,9 +449,59 @@ class TestBlockContract(unittest.TestCase):
                                "stack-dnd.js"), encoding="utf-8").read()
         self.assertIn("scroll_only:false", js)
         self.assertIn("scroll_only:'", js, "needs a label")
+        # The retired keys must never be live, user-facing controls. They DO
+        # legitimately appear as string literals in the migration denylist
+        # (RETIRED_KEYS), so strip comments and quoted strings before
+        # asserting they are absent from executable code.
+        import re
+        code = re.sub(r"//[^\n]*", "", js)                     # // comments
+        code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)      # /* comments */
+        code = re.sub(r"'[^']*'", "''", code)                  # 'strings'
+        code = re.sub(r'"[^"]*"', '""', code)                  # "strings"
+        code = re.sub(r"`[^`]*`", "``", code)                  # `templates`
         for dead in ("use_panel_filters", "skip_if_backlog",
                      "backlog_threshold"):
-            self.assertNotIn(dead, js, dead)
+            self.assertNotIn(dead, code,
+                             f"{dead} may only exist as a migration literal")
+        # …and the migration safeguards themselves must be present.
+        for needle in ("RETIRED_KEYS", "_migrateBlock",
+                       "RETIRED_KEYS.includes(key)"):
+            self.assertIn(needle, js, f"missing migration safeguard: {needle}")
+
+
+# ── backend safety net: stacks entering the engine are cleaned ───
+class TestBackendBlockNormalization(unittest.TestCase):
+    def test_normalize_blocks_strips_retired_keys(self):
+        from backend.action_engine import normalize_blocks
+        out = normalize_blocks([
+            {"block_id": "SCROLL_PARSE", "use_panel_filters": True,
+             "skip_if_backlog": True, "backlog_threshold": 3,
+             "scroll_only": True, "max_scrolls": 1000},
+            "junk", 42, None,
+        ])
+        self.assertEqual(len(out), 1)
+        b = out[0]
+        for dead in ("use_panel_filters", "skip_if_backlog",
+                     "backlog_threshold"):
+            self.assertNotIn(dead, b)
+        self.assertTrue(b["scroll_only"], "real settings are kept")
+        self.assertEqual(b["max_scrolls"], 1000)
+        self.assertTrue(b["enabled"], "enabled defaults to True")
+
+    def test_load_stack_drops_the_dead_kwargs(self):
+        cdp = HighlightCDP(PAGES, page_height=100)
+        eng = ActionEngine(cdp=cdp, memory=None, criteria=None)
+        eng.load_stack([
+            {"block_id": "SCROLL_PARSE", "use_panel_filters": True,
+             "scroll_only": True},
+            {"block_id": "PAUSE", "duration_ms": 123, "enabled": False},
+        ])
+        self.assertEqual(len(eng._stack), 2)
+        sp = eng._stack[0]
+        self.assertTrue(sp.scroll_only)
+        self.assertFalse(hasattr(sp, "use_panel_filters"))
+        self.assertNotIn("use_panel_filters", sp.to_dict())
+        self.assertFalse(eng._stack[1].enabled)
 
 
 if __name__ == "__main__":

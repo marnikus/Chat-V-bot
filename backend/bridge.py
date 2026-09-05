@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
-from backend.action_engine import ActionEngine
+from backend.action_engine import ActionEngine, normalize_blocks
 from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
@@ -69,6 +69,21 @@ class Bridge(QObject):
         """Live update: a person failed the filter and was purged."""
         self.person_removed.emit(payload)
         asyncio.ensure_future(self._refresh_users())
+
+    @staticmethod
+    def _clean_blocks(blocks):
+        """Strip retired block keys (e.g. use_panel_filters) before storing
+        or emitting a stack, so dead controls never round-trip back to the
+        UI. JS performs the fuller migration (it also back-fills missing
+        defaults); this is the server-side safety net."""
+        return normalize_blocks(blocks)
+
+    @classmethod
+    def _clean_history(cls, hist):
+        if not isinstance(hist, list):
+            return []
+        return [cls._clean_blocks(entry) for entry in hist
+                if isinstance(entry, list)]
 
     # ── history helpers (Feature #1 Undo/Redo) ───────────────────
     def _get_history(self) -> tuple[list, int]:
@@ -367,6 +382,7 @@ class Bridge(QObject):
             return
         if not isinstance(blocks, list):
             return
+        blocks = self._clean_blocks(blocks)
         # Save last_stack
         self._config.set_state(last_stack=blocks, last_stack_preset="")
         # Push to history (auto-save history)
@@ -392,7 +408,7 @@ class Bridge(QObject):
         except json.JSONDecodeError:
             return
         if isinstance(blocks, list):
-            self._push_history(blocks)
+            self._push_history(self._clean_blocks(blocks))
 
     @Slot(str, int)
     def save_stack_history(self, history_json, index):
@@ -405,6 +421,8 @@ class Bridge(QObject):
             return
         if not isinstance(index, int):
             index = -1
+        # Strip retired keys from every stored snapshot on the way in.
+        hist = self._clean_history(hist)
         # Enforce max
         if len(hist) > MAX_STACK_HISTORY:
             overflow = len(hist) - MAX_STACK_HISTORY
@@ -421,7 +439,7 @@ class Bridge(QObject):
             self.log_message.emit("⚠ Nothing to undo", "warn")
             return "null"
         idx -= 1
-        blocks = hist[idx]
+        blocks = self._clean_blocks(hist[idx])
         self._set_history(hist, idx)
         self._config.set_state(last_stack=blocks, last_stack_preset="")
         self._engine.load_stack(blocks)
@@ -438,7 +456,7 @@ class Bridge(QObject):
             self.log_message.emit("⚠ Nothing to redo", "warn")
             return "null"
         idx += 1
-        blocks = hist[idx]
+        blocks = self._clean_blocks(hist[idx])
         self._set_history(hist, idx)
         self._config.set_state(last_stack=blocks, last_stack_preset="")
         self._engine.load_stack(blocks)
@@ -523,9 +541,10 @@ class Bridge(QObject):
             self.log_message.emit("⚠ Already running", "warn"); return
         try:
             blocks = json.loads(stack_json)
-            self._engine.load_stack(blocks)
         except json.JSONDecodeError:
             self.log_message.emit("❌ Bad JSON", "error"); return
+        blocks = self._clean_blocks(blocks)
+        self._engine.load_stack(blocks)
         # remember what is being run for the next session
         if isinstance(blocks, list):
             self._config.set_state(last_stack=blocks,
@@ -663,6 +682,7 @@ class Bridge(QObject):
             self.log_message.emit("❌ Preset save aborted: bad stack payload",
                                   "error")
             return
+        blocks = self._clean_blocks(blocks)
         try:
             self._presets.save_stack(name, blocks)
         except Exception as exc:
@@ -681,6 +701,8 @@ class Bridge(QObject):
         if blocks is None:
             self.log_message.emit(f"❌ Preset “{name}” not found", "error")
             return "null"
+        # Legacy presets may still carry retired keys — clean before use.
+        blocks = self._clean_blocks(blocks)
         # Preserve current stack in history before overwriting (undo after preset load)
         try:
             current = self._config.get_state("last_stack", None)
