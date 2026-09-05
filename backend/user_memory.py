@@ -160,7 +160,14 @@ class UserMemory:
         return cur.rowcount > 0
 
     async def reset_messaged(self) -> int:
-        cur = await self._db.execute("UPDATE users SET messaged=0")
+        """Mark every user as new again.
+
+        A “New” person must never show a message time: clear last_messaged
+        alongside the flag (message_count stays — it is a historical
+        counter, exactly like the per-row ↩ Undo).
+        """
+        cur = await self._db.execute(
+            "UPDATE users SET messaged=0,last_messaged=NULL")
         await self._db.commit()
         return cur.rowcount
 

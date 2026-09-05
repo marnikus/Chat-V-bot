@@ -62,10 +62,21 @@ class Bridge(QObject):
         self._engine.person_found.connect(self._on_person_found)
         # A person failed the filter and was destroyed: drop them from the table.
         self._engine.person_removed.connect(self._on_person_removed)
+        # The engine just marked a person messaged during a run: flip the row
+        # (and stats) live instead of waiting for the next explicit refresh.
+        self._engine.person_marked.connect(self._on_person_marked)
+        # Whatever a run did (marking, purges, seek-only passes), the table
+        # must end up in sync with SQLite — restart is not a refresh step.
+        self._engine.stack_complete.connect(
+            lambda: asyncio.ensure_future(self._refresh_users()))
 
     def _on_person_found(self, payload: str) -> None:
         """Live update: a person just passed the filter during Scroll & Parse."""
         self.person_found.emit(payload)
+        asyncio.ensure_future(self._refresh_users())
+
+    def _on_person_marked(self, nick: str) -> None:
+        """Live update: a run just messaged `nick` — refresh the table now."""
         asyncio.ensure_future(self._refresh_users())
 
     def _on_person_removed(self, payload: str) -> None:
@@ -496,6 +507,9 @@ class Bridge(QObject):
             self._config.set_state(grid_layout=value)
         elif kind == "stack":
             self._config.set_state(last_stack=value, last_stack_preset="")
+            # The stack determines the processing order (# column): re-rank
+            # the people list when a block is added/removed/toggled.
+            asyncio.ensure_future(self._refresh_users())
         return True
 
     def _global_result(self, entry, index=None):
@@ -527,6 +541,9 @@ class Bridge(QObject):
             self._config.set_state(last_stack=blocks, last_stack_preset="")
             self._engine.load_stack(blocks)
             self.stack_loaded.emit("", json.dumps(blocks, ensure_ascii=False))
+            # Undo/redo of a stack edit can change the enabled Scroll & Parse
+            # presence — re-rank the people list's # column to match.
+            asyncio.ensure_future(self._refresh_users())
 
     @Slot(result=str)
     def undo(self):
@@ -1155,9 +1172,21 @@ class Bridge(QObject):
     # ── user list refresh ────────────────────────────────────────
     async def _refresh_users(self):
         users = await self._memory.get_all()
+        # Processing-order ranks (# column). The engine's queue_order()
+        # mirrors the queue the run loop would build (A–Z under an enabled
+        # Scroll & Parse block, newest-discovered first otherwise). Only
+        # un-messaged people are processed, so only they get a number.
+        ranks: dict[str, int] = {}
+        try:
+            ordered = self._engine.queue_order(users)
+            ranks = {nick: i + 1 for i, nick in enumerate(ordered)}
+        except Exception:
+            queue = await self._memory.get_queue()
+            ranks = {u.nick: i + 1 for i, u in enumerate(queue)}
         self.users_updated.emit(json.dumps(
             [{"nick": u.nick, "gender": u.gender, "registered": u.registered,
               "anonymous": u.anonymous, "guest": u.guest, "messaged": u.messaged,
-              "first_seen": u.first_seen, "last_messaged": u.last_messaged}
+              "first_seen": u.first_seen, "last_messaged": u.last_messaged,
+              "order": ranks.get(u.nick)}
              for u in users], ensure_ascii=False))
         self.stats_updated.emit(json.dumps(await self._memory.get_stats()))

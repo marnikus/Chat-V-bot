@@ -101,6 +101,15 @@
 #userTable th.col-select, #userTable td.col-select {
   width: 28px; max-width: 28px; padding: 4px 6px; text-align: center;
 }
+/* Processing-order (#) column */
+#userTable th.col-order, #userTable td.col-order {
+  width: 34px; max-width: 34px; padding: 6px 4px; text-align: center;
+}
+#userTable td.col-order {
+  font-variant-numeric: tabular-nums; color: var(--text-secondary);
+}
+#userTable tr.row-new td.col-order { color: var(--accent); font-weight: 600; }
+
 #userTable input[type="checkbox"] {
   cursor: pointer; accent-color: var(--accent);
   width: 13px; height: 13px; margin: 0; vertical-align: middle;

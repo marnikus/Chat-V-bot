@@ -114,6 +114,7 @@ class ActionEngine(QObject):
 
     step_complete = Signal(str, str)      # block_name, user_nick
     user_complete = Signal(str, bool)     # user_nick, success
+    person_marked = Signal(str)           # user_nick just marked messaged by a run
     stack_complete = Signal()
     log_msg = Signal(str)
     debug_msg = Signal(str, str)          # message, level (info|success|warn|error)
@@ -240,6 +241,34 @@ class ActionEngine(QObject):
         return removed
 
     # ── main execution loop ──────────────────────────────────────
+    def queue_order(self, users: list) -> list[str]:
+        """The nick order a run would process right now (1st → last).
+
+        Mirrors the two queue-building branches of `_execute_cycle`:
+          * an ENABLED SCROLL_PARSE block is present  → the collect phase
+            sorts people with sort_people (un-messaged first, A–Z);
+          * otherwise                                → UserMemory.get_queue
+            (WHERE messaged=0 ORDER BY first_seen DESC).
+        Only un-messaged people are ever processed, so messaged users are
+        excluded here too.
+        """
+        scroll_block = next((b for b in self._stack
+                             if b.block_id == "SCROLL_PARSE"
+                             and getattr(b, "enabled", True)), None)
+        unmessaged = [u for u in users if not getattr(u, "messaged", False)]
+        if scroll_block is not None:
+            from backend.person_filter import sort_people
+            ordered = sort_people(unmessaged)
+        else:
+            # Stable: newest-discovered first, nick A–Z breaks ties so the
+            # order never flickers between refreshes.
+            ordered = sorted(
+                sorted(unmessaged, key=lambda u: str(getattr(u, "nick", ""))
+                       .casefold()),
+                key=lambda u: str(getattr(u, "first_seen", "") or ""),
+                reverse=True)
+        return [getattr(u, "nick", "") for u in ordered]
+
     def _repeat_cycles(self) -> int:
         """How many times the whole stack runs per Run press.
 
@@ -406,6 +435,9 @@ class ActionEngine(QObject):
             ok = await self._execute_for_user(user, has_skip)
             if ok and not standalone:
                 await self._memory.mark_messaged(user.nick)
+                # Live status update: the UI re-renders the row (✅ Done) the
+                # moment the person is messaged, not only after a restart.
+                self.person_marked.emit(user.nick)
             if not standalone:
                 self.user_complete.emit(user.nick, ok)
         return "worked"

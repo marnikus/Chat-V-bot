@@ -91,10 +91,10 @@ const UserTable = {
     this._updateSortHeaders();
 
     if (!this.users.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="table-placeholder">' +
+      tbody.innerHTML = '<tr><td colspan="9" class="table-placeholder">' +
         'No users discovered yet. Connect and run the parser.</td></tr>';
     } else if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="table-placeholder">' +
+      tbody.innerHTML = '<tr><td colspan="9" class="table-placeholder">' +
         `No nick matches “${this._esc(this.filter)}”.</td></tr>`;
     } else {
       tbody.innerHTML = rows.map((u) => this._row(u)).join('');
@@ -115,6 +115,11 @@ const UserTable = {
   _sortValue(user, key) {
     if (key === 'gender') {
       return ({ female: 'female', male: 'male' }[user.gender] || 'unknown');
+    }
+    if (key === 'order') {
+      // Only un-messaged people are numbered; messaged rows have no rank and
+      // stay at the end in either direction (null handling below).
+      return (user.messaged || !Number.isInteger(user.order)) ? null : user.order;
     }
     if (key === 'registered' || key === 'messaged' || key === 'status') {
       return key === 'status' ? (user.messaged ? 1 : 0) : (user[key] ? 1 : 0);
@@ -174,7 +179,13 @@ const UserTable = {
     const statusHtml = `<span class="status-badge ${u.messaged ? 'done' : 'new'}">` +
       `${u.messaged ? '✅ Done' : '🆕 New'}</span>`;
     const seen = u.first_seen ? (u.first_seen.substring(11, 16) || u.first_seen) : '—';
-    const msg = u.last_messaged ? (u.last_messaged.substring(11, 16) || u.last_messaged) : '—';
+    // A “New” person never shows a message time — even if a stale timestamp
+    // lingers in the DB, the status and the time column must agree.
+    const msg = (!u.messaged || !u.last_messaged)
+      ? '—'
+      : (u.last_messaged.substring(11, 16) || u.last_messaged);
+    // Processing order: only people with status New (un-messaged) rank.
+    const order = (!u.messaged && Number.isInteger(u.order)) ? u.order : null;
     const checked = this.selected.has(u.nick) ? ' checked' : '';
     const rowCls = [
       !u.messaged ? 'row-new' : '',
@@ -185,6 +196,8 @@ const UserTable = {
       <td class="col-select">
         <input type="checkbox" data-nick="${attr}"${checked}
                aria-label="Select ${nick}"></td>
+      <td class="col-order" title="${order ? `Processed ${order}.` : 'No processing order (already messaged)'}">${
+        order === null ? '—' : order}</td>
       <td class="col-nick" title="${attr}">${nick}</td>
       <td>${gender}</td><td>${reg}</td><td>${statusHtml}</td>
       <td>${seen}</td><td>${msg}</td>
