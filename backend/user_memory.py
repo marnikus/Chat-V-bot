@@ -169,6 +169,40 @@ class UserMemory:
         await self._db.commit()
         return cur.rowcount
 
+    async def replace_all(self, rows: list[dict]) -> int:
+        """Restore a full snapshot: wipe the table and insert the given rows.
+
+        Used by the global undo/redo system to restore the people list to a
+        previously recorded state. Timestamps, message_count and notes are
+        preserved verbatim (not re-stamped with CURRENT_TIMESTAMP), so a
+        restored person is indistinguishable from the original.
+        """
+        await self._db.execute("DELETE FROM users")
+        count = 0
+        for row in rows or []:
+            nick = str(row.get("nick", "")).strip()
+            if not nick:
+                continue
+            await self._db.execute(
+                "INSERT INTO users(nick,gender,registered,anonymous,guest,"
+                "first_seen,last_seen,messaged,message_count,last_messaged,"
+                "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (nick,
+                 str(row.get("gender") or "unknown"),
+                 1 if row.get("registered") else 0,
+                 1 if row.get("anonymous") else 0,
+                 1 if row.get("guest") else 0,
+                 row.get("first_seen") or "",
+                 row.get("last_seen") or "",
+                 1 if row.get("messaged") else 0,
+                 int(row.get("message_count") or 0),
+                 row.get("last_messaged"),
+                 str(row.get("notes") or "")))
+            count += 1
+        await self._db.commit()
+        log.info("replace_all → %d rows restored", count)
+        return count
+
     @staticmethod
     def _row(r: tuple) -> UserRecord:
         return UserRecord(nick=r[0], gender=r[1], registered=bool(r[2]),

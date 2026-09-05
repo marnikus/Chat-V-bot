@@ -229,14 +229,13 @@ const UserTable = {
   },
 
   // ── actions ─────────────────────────────────────────────────
+  // No confirmation dialogs on purpose: every remove / reset action is
+  // recorded in the global undo history, so Ctrl+Z is the safety net.
+
   deleteNick(nick) {
     if (!this._bridge()) return;
-    PresetsUI.confirm('Delete user?',
-      `“${nick}” will be permanently removed from user memory.`,
-      'Delete', () => {
-        this.selected.delete(nick);
-        App.bridge.delete_user(nick);
-      });
+    this.selected.delete(nick);
+    App.bridge.delete_user(nick);
   },
 
   deleteSelected() {
@@ -246,14 +245,9 @@ const UserTable = {
       LogConsole.log('⚠ Nothing selected — tick the rows you want to delete', 'warn');
       return;
     }
-    const preview = nicks.slice(0, 6).join(', ') + (nicks.length > 6 ? ', …' : '');
-    PresetsUI.confirm(`Delete ${nicks.length} user(s)?`,
-      `${preview}\n\nThese nicks will be permanently removed from user memory.`,
-      `Delete ${nicks.length}`, () => {
-        App.bridge.delete_users(JSON.stringify(nicks));
-        this.selected.clear();
-        this._syncSelectionUI();
-      });
+    App.bridge.delete_users(JSON.stringify(nicks));
+    this.selected.clear();
+    this._syncSelectionUI();
   },
 
   clearAll() {
@@ -262,21 +256,13 @@ const UserTable = {
       LogConsole.log('ℹ User memory is already empty', 'info');
       return;
     }
-    PresetsUI.confirm('Clear ALL users?',
-      `All ${this.users.length} user(s) will be permanently removed from user ` +
-      'memory. This cannot be undone.',
-      'Clear all', () => {
-        this.selected.clear();
-        App.bridge.clear_memory();
-      });
+    this.selected.clear();
+    App.bridge.clear_memory();
   },
 
   resetMessaged() {
     if (!this._bridge()) return;
-    PresetsUI.confirm('Reset messaged flags?',
-      'Every user will be marked as “new” again, so the bot may message them ' +
-      'a second time. No user is deleted.',
-      'Reset', () => App.bridge.reset_messaged());
+    App.bridge.reset_messaged();
   },
 
   toggleMessaged(nick) {

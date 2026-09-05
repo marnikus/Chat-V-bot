@@ -219,12 +219,22 @@ backlog and then resumes harvesting instead of becoming a permanent off-switch.
 
 ## RULE 12 — one global history for every editable surface
 
-The action stack and grid layout share ONE chronological undo history
-(`state.undo_history` / `state.undo_history_index`). Each entry is tagged with
-`kind: "stack"` or `kind: "grid"`, so one `Ctrl+Z` always reverses the most
-recent edit regardless of which panel produced it. There must be no separate
-grid undo/redo controls or shortcuts. The common push logic owns deduplication,
-truncate-on-branch, and the 100-entry cap.
+The action stack, grid layout and people list share ONE chronological undo
+history (`state.undo_history` / `state.undo_history_index`). Each entry is
+tagged with `kind: "stack"` / `kind: "grid"` / `kind: "people"`, so one
+`Ctrl+Z` always reverses the most recent edit regardless of which panel
+produced it. There must be no separate undo/redo controls or shortcuts. The
+common push logic owns deduplication, truncate-on-branch, and the 100-entry
+cap.
+
+People-list entries (delete / delete-selected / clear-all / status toggle /
+reset-messaged) are reversible commands stored as
+`{kind:"people", value:{before:[…], after:[…]}}` — full-row snapshots of both
+halves. `undo()` reverses the TIP people entry with its `before` half and
+`redo()` re-applies its `after` half, so a people action is undone in ONE
+step even when stack/grid edits surround it in the timeline. Automatic engine
+side-effects (a run marking people messaged, filter purges, live collection)
+are NOT recorded — only explicit user actions.
 
 Legacy per-surface history keys may be read for migration only; new edits must
 never write them.

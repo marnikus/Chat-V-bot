@@ -38,6 +38,7 @@ class Bridge(QObject):
     grid_layout_changed = Signal(str)        # JSON canonical grid payload
     grid_layout_persisted = Signal(bool)     # close-time save acknowledgment
     template_loaded = Signal(str, str)       # name, body
+    history_changed = Signal()               # global timeline grew / moved
 
     def __init__(self, cdp, memory, criteria, engine, config,
                  presets: PresetStore | None = None, parent=None):
@@ -87,6 +88,51 @@ class Bridge(QObject):
         return [cls._clean_blocks(entry) for entry in hist
                 if isinstance(entry, list)]
 
+    # ── people-list snapshots for the global undo history ─────────
+    @staticmethod
+    def _people_row(u) -> dict:
+        """Full serialisable row for one person (every DB column)."""
+        return {"nick": u.nick, "gender": u.gender,
+                "registered": bool(u.registered),
+                "anonymous": bool(u.anonymous), "guest": bool(u.guest),
+                "first_seen": u.first_seen or "", "last_seen": u.last_seen or "",
+                "messaged": bool(u.messaged),
+                "message_count": int(u.message_count or 0),
+                "last_messaged": u.last_messaged, "notes": u.notes or ""}
+
+    async def _people_rows(self) -> list[dict]:
+        """Full snapshot of the people list (all columns)."""
+        users = await self._memory.get_all()
+        return [self._people_row(u) for u in users]
+
+    async def _push_people_entry(self, before: list[dict],
+                                 after: list[dict]) -> bool:
+        """Record one people-list edit in the global history.
+
+        The entry stores BOTH halves so the action can be reversed with a
+        single Ctrl+Z no matter what stack/grid edits surround it in the
+        timeline. Nothing is pushed for a no-op (identical snapshots).
+        """
+        if before == after:
+            return False
+        self._push_global("people", {"before": before, "after": after})
+        return True
+
+    def _apply_people(self, rows) -> None:
+        """Restore the people list to a snapshot (async, then re-emit)."""
+        rows = [dict(r) for r in (rows or [])]
+        asyncio.ensure_future(self._do_apply_people(rows))
+
+    async def _do_apply_people(self, rows: list[dict]) -> None:
+        try:
+            await self._memory.replace_all(rows)
+            self.log_message.emit(
+                f"↩ People list restored — {len(rows)} person(s)", "info")
+        except Exception as exc:
+            self.log_message.emit(f"❌ People-list restore failed: {exc}",
+                                  "error")
+        await self._refresh_users()
+
     # ── one global undo history ─────────────────────────────────
     # Stack edits and grid edits share this timeline.  The old stack/grid
     # histories are accepted only as a one-time migration source; no new
@@ -124,6 +170,11 @@ class Bridge(QObject):
                     canonical, err = self._canonical_grid_payload(entry["value"])
                     if not err:
                         history.append(self._history_entry("grid", canonical))
+                elif entry.get("kind") == "people" and isinstance(entry.get("value"), dict):
+                    value = entry["value"]
+                    if isinstance(value.get("before"), list) and \
+                            isinstance(value.get("after"), list):
+                        history.append(self._history_entry("people", value))
             index = self._config.get_state("undo_history_index", len(history) - 1)
             index = index if isinstance(index, int) else len(history) - 1
             index = max(-1, min(index, len(history) - 1))
@@ -186,7 +237,7 @@ class Bridge(QObject):
                                undo_history_index=index)
 
     def _push_global(self, kind: str, value) -> tuple[list, int]:
-        if kind not in ("stack", "grid"):
+        if kind not in ("stack", "grid", "people"):
             raise ValueError(f"unknown history kind: {kind}")
         history, index = self._get_global_history()
         entry = self._history_entry(kind, value)
@@ -202,6 +253,7 @@ class Bridge(QObject):
             history = history[overflow:]
             index -= overflow
         self._set_global_history(history, index)
+        self.history_changed.emit()
         return history, index
 
     def _get_history(self) -> tuple[list, int]:
@@ -453,9 +505,23 @@ class Bridge(QObject):
         return json.dumps(result, ensure_ascii=False)
 
     def _apply_global_entry(self, entry):
-        if entry["kind"] == "grid":
+        """Apply the state represented by a history entry.
+
+        Stack/grid entries carry their after-state snapshot. A people entry
+        carries {"before":…, "after":…}; when an undo/redo walk reaches it as
+        the state to step ONTO, the after-state is the surface state at that
+        point in the timeline (the tip-reversal case is handled separately by
+        undo()/redo(), which apply the matching half).
+        """
+        kind = entry.get("kind")
+        if kind == "grid":
             self._config.set_state(grid_layout=entry["value"])
             self.grid_layout_changed.emit(entry["value"])
+        elif kind == "people":
+            value = entry.get("value")
+            rows = value.get("after") if isinstance(value, dict) else None
+            if rows is not None:
+                self._apply_people(rows)
         else:
             blocks = self._clean_blocks(entry["value"])
             self._config.set_state(last_stack=blocks, last_stack_preset="")
@@ -465,11 +531,35 @@ class Bridge(QObject):
     @Slot(result=str)
     def undo(self):
         history, index = self._get_global_history()
-        if index <= 0 or not history:
+        if not history or index < 0 or index >= len(history):
+            self.log_message.emit("⚠ Nothing to undo", "warn")
+            return "null"
+        entry = history[index]
+        # People entries are reversible commands: undoing the TIP entry must
+        # restore the pre-edit list in a single step even when stack/grid
+        # edits surround it in the timeline — and even when the people edit
+        # is the FIRST entry of a fresh timeline (index 0 / nothing before).
+        if entry.get("kind") == "people":
+            value = entry.get("value")
+            before = value.get("before") if isinstance(value, dict) else None
+            if before is None:
+                self.log_message.emit("⚠ Nothing to undo", "warn")
+                return "null"
+            self._apply_people(before)
+            index -= 1
+            self._set_global_history(history, index)
+            self.history_changed.emit()
+            self.log_message.emit("↩ Undo — people list restored", "info")
+            result = {"kind": "people", "value": before}
+            if index is not None:
+                result["index"] = index
+            return json.dumps(result, ensure_ascii=False)
+        if index <= 0:
             self.log_message.emit("⚠ Nothing to undo", "warn")
             return "null"
         index -= 1
         self._set_global_history(history, index)
+        self.history_changed.emit()
         entry = history[index]
         self._apply_global_entry(entry)
         self.log_message.emit("↩ Undo — restored " + entry["kind"], "info")
@@ -478,12 +568,27 @@ class Bridge(QObject):
     @Slot(result=str)
     def redo(self):
         history, index = self._get_global_history()
-        if index < 0 or index >= len(history) - 1:
+        if not history or index >= len(history) - 1:
             self.log_message.emit("⚠ Nothing to redo", "warn")
             return "null"
         index += 1
-        self._set_global_history(history, index)
         entry = history[index]
+        if entry.get("kind") == "people":
+            value = entry.get("value")
+            after = value.get("after") if isinstance(value, dict) else None
+            if after is None:
+                self.log_message.emit("⚠ Nothing to redo", "warn")
+                return "null"
+            self._apply_people(after)
+            self._set_global_history(history, index)
+            self.history_changed.emit()
+            self.log_message.emit("↪ Redo — people list restored", "info")
+            result = {"kind": "people", "value": after}
+            if index is not None:
+                result["index"] = index
+            return json.dumps(result, ensure_ascii=False)
+        self._set_global_history(history, index)
+        self.history_changed.emit()
         self._apply_global_entry(entry)
         self.log_message.emit("↪ Redo — restored " + entry["kind"], "info")
         return self._global_result(entry, index)
@@ -783,13 +888,19 @@ class Bridge(QObject):
         asyncio.ensure_future(self._do_set_messaged(nick, bool(messaged)))
 
     async def _do_reset(self):
+        before = await self._people_rows()
         c = await self._memory.reset_messaged()
         self.log_message.emit(f"🔄 Reset {c} users", "info")
+        if c:
+            await self._push_people_entry(before, await self._people_rows())
         await self._refresh_users()
 
     async def _do_clear(self):
+        before = await self._people_rows()
         c = await self._memory.clear_all()
         self.log_message.emit(f"🗑 Cleared {c} users", "warn")
+        if c:
+            await self._push_people_entry(before, await self._people_rows())
         self.users_deleted.emit("[]", c)
         await self._refresh_users()
 
@@ -798,6 +909,7 @@ class Bridge(QObject):
         if not nick:
             self.log_message.emit("⚠ No nick given — nothing deleted", "warn")
             return
+        before = await self._people_rows()
         try:
             ok = await self._memory.delete_user(nick)
         except Exception as exc:
@@ -805,6 +917,7 @@ class Bridge(QObject):
             return
         if ok:
             self.log_message.emit(f"🗑 Deleted user “{nick}”", "warn")
+            await self._push_people_entry(before, await self._people_rows())
             self.users_deleted.emit(json.dumps([nick], ensure_ascii=False), 1)
         else:
             self.log_message.emit(f"⚠ User “{nick}” not found", "warn")
@@ -814,11 +927,14 @@ class Bridge(QObject):
         if not nicks:
             self.log_message.emit("⚠ Nothing selected — nothing deleted", "warn")
             return
+        before = await self._people_rows()
         try:
             count = await self._memory.delete_users(nicks)
         except Exception as exc:
             self.log_message.emit(f"❌ Delete failed: {exc}", "error")
             return
+        if count:
+            await self._push_people_entry(before, await self._people_rows())
         self.log_message.emit(
             f"🗑 Deleted {count} selected user(s)"
             + (f": {', '.join(nicks[:5])}" + ("…" if len(nicks) > 5 else "")
@@ -827,6 +943,7 @@ class Bridge(QObject):
         await self._refresh_users()
 
     async def _do_set_messaged(self, nick, messaged):
+        before = await self._people_rows()
         try:
             ok = await self._memory.set_messaged(nick, messaged)
         except Exception as exc:
@@ -836,6 +953,7 @@ class Bridge(QObject):
             self.log_message.emit(
                 f"{'✅' if messaged else '↩'} “{nick}” marked as "
                 f"{'messaged' if messaged else 'new'}", "info")
+            await self._push_people_entry(before, await self._people_rows())
         await self._refresh_users()
 
     # ── stack presets ────────────────────────────────────────────

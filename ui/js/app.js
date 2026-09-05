@@ -25,7 +25,8 @@ const App = {
       if (state.grid_layout) history.push({ kind: 'grid', value: state.grid_layout });
     }
     this.globalHistory = history.filter((entry) =>
-      entry && (entry.kind === 'stack' || entry.kind === 'grid'))
+      entry && (entry.kind === 'stack' || entry.kind === 'grid' ||
+                entry.kind === 'people'))
       .map((entry) => ({ kind: entry.kind, value: this._copy(entry.value) }));
     const idx = Number.isInteger(state.undo_history_index)
       ? state.undo_history_index
@@ -61,6 +62,14 @@ const App = {
     }
   },
 
+  _peopleRowsOf(value) {
+    // People entries carry {"before": rows, "after": rows}; undo/redo return
+    // the matching half. A bare array is accepted too (defensive).
+    if (Array.isArray(value)) return value;
+    if (value && Array.isArray(value.after)) return value.after;
+    return null;
+  },
+
   _applyGlobalResult(raw) {
     if (!raw || raw === 'null') return false;
     let result;
@@ -77,9 +86,37 @@ const App = {
       StackDnD._isRestoringHistory = false;
     } else if (result.kind === 'grid' && typeof SashGrid !== 'undefined') {
       SashGrid._applySerialized(result.value, false);
+    } else if (result.kind === 'people' && typeof UserTable !== 'undefined') {
+      const rows = this._peopleRowsOf(result.value);
+      if (rows) {
+        UserTable.render(rows);
+        // The backend applies the snapshot asynchronously and re-emits
+        // users_updated + stats_updated; a refresh keeps every panel in sync.
+        if (this.bridge && this.bridge.refresh_users) this.bridge.refresh_users();
+      }
     }
     this._updateUndoButtons();
     return true;
+  },
+
+  /** Re-sync the local history mirror from the backend's authoritative
+      timeline (the backend records people-list edits itself). */
+  _syncGlobalHistory() {
+    if (!this.bridge || !this.bridge.get_undo_history) return;
+    this.bridge.get_undo_history((json) => {
+      try {
+        const state = JSON.parse(json);
+        if (state && Array.isArray(state.history)) {
+          this.globalHistory = state.history
+            .filter((e) => e && (e.kind === 'stack' || e.kind === 'grid' ||
+                                 e.kind === 'people'))
+            .map((e) => ({ kind: e.kind, value: this._copy(e.value) }));
+          this.globalHistoryIndex = Number.isInteger(state.index)
+            ? state.index : this.globalHistory.length - 1;
+          this._updateUndoButtons();
+        }
+      } catch (e) { /* ignore */ }
+    });
   },
 
   undoGlobal() {
@@ -103,7 +140,10 @@ const App = {
     const undo = document.getElementById('undoBtn');
     const redo = document.getElementById('redoBtn');
     const canUndo = this.globalHistoryIndex > 0;
-    const canRedo = this.globalHistoryIndex >= 0 &&
+    // Redo is available whenever an entry exists past the pointer. Index -1
+    // (e.g. after undoing a sole people-list edit) still has entry 0 to
+    // re-apply, so it must count.
+    const canRedo = this.globalHistory.length > 0 &&
                     this.globalHistoryIndex < this.globalHistory.length - 1;
     if (undo) {
       undo.disabled = !canUndo;
@@ -306,6 +346,11 @@ function setupBridgeListeners() {
     } catch (e) { /* ignore */ }
   });
   b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
+  // backend records people-list edits in the global timeline itself — keep
+  // the local mirror + undo/redo buttons in sync whenever it grows/moves.
+  if (b.history_changed && b.history_changed.connect) {
+    b.history_changed.connect(() => App._syncGlobalHistory());
+  }
   b.stack_loaded.connect((name, json) => {
     try {
       const blocks = JSON.parse(json);
