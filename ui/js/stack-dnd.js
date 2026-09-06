@@ -4,6 +4,7 @@
    Features:
    - Undo/Redo history (up to 100 steps, persisted)
    - Enable/Disable toggle per block
+   - Block Config pin (keep the Tune panel open when no block is selected)
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -123,6 +124,10 @@ const StackDnD = {
   stack: [],
   selectedIdx: -1,
   customBlocks: [],       // reusable Find & Click presets: [{name, block, updated_at}]
+  // Block Config "Pin" toggle: while true the Tune panel stays open even
+  // when no Action Block is selected (empty state), instead of closing on
+  // deselect.
+  configPinned: false,
   _inited: false,
   _running: false,
   _runningIdx: -1,
@@ -143,10 +148,12 @@ const StackDnD = {
     this._initDefaultStack();
     this._renderStack();
     this._setupAddMenu();
+    this._setupConfigPin();
     this._setupButtons();
     this._setupKeyboardReorder();
     this._setupHistoryButtons();
     this.updateHistoryButtons();
+    this._updateConfigPinButton();
   },
 
   _initDefaultStack() {
@@ -736,6 +743,79 @@ const StackDnD = {
     });
   },
 
+  // ── Block Config pin / keep-open ─────────────────────────────
+  _setupConfigPin() {
+    const btn = document.getElementById('pinConfigBtn');
+    if (btn) {
+      btn.onclick = (ev) => {
+        if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+        this._toggleConfigPin();
+        if (typeof LogConsole !== 'undefined') {
+          LogConsole.log(this.configPinned
+            ? '📌 Block Config pinned — stays open when no block is selected'
+            : '📌 Block Config unpinned — closes when no block is selected',
+            'info');
+        }
+      };
+    }
+    // The close button is also wired here (not only inside _showConfig) so it
+    // works in every state, including a pinned-but-empty panel that was never
+    // populated by a block.
+    const closeBtn = document.getElementById('closeConfigBtn');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        // Explicit close always wins: unpin too, so the next deselect returns
+        // to the default close-on-deselect behaviour.
+        this.configPinned = false;
+        this._updateConfigPinButton();
+        this._updateConfigVisibility(null);
+      };
+    }
+  },
+
+  _toggleConfigPin() {
+    this.configPinned = !this.configPinned;
+    this._updateConfigPinButton();
+    // Apply immediately: pinning an empty panel keeps it visible, unpinning
+    // an empty panel restores the default close-on-deselect behaviour.
+    this._updateConfigVisibility(this.stack[this.selectedIdx]);
+  },
+
+  _updateConfigPinButton() {
+    const btn = document.getElementById('pinConfigBtn');
+    if (!btn) return;
+    btn.classList.toggle('pin-active', this.configPinned);
+    btn.setAttribute('aria-pressed', this.configPinned ? 'true' : 'false');
+    btn.title = this.configPinned
+      ? 'Unpin Block Config — close when no block is selected'
+      : 'Pin Block Config — keep open when no block is selected';
+    const icon = btn.querySelector('.material-icons');
+    if (icon) icon.textContent = 'push_pin';
+  },
+
+  _clearConfigPanel() {
+    const form = document.getElementById('blockConfigForm');
+    if (form) form.innerHTML = '';
+    const actions = document.getElementById('customBlockActions');
+    if (actions) actions.classList.add('hidden');
+  },
+
+  _updateConfigVisibility(block) {
+    const panel = document.getElementById('blockConfigPanel');
+    if (!panel) return;
+    const hasBlock = !!block;
+    if (this.configPinned || hasBlock) {
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
+    panel.classList.toggle('has-block', hasBlock);
+    if (!hasBlock) this._clearConfigPanel();
+    if (typeof SashGrid !== 'undefined' && typeof SashGrid._syncHidden === 'function') {
+      SashGrid._syncHidden();
+    }
+  },
+
   notifyEdited() {
     if (this._running || this._restoring || this._isRestoringHistory || !App.bridge) return;
     clearTimeout(this._snapshotTimer);
@@ -758,8 +838,9 @@ const StackDnD = {
     this.selectedIdx = -1;
     this._runningIdx = -1;
     this._renderStack();
-    const panel = document.getElementById('blockConfigPanel');
-    if (panel) panel.classList.add('hidden');
+    // Respect the pin: an unpinned panel closes on deselect; a pinned panel
+    // stays open showing its empty-state hint.
+    this._updateConfigVisibility(this.stack[this.selectedIdx]);
     if (opts.silent) {
       this._restoring = prev;
     } else {
@@ -813,11 +894,35 @@ const StackDnD = {
     this._showConfig(idx);
   },
 
+  deselectBlock() {
+    this.selectedIdx = -1;
+    this._renderStack();
+    this._showConfig(this.selectedIdx);
+  },
+
   removeBlock(idx) {
     const name = this.stack[idx] ? this._displayName(this.stack[idx]) : '';
+    const selectedBefore = this.selectedIdx;
     this.stack.splice(idx, 1);
-    if (this.selectedIdx >= this.stack.length) this.selectedIdx = this.stack.length - 1;
+    if (selectedBefore === -1) {
+      this.selectedIdx = -1;
+    } else if (idx < selectedBefore) {
+      // Keep the selected block selected: removing one before it shifts its
+      // index down.
+      this.selectedIdx = selectedBefore - 1;
+    } else if (idx === selectedBefore) {
+      // The selected block is gone; fall back to the block that now sits in
+      // that slot (or -1 when the stack is empty).
+      this.selectedIdx = Math.min(selectedBefore, this.stack.length - 1);
+    } else {
+      // Removing an item after the selection leaves the selected index valid.
+      this.selectedIdx = selectedBefore;
+    }
     this._renderStack();
+    // Refresh the Tune panel for the block that fills the selected slot
+    // (or, when the selected block was removed and the panel is pinned,
+    // keep it open with its empty-state hint).
+    this._showConfig(this.selectedIdx);
     this.pushHistory();
     this.notifyEdited();
     if (typeof LogConsole !== 'undefined' && name) {
@@ -837,13 +942,16 @@ const StackDnD = {
   },
 
   _showConfig(idx) {
-    const panel = document.getElementById('blockConfigPanel');
     const form = document.getElementById('blockConfigForm');
     const block = this.stack[idx];
-    if (!block) { panel.classList.remove('has-block'); panel.classList.add('hidden'); return; }
-    panel.classList.remove('hidden');
+    if (!block) {
+      // No block selected: an unpinned panel closes; a pinned panel stays
+      // open and shows the empty-state hint until a block is chosen.
+      this._updateConfigVisibility(null);
+      return;
+    }
     // Marks the panel as populated so its empty-state hint hides.
-    panel.classList.add('has-block');
+    this._updateConfigVisibility(block);
     const meta = this._meta(block.block_id);
     const labels = meta.labels || {};
     const isConstructor = block.block_id === 'CUSTOM_FIND';
@@ -947,10 +1055,16 @@ const StackDnD = {
       inp.addEventListener('change', handler);
       // also listen to input for text to update summary live? but history on change only
     });
-    document.getElementById('closeConfigBtn').onclick = () => {
-      panel.classList.add('hidden');
-      panel.classList.remove('has-block');
-    };
+    // Keep the close handler bound even when _showConfig is called without a
+    // full init (defensive; the pin setup also binds it once at startup).
+    const closeBtn = document.getElementById('closeConfigBtn');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        this.configPinned = false;
+        this._updateConfigPinButton();
+        this._updateConfigVisibility(null);
+      };
+    }
 
     const actions = document.getElementById('customBlockActions');
     if (block.block_id === 'CUSTOM_FIND' && App.bridge) {

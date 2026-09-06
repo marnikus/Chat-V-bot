@@ -109,10 +109,14 @@
 
     <!-- BLOCK CONFIG EDITOR (hidden until a block is selected) -->
     <div id="blockConfigPanel" class="panel config-panel hidden">
-      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">tune</span> Block Config <button id="closeConfigBtn" class="btn-icon-sm"><span class="material-icons">close</span></button></h3>
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">tune</span> Block Config
+        <span class="spacer"></span>
+        <button id="pinConfigBtn" class="btn-icon-sm pin-button" title="📌 Pin Block Config — keep it open when no block is selected" aria-label="Pin Block Config" aria-pressed="false"><span class="material-icons">push_pin</span></button>
+        <button id="closeConfigBtn" class="btn-icon-sm" title="Close Block Config"><span class="material-icons">close</span></button>
+      </h3>
       <!-- Empty state: "Reset to default" un-hides this window, so it must
            explain itself instead of looking broken (AGENT_RULES RULE 4). -->
-      <div id="blockConfigEmpty" class="config-empty">Select a block in the Action Stack to edit its settings here.</div>
+      <div id="blockConfigEmpty" class="config-empty">Select a block in the Action Stack to edit its settings here. Tip: pin this panel with 📌 to keep it open.</div>
       <div id="blockConfigForm"></div>
       <div id="customBlockActions" class="config-actions hidden">
         <button id="saveCustomBlockBtn" class="btn-small" title="Store this block in config.json so it can be reused in any stack"><span class="material-icons">bookmark_add</span> <span class="btn-label" data-label>Save as new preset</span></button>
