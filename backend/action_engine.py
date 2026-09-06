@@ -398,6 +398,10 @@ class ActionEngine(QObject):
         # an enabled CLICK_USER asks for it, work the People list in Order (#)
         # sequence (#1 first … #N) instead of whatever this run collected.
         queue = await self._order_queue_by_column(queue)
+        # Phase 2c: Pick Person — an enabled TAKE_PERSON block chooses one
+        # person from the People list by its rule and remembers the nick for
+        # every {{nick}} field of this run (once per cycle).
+        await self._run_take_phase()
         has_skip = any(b.block_id == "CONDITIONAL_SKIP"
                        and getattr(b, "enabled", True)
                        for b in self._stack)
@@ -455,6 +459,44 @@ class ActionEngine(QObject):
             if not standalone:
                 self.user_complete.emit(user.nick, ok)
         return "worked"
+
+    async def _run_take_phase(self) -> None:
+        """Cycle-level Pick Person blocks (TAKE_PERSON).
+
+        Walks the stack in order and, for every enabled TAKE_PERSON,
+        resolves a nick via its rule and remembers it (note_selected). A
+        rule with no matching person logs a warning and is skipped — the
+        previous selection (if any) is kept.
+        """
+        try:
+            rows = await self._memory.get_all()
+        except Exception as exc:
+            log.warning("Pick Person phase could not read the list: %s", exc)
+            self.debug_msg.emit("      ❌ Pick Person: cannot read the "
+                                f"People list ({exc})", "error")
+            return
+        for block in self._stack:
+            if block.block_id != "TAKE_PERSON":
+                continue
+            if not getattr(block, "enabled", True):
+                continue
+            try:
+                nick = block.choose(rows, self)
+            except Exception as exc:
+                log.warning("Pick Person failed: %s", exc)
+                self.debug_msg.emit("      ❌ Pick Person raised: {exc}",
+                                    "error")
+                continue
+            if nick:
+                self.log_msg.emit(
+                    f"🎯 Pick Person: remembering “{nick}” — {{nick}} in "
+                    "later fields will resolve to it")
+                self.note_selected(nick)
+            else:
+                phrase = getattr(block, "mode_phrase", "")
+                self.log_msg.emit(
+                    "⚠ Pick Person: no " + (phrase or "matching person") +
+                    " in the list — skipped (previous selection kept)")
 
     def note_selected(self, nick: str) -> None:
         """Remember the person a Click User block just selected.
@@ -632,6 +674,8 @@ class ActionEngine(QObject):
                 continue  # already handled in the collect phase
             if block.block_id == "REPEAT_LOOP":
                 continue  # marker — the engine driver handles the cycle count
+            if block.block_id == "TAKE_PERSON":
+                continue  # driver — handled once per cycle (_run_take_phase)
             self._ctx = {"step": idx, "total_steps": total,
                          "block_id": block.block_id,
                          "block_name": block.display_name,

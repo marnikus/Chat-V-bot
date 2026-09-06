@@ -124,6 +124,15 @@ const BUILTIN_BLOCKS = [
   { block_id:'PAUSE',          name:'Custom Pause',      icon:'⏸️',
     defaults:{duration_ms:1000, enabled:true},
     labels:{duration_ms:'Duration (ms)', enabled:'Enabled'} },
+  { block_id:'TAKE_PERSON',    name:'Pick Person',       icon:'🎯',
+    defaults:{pick_mode:'random_new', enabled:true},
+    radios:{pick_mode:['random_new','random_done','order_first']},
+    radio_labels:{pick_mode:{
+        random_new:'Any random un-messaged person (Status New)',
+        random_done:'Any random already-messaged person (Status Done)',
+        order_first:'The first person in Order (#) — exactly #1'}},
+    labels:{pick_mode:'Pick a person from the list and remember its nick:',
+            enabled:'Enabled'} },
   { block_id:'REPEAT_LOOP',    name:'Repeat Loop',       icon:'🔁',
     defaults:{repeat_count:2, enabled:true},
     labels:{repeat_count:'Number of loop cycles (whole run repeats N times, 1 = once)',
@@ -433,6 +442,13 @@ const StackDnD = {
       if (k === 'respect_order') {
         if (v) parts.push('respect Order (#)');
         continue;  // checkbox off adds nothing to the summary
+      }
+      if (b.block_id === 'TAKE_PERSON' && k === 'pick_mode') {
+        const t = { random_new: 'pick: random New',
+                    random_done: 'pick: random Done',
+                    order_first: 'pick: Order #1' }[v];
+        if (t) parts.push(t);
+        continue;
       }
       if (k === 'message' && b.use_composer) continue;  // composer text is used
       parts.push(`${k}=${String(v).substring(0, 24)}`);
@@ -894,6 +910,20 @@ const StackDnD = {
           <label>${labelText}${fromComposer ? ' — disabled: text comes from the Message Composer window' : ''}</label>
           <textarea data-key="message" rows="3"${fromComposer ? ' disabled' : ''}
             placeholder="Message text — or tick “Use Message Composer” above">${this._esc(String(val || ''))}</textarea>
+        </div>`;
+        continue;
+      }
+      const radioOpts = (meta.radios && meta.radios[key]) || null;
+      if (radioOpts) {
+        const rlabels = (meta.radio_labels && meta.radio_labels[key]) || {};
+        const optsHtml = radioOpts.map((o) => {
+          const checked = String(val) === String(o) ? ' checked' : '';
+          return `<label class="radio-opt"><input type="radio" data-key="${key}"
+            value="${this._esc(o)}"${checked}> ${this._esc(rlabels[o] || o)}</label>`;
+        }).join('');
+        html += `<div class="form-row form-row-check${stripe}">
+          <label>${labelText}</label>
+          <div class="radio-group">${optsHtml}</div>
         </div>`;
         continue;
       }
