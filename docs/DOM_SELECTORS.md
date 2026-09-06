@@ -251,3 +251,50 @@ total users in that session.
 ---
 
 *This document is auto-verified against the saved HTML files in this repository.*
+
+---
+
+## Message Archive / Passive Collector (added 2026-09-06)
+
+The selectors the in-page agent (`backend/js/chat_agent.js`) depends on. They
+were verified against the saved pages `Вирт чат.html` (main room, the only
+page that contains message images) and `Вирт чат privat.html` (private chat).
+
+### One message
+
+```
+div.message-container.my-message-background   → sent BY me      (dir = out)
+div.message-container.general-background      → received        (dir = in)
+  p.message
+    span.from                                 → author nick
+    " ▸ "                                     → separator text node
+    span.message                              → the text, OR
+    app-chat-image img[alt="chat image"]      → an image / GIF (src = url)
+  span.sent-time                              → "HH:MM" only — no date
+```
+
+There are **no date separators** in the DOM, so absolute days are inferred by
+the parser (see doc A §5) and stored per message as `day`.
+
+### Which conversation is on screen
+
+```
+.tab-item.active                              → the active tab (class TOKEN
+                                                match: the live attribute is
+                                                "cdk-drag mat-ripple tab-item …")
+  mat-icon.chat-type-icon[data-mat-icon-name="user"]  → private chat
+  mat-icon.chat-type-icon[data-mat-icon-name="room"]  → the main room
+  p.chat-title                                → the partner's nick
+.users-counter                                → participant count (2 = private)
+.primary-text.bold                            → my own row in the user list
+```
+
+### Agent contract
+
+`window.__cvbAgent` (VERSION 3) exposes `state()`, `slice(a, b)` and
+`drain()`; it buffers MutationObserver additions synchronously (cap 500,
+`dropped++` beyond that) and notifies Python through the `__cvbPush` binding,
+debounced by 120 ms. `state()` returns head/tail fingerprints only — never
+the whole conversation — which is what keeps a steady-state poll free of any
+node serialisation.
+

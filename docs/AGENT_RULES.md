@@ -251,3 +251,20 @@ Corollary for "reset to default": restoring the default tree is not enough when
 a hidden panel releases its grid space. `resetToDefault()` also un-hides every
 window, and any window that can be shown while empty needs an empty state
 (RULE 4) so it does not look broken.
+
+## RULE 14 — the archive is not the queue
+
+`users` (chatbot.db) answers *"who should I message under the current
+filter"* and may shrink at any time — filters purge it, People-list edits
+delete from it, undo rewrites it.
+
+`persons` / `messages` (history.db) answer *"what was actually said"* and are
+append-only. No filter, purge, undo or People-list edit may delete archived
+messages, and no collector may add anyone to the queue. Deleting a person in
+the Full User Database writes a tombstone (`deleted_at`) that Undelete
+reverses; only an explicit hard delete erases rows.
+
+The two stores are joined **by nick at read time only** — clicking a nick in
+User Memory looks the person up in the archive; it never copies data between
+the two databases.
+

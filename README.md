@@ -263,6 +263,69 @@ The **Log Console** is a live step-by-step debugger for every block:
 
 ---
 
+## Message History & the Passive Collector
+
+Everything said in a private chat — both directions, text, images and GIFs —
+is archived per nick in a second SQLite database (`history.db`, media bytes
+in `media_cache/`). The queue database (`chatbot.db`) is untouched by it:
+filters and People-list edits never delete archived messages (docs RULE 14).
+
+### My Nick
+
+The pinned header has a **My Nick** field. Set it to the nick *you* are using
+in the chat; it is stored in `config.json` (`collector.my_nick`) and written
+next to every archived message, so a conversation always shows both sides
+even when your nick changes between sessions.
+
+### The three windows
+
+They are ordinary grid windows — drag, split, merge and resize them like any
+other panel (`📐` menu → *Reset to default* brings them all back).
+
+| Window | What it does |
+|---|---|
+| **Person History** | The whole conversation with one person, oldest first, with inline images/GIFs, day separators and gap markers. Click a nick in **User Memory** to open it. Text is selectable; a left click on an image copies it. Search this conversation, or switch to **All people** for a global search grouped per nick. |
+| **Full User Database** | Everyone ever archived, merged by nick (never a duplicate), lazily loaded as you scroll, searchable by nick. Clicking a row opens that person. `Preload` sets how many rows are fetched ahead of the scroll. |
+| **Chat Message Collector** | What the background collector is doing right now: *Collecting*, *Collected*, *No new messages* or *Not in private tab now*, plus the partner, my nick, the archive total and the heartbeat. Pause/resume it, force one pass, or turn media downloads off. |
+
+### How collection works (and why it does not freeze the UI)
+
+A tiny agent is injected into the page. Every heartbeat it returns only a
+**fingerprint of the head and tail** of the conversation plus a message
+count — never the whole DOM. When nothing changed, the pass costs one
+`Runtime.evaluate`; when the tail grew, only the *new* messages are
+serialised, in chunks with a pause between them, and appended. If the page
+trimmed or re-rendered the conversation, the collector re-syncs by overlap
+and records a **gap marker** rather than silently losing lines.
+
+The collector keeps running (throttled) during an Action Stack run, so a
+long automation never costs you messages.
+
+### The COLLECT_HISTORY block
+
+Add **🗃 Collect Message History** to a stack to archive the conversation on
+screen on demand: `target` (current tab or the selected person), `mode`
+(delta / full re-scan), `max_messages`, chunk size and pause, media on/off,
+and *fail if empty*. It reports progress as `done/total` and honours Stop.
+
+### Settings (config.json)
+
+```jsonc
+"history":   { "enabled": true, "db_path": "history.db",
+               "media":   { "enabled": true, "max_file_mb": 2,
+                            "max_cache_mb": 200, "cache_dir": "media_cache" },
+               "preview": { "preload_rows": 40, "page_size": 50,
+                            "show_images": true } },
+"collector": { "enabled": true, "my_nick": "", "heartbeat_ms": 1500,
+               "require_private": true, "download_media": true }
+```
+
+Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
+`docs/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md`,
+`docs/HISTORY_UI_WINDOWS_DESIGN_2026-09-06.md`.
+
+---
+
 ## Repository Structure
 
 ```
@@ -278,6 +341,16 @@ The **Log Console** is a live step-by-step debugger for every block:
 │   ├── message_injector.py  # Message typing via CDP
 │   ├── media_handler.py     # Image attachment via CDP
 │   ├── config_manager.py    # SINGLE JSON file: settings + presets + state
+│   ├── history_service.py   # Message archive: db + repo + query + collector
+│   ├── history_db.py        # history.db schema/connection (FTS5 when available)
+│   ├── history_models.py    # Message/Person/Media records + fingerprints
+│   ├── history_repo.py      # Append/align/merge — the archive writer
+│   ├── history_query.py     # Paging, search, per-person and DB statistics
+│   ├── chat_parser.py       # Delta-aware conversation parser (resource saving)
+│   ├── chat_agent_js.py     # Probe expressions for the in-page agent
+│   ├── collector.py         # Passive private-chat collector state machine
+│   ├── media_store.py       # Image/GIF cache (url + sha256 + bytes on disk)
+│   ├── js/chat_agent.js     # The in-page agent (fingerprints, slices, push)
 │   ├── preset_store.py      # JSON-backed stack/template presets (same file)
 │   ├── dom_probe.py         # DOM probe JS + result interpreter (debugger)
 │   ├── tab_matcher.py       # URL → tab matching (URL presets)
@@ -298,6 +371,11 @@ The **Log Console** is a live step-by-step debugger for every block:
 ├── ui/
 │   ├── index.html           # Main UI shell
 │   ├── css/                 # Stylesheets (dark theme)
+│   ├── js/history-model.js  # Archive paging model (lazy loading, live merge)
+│   ├── js/history-view.js   # Archive renderer (text-only nodes, copy on click)
+│   ├── js/history-store.js  # Person History window
+│   ├── js/history-db.js     # Full User Database window
+│   ├── js/collector-panel.js# Chat Message Collector window
 │   └── js/                  # stack-dnd, presets-ui, url-toolbar, composer, log…
 ├── docs/
 │   ├── ARCHITECTURE.md      # Full architecture document
