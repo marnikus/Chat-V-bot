@@ -18,6 +18,7 @@ from actions import (  # noqa: F401
     pause,
     repeat_loop,
     scroll_parse,
+    search_users,
     take_person,
     type_message,
     wait_page,

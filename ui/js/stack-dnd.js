@@ -133,6 +133,10 @@ const BUILTIN_BLOCKS = [
         order_first:'The first person in Order (#) — exactly #1'}},
     labels:{pick_mode:'Pick a person from the list and remember its nick:',
             enabled:'Enabled'} },
+  { block_id:'SEARCH_USERS',   name:'Search Users',      icon:'🔍',
+    defaults:{text:'',pre_delay_ms:500, enabled:true},
+    labels:{text:'Search text — {{nick}} = selected user (types into the users-list “Поиск” box, focus + text verified)',
+            pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
   { block_id:'REPEAT_LOOP',    name:'Repeat Loop',       icon:'🔁',
     defaults:{repeat_count:2, enabled:true},
     labels:{repeat_count:'Number of loop cycles (whole run repeats N times, 1 = once)',
@@ -448,6 +452,10 @@ const StackDnD = {
                     random_done: 'pick: random Done',
                     order_first: 'pick: Order #1' }[v];
         if (t) parts.push(t);
+        continue;
+      }
+      if (b.block_id === 'SEARCH_USERS' && k === 'text') {
+        parts.push(v ? `search: “${v}”` : 'search: (empty)');
         continue;
       }
       if (k === 'message' && b.use_composer) continue;  // composer text is used

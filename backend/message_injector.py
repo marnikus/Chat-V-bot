@@ -25,6 +25,13 @@ TEXTAREA_SELECTOR = "textarea[placeholder='Сообщение']"
 TEXTAREA_FALLBACK = "textarea#mat-input-1"
 SEND_SELECTOR = "button[type='submit']"
 
+# The users-list search box: structural selectors only — "Поиск" is a
+# floating <mat-label>, NOT a placeholder, and the #mat-input-N ids are
+# regenerated every time the users-list component mounts, so both are
+# unusable in selectors.
+SEARCH_SELECTOR = ".search-field input[matinput]"
+SEARCH_FALLBACK = "input[maxlength='20']"
+
 _SEND_ICON_JS = """(function(){
   var out = {found:false, clicked:false, total:0, error:null};
   try {
@@ -78,6 +85,15 @@ _READ_VALUE_JS = """(function(){
   return ('value' in el && el.value !== undefined) ? el.value : el.textContent;
 })()"""
 
+# True when the cursor is actually inside the field (document.activeElement
+# is the element). Returns JSON so the caller can parse it safely.
+_FOCUS_STATE_JS = """(function(){
+  var el = document.querySelector(__SEL__);
+  if (!el) return JSON.stringify({found:false, focused:false});
+  return JSON.stringify({found:true, focused:document.activeElement === el,
+                         tag:(el.tagName||'').toLowerCase()});
+})()"""
+
 
 def _rep(report: Optional[Callable], message: str, level: str = "info") -> None:
     if report:
@@ -98,10 +114,12 @@ def _js(text: str) -> str:
     return json.dumps(text or "", ensure_ascii=True)
 
 
-async def _find_textarea(cdp: CDPClient, report) -> Optional[str]:
-    """Return the selector of the first textarea that is present."""
-    for sel in (TEXTAREA_SELECTOR, TEXTAREA_FALLBACK):
-        _rep(report, f"🔍 Searching message textarea: selector '{sel}'", "info")
+async def _find_field(cdp: CDPClient, selectors, what: str,
+                      report) -> Optional[str]:
+    """Return the selector of the first field (from `selectors`) that is
+    present. `what` is a human label ("message textarea", "search field")."""
+    for sel in selectors:
+        _rep(report, f"🔍 Searching {what}: selector '{sel}'", "info")
         try:
             raw = await cdp.evaluate(build_probe(selector=sel))
             res = json.loads(raw) if raw else None
@@ -109,13 +127,24 @@ async def _find_textarea(cdp: CDPClient, report) -> Optional[str]:
             _rep(report, f"❌ Probe error: {exc}", "error")
             res = None
         if res and res.get("found"):
-            msg, level = interpret_wait(res, f"textarea '{sel}'")
+            msg, level = interpret_wait(res, f"{what} '{sel}'")
             _rep(report, msg, level)
             return sel
         total = int((res or {}).get("total", 0) or 0)
-        _rep(report, f"❌ Failed to find element: textarea '{sel}' "
+        _rep(report, f"❌ Failed to find element: {what} '{sel}' "
                      f"(matched {total} node(s))", "warn")
     return None
+
+
+async def _field_focused(cdp: CDPClient, sel: str) -> bool:
+    """True when the cursor is inside the field (activeElement === it)."""
+    try:
+        raw = await cdp.evaluate(
+            _FOCUS_STATE_JS.replace("__SEL__", _js(sel)))
+        res = json.loads(raw) if raw else None
+        return bool(res and res.get("found") and res.get("focused"))
+    except Exception:
+        return False
 
 
 async def _field_value(cdp: CDPClient, sel: str) -> Optional[str]:
@@ -147,21 +176,28 @@ async def _focus_and_select_all(cdp: CDPClient, sel: str) -> bool:
 
 
 async def _try_set_value(cdp: CDPClient, sel: str, text: str) -> Optional[str]:
-    """Strategy 1 — native prototype setter + input/change events."""
+    """Strategy 1 — native prototype setter + input/change events.
+
+    The value setter is taken from the element's OWN prototype
+    (HTMLInputElement for <input>, HTMLTextAreaElement for <textarea>) —
+    calling the textarea setter on an <input> silently misbehaves in some
+    browsers.
+    """
     js = """(function(){
         var ta = document.querySelector(__SEL__);
         if(!ta) return 'no-element';
         ta.focus();
-        var setter = Object.getOwnPropertyDescriptor(
-            window.HTMLTextAreaElement.prototype,'value').set;
-        if (!setter && ta.tagName !== 'TEXTAREA') {
-            setter = Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype,'value').set;
-        }
+        var isTextarea = ta.tagName && ta.tagName.toLowerCase() === 'textarea';
+        var proto = isTextarea ? window.HTMLTextAreaElement.prototype
+                               : window.HTMLInputElement.prototype;
+        var setter = proto ? Object.getOwnPropertyDescriptor(proto,'value').set
+                           : null;
         try {
-            setter.call(ta, __TEXT__);
+            if (setter) setter.call(ta, __TEXT__);
+            else ta.value = __TEXT__;
         } catch (e) {
-            ta.value = __TEXT__;
+            try { ta.value = __TEXT__; }
+            catch (e2) { return 'error'; }
         }
         ta.dispatchEvent(new Event('input',{bubbles:true}));
         ta.dispatchEvent(new Event('change',{bubbles:true}));
@@ -232,21 +268,29 @@ async def _try_insert_text(cdp: CDPClient, sel: str, text: str) -> Optional[str]
     return "ok"
 
 
-async def type_message(cdp: CDPClient, text: str, typing_speed_ms: int = 30,
-                       report: Optional[Callable] = None) -> bool:
-    """Put `text` into the message field, verifying the page accepted it.
+async def _run_type_strategies(cdp: CDPClient, sel: str, text: str,
+                               typing_speed_ms: int, report,
+                               kind: str) -> bool:
+    """Shared verified typing ladder: value setter → Ctrl+V → insertText.
 
-    Tries, in order: native value setter → clipboard Ctrl+V paste → CDP
-    Input.insertText. The first strategy whose write verifies wins; the log
-    records which one delivered the text.
+    `kind` selects the log wording — "message" reproduces the original Type
+    Message strings byte-for-byte, "search" is used for the users-list
+    search box. Returns True only when the page actually accepted the text
+    (read-back equals what was sent).
     """
-    sel = await _find_textarea(cdp, report)
-    if not sel:
-        _rep(report, "❌ Type Message aborted: no message textarea found", "error")
-        return False
-    if not text:
-        _rep(report, "⚠ Message text is empty — nothing typed", "warn")
-        return False
+    n = len(text)
+    if kind == "search":
+        noun, warn_direct, warn_paste = ("search field",
+            "⚠ Direct search field value injection was not accepted — "
+            "copying the text and pasting with Ctrl+V…",
+            "⚠ Clipboard paste not accepted — falling back to CDP "
+            "Input.insertText…")
+    else:
+        noun, warn_direct, warn_paste = ("textarea",
+            "⚠ Direct textarea value injection was not accepted — copying "
+            "the text and pasting with Ctrl+V…",
+            "⚠ Clipboard paste not accepted — falling back to CDP "
+            "Input.insertText…")
 
     attempts = []
     # Strategy 1 — direct value injection (fast path).
@@ -254,48 +298,109 @@ async def type_message(cdp: CDPClient, text: str, typing_speed_ms: int = 30,
     if result == "ok":
         actual = await _field_value(cdp, sel)
         if _same_text(actual, text):
-            _rep(report, f"⌨️ Typed {len(text)} char(s) into textarea '{sel}' "
+            _rep(report, f"⌨️ Typed {n} char(s) into {noun} '{sel}' "
                          f"(speed {typing_speed_ms} ms/char)", "success")
-            log.info("Message typed (%d chars)", len(text))
+            log.info("%s typed (%d chars)", noun, n)
             return True
         attempts.append("direct value set was not accepted by the page")
     else:
         attempts.append(f"direct value set failed ({result})")
 
     # Strategy 2 — clipboard + real Ctrl+V paste into the selected field.
-    _rep(report, "⚠ Direct textarea value injection was not accepted — "
-                 "copying the text and pasting with Ctrl+V…", "warn")
+    _rep(report, warn_direct, "warn")
     result = await _try_clipboard_paste(cdp, sel, text)
     if result == "ok":
         actual = await _field_value(cdp, sel)
         if _same_text(actual, text):
-            _rep(report, f"📋 Pasted {len(text)} char(s) with Ctrl+V into "
-                         f"textarea '{sel}'", "success")
-            log.info("Message pasted via Ctrl+V (%d chars)", len(text))
+            _rep(report, f"📋 Pasted {n} char(s) with Ctrl+V into "
+                         f"{noun} '{sel}'", "success")
+            log.info("Text pasted via Ctrl+V (%d chars)", n)
             return True
         attempts.append("Ctrl+V paste ran but the page still did not accept it")
     else:
         attempts.append(f"Ctrl+V paste unavailable ({result})")
 
     # Strategy 3 — CDP-level text insertion into the focused field.
-    _rep(report, "⚠ Clipboard paste not accepted — falling back to CDP "
-                 "Input.insertText…", "warn")
+    _rep(report, warn_paste, "warn")
     result = await _try_insert_text(cdp, sel, text)
     if result == "ok":
         actual = await _field_value(cdp, sel)
         if _same_text(actual, text):
-            _rep(report, f"⌨️ Inserted {len(text)} char(s) into textarea "
-                         f"'{sel}' (Input.insertText)", "success")
-            log.info("Message inserted via Input.insertText (%d chars)",
-                     len(text))
+            _rep(report, f"⌨️ Inserted {n} char(s) into {noun} '{sel}' "
+                         f"(Input.insertText)", "success")
+            log.info("Text inserted via Input.insertText (%d chars)", n)
             return True
         attempts.append("insertText ran but the page still did not accept it")
     else:
         attempts.append(f"insertText unavailable ({result})")
 
-    _rep(report, "❌ Textarea value injection failed (page did not accept "
+    noun_cap = "Search field" if kind == "search" else "Textarea"
+    _rep(report, f"❌ {noun_cap} value injection failed (page did not accept "
                  "input): " + "; ".join(attempts), "error")
     return False
+
+
+async def type_message(cdp: CDPClient, text: str, typing_speed_ms: int = 30,
+                       report: Optional[Callable] = None) -> bool:
+    """Put `text` into the message textarea, verifying the page accepted it.
+
+    Tries, in order: native value setter → clipboard Ctrl+V paste → CDP
+    Input.insertText. The first strategy whose write verifies wins; the log
+    records which one delivered the text.
+    """
+    sel = await _find_field(cdp, (TEXTAREA_SELECTOR, TEXTAREA_FALLBACK),
+                            "message textarea", report)
+    if not sel:
+        _rep(report, "❌ Type Message aborted: no message textarea found", "error")
+        return False
+    if not text:
+        _rep(report, "⚠ Message text is empty — nothing typed", "warn")
+        return False
+    return await _run_type_strategies(cdp, sel, text, typing_speed_ms,
+                                      report, "message")
+
+
+async def type_search(cdp: CDPClient, text: str,
+                      report: Optional[Callable] = None) -> bool:
+    """Type `text` into the users-list Поиск search box, VERIFIED.
+
+    Beyond the same strategy ladder as Type Message, this checks the two
+    things that were missing: the field was really clicked and the cursor
+    is inside it (document.activeElement === the input; a real click on the
+    field centre is issued first when needed), and the text really landed
+    in the box (value read-back). Every stage is logged.
+    """
+    sel = await _find_field(cdp, (SEARCH_SELECTOR, SEARCH_FALLBACK),
+                            "search field", report)
+    if not sel:
+        _rep(report, "❌ Search Users aborted: no search field found", "error")
+        return False
+    if not text:
+        _rep(report, "⚠ Search text is empty — nothing typed", "warn")
+        return False
+
+    # ── focus: make sure the cursor is inside the field ──────────
+    if await _field_focused(cdp, sel):
+        _rep(report, "⌨️ Search field already focused — cursor inside", "success")
+    else:
+        _rep(report, "⚠ Search field not focused — clicking it to place the "
+                     "cursor…", "warn")
+        try:
+            rect = await cdp.get_element_rect(sel)
+            if rect:
+                await cdp.click_at(rect["x"] + rect["width"] / 2,
+                                   rect["y"] + rect["height"] / 2)
+                await asyncio.sleep(0.1)
+        except Exception as exc:
+            _rep(report, f"❌ Could not click the search field: {exc}",
+                 "error")
+        if not await _field_focused(cdp, sel):
+            _rep(report, "❌ Search field could not be focused — the cursor "
+                         "is not inside it", "error")
+            return False
+        _rep(report, "✅ Search field clicked — cursor inside", "success")
+
+    return await _run_type_strategies(cdp, sel, text, 0, report, "search")
 
 
 async def click_send(cdp: CDPClient, report: Optional[Callable] = None) -> bool:
