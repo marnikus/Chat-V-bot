@@ -32,7 +32,16 @@
     { id: 'composer', title: 'Message Composer' },
     { id: 'people',   title: 'User Memory' },
     { id: 'log',      title: 'Log Console' },
+    // Message archive windows (added in layout version 2)
+    { id: 'history',   title: 'Person History' },
+    { id: 'userdb',    title: 'Full User Database' },
+    { id: 'collector', title: 'Chat Message Collector' },
   ];
+  /** Windows that existed in layout version 1 — used by migrate(). */
+  const V1_WINDOW_IDS = ['stats', 'filters', 'stack', 'config', 'composer',
+                         'people', 'log'];
+  /** Current serialisation version. v1 layouts are migrated on load. */
+  const VERSION = 2;
   const WINDOW_IDS = WINDOWS.map((w) => w.id);
   const WINDOW_TITLES = Object.fromEntries(WINDOWS.map((w) => [w.id, w.title]));
 
@@ -70,7 +79,9 @@
       ], [17, 83]),
       leaf('composer'),
       split('row', [leaf('people'), leaf('log')], [70, 30]),
-    ], [46, 24, 30]);
+      split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
+            [40, 35, 25]),
+    ], [36, 18, 24, 22]);
   }
 
   /**
@@ -81,7 +92,8 @@
     return split('col', [
       leaf('stats'), leaf('filters'), leaf('stack'), leaf('config'),
       leaf('composer'), leaf('people'), leaf('log'),
-    ], [8, 8, 20, 16, 18, 18, 12]);
+      leaf('history'), leaf('userdb'), leaf('collector'),
+    ], [6, 6, 16, 12, 12, 12, 10, 10, 9, 7]);
   }
 
   /**
@@ -95,7 +107,11 @@
         split('row', [leaf('stats'), leaf('filters')], [45, 55]),
         split('col', [leaf('stack'), leaf('config')], [72, 28]),
       ], [25, 75]),
-    ], [38, 26, 36]);
+      split('row', [
+        split('col', [leaf('history'), leaf('collector')], [65, 35]),
+        leaf('userdb'),
+      ], [55, 45]),
+    ], [30, 20, 28, 22]);
   }
 
   /**
@@ -112,7 +128,9 @@
         split('row', [leaf('stats'), leaf('filters')], [45, 55]),
         split('col', [leaf('stack'), leaf('config')], [72, 28]),
       ], [25, 75]),
-    ], [58, 42]);
+      split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
+            [38, 34, 28]),
+    ], [40, 30, 30]);
   }
 
   const PRESETS = {
@@ -494,23 +512,102 @@
     return null;
   }
 
-  const serialize = (tree) => JSON.stringify({ v: 1, tree });
+  // ── v1 → v2 migration ────────────────────────────────────────
 
-  /** Parse + validate. Returns { ok:true, tree } or { ok:false, error }. */
+  /**
+   * Drop leaves that are not windows any more (and repeated ids), collapsing
+   * splits that end up with a single child. Returns null when nothing usable
+   * is left.
+   */
+  function pruneTree(node, seen, allowed) {
+    seen = seen || new Set();
+    allowed = allowed || new Set(WINDOW_IDS);
+    if (isLeaf(node)) {
+      if (typeof node.id !== 'string' || !allowed.has(node.id)) return null;
+      if (seen.has(node.id)) return null;
+      seen.add(node.id);
+      return leaf(node.id);
+    }
+    if (!isSplit(node) || !Array.isArray(node.children)) return null;
+    const kids = [], sizes = [];
+    node.children.forEach((child, i) => {
+      const kept = pruneTree(child, seen, allowed);
+      if (!kept) return;
+      kids.push(kept);
+      const size = Array.isArray(node.sizes) ? Number(node.sizes[i]) : NaN;
+      sizes.push(Number.isFinite(size) && size > 0 ? size : MIN_SIZE);
+    });
+    if (!kids.length) return null;
+    if (kids.length === 1) return kids[0];
+    return { t: 'split', dir: node.dir === 'col' ? 'col' : 'row',
+             children: kids, sizes: normalizeSizes(sizes) };
+  }
+
+  /** Even sizes that always sum to exactly 100 (integers where possible). */
+  function evenSizes(count) {
+    const base = Math.floor(100 / count);
+    const out = new Array(count).fill(base);
+    out[0] += 100 - base * count;
+    return out;
+  }
+
+  /**
+   * Upgrade an older arrangement to the current window set: unknown and
+   * duplicated windows are dropped, missing ones are appended as a new row
+   * along the bottom, and the user's existing arrangement is preserved.
+   * Anything unusable falls back to the default tree. Idempotent.
+   */
+  function migrate(tree) {
+    const pruned = pruneTree(tree);
+    if (!pruned || !isSplit(pruned)) return defaultTree();
+    const present = new Set(leafIds(pruned));
+    const missing = WINDOW_IDS.filter((id) => !present.has(id));
+    if (!missing.length) return validate(pruned) ? defaultTree() : pruned;
+    const extra = missing.length === 1
+      ? leaf(missing[0])
+      : { t: 'split', dir: 'row', children: missing.map(leaf),
+          sizes: evenSizes(missing.length) };
+    const share = Math.min(40, Math.max(MIN_SIZE, missing.length * 9));
+    const out = { t: 'split', dir: 'col', children: [pruned, extra],
+                  sizes: [100 - share, share] };
+    return validate(out) ? defaultTree() : out;
+  }
+
+  const serialize = (tree) => JSON.stringify({ v: VERSION, tree });
+
+  /**
+   * Parse + validate, migrating older versions.
+   * Returns { ok:true, tree, migrated? } or { ok:false, error }.
+   */
   function deserialize(str, expectedIds) {
+    let obj;
     try {
-      const obj = JSON.parse(str);
-      const tree = obj && obj.v === 1 ? obj.tree : obj;
-      const err = validate(tree, expectedIds);
-      return err ? { ok: false, error: err } : { ok: true, tree: clone(tree) };
+      obj = JSON.parse(str);
     } catch (e) {
       return { ok: false, error: 'unparseable: ' + e.message };
     }
+    const versioned = obj && typeof obj === 'object' && !obj.t;
+    const version = versioned ? obj.v : 1;      // a bare tree is a v1 layout
+    const tree = versioned ? obj.tree : obj;
+    if (version !== 1 && version !== VERSION)
+      return { ok: false, error: 'unsupported layout version ' + version };
+    if (version === VERSION) {
+      const err = validate(tree, expectedIds);
+      return err ? { ok: false, error: err } : { ok: true, tree: clone(tree) };
+    }
+    // v1: refuse structural rubbish rather than half-migrating it, then
+    // upgrade the arrangement so nobody loses their layout on update.
+    const structural = validate(tree, leafIds(tree));
+    if (structural) return { ok: false, error: structural };
+    const upgraded = migrate(tree);
+    const err = validate(upgraded, expectedIds);
+    return err ? { ok: false, error: err }
+               : { ok: true, tree: upgraded, migrated: true };
   }
 
   return {
-    WINDOWS, WINDOW_IDS, WINDOW_TITLES,
-    MAX_DEPTH, MIN_SIZE,
+    WINDOWS, WINDOW_IDS, WINDOW_TITLES, V1_WINDOW_IDS, VERSION,
+    MAX_DEPTH, MIN_SIZE, pruneTree, migrate,
     leaf, split, clone, firstLeafId,
     defaultTree, layoutA, layoutB, layoutC, PRESETS,
     normalizeSizes,

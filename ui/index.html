@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="css/stack-drag.css">
 <link rel="stylesheet" href="css/table.css">
 <link rel="stylesheet" href="css/composer.css">
+<link rel="stylesheet" href="css/history.css">
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
@@ -22,6 +23,12 @@
       <span class="app-title">🤖 ChatBot Automator</span>
     </div>
     <div class="header-right">
+      <div class="my-nick-wrap">
+        <label for="myNickInput">My Nick</label>
+        <input id="myNickInput" type="text" spellcheck="false" autocomplete="off"
+               placeholder="your nick in the chat"
+               title="The nick YOU are using in this chat session. Stored in config.json and written next to every archived message, so the history always shows both sides.">
+      </div>
       <button id="layoutMenuBtn" class="btn-icon"
               title="Grid layouts — drag any window by its title bar, or pick a preset arrangement"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
@@ -56,7 +63,7 @@
   <main class="sash-grid" id="sashGrid">
 
     <!-- STATS -->
-    <div class="panel stats-panel" id="winStats">
+    <div class="panel stats-panel" id="winStats" data-window="stats">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move · drop on an edge to split · drop in the middle to join a row/column">drag_indicator</span><span class="material-icons">bar_chart</span> Stats</h3>
       <div id="statsContainer">
         <div class="stat"><span class="stat-label">Total</span><span id="statTotal" class="stat-value">0</span></div>
@@ -66,13 +73,13 @@
     </div>
 
     <!-- FILTERS -->
-    <div class="panel filters-panel" id="winFilters">
+    <div class="panel filters-panel" id="winFilters" data-window="filters">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">filter_list</span> Filters <button id="editCriteriaBtn" class="btn-icon-sm" title="Edit criteria"><span class="material-icons">edit</span></button></h3>
       <div id="criteriaDisplay"></div>
     </div>
 
     <!-- ACTION STACK -->
-    <div class="panel stack-panel" id="winStack">
+    <div class="panel stack-panel" id="winStack" data-window="stack">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">view_list</span> Action Stack
         <span class="spacer"></span>
         <button id="undoBtn" class="btn-icon-sm" title="Undo (Ctrl+Z) — up to 100 steps" disabled><span class="material-icons">undo</span></button>
@@ -108,7 +115,7 @@
     </div>
 
     <!-- BLOCK CONFIG EDITOR (hidden until a block is selected) -->
-    <div id="blockConfigPanel" class="panel config-panel hidden">
+    <div id="blockConfigPanel" data-window="config" class="panel config-panel hidden">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">tune</span> Block Config
         <span class="spacer"></span>
         <button id="pinConfigBtn" class="btn-icon-sm pin-button" title="📌 Pin Block Config — keep it open when no block is selected" aria-label="Pin Block Config" aria-pressed="false"><span class="material-icons">push_pin</span></button>
@@ -124,7 +131,7 @@
     </div>
 
     <!-- MESSAGE COMPOSER -->
-    <div class="panel composer-panel" id="winComposer">
+    <div class="panel composer-panel" id="winComposer" data-window="composer">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">chat</span> Message Composer</h3>
       <textarea id="messageInput" placeholder="Type your message here... Use {{nick}} for username" maxlength="1000"></textarea>
       <div class="composer-bar">
@@ -150,7 +157,7 @@
     </div>
 
     <!-- USER MEMORY (people table) -->
-    <div class="panel table-panel" id="winPeople">
+    <div class="panel table-panel" id="winPeople" data-window="people">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">people</span> User Memory
         <input id="userSearch" class="user-search" type="search"
                placeholder="Filter nick…" spellcheck="false" autocomplete="off">
@@ -168,14 +175,15 @@
           <thead><tr>
             <th class="col-select"><input type="checkbox" id="selectAllUsers"
                 title="Select / deselect all visible rows"></th>
-            <th class="col-order" data-sort="order" tabindex="0" aria-sort="none"
-                title="Processing order — 1 = first to be processed (people with status New only)"># <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="nick" tabindex="0" aria-sort="none">Nick <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="gender" tabindex="0" aria-sort="none">Gender <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="registered" tabindex="0" aria-sort="none">Reg? <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="status" tabindex="0" aria-sort="none">Status <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="first_seen" tabindex="0" aria-sort="none">First Seen <span class="sort-arrow">▲▼</span></th>
-            <th data-sort="last_messaged" tabindex="0" aria-sort="none">Messaged <span class="sort-arrow">▲▼</span></th>
+            <th class="col-order" data-sort="order" tabindex="-1" aria-sort="none">
+                <button type="button" class="sort-button"
+                  title="Processing order — 1 = first to be processed (people with status New only)"># <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="nick" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Nick">Nick <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="gender" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Gender">Gender <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="registered" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Reg?">Reg? <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="status" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Status">Status <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="first_seen" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by First Seen">First Seen <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="last_messaged" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Messaged">Messaged <span class="sort-arrow">▲▼</span></button></th>
             <th>Actions</th>
           </tr></thead>
           <tbody id="userTableBody"></tbody>
@@ -184,12 +192,75 @@
     </div>
 
     <!-- LOG CONSOLE -->
-    <div class="panel log-panel" id="winLog">
+    <div class="panel log-panel" id="winLog" data-window="log">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">terminal</span> Log Console
         <span class="spacer"></span>
         <button id="clearLogBtn" class="btn-small" title="Clear console">Clear</button>
       </h3>
       <div id="logConsole" class="log-console"></div>
+    </div>
+
+    <!-- PERSON HISTORY (whole conversation with one person) -->
+    <div class="panel history-panel" id="winHistory" data-window="history">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">forum</span> Person History
+        <span class="spacer"></span>
+        <button id="historyLatestBtn" class="btn-small hidden"
+                title="New messages arrived while you were reading older ones">Jump to latest</button>
+      </h3>
+      <div class="history-toolbar">
+        <input id="historySearchInput" class="history-search" type="search"
+               spellcheck="false" autocomplete="off"
+               placeholder="Search this conversation…">
+        <button id="historySearchGlobalBtn" class="btn-small"
+                title="Search every conversation instead of this one">All people</button>
+        <label class="mini-toggle" title="Show images and GIFs inline (off = placeholders only)">
+          <input type="checkbox" id="historyImagesToggle" checked> Images</label>
+      </div>
+      <div class="history-header" id="historyHeader"></div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+
+    <!-- FULL USER DATABASE (everyone ever archived, merged by nick) -->
+    <div class="panel userdb-panel" id="winUserDb" data-window="userdb">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">storage</span> Full User Database
+        <span class="spacer"></span>
+        <button id="userdbRefreshBtn" class="btn-icon-sm" title="Reload the list"><span class="material-icons">refresh</span></button>
+      </h3>
+      <div class="userdb-toolbar">
+        <input id="userdbSearch" class="userdb-search" type="search"
+               spellcheck="false" autocomplete="off" placeholder="Search nick…">
+        <label class="mini-toggle" title="How many rows are loaded ahead of the scroll position">
+          Preload <input id="userdbPreload" type="number" min="5" max="500" step="5" value="40"></label>
+      </div>
+      <div class="userdb-list" id="userdbList">
+        <table class="userdb-table" id="userdbTable">
+          <thead><tr>
+            <th>Nick</th><th>Msgs</th><th>Media</th>
+            <th>First</th><th>Last</th><th>My nick</th>
+          </tr></thead>
+          <tbody id="userdbBody"></tbody>
+        </table>
+      </div>
+      <div class="userdb-foot" id="userdbFoot"></div>
+    </div>
+
+    <!-- CHAT MESSAGE COLLECTOR (passive private-chat monitor) -->
+    <div class="panel collector-panel" id="winCollector" data-window="collector">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">radar</span> Chat Message Collector
+        <span class="spacer"></span>
+        <span id="collectorStatus" class="collector-state state-off">Off</span>
+      </h3>
+      <div class="collector-toolbar">
+        <button id="collectorPauseBtn" class="btn-small" title="Pause / resume the passive collector">⏸ Pause</button>
+        <button id="collectorNowBtn" class="btn-small" title="Run one collection pass right now">Collect now</button>
+        <label class="mini-toggle"><input type="checkbox" id="collectorEnabledToggle" checked> On</label>
+        <label class="mini-toggle"><input type="checkbox" id="collectorMediaToggle" checked> Media</label>
+        <label class="mini-toggle" title="How often the active tab is checked (ms)">
+          Every <input id="collectorHeartbeat" type="number" min="300" max="60000" step="100" value="1500"> ms</label>
+      </div>
+      <div class="collector-body">
+        <div class="collector-rows" id="collectorRows"></div>
+      </div>
     </div>
 
   </main>
@@ -254,5 +325,10 @@
 <script src="js/url-toolbar.js"></script>
 <script src="js/criteria-editor.js"></script>
 <script src="js/log-console.js"></script>
+<script src="js/history-model.js"></script>
+<script src="js/history-view.js"></script>
+<script src="js/history-store.js"></script>
+<script src="js/history-db.js"></script>
+<script src="js/collector-panel.js"></script>
 </body>
 </html>

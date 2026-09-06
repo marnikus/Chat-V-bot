@@ -146,6 +146,13 @@ class HistoryService:
             except OSError as e:
                 log.warning("media cache folder unavailable: %s", e)
         await self._install_push_binding()
+        # A reconnect (or a Chrome restart) drops the binding — put it back.
+        connected = getattr(self.cdp, "connected", None)
+        if connected is not None and hasattr(connected, "connect"):
+            connected.connect(lambda: asyncio.ensure_future(self._rebind()))
+        disconnected = getattr(self.cdp, "disconnected", None)
+        if disconnected is not None and hasattr(disconnected, "connect"):
+            disconnected.connect(self._on_disconnected)
         log.info("Message archive ready: %s (fts=%s)", self.db.path,
                  self.db.fts_enabled)
         return self
@@ -164,6 +171,13 @@ class HistoryService:
         self._binding = True
         if hasattr(self.cdp, "on_event"):
             self.cdp.on_event("Runtime.bindingCalled", self._on_binding)
+
+    async def _rebind(self) -> None:
+        self._binding = False
+        await self._install_push_binding()
+
+    def _on_disconnected(self) -> None:
+        self._binding = False
 
     def _on_binding(self, params: dict):
         if (params or {}).get("name") != "__cvbPush":

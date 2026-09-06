@@ -43,6 +43,7 @@ const SashGrid = {
   WIN_ICONS: {
     stats: 'bar_chart', filters: 'filter_list', stack: 'view_list',
     config: 'tune', composer: 'chat', people: 'people', log: 'terminal',
+    history: 'forum', userdb: 'storage', collector: 'radar',
   },
 
   // ── bootstrap ────────────────────────────────────────────────
@@ -55,6 +56,7 @@ const SashGrid = {
       stats: 'winStats', filters: 'winFilters', stack: 'winStack',
       config: 'blockConfigPanel', composer: 'winComposer',
       people: 'winPeople', log: 'winLog',
+      history: 'winHistory', userdb: 'winUserDb', collector: 'winCollector',
     };
     for (const w of SashCore.WINDOWS) {
       const el = document.getElementById(winElIds[w.id]);

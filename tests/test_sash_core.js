@@ -36,8 +36,13 @@ function near(a, b, tol, msg) {
   if (Math.abs(a - b) > (tol == null ? 0.01 : tol))
     throw new Error((msg || 'near') + ': ' + a + ' !~ ' + b);
 }
-const ALL = ['stats', 'filters', 'stack', 'config', 'composer', 'people', 'log']
+// Layout version 2: the seven original windows plus the message-archive
+// windows (Person History, Full User Database, Chat Message Collector).
+const ALL = ['stats', 'filters', 'stack', 'config', 'composer', 'people',
+             'log', 'history', 'userdb', 'collector']
   .slice().sort(); // sorted — compared against sorted leaf lists
+/** ALL minus the given ids — for trees a test deliberately shrinks. */
+const allBut = (...ids) => ALL.filter((i) => !ids.includes(i));
 const sorted = (tree) => S.leafIds(tree).slice().sort();
 const valid = (tree, ids) => ok(S.validate(tree, ids) === null,
   'validate: ' + S.validate(tree, ids));
@@ -49,13 +54,13 @@ const grandParentOf = (tree, id) =>
 
 // ── presets ──────────────────────────────────────────────────────
 
-t('default tree validates & contains all 7 windows', () => {
+t('default tree validates & contains every window', () => {
   const d = S.defaultTree();
   valid(d);
   eq(sorted(d), ALL);
   // col [ top utility row | composer | people|log row ]
-  ok(S.isSplit(d) && d.dir === 'col' && d.children.length === 3, 'root col, 3 children');
-  eq(d.sizes, [46, 24, 30]);
+  ok(S.isSplit(d) && d.dir === 'col' && d.children.length === 4, 'root col, 4 children');
+  eq(d.sizes, [36, 18, 24, 22]);
   const top = d.children[0];
   ok(S.isSplit(top) && top.dir === 'row' && top.children.length === 2, 'top row, 2 groups');
   eq(top.sizes, [17, 83]);
@@ -64,24 +69,28 @@ t('default tree validates & contains all 7 windows', () => {
   ok(S.isLeaf(d.children[1]) && d.children[1].id === 'composer', 'composer own row');
   eq(S.leafIds(d.children[2]), ['people', 'log']);
   eq(d.children[2].sizes, [70, 30]);
+  eq(S.leafIds(d.children[3]), ['history', 'userdb', 'collector']);
 });
 
-t('layout A: 7 stacked rows in spec order', () => {
+t('layout A: one stacked row per window, spec order', () => {
   const a = S.layoutA();
   valid(a);
   eq(sorted(a), ALL);
-  ok(S.isSplit(a) && a.dir === 'col' && a.children.length === 7, '7 rows');
+  ok(S.isSplit(a) && a.dir === 'col' && a.children.length === 10, '10 rows');
   eq(a.children.map((c) => c.id), ['stats', 'filters', 'stack', 'config',
-                                    'composer', 'people', 'log']);
-  eq(a.sizes, [8, 8, 20, 16, 18, 18, 12]);
+                                    'composer', 'people', 'log',
+                                    'history', 'userdb', 'collector']);
+  eq(a.sizes, [6, 6, 16, 12, 12, 12, 10, 10, 9, 7]);
 });
 
 t('layout B: [composer|people] row, full-width log, utilities row', () => {
   const b = S.layoutB();
   valid(b);
   eq(sorted(b), ALL);
-  ok(S.isSplit(b) && b.dir === 'col' && b.children.length === 3, '3 rows');
-  eq(b.sizes, [38, 26, 36]);
+  ok(S.isSplit(b) && b.dir === 'col' && b.children.length === 4, '4 rows');
+  eq(b.sizes, [30, 20, 28, 22]);
+  eq(S.leafIds(b.children[3]).slice().sort(),
+     ['collector', 'history', 'userdb']);
   const top = b.children[0];
   ok(S.isSplit(top) && top.dir === 'row' && top.children.length === 2, 'top row');
   eq(S.leafIds(top), ['composer', 'people']);
@@ -103,8 +112,9 @@ t('layout C: log spans the full height of the hero row', () => {
   const c = S.layoutC();
   valid(c);
   eq(sorted(c), ALL);
-  ok(S.isSplit(c) && c.dir === 'col' && c.children.length === 2, '2 rows');
-  near(c.sizes[0], 58, 0.001); near(c.sizes[1], 42, 0.001);
+  ok(S.isSplit(c) && c.dir === 'col' && c.children.length === 3, '3 rows');
+  near(c.sizes[0], 40, 0.001); near(c.sizes[1], 30, 0.001);
+  near(c.sizes[2], 30, 0.001);
   const hero = c.children[0];
   ok(S.isSplit(hero) && hero.dir === 'row' && hero.children.length === 2, 'hero row');
   eq(hero.sizes, [70, 30]);
@@ -112,6 +122,7 @@ t('layout C: log spans the full height of the hero row', () => {
   eq(S.leafIds(hero.children[0]), ['composer', 'people']);
   ok(S.isLeaf(hero.children[1]) && hero.children[1].id === 'log', 'log = side column');
   eq(S.leafIds(c.children[1]), ['stats', 'filters', 'stack', 'config']);
+  eq(S.leafIds(c.children[2]), ['history', 'userdb', 'collector']);
 });
 
 // ── splitLeaf (edge drop = "splits in half" semantics) ───────────
@@ -165,14 +176,14 @@ t('moveWindow: edge drop splits the target & removes the original row', () => {
   S.moveWindow(d, 'composer',
     { kind: 'edge', target: 'people', dir: 'row', newFirst: true });
   valid(d);
-  eq(sorted(d), ALL, 'still 7 windows (a move, not a copy)');
+  eq(sorted(d), ALL, 'every window still there (a move, not a copy)');
   const p = parentOf(d, 'people');
   eq(S.leafIds(p), ['composer', 'people'], 'composer landed in people\'s row');
   eq(p.sizes, [50, 50]);
-  // composer\'s old full-width row is gone → root has 2 children, renormalised
-  ok(d.children.length === 2, 'root now 2 children');
-  near(d.sizes[0], 46 / 76 * 100, 0.1, 'top share renormalised');
-  near(d.sizes[1], 30 / 76 * 100, 0.1, 'bottom share renormalised');
+  // composer\'s old full-width row is gone → one row fewer, renormalised
+  ok(d.children.length === 3, 'root now 3 children');
+  near(d.sizes[0], 36 / 82 * 100, 0.1, 'top share renormalised');
+  near(d.sizes[1], 24 / 82 * 100, 0.1, 'bottom share renormalised');
   // bottom row = [ row[composer,people] | log ] — log kept its slot
   ok(S.isLeaf(d.children[1].children[1]) &&
      d.children[1].children[1].id === 'log', 'log stayed in the bottom row');
@@ -196,9 +207,9 @@ t('moveWindow: center drop into a 2-child sub-split → 3 children, sizes stay s
   const inner = parentOf(b, 'stats');          // [stats|filters] row
   eq(S.leafIds(inner), ['log', 'stats', 'filters']);
   near(inner.sizes[0], 22.5); near(inner.sizes[1], 22.5); near(inner.sizes[2], 55);
-  // log left its full-width row → root now has 2 children
-  ok(b.children.length === 2, 'root now 2 children');
-  near(b.sizes[0], 38 / 74 * 100, 0.1);
+  // log left its full-width row → root now has one row fewer
+  ok(b.children.length === 3, 'root now 3 children');
+  near(b.sizes[0], 30 / 80 * 100, 0.1);
 });
 
 t('moveWindow: sash drop lands between two sub-split groups', () => {
@@ -212,7 +223,7 @@ t('moveWindow: sash drop lands between two sub-split groups', () => {
   eq(S.leafIds(util.children[0]), ['stats', 'filters']);
   eq(S.leafIds(util.children[2]), ['stack', 'config']);
   near(util.sizes[0], 25); near(util.sizes[1], 37.5); near(util.sizes[2], 37.5);
-  ok(b.children.length === 2, 'log\'s old row collapsed away');
+  ok(b.children.length === 3, 'log\'s old row collapsed away');
 });
 
 t('moveWindow: sash drop between non-adjacent anchors throws', () => {
@@ -251,7 +262,7 @@ t('moveWindow: unknown window / target throws', () => {
 t('removeLeaf: 2-child split collapses to the remaining child', () => {
   const d = S.defaultTree();
   S.removeLeaf(d, 'config');
-  valid(d, ['stats', 'filters', 'stack', 'composer', 'people', 'log']);
+  valid(d, allBut('config'));
   const p = parentOf(d, 'stack');
   ok(p.dir === 'row', 'stack\'s parent is now the top row (col collapsed)');
   eq(p.sizes, [17, 83]);
@@ -262,7 +273,7 @@ t('removeLeaf: 3+-child split renormalises instead of collapsing', () => {
   S.moveWindow(b, 'log', { kind: 'sibling', target: 'stats', side: 'before' });
   // utilities row now: [log, stats, filters] | [stack/config]
   S.removeLeaf(b, 'log');
-  valid(b, ['stats', 'filters', 'stack', 'config', 'composer', 'people']);
+  valid(b, allBut('log'));
   const util = grandParentOf(b, 'stats');
   eq(S.leafIds(util.children[0]).slice().sort(), ['filters', 'stats']);
   const sum = util.sizes.reduce((a, x) => a + x, 0);

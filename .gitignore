@@ -8,3 +8,5 @@ logs/*.log
 *.db-journal
 logs/*.jsonl
 .venv/
+media_cache/
+history.db*

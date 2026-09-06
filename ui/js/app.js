@@ -174,6 +174,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function initApp() {
   setupHeader();
   UserTable.init();
+  // Message archive windows (Person History / Full User Database /
+  // Chat Message Collector). They are inert without a bridge.
+  if (typeof HistoryStore !== 'undefined') HistoryStore.init();
+  if (typeof HistoryDb !== 'undefined') HistoryDb.init();
+  if (typeof CollectorPanel !== 'undefined') CollectorPanel.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
@@ -372,6 +377,40 @@ function setupBridgeListeners() {
       }
     } catch (e) { /* ignore */ }
   });
+
+  // ── message archive ───────────────────────────────────────
+  if (b.history_page_ready)
+    b.history_page_ready.connect((req, json) => HistoryStore.onPage(req, json));
+  if (b.history_search_ready)
+    b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
+  if (b.userdb_page_ready)
+    b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
+  if (b.userdb_changed)
+    b.userdb_changed.connect(() => HistoryDb.onChanged());
+  if (b.collector_status)
+    b.collector_status.connect((json) => CollectorPanel.onStatus(json));
+  if (b.history_appended) {
+    b.history_appended.connect((json) => {
+      HistoryStore.onLiveAppend(json);
+      CollectorPanel.onAppended(json);
+    });
+  }
+  if (b.my_nick_changed)
+    b.my_nick_changed.connect((nick) => HistoryStore.setMyNick(nick));
+  if (b.history_error) {
+    b.history_error.connect((scope, message) => {
+      LogConsole.log('⚠ ' + scope + ': ' + message, 'warn');
+      HistoryStore.onError(scope, message);
+    });
+  }
+  if (b.get_history_settings) {
+    b.get_history_settings((json) => {
+      let settings = {};
+      try { settings = JSON.parse(json); } catch (e) { settings = {}; }
+      HistoryStore.applySettings(settings);
+      HistoryDb.applySettings(settings);
+    });
+  }
 
   // Load initial criteria display
   b.get_criteria((json) => {

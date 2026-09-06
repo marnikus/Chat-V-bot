@@ -59,6 +59,12 @@ const UserTable = {
     const tbody = document.getElementById('userTableBody');
     if (tbody) {
       tbody.addEventListener('click', (e) => {
+        // Clicking the nick opens that person's archived conversation.
+        const nickCell = e.target.closest('.col-nick[data-nick]');
+        if (nickCell && typeof HistoryStore !== 'undefined') {
+          HistoryStore.openPerson(nickCell.dataset.nick);
+          return;
+        }
         const btn = e.target.closest('button[data-act]');
         if (!btn) return;
         const nick = btn.dataset.nick;
@@ -198,7 +204,8 @@ const UserTable = {
                aria-label="Select ${nick}"></td>
       <td class="col-order" title="${order ? `Processed ${order}.` : 'No processing order (already messaged)'}">${
         order === null ? '—' : order}</td>
-      <td class="col-nick" title="${attr}">${nick}</td>
+      <td class="col-nick nick-link" data-nick="${attr}"
+          title="Open the full message history with ${attr}">${nick}</td>
       <td>${gender}</td><td>${reg}</td><td>${statusHtml}</td>
       <td>${seen}</td><td>${msg}</td>
       <td class="row-actions">
