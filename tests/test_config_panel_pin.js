@@ -252,6 +252,36 @@ t('backend session state overrides the local pin on restore', () => {
      'local storage still defaults to unpinned for a fresh browser');
 });
 
+t('applyConfigPin after a stack restore reopens a pinned empty panel', () => {
+  clearStorage();
+  StackDnD.configPinned = false;
+  StackDnD._updateConfigPinButton();
+  StackDnD.setStack([block], { silent: true });
+  StackDnD.setStack([], { silent: true });        // deselect -> closed
+  ok(panel().classList.contains('hidden'), 'panel closed before restore');
+  StackDnD._applyConfigPin(true);                 // restore says pinned
+  ok(!panel().classList.contains('hidden'),
+     'later restore still reopens the pinned empty panel');
+});
+
+t('flushPersistence saves the pin state (local + backend)', () => {
+  clearStorage();
+  const saved = [];
+  global.App.bridge = { set_block_config_pinned(v) { saved.push(!!v); } };
+  try {
+    StackDnD.configPinned = false;
+    StackDnD._updateConfigPinButton();
+    StackDnD.configPinned = true;                 // toggle logic missed the bridge
+    StackDnD.flushPersistence();
+  } finally {
+    global.App.bridge = null;
+  }
+  ok(storage[StackDnD.CONFIG_PIN_STORAGE_KEY] === '1',
+     'close flush writes the final pin to localStorage');
+  ok(saved.length === 1 && saved[0] === true,
+     'close flush writes the final pin to the backend');
+});
+
 // ── unpin restores the default behaviour ────────────────────────────
 
 t('unpinning an empty pinned panel closes it', () => {

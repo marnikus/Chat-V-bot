@@ -777,6 +777,12 @@ const StackDnD = {
     } catch (e) { /* backend absent -> localStorage copy stands */ }
   },
 
+  /** Save the pin once more at shutdown, closing the gap if a toggle happened
+      before the QWebChannel bridge finished connecting. */
+  flushPersistence() {
+    this._persistConfigPin();
+  },
+
   _setupConfigPin() {
     const btn = document.getElementById('pinConfigBtn');
     if (btn) {

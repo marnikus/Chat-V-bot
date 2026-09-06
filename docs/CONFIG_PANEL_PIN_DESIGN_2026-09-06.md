@@ -33,9 +33,12 @@ Pin state is persisted so the setting survives app restarts:
 - when the desktop bridge is available it also calls
   `Bridge.set_block_config_pinned(bool)`, which stores it in `config.json`
   (`state.block_config_pinned`) and returns it in `get_app_state()`.
-On startup `StackDnD` reads the local copy immediately, then session restore
-lets the backend value win (the backend is authoritative in the desktop app).
-If either storage is unavailable the panel simply starts unpinned.
+On startup `StackDnD` reads the local copy immediately; the desktop session
+restore then applies the authoritative `state.block_config_pinned` value from
+`get_app_state()`. If either storage is unavailable the panel simply starts
+unpinned. `main.py` also calls `StackDnD.flushPersistence()` during the
+existing close-time flush, so the final pin state is written even if a toggle
+happened before the WebChannel bridge was available.
 
 ## Implementation
 

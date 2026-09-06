@@ -97,6 +97,12 @@ class MainWindow(QMainWindow):
         script = """
             (function () {
                 try {
+                    if (window.StackDnD &&
+                        typeof window.StackDnD.flushPersistence === 'function') {
+                        window.StackDnD.flushPersistence();
+                    }
+                } catch (e) {}
+                try {
                     if (window.SashGrid &&
                         typeof window.SashGrid.flushPersistence === 'function') {
                         return !!window.SashGrid.flushPersistence();

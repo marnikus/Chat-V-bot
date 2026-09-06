@@ -210,13 +210,6 @@ function restoreSession(json) {
     StackDnD.loadHistoryFromState(state);
   }
 
-  // Block Config pin is persisted in the same session state (config.json) so
-  // a pinned panel reopens (empty state) after an app restart.
-  if (typeof state.block_config_pinned === 'boolean' &&
-      typeof StackDnD.applyConfigPin === 'function') {
-    StackDnD.applyConfigPin(state.block_config_pinned);
-  }
-
   // 1) restore the last stack (snapshot or the named preset)
   const lastStack = Array.isArray(state.last_stack) ? state.last_stack : null;
   const lastPreset = state.last_stack_preset || '';
@@ -234,6 +227,15 @@ function restoreSession(json) {
     PresetsUI.loadStack(lastPreset);
   } else {
     StackDnD.refreshPresets();
+  }
+
+  // Block Config pin is persisted in the same session state (config.json) so
+  // a pinned panel reopens (empty state) after an app restart. Applied AFTER
+  // the stack restore so a pinned-but-deselected panel is reopened even when
+  // setStack() cleared the selection.
+  if (typeof state.block_config_pinned === 'boolean' &&
+      typeof StackDnD.applyConfigPin === 'function') {
+    StackDnD.applyConfigPin(state.block_config_pinned);
   }
 
   // 2) restore the last bookmark + try auto-connect with its URL
