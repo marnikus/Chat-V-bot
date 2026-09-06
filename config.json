@@ -78,7 +78,7 @@
         "filter_guest": "any",
         "filter_anonymous": "any",
         "pre_delay_ms": 300,
-        "enabled": true,
+        "enabled": false,
         "block_id": "SCROLL_PARSE"
       },
       {
