@@ -123,7 +123,8 @@ hardcoded ones. Example: a "Find Settings Button" block.
 Block Config title bar. While pinned, the panel stays open even when no block
 is selected (it shows the empty-state hint until you pick one). Click 📌 again
 to unpin and restore the default close-on-deselect behaviour; the **×** close
-button always closes and unpins.
+button always closes and unpins. The pin state is remembered across app
+restarts, so the panel reopens when you come back.
 
 ### Reorder Blocks (drag & drop)
 Grab any block (or its **⠿** handle) and drag it up or down. While you move

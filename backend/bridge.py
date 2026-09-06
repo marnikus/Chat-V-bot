@@ -406,6 +406,11 @@ class Bridge(QObject):
         payload, err = self._canonical_grid_payload(raw)
         return payload if not err else ""
 
+    @Slot(bool)
+    def set_block_config_pinned(self, pinned):
+        """Persist the Block Config keep-open pin across app restarts."""
+        self._config.set_state(block_config_pinned=bool(pinned))
+
     @Slot(str, result=bool)
     def save_grid_layout(self, layout_json):
         """Validate and persist a grid as one entry in global undo history."""
@@ -663,6 +668,8 @@ class Bridge(QObject):
                 "undo_history": history,
                 "undo_history_index": h_idx,
                 "grid_layout": self.get_grid_layout() or None,
+                "block_config_pinned":
+                    self._config.get_state("block_config_pinned", False),
                 "window_geometry": self._config.get_state("window_geometry", None),
             },
         }

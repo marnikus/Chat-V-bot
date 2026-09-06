@@ -28,8 +28,14 @@ undo/redo), because the panel disappears just because the selection was lost.
 | No block selected, unpinned | no (hidden) | — |
 | No block selected, pinned | yes | empty-state hint |
 
-Pin is UI-local state (`StackDnD.configPinned`) and is intentionally not
-persisted: it is a transient editing convenience.
+Pin state is persisted so the setting survives app restarts:
+- `StackDnD` writes it to `localStorage` (`chatbot.blockConfigPin.v1`);
+- when the desktop bridge is available it also calls
+  `Bridge.set_block_config_pinned(bool)`, which stores it in `config.json`
+  (`state.block_config_pinned`) and returns it in `get_app_state()`.
+On startup `StackDnD` reads the local copy immediately, then session restore
+lets the backend value win (the backend is authoritative in the desktop app).
+If either storage is unavailable the panel simply starts unpinned.
 
 ## Implementation
 

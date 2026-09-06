@@ -210,6 +210,13 @@ function restoreSession(json) {
     StackDnD.loadHistoryFromState(state);
   }
 
+  // Block Config pin is persisted in the same session state (config.json) so
+  // a pinned panel reopens (empty state) after an app restart.
+  if (typeof state.block_config_pinned === 'boolean' &&
+      typeof StackDnD.applyConfigPin === 'function') {
+    StackDnD.applyConfigPin(state.block_config_pinned);
+  }
+
   // 1) restore the last stack (snapshot or the named preset)
   const lastStack = Array.isArray(state.last_stack) ? state.last_stack : null;
   const lastPreset = state.last_stack_preset || '';

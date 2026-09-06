@@ -124,9 +124,11 @@ const StackDnD = {
   stack: [],
   selectedIdx: -1,
   customBlocks: [],       // reusable Find & Click presets: [{name, block, updated_at}]
+  CONFIG_PIN_STORAGE_KEY: 'chatbot.blockConfigPin.v1',
   // Block Config "Pin" toggle: while true the Tune panel stays open even
   // when no Action Block is selected (empty state), instead of closing on
-  // deselect.
+  // deselect. Persisted in localStorage and, when the desktop bridge is
+  // present, in config.json so it survives app restarts.
   configPinned: false,
   _inited: false,
   _running: false,
@@ -148,12 +150,16 @@ const StackDnD = {
     this._initDefaultStack();
     this._renderStack();
     this._setupAddMenu();
+    this._loadConfigPin();
     this._setupConfigPin();
     this._setupButtons();
     this._setupKeyboardReorder();
     this._setupHistoryButtons();
     this.updateHistoryButtons();
     this._updateConfigPinButton();
+    // Toast-style hint is deliberate: a previously pinned panel reopens empty
+    // (no selection after startup), showing the empty-state hint.
+    this._updateConfigVisibility(this.stack[this.selectedIdx]);
   },
 
   _initDefaultStack() {
@@ -744,6 +750,33 @@ const StackDnD = {
   },
 
   // ── Block Config pin / keep-open ─────────────────────────────
+  _loadConfigPin() {
+    let pinned = false;
+    try {
+      pinned = String(localStorage.getItem(this.CONFIG_PIN_STORAGE_KEY)) === '1';
+    } catch (e) { /* storage unavailable -> default unpinned */ }
+    this.configPinned = pinned;
+  },
+
+  _applyConfigPin(pinned) {
+    this.configPinned = !!pinned;
+    this._updateConfigPinButton();
+    this._updateConfigVisibility(this.stack[this.selectedIdx]);
+  },
+
+  _persistConfigPin() {
+    try {
+      localStorage.setItem(this.CONFIG_PIN_STORAGE_KEY,
+                           this.configPinned ? '1' : '0');
+    } catch (e) { /* storage unavailable -> backend still persists it */ }
+    try {
+      if (typeof App !== 'undefined' && App.bridge &&
+          typeof App.bridge.set_block_config_pinned === 'function') {
+        App.bridge.set_block_config_pinned(this.configPinned);
+      }
+    } catch (e) { /* backend absent -> localStorage copy stands */ }
+  },
+
   _setupConfigPin() {
     const btn = document.getElementById('pinConfigBtn');
     if (btn) {
@@ -776,6 +809,7 @@ const StackDnD = {
   _toggleConfigPin() {
     this.configPinned = !this.configPinned;
     this._updateConfigPinButton();
+    this._persistConfigPin();
     // Apply immediately: pinning an empty panel keeps it visible, unpinning
     // an empty panel restores the default close-on-deselect behaviour.
     this._updateConfigVisibility(this.stack[this.selectedIdx]);

@@ -51,6 +51,14 @@ global.document = {
   querySelector() { return makeEl(); },
   querySelectorAll() { return []; },
 };
+const storage = {};
+function clearStorage() { Object.keys(storage).forEach((k) => delete storage[k]); }
+global.localStorage = {
+  getItem(k) { return storage[k] === undefined ? null : storage[k]; },
+  setItem(k, v) { storage[k] = String(v); },
+  removeItem(k) { delete storage[k]; },
+  clear() { clearStorage(); },
+};
 global.window = global;
 global.App = { bridge: null };
 global.LogConsole = { log() {} };
@@ -182,6 +190,66 @@ t('pinned empty panel still accepts a later block selection', () => {
      'selecting a block re-populates the pinned panel');
   ok(form().innerHTML.indexOf('data-key="pre_delay_ms"') !== -1,
      'config form populated after selection');
+});
+
+// ── pin persistence across restarts ─────────────────────────────────
+
+t('pin toggle persists to localStorage', () => {
+  clearStorage();
+  StackDnD.configPinned = false;
+  StackDnD._updateConfigPinButton();
+  StackDnD._toggleConfigPin();                    // pin -> persists '1'
+  ok(storage[StackDnD.CONFIG_PIN_STORAGE_KEY] === '1',
+     'pinning writes 1 to localStorage');
+  StackDnD._toggleConfigPin();                    // unpin -> persists '0'
+  ok(storage[StackDnD.CONFIG_PIN_STORAGE_KEY] === '0',
+     'unpinning writes 0 to localStorage');
+});
+
+t('pin toggle notifies the desktop bridge so config.json persists it', () => {
+  clearStorage();
+  const saved = [];
+  global.App.bridge = { set_block_config_pinned(v) { saved.push(!!v); } };
+  try {
+    StackDnD.configPinned = false;
+    StackDnD._updateConfigPinButton();
+    StackDnD._toggleConfigPin();
+    StackDnD._toggleConfigPin();
+  } finally {
+    global.App.bridge = null;
+  }
+  ok(saved.length === 2, 'bridge pin slot called on each toggle');
+  ok(saved[0] === true, 'pin toggle sends true');
+  ok(saved[1] === false, 'unpin toggle sends false');
+});
+
+t('load restores a pinned state and reopens the panel empty after restart', () => {
+  clearStorage();
+  StackDnD.configPinned = false;
+  StackDnD._updateConfigPinButton();
+  StackDnD._toggleConfigPin();                    // pin (persists true)
+  ok(storage[StackDnD.CONFIG_PIN_STORAGE_KEY] === '1', 'storage holds pinned');
+  // Simulate a fresh session: StackDnD starts unpinned, then reads storage.
+  StackDnD.configPinned = false;
+  StackDnD._loadConfigPin();
+  ok(StackDnD.configPinned === true, 'load reads the persisted pin');
+  StackDnD.setStack([], { silent: true });        // "reload" with no selection
+  ok(!panel().classList.contains('hidden'),
+     'pinned panel is visible after reload with no block selected');
+  ok(!panel().classList.contains('has-block'),
+     'reloaded pinned panel is empty, not stale');
+});
+
+t('backend session state overrides the local pin on restore', () => {
+  clearStorage();
+  StackDnD.configPinned = false;
+  StackDnD._persistConfigPin();                   // storage = '0'
+  StackDnD._applyConfigPin(true);                 // backend says pinned
+  ok(StackDnD.configPinned === true, 'backend pinned state wins');
+  StackDnD._applyConfigPin(false);                // backend says unpinned
+  ok(StackDnD.configPinned === false, 'backend unpinned state wins');
+  ok(storage[StackDnD.CONFIG_PIN_STORAGE_KEY] === '0',
+     'local storage still defaults to unpinned for a fresh browser');
 });
 
 // ── unpin restores the default behaviour ────────────────────────────
