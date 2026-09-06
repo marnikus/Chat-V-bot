@@ -420,6 +420,25 @@ class ActionEngine(QObject):
             return await self._run_single_target_cycle(has_skip, take_matched)
         needs_user = [b.block_id for b in self._stack
                       if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
+        # A standalone-bound memory-driven stack (no user-scoped blocks, no
+        # queue) whose Pick Person found nobody this cycle — e.g. every
+        # Status-New person is already Done — has nothing left to work: end
+        # the cycle like an empty queue so a Repeat Loop stops instead of
+        # looping over the previous selection forever.
+        take_present = any(b.block_id == "TAKE_PERSON"
+                           and getattr(b, "enabled", True)
+                           for b in self._stack)
+        if (take_present and not take_matched and not needs_user
+                and not queue):
+            self.log_msg.emit(
+                "⚠ Pick Person found no one this cycle — nothing left to "
+                "work (a Repeat Loop ends here, like an empty queue)")
+            self.debug_msg.emit(
+                "ℹ Memory-driven cycle ended: no person matched Pick "
+                "Person", "warn")
+            self._tracer.note({"type": "run_skip",
+                               "reason": "no_take_match"})
+            return "empty"
         standalone = False
         if queue:
             self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
@@ -593,6 +612,38 @@ class ActionEngine(QObject):
         self.selected_nick = nick
         if self._tracer is not None:
             self._tracer.note({"type": "nick_selected", "nick": nick})
+
+    async def mark_person_messaged(self, nick: str) -> str:
+        """Mark ONE person as messaged (used by the "Mark Person as
+        Messaged" block; the engine's automatic per-person marking uses the
+        same memory call + live signal directly).
+
+        Returns a status string so the block can report exactly what
+        happened:
+          "ok"      — the person was New and is now messaged (live row
+                      update emitted);
+          "already" — the person was already messaged; nothing changed;
+          "missing" — no such nick in the People list;
+          "error"   — the People list could not be read.
+        """
+        if not nick:
+            return "missing"
+        try:
+            rows = await self._memory.get_all()
+            record = next((r for r in rows
+                           if getattr(r, "nick", "") == nick), None)
+            if record is None:
+                return "missing"
+            if getattr(record, "messaged", False):
+                return "already"
+            await self._memory.mark_messaged(nick)
+            # Live status update: the UI re-renders the row (✅ Done) the
+            # moment the person is messaged, not only after a restart.
+            self.person_marked.emit(nick)
+            return "ok"
+        except Exception as exc:
+            log.warning("mark_person_messaged(%s) failed: %s", nick, exc)
+            return "error"
 
     def _expand_nick_on_block(self, block: BaseAction, nick: str) -> dict:
         """Temporarily replace ``{{nick}}`` in the block's string settings.
