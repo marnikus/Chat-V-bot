@@ -1,24 +1,28 @@
-"""Attach Image: human-like dialog flow, all image formats, send verify.
+"""Attach Image: active-chat targeting, dialog flow, formats, send verify.
 
 FEATURE —
-  * the block picks .jpg/.jpeg/.png/.gif (any case) from the folder —
-    not only *.jpg;
-  * when `simulate_dialog` is on it first clicks the site's image (attach)
-    button — the "open the upload dialog" step — then sets the file on the
-    hidden input (the same result as choosing in the dialog);
+  * the block resolves the ACTIVE (visible) conversation and attaches there
+    — when several chat panels are mounted (e.g. a hidden main-room
+    composer plus the open private chat) it uses the private chat's own
+    image button and file input, never the first one in the DOM;
+  * the image-button click runs through the shared visual-confirmation
+    runner (red find outline -> pause -> orange click outline);
+  * it picks .jpg/.jpeg/.png/.gif (any case) from the folder;
   * after injection it reads back `input.files.length` so a silent no-op
     injection is impossible;
-  * it then verifies a new `.message-container` really appeared (the site
-    auto-sends the image once chosen), unless verification is disabled.
+  * it verifies a new `.message-container` really appeared INSIDE the same
+    conversation, unless verification is disabled;
+  * when the active-conversation probe cannot resolve it falls back to the
+    global selectors with a warning.
 
 Run with:  python3 tests/test_attach_image.py
 """
 
 import asyncio
 import os
+import shutil
 import sys
 import tempfile
-import shutil
 import unittest
 from unittest import mock
 
@@ -34,19 +38,41 @@ from actions.attach_image import AttachImage  # noqa: E402
 PROBE_FOUND = ('{"phase":"probe","found":true,"total":1,"visible":true,'
                '"disabled":false,"clickable":true,"error":null}')
 
+#: Default probe answer: a single visible composer that resolves to the
+#: classic global selectors (equivalent to the pre-scoping layout).
+DEFAULT_CTX = {
+    "ok": True, "chat_count": 1,
+    "input_css": media.FILE_INPUT_SELECTOR,
+    "button_css": media.IMAGE_BUTTON_SELECTOR,
+    "shell_css": "",
+}
+
+#: Two chat panels mounted; the second one is the visible private chat.
+SECOND_CHAT_CTX = {
+    "ok": True, "chat_count": 2,
+    "input_css": "app-chat:nth-of-type(2) input#file[type='file']",
+    "button_css": "app-chat:nth-of-type(2) "
+                  ".mat-mdc-form-field-icon-suffix button",
+    "shell_css": "app-chat:nth-of-type(2)",
+}
+
 
 class FakeCDP:
-    """Records evaluate/set-file calls; answers the three probe families."""
+    """Records evaluate/set-file calls; answers the probe families."""
 
-    def __init__(self, readback="1", counts=None, probe=PROBE_FOUND):
+    def __init__(self, readback="1", counts=None, probe=PROBE_FOUND,
+                 ctx=None):
         self.readback = readback
         self.counts = list(counts or [])
         self.probe = probe
+        self.ctx = ctx if ctx is not None else dict(DEFAULT_CTX)
         self.evals = []
         self.sets = []
 
     async def evaluate(self, expression):
         self.evals.append(expression)
+        if "ACTIVE_CHAT_CTX" in expression:
+            return __import__("json").dumps(self.ctx)
         if "message-container" in expression:
             return str(self.counts.pop(0)) if self.counts else "0"
         if "files.length" in expression:
@@ -97,6 +123,67 @@ class TestFormats(unittest.TestCase):
         shutil.rmtree(d, ignore_errors=True)
 
 
+# ── active-conversation scoping ──────────────────────────────────
+class TestActiveChatScoping(unittest.TestCase):
+    def test_injects_into_the_visible_conversation_when_several_are_mounted(self):
+        """Two panels mounted: the block must use the SECOND chat's input
+        (the visible private chat), not the first (hidden main room)."""
+        async def go():
+            d = tmp_folder(["a.jpg"])
+            cdp = FakeCDP(ctx=dict(SECOND_CHAT_CTX), counts=[2, 3])
+            messages = []
+            ok = await media.attach_image(
+                cdp, d, simulate_dialog=True, verify_timeout_ms=200,
+                verify_poll_ms=20,
+                report=lambda m, lvl="info": messages.append(m))
+            self.assertTrue(ok)
+            # file landed in the SECOND chat panel's own input
+            self.assertEqual(cdp.sets[0][0], SECOND_CHAT_CTX["input_css"])
+            # verification counted inside the second panel only
+            scoped_count_js = any(
+                "app-chat:nth-of-type(2) .message-container" in e
+                for e in cdp.evals)
+            self.assertTrue(scoped_count_js,
+                            "send verification must be scoped to the "
+                            "active conversation")
+            return d, " ".join(messages)
+        d, msg = run(go())
+        self.assertIn("2 chat panel(s)", msg,
+                      "the run log should say how many panels were found")
+        shutil.rmtree(d, ignore_errors=True)
+
+    def test_single_composer_layout_uses_global_selectors(self):
+        async def go():
+            d = tmp_folder(["a.jpg"])
+            cdp = FakeCDP(counts=[2, 3])       # default ctx = single panel
+            ok = await media.attach_image(
+                cdp, d, simulate_dialog=False, verify_timeout_ms=200,
+                verify_poll_ms=20)
+            self.assertTrue(ok)
+            self.assertEqual(cdp.sets[0][0], media.FILE_INPUT_SELECTOR)
+            return d
+        d = run(go())
+        shutil.rmtree(d, ignore_errors=True)
+
+    def test_probe_failure_falls_back_to_global_selectors(self):
+        async def go():
+            d = tmp_folder(["a.jpg"])
+            cdp = FakeCDP(ctx={"ok": False, "chat_count": 0,
+                               "input_css": "", "button_css": "",
+                               "shell_css": ""}, counts=[1, 2])
+            messages = []
+            ok = await media.attach_image(
+                cdp, d, simulate_dialog=True, verify_timeout_ms=200,
+                verify_poll_ms=20,
+                report=lambda m, lvl="info": messages.append(m))
+            self.assertTrue(ok)
+            self.assertEqual(cdp.sets[0][0], media.FILE_INPUT_SELECTOR)
+            return d, " ".join(messages)
+        d, msg = run(go())
+        self.assertIn("falling back", msg)
+        shutil.rmtree(d, ignore_errors=True)
+
+
 # ── the attach pipeline (no dialog step) ─────────────────────────
 class TestAttachPipeline(unittest.TestCase):
     def test_injects_and_verifies_the_send(self):
@@ -110,8 +197,9 @@ class TestAttachPipeline(unittest.TestCase):
             self.assertEqual(len(cdp.sets), 1)
             self.assertTrue(cdp.sets[0][1][0].endswith("1.gif") or
                             cdp.sets[0][1][0].endswith("2.jpg"))
-            # evaluate sequence: probe, readback, baseline count, poll count
+            # evaluate sequence: ctx, probe, readback, baseline count, poll
             text = " ".join(cdp.evals)
+            self.assertIn("ACTIVE_CHAT_CTX", text)
             self.assertIn("files.length", text)
             self.assertIn("message-container", text)
             return d
@@ -142,8 +230,8 @@ class TestAttachPipeline(unittest.TestCase):
             self.assertFalse(ok)
             joined = " ".join(messages)
             self.assertIn("No new message", joined,
-                            "the failure must name the verify stage: "
-                            + joined)
+                          "the failure must name the verify stage: "
+                          + joined)
             return d
         d = run(go())
         shutil.rmtree(d, ignore_errors=True)
@@ -192,9 +280,9 @@ class TestAttachPipeline(unittest.TestCase):
         shutil.rmtree(d, ignore_errors=True)
 
 
-# ── dialog simulation step ───────────────────────────────────────
+# ── dialog simulation step + visual confirmation ─────────────────
 class TestDialogSimulation(unittest.TestCase):
-    def test_clicks_the_image_button_first(self):
+    def test_clicks_the_image_button_with_visual_confirmation(self):
         async def go():
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(counts=[2, 3])
@@ -206,9 +294,33 @@ class TestDialogSimulation(unittest.TestCase):
             self.assertTrue(ok)
             self.assertEqual(click.await_count, 1)
             kwargs = click.await_args.kwargs
-            self.assertIn("image", kwargs.get("match_text", ""))
-            self.assertIn("suffix", kwargs.get("selector", ""))
+            # the shared visual runner must be ON (BUG #3)
+            self.assertTrue(kwargs.get("highlight_enabled"),
+                            "the dialog click needs the red/orange outlines")
+            self.assertGreater(kwargs.get("confirm_pause_ms", 0), 0,
+                               "the click needs the confirm pause")
+            self.assertTrue(hasattr(kwargs.get("engine"), "report"),
+                            "logs must stream through engine.report")
             self.assertTrue(cdp.sets, "file injection must still happen")
+            return d
+        d = run(go())
+        shutil.rmtree(d, ignore_errors=True)
+
+    def test_click_targets_the_active_chat_image_button(self):
+        async def go():
+            d = tmp_folder(["a.jpg"])
+            cdp = FakeCDP(ctx=dict(SECOND_CHAT_CTX), counts=[2, 3])
+            click = mock.AsyncMock(return_value="ok")
+            with mock.patch("backend.visual_click.find_and_click", click):
+                ok = await media.attach_image(
+                    cdp, d, simulate_dialog=True, verify_timeout_ms=200,
+                    verify_poll_ms=20)
+            self.assertTrue(ok)
+            self.assertEqual(click.await_count, 1)
+            kwargs = click.await_args.kwargs
+            self.assertEqual(kwargs.get("selector"),
+                             SECOND_CHAT_CTX["button_css"],
+                             "must click the VISIBLE conversation's button")
             return d
         d = run(go())
         shutil.rmtree(d, ignore_errors=True)
@@ -226,6 +338,8 @@ class TestDialogSimulation(unittest.TestCase):
                     report=lambda m, lvl="info": messages.append(m))
             self.assertTrue(ok)
             self.assertTrue(cdp.sets)
+            self.assertEqual(click.await_count, 2,
+                             "a scoped miss must retry with the text search")
             return d, " ".join(messages)
         d, msg = run(go())
         self.assertIn("image", msg)
@@ -239,19 +353,24 @@ class TestBlockSettings(unittest.TestCase):
         self.assertEqual(blk.file_pattern, media.DEFAULT_FILE_PATTERN)
         self.assertEqual(blk.rotation_mode, "sequential")
         self.assertTrue(blk.simulate_dialog)
+        self.assertTrue(blk.highlight_enabled)
+        self.assertEqual(blk.confirm_pause_ms, 700)
         self.assertEqual(blk.verify_timeout_ms, 8000)
 
     def test_schema_exposes_every_setting(self):
         schema = AttachImage().config_schema()
         for key in ("folder_path", "file_pattern", "rotation_mode",
-                    "simulate_dialog", "verify_timeout_ms"):
+                    "simulate_dialog", "highlight_enabled",
+                    "confirm_pause_ms", "verify_timeout_ms"):
             self.assertIn(key, schema)
         self.assertEqual(schema["rotation_mode"]["type"], "select")
         self.assertEqual(schema["simulate_dialog"]["type"], "checkbox")
+        self.assertEqual(schema["highlight_enabled"]["type"], "checkbox")
 
     def test_to_dict_round_trips(self):
         blk = AttachImage(folder_path="/x", file_pattern="*.gif",
                           rotation_mode="random", simulate_dialog=False,
+                          highlight_enabled=False, confirm_pause_ms=1500,
                           verify_timeout_ms=3000)
         d = blk.to_dict()
         again = AttachImage(**{k: v for k, v in d.items()
@@ -259,6 +378,8 @@ class TestBlockSettings(unittest.TestCase):
         self.assertEqual(again.file_pattern, "*.gif")
         self.assertEqual(again.rotation_mode, "random")
         self.assertFalse(again.simulate_dialog)
+        self.assertFalse(again.highlight_enabled)
+        self.assertEqual(again.confirm_pause_ms, 1500)
         self.assertEqual(again.verify_timeout_ms, 3000)
 
 
