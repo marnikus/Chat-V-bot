@@ -13,6 +13,7 @@ from actions import (  # noqa: F401
     click_main_tab,
     click_send,
     click_user,
+    collect_history,
     conditional_skip,
     custom_find,
     mark_messaged,
