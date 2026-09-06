@@ -49,6 +49,7 @@ class ClickUser(BaseAction):
                  verify_new_tab: bool = True, tab_pause_ms: int = 800,
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,
                  respect_order: bool = False,
+                 use_person_from_memory: bool = False,
                  pre_delay_ms: int = 1000, **kw):
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
         self.selector = selector
@@ -64,6 +65,11 @@ class ClickUser(BaseAction):
         # column sequence (1 first, then 2 … N) instead of the order the
         # page happened to show this run.
         self.respect_order = bool(respect_order)
+        # When ON, the engine switches the run to single-target mode: the
+        # queue is ignored and this block clicks the person whose nick is
+        # saved in {{nick}} memory this run (Pick Person / an earlier Click
+        # User), never the next queued person.
+        self.use_person_from_memory = bool(use_person_from_memory)
 
     async def _read_tabs(self, cdp: CDPClient) -> Optional[dict]:
         try:
@@ -83,7 +89,26 @@ class ClickUser(BaseAction):
         import asyncio
 
         await self.pre_delay()
-        label = f"person “{user_nick}”"
+
+        # "Use Person from Memory": the person to click is the nick saved in
+        # this run's {{nick}} memory — NOT the queued user. Never click
+        # blindly: with no saved nick we fail loudly instead of guessing.
+        if self.use_person_from_memory:
+            nick = (getattr(engine, "selected_nick", "") or "") if engine \
+                else ""
+            if not nick:
+                if engine:
+                    engine.report(
+                        "❌ Use Person from Memory: no person is saved in "
+                        "memory this run — add a Pick Person block before "
+                        "it (or let an earlier Click User click someone) so "
+                        "{{nick}} has a value", "error")
+                log.warning("Click User (memory): no selected nick to click")
+                return ActionResult.FAIL
+        else:
+            nick = user_nick
+
+        label = f"person “{nick}”"
 
         # Snapshot the tabs BEFORE clicking, so "a new tab appeared" is provable.
         before = await self._read_tabs(cdp) if self.verify_new_tab else None
@@ -94,7 +119,7 @@ class ClickUser(BaseAction):
         # Find (red) → pause → click target (orange) → click, via the shared runner.
         outcome = await find_and_click_exact(
             cdp,
-            text=user_nick,
+            text=nick,
             selector=self.selector,
             label_selector=self.label_selector,
             click_selector=self.click_selector,
@@ -111,7 +136,7 @@ class ClickUser(BaseAction):
         if engine is not None:
             note = getattr(engine, "note_selected", None)
             if note is not None:
-                note(user_nick)
+                note(nick)
 
         if not self.verify_new_tab:
             return ActionResult.OK
@@ -133,15 +158,15 @@ class ClickUser(BaseAction):
         before_count = int((before or {}).get("count", 0) or 0)
         after_count = int(after.get("count", 0) or 0)
         titles = [str(t) for t in (after.get("titles") or [])]
-        matched = any(user_nick and user_nick in t for t in titles)
+        matched = any(nick and nick in t for t in titles)
 
         if after_count > before_count or matched:
             how = (f"tab count {before_count} → {after_count}" if
                    after_count > before_count else
-                   f"a tab titled “{user_nick}” is open")
+                   f"a tab titled “{nick}” is open")
             if engine:
                 engine.report(f"✅ New tab confirmed for {label} ({how})", "success")
-            log.info("Opened chat tab for %s", user_nick)
+            log.info("Opened chat tab for %s", nick)
             return ActionResult.OK
 
         if engine:
@@ -149,7 +174,7 @@ class ClickUser(BaseAction):
                 f"❌ No new tab appeared for {label} — still {after_count} tab(s): "
                 + (", ".join(f"“{t[:24]}”" for t in titles[:5]) or "none"),
                 "error")
-        log.warning("No new tab after clicking %s", user_nick)
+        log.warning("No new tab after clicking %s", nick)
         return ActionResult.FAIL
 
     def config_schema(self) -> dict:
@@ -176,4 +201,9 @@ class ClickUser(BaseAction):
         s["respect_order"] = {"type": "checkbox", "default": False,
                               "label": "Respect the Order (#) column — "
                                        "message people 1, 2, 3… N in list order"}
+        s["use_person_from_memory"] = {
+            "type": "checkbox", "default": False,
+            "label": "Use Person from Memory — click the person saved as "
+                     "{{nick}} this run, not the user list (Pick Person / an "
+                     "earlier Click User must save the nick first)"}
         return s

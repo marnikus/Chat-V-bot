@@ -74,7 +74,7 @@ const BUILTIN_BLOCKS = [
               tab_selector:"div[role='tab'].tab-item",
               tab_title_selector:'p.chat-title', verify_new_tab:true,
               tab_pause_ms:800, highlight_enabled:true, confirm_pause_ms:700,
-              respect_order:false,
+              respect_order:false, use_person_from_memory:false,
               pre_delay_ms:1000, enabled:true},
     labels:{selector:'Person row selector (CSS)',
             label_selector:'Nickname element inside (CSS)',
@@ -86,6 +86,7 @@ const BUILTIN_BLOCKS = [
             highlight_enabled:'Visual confirmation outlines',
             confirm_pause_ms:'Pause after found (ms)',
             respect_order:'Respect the Order (#) column — message people 1, 2, 3… N in list order',
+            use_person_from_memory:'Use Person from Memory — click the person saved as {{nick}} this run, not the user list (Pick Person / an earlier Click User must save the nick first)',
             pre_delay_ms:'Pre-delay (ms)', enabled:'Enabled'} },
   { block_id:'WAIT_PAGE_LOAD', name:'Wait for Page',     icon:'⏳',
     defaults:{target_selector:"textarea[placeholder='Сообщение']",timeout_ms:5000,pre_delay_ms:200, enabled:true},
@@ -458,6 +459,10 @@ const StackDnD = {
       }
       if (k === 'respect_order') {
         if (v) parts.push('respect Order (#)');
+        continue;  // checkbox off adds nothing to the summary
+      }
+      if (k === 'use_person_from_memory') {
+        if (v) parts.push('target: {{nick}} from memory');
         continue;  // checkbox off adds nothing to the summary
       }
       if (b.block_id === 'TAKE_PERSON' && k === 'pick_mode') {

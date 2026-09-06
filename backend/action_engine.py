@@ -401,10 +401,23 @@ class ActionEngine(QObject):
         # Phase 2c: Pick Person — an enabled TAKE_PERSON block chooses one
         # person from the People list by its rule and remembers the nick for
         # every {{nick}} field of this run (once per cycle).
-        await self._run_take_phase()
+        take_matched = await self._run_take_phase()
         has_skip = any(b.block_id == "CONDITIONAL_SKIP"
                        and getattr(b, "enabled", True)
                        for b in self._stack)
+        # Phase 2d: Click User "Use Person from Memory" — an enabled
+        # CLICK_USER with the checkbox switches the whole cycle to
+        # SINGLE-TARGET mode: the queued/list people are ignored and the
+        # stack runs exactly once against the person saved in {{nick}}
+        # memory (picked above by Pick Person, or remembered by an earlier
+        # Click User this run).
+        mem_click = next((b for b in self._stack
+                          if b.block_id == "CLICK_USER"
+                          and getattr(b, "enabled", True)
+                          and getattr(b, "use_person_from_memory", False)),
+                         None)
+        if mem_click is not None:
+            return await self._run_single_target_cycle(has_skip, take_matched)
         needs_user = [b.block_id for b in self._stack
                       if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
         standalone = False
@@ -460,21 +473,88 @@ class ActionEngine(QObject):
                 self.user_complete.emit(user.nick, ok)
         return "worked"
 
-    async def _run_take_phase(self) -> None:
+    async def _run_single_target_cycle(self, has_skip: bool,
+                                       take_matched: bool) -> str:
+        """One cycle in "Use Person from Memory" (single-target) mode.
+
+        The stack runs exactly ONCE against the person whose nick is saved
+        in {{nick}} memory this cycle — the collected/queued people list is
+        ignored. After a successful pass that person is marked messaged
+        (Status → Done, live grid row update), so a Repeat Loop + Pick
+        Person combination advances to a different New person every cycle.
+
+        Safety: when nothing is saved in memory (no Pick Person match, no
+        earlier Click User this run) the cycle ends without clicking
+        anything — never a blind click.
+        """
+        take_present = any(b.block_id == "TAKE_PERSON"
+                           and getattr(b, "enabled", True)
+                           for b in self._stack)
+        if take_present and not take_matched:
+            # Every Pick Person rule came up empty (e.g. all Status-New
+            # people are Done now) — like an empty queue: end the repeats.
+            self.log_msg.emit(
+                "⚠ Use Person from Memory: Pick Person found no one to "
+                "work — nothing to click this cycle")
+            self.debug_msg.emit(
+                "ℹ Single-target cycle ended — a Repeat Loop stops here, "
+                "exactly like an empty queue", "warn")
+            self._tracer.note({"type": "run_skip",
+                               "reason": "no_take_match"})
+            return "empty"
+        if not self.selected_nick:
+            self.log_msg.emit(
+                "⚠ Use Person from Memory: no person is saved in memory "
+                "this run — add a Pick Person block before the Click User "
+                "block (or let an earlier Click User click someone first) "
+                "so {{nick}} has a value")
+            self.debug_msg.emit(
+                "⚠ Nothing to click: Click User 'Use Person from Memory' "
+                "needs a nick saved by Pick Person or an earlier Click "
+                "User this run", "warn")
+            self._tracer.note({"type": "run_skip",
+                               "reason": "no_memory_nick"})
+            return "empty"
+        target = self.selected_nick
+        self.log_msg.emit(
+            "▶ Single-target run — working the person saved in memory: "
+            f"“{target}” (the user list is ignored)")
+        self.debug_msg.emit(
+            "ℹ Click User 'Use Person from Memory' is on: this stack runs "
+            "once per cycle against the saved nick, not once per queued "
+            "person.", "info")
+        self._tracer.note({"type": "run_mode", "mode": "single_target",
+                           "nick": target})
+        user = UserRecord(nick=target)
+        ok = await self._execute_for_user(user, has_skip)
+        if ok:
+            await self._memory.mark_messaged(target)
+            # Live status update: the UI re-renders the row (✅ Done) the
+            # moment the person is messaged, not only after a restart.
+            self.person_marked.emit(target)
+        self.user_complete.emit(target, ok)
+        return "worked"
+
+    async def _run_take_phase(self) -> bool:
         """Cycle-level Pick Person blocks (TAKE_PERSON).
 
         Walks the stack in order and, for every enabled TAKE_PERSON,
         resolves a nick via its rule and remembers it (note_selected). A
         rule with no matching person logs a warning and is skipped — the
         previous selection (if any) is kept.
+
+        Returns True when at least one enabled TAKE_PERSON block chose a
+        nick this cycle (used by the single-target driver to know when the
+        pool is exhausted).
         """
+        matched = False
         try:
             rows = await self._memory.get_all()
         except Exception as exc:
             log.warning("Pick Person phase could not read the list: %s", exc)
             self.debug_msg.emit("      ❌ Pick Person: cannot read the "
                                 f"People list ({exc})", "error")
-            return
+            return False
         for block in self._stack:
             if block.block_id != "TAKE_PERSON":
                 continue
@@ -488,6 +568,7 @@ class ActionEngine(QObject):
                                     "error")
                 continue
             if nick:
+                matched = True
                 self.log_msg.emit(
                     f"🎯 Pick Person: remembering “{nick}” — {{nick}} in "
                     "later fields will resolve to it")
@@ -497,6 +578,7 @@ class ActionEngine(QObject):
                 self.log_msg.emit(
                     "⚠ Pick Person: no " + (phrase or "matching person") +
                     " in the list — skipped (previous selection kept)")
+        return matched
 
     def note_selected(self, nick: str) -> None:
         """Remember the person a Click User block just selected.
