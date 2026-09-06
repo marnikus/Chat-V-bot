@@ -123,16 +123,16 @@ class HistoryQuery:
             "SELECT COUNT(*) FROM messages WHERE person_id=?", (pid,), 0))
 
         if after_ord is not None:
-            rows = await self.db.fetchall(
+            rows = await self.db.fetchdicts(
                 self._SELECT + "WHERE m.person_id=? AND m.ord>? "
                 "ORDER BY m.ord LIMIT ?", (pid, int(after_ord), limit))
         elif before_ord is not None:
-            rows = await self.db.fetchall(
+            rows = await self.db.fetchdicts(
                 self._SELECT + "WHERE m.person_id=? AND m.ord<? "
                 "ORDER BY m.ord DESC LIMIT ?", (pid, int(before_ord), limit))
             rows = list(reversed(rows))
         else:
-            rows = await self.db.fetchall(
+            rows = await self.db.fetchdicts(
                 self._SELECT + "WHERE m.person_id=? ORDER BY m.ord DESC "
                 "LIMIT ?", (pid, limit))
             rows = list(reversed(rows))
@@ -164,7 +164,7 @@ class HistoryQuery:
                     "missing": True, "has_more": False, "has_newer": False,
                     "total": 0, "gaps": []}
         pid = int(person["id"])
-        rows = await self.db.fetchall(
+        rows = await self.db.fetchdicts(
             self._SELECT + "WHERE m.person_id=? AND m.ord BETWEEN ? AND ? "
             "ORDER BY m.ord", (pid, int(ord_) - int(radius),
                                int(ord_) + int(radius)))
@@ -184,7 +184,7 @@ class HistoryQuery:
         }
 
     async def gaps(self, person_id: int) -> list[dict]:
-        rows = await self.db.fetchall(
+        rows = await self.db.fetchdicts(
             "SELECT after_ord, reason, detail, created_at FROM gaps "
             "WHERE person_id=? ORDER BY after_ord", (person_id,))
         return [{"ord": int(r["after_ord"]), "after_ord": int(r["after_ord"]),
@@ -262,7 +262,7 @@ class HistoryQuery:
                     "JOIN messages_fts f ON f.rowid = m.id "
                     f"WHERE {where} AND messages_fts MATCH ?",
                     params + [match], 0))
-                rows = await self.db.fetchall(
+                rows = await self.db.fetchdicts(
                     base + "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
                     params + [match, limit, offset])
                 return rows, total
@@ -275,7 +275,7 @@ class HistoryQuery:
             "JOIN persons p ON p.id = m.person_id "
             f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\'",
             params + [needle], 0))
-        rows = await self.db.fetchall(
+        rows = await self.db.fetchdicts(
             select + f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\' "
             "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
             params + [needle, limit, offset])
@@ -316,7 +316,7 @@ class HistoryQuery:
         total = int(await self.db.scalar(
             f"SELECT COUNT(*) FROM persons WHERE {where}",
             params[:1] if needle else [], 0))
-        rows = await self.db.fetchall(
+        rows = await self.db.fetchdicts(
             f"SELECT * FROM persons WHERE {where} ORDER BY {order} "
             "LIMIT ? OFFSET ?", params + [limit, offset])
         items = []

@@ -33,27 +33,21 @@ def align_batch(batch_fps: Sequence[str],
                 tail_fps: Sequence[str]) -> Alignment:
     """Find where `batch_fps` continues the stored conversation.
 
-    Returns the index of the first NEW record. When nothing overlaps and we
-    do have a stored tail, alignment is lost: the caller must append
-    everything and record a gap.
+    Returns the index of the first record after the known tail — the LAST
+    place in the batch where our stored suffix occurs, so a conversation
+    whose older half was re-rendered above us (the user scrolled up) is not
+    mistaken for new messages. When nothing overlaps at all and we do have a
+    stored tail, alignment is lost: the caller must append everything and
+    record a gap.
     """
     batch = list(batch_fps)
     tail = list(tail_fps)
-    if not batch:
-        return Alignment(start=0, matched=True)
-    if not tail:
+    if not batch or not tail:
         return Alignment(start=0, matched=True)       # first ever batch
-    known = set(tail)
-    for k in range(min(len(tail), len(batch)), 0, -1):
-        if tail[-k:] == batch[:k]:
-            return Alignment(start=k, overlap=k, matched=True)
-    # the batch may start *after* our tail (site trimmed the top): if none of
-    # its records are known at all, we cannot bridge the hole.
-    if any(fp in known for fp in batch):
-        # partial, out-of-order overlap — keep the unknown ones, no gap
-        first_new = next((i for i, fp in enumerate(batch) if fp not in known),
-                         len(batch))
-        return Alignment(start=first_new, matched=True, overlap=first_new)
+    for end in range(len(batch), 0, -1):
+        for k in range(min(len(tail), end), 0, -1):
+            if batch[end - k:end] == tail[-k:]:
+                return Alignment(start=end, overlap=k, matched=True)
     return Alignment(start=0, gap=True, reason="alignment_lost")
 
 
@@ -146,7 +140,7 @@ class HistoryRepo:
 
     async def possible_duplicates(self) -> list[dict]:
         """Nicks that differ only by case/spacing — candidates for a merge."""
-        rows = await self.db.fetchall(
+        rows = await self.db.fetchdicts(
             "SELECT nick_lc, GROUP_CONCAT(nick, char(10)) AS nicks, "
             "COUNT(*) AS n, GROUP_CONCAT(id, ',') AS ids "
             "FROM persons WHERE deleted_at IS NULL "
@@ -196,9 +190,11 @@ class HistoryRepo:
     # ── append ───────────────────────────────────────────────────
     async def append(self, nick: str, records: Iterable, my_nick: str = "",
                      align: bool = True, expect_idx: Optional[int] = None,
-                     dom_count: int = 0, head_sig: str = "",
-                     tail_sig: str = "", now: Optional[datetime] = None,
-                     session_id: str = "") -> AppendResult:
+                     dom_count: int = 0, head_sig: Optional[str] = None,
+                     tail_sig: Optional[str] = None,
+                     now: Optional[datetime] = None,
+                     session_id: str = "",
+                     prepend: bool = False) -> AppendResult:
         now = now or datetime.now()
         person_id = await self.ensure_person(nick)
         recs = [_as_record(r) for r in (records or [])]
@@ -210,6 +206,11 @@ class HistoryRepo:
             result.total = int(person["message_count"]) if person else 0
             result.last_ord = await self._last_ord(person_id)
             return result
+
+        if prepend:
+            return await self._prepend(person_id, recs, my_nick, now,
+                                       dom_count, head_sig, tail_sig,
+                                       session_id)
 
         cursor = await self.get_cursor(person_id)
         batch_fps = [r.ensure_fp() for r in recs]
@@ -259,6 +260,64 @@ class HistoryRepo:
         result.total = int(person["message_count"]) if person else 0
         return result
 
+    async def _prepend(self, person_id: int, recs, my_nick: str,
+                       now: datetime, dom_count: int,
+                       head_sig: Optional[str], tail_sig: Optional[str],
+                       session_id: str) -> AppendResult:
+        """Backfill OLDER lines that appeared above what we already stored.
+
+        Their `ord` must come before everything we have, so the existing rows
+        are shifted up by however many genuinely new lines we found.
+        """
+        result = AppendResult(person_id=person_id)
+        days = resolve_days([r.ts_display for r in recs], now)
+        fresh = []
+        for rec, day in zip(recs, days):
+            known = await self.db.fetchone(
+                "SELECT 1 FROM messages WHERE person_id=? AND fp=? AND day=?",
+                (person_id, rec.ensure_fp(), day))
+            if not known:
+                fresh.append((rec, day))
+        result.skipped = len(recs) - len(fresh)
+        if fresh:
+            shift = len(fresh)
+            await self.db.execute(
+                "UPDATE messages SET ord = ord + ? WHERE person_id=?",
+                (shift, person_id))
+            stamp = datetime.now().isoformat(timespec="seconds")
+            position = 0
+            for rec, day in fresh:
+                position += 1
+                media_id = await self._media_id(rec)
+                cur = await self.db.execute(
+                    "INSERT OR IGNORE INTO messages("
+                    "person_id, ord, fp, direction, from_nick, my_nick, kind, "
+                    "text, text_lc, media_id, ts_display, ts_resolved, day, "
+                    "ts_exact, occ, dom_idx, session_id, created_at) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)",
+                    (person_id, position, rec.fp, rec.direction, rec.from_nick,
+                     my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
+                     media_id, rec.ts_display,
+                     f"{day} {rec.ts_display or '00:00'}", day, rec.occ,
+                     rec.idx, session_id or self.session_id, stamp))
+                if cur.rowcount:
+                    result.added += 1
+            await self.db.commit()
+        await self._after_write(person_id, my_nick, dom_count, head_sig,
+                                tail_sig, bootstrapped=True)
+        person = await self.get_person_by_id(person_id)
+        result.total = int(person["message_count"]) if person else 0
+        result.last_ord = await self._last_ord(person_id)
+        result.first_ord = 1
+        return result
+
+    async def record_gap(self, nick_or_id, after_ord: int, reason: str,
+                         detail: str = "") -> None:
+        """Note a known hole in a conversation (cap, lost alignment, …)."""
+        person_id = (int(nick_or_id) if isinstance(nick_or_id, int)
+                     else await self.ensure_person(str(nick_or_id)))
+        await self._record_gap(person_id, after_ord, reason, detail)
+
     async def _media_id(self, rec: MessageRecord) -> Optional[int]:
         if not rec.media_url:
             return None
@@ -287,15 +346,22 @@ class HistoryRepo:
         await self.db.commit()
 
     async def _touch_cursor(self, person_id: int, dom_count: int,
-                            head_sig: str, tail_sig: str) -> None:
-        if not (dom_count or head_sig or tail_sig):
+                            head_sig: Optional[str],
+                            tail_sig: Optional[str]) -> None:
+        if not dom_count and head_sig is None and tail_sig is None:
             return
         await self._after_write(person_id, "", dom_count, head_sig, tail_sig,
                                 bootstrapped=None)
 
     async def _after_write(self, person_id: int, my_nick: str, dom_count: int,
-                           head_sig: str, tail_sig: str,
+                           head_sig: Optional[str], tail_sig: Optional[str],
                            bootstrapped: Optional[bool]) -> None:
+        """Refresh counters and the resume cursor.
+
+        `head_sig` / `tail_sig` of None mean "leave as is"; an empty string
+        deliberately CLEARS the signature, which is how an interrupted read
+        tells the next pass that it may not trust the shortcut.
+        """
         await self._recount(person_id, my_nick)
         tail = [r[0] for r in await self.db.fetchall(
             "SELECT fp FROM (SELECT fp, ord FROM messages WHERE person_id=? "
@@ -313,8 +379,8 @@ class HistoryRepo:
             "bootstrapped=excluded.bootstrapped, updated_at=excluded.updated_at",
             (person_id, await self._last_ord(person_id),
              dom_count or current.get("dom_count") or 0,
-             head_sig or current.get("head_sig") or "",
-             tail_sig or current.get("tail_sig") or "",
+             current.get("head_sig", "") if head_sig is None else head_sig,
+             current.get("tail_sig", "") if tail_sig is None else tail_sig,
              json.dumps(tail), 1 if flag else 0,
              datetime.now().isoformat(timespec="seconds")))
         await self.db.commit()

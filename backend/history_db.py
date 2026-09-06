@@ -194,9 +194,18 @@ class HistoryDB:
         await self.conn.commit()
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list:
+        """Rows as plain tuples — the shape callers (and tests) compare."""
         cur = await self.conn.execute(sql, tuple(params))
         try:
-            return list(await cur.fetchall())
+            return [tuple(row) for row in await cur.fetchall()]
+        finally:
+            await cur.close()
+
+    async def fetchdicts(self, sql: str, params: Iterable[Any] = ()) -> list:
+        """Rows as dictionaries, for code that reads columns by name."""
+        cur = await self.conn.execute(sql, tuple(params))
+        try:
+            return [dict(row) for row in await cur.fetchall()]
         finally:
             await cur.close()
 
