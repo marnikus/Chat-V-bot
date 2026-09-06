@@ -764,6 +764,12 @@ const StackDnD = {
     this._updateConfigVisibility(this.stack[this.selectedIdx]);
   },
 
+  /** Public restore hook used by session restore in app.js. It must exist so
+      a missing underscore cannot silently make the saved pin a no-op. */
+  applyConfigPin(pinned) {
+    this._applyConfigPin(pinned);
+  },
+
   _persistConfigPin() {
     try {
       localStorage.setItem(this.CONFIG_PIN_STORAGE_KEY,

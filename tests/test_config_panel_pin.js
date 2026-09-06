@@ -264,6 +264,40 @@ t('applyConfigPin after a stack restore reopens a pinned empty panel', () => {
      'later restore still reopens the pinned empty panel');
 });
 
+t('public applyConfigPin exists and is what session restore calls', () => {
+  clearStorage();
+  ok(typeof StackDnD.applyConfigPin === 'function',
+     'session restore must find a public applyConfigPin = undefined');
+  if (typeof StackDnD.applyConfigPin === 'function') {
+    ok(StackDnD.applyConfigPin === StackDnD._applyConfigPin ||
+       (() => { // either direct alias or delegated wrapper
+         StackDnD.configPinned = false;
+         StackDnD._updateConfigPinButton();
+         StackDnD.applyConfigPin(true);
+         return StackDnD.configPinned === true;
+       })(),
+       'public applyConfigPin delegates to the internal restore');
+  }
+});
+
+t('restoring true after setStack([]) makes the panel visible (exact bug)', () => {
+  clearStorage();
+  StackDnD.configPinned = false;
+  StackDnD._updateConfigPinButton();
+  // The app restore sequence: setStack clears selection, then applyConfigPin
+  // reopens it if it was pinned.
+  StackDnD.setStack([], { silent: true });
+  if (typeof StackDnD.applyConfigPin === 'function') {
+    StackDnD.applyConfigPin(true);
+  } else {
+    StackDnD._applyConfigPin(true);
+  }
+  ok(!panel().classList.contains('hidden'),
+     'restored pinned panel must become visible after startup');
+  ok(pinBtn().classList.contains('pin-active'),
+     'restored pin button must be active after startup');
+});
+
 t('flushPersistence saves the pin state (local + backend)', () => {
   clearStorage();
   const saved = [];
