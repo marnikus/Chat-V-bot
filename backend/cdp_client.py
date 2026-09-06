@@ -1,20 +1,96 @@
 """Chrome DevTools Protocol WebSocket client with auto-reconnect."""
 
 import asyncio
+import heapq
+import inspect
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 import aiohttp
 import websockets
 from PySide6.QtCore import QObject, Signal
 
 log = logging.getLogger("chatbot")
 
+HIGH, LOW = 0, 1
+
 
 @dataclass
 class TabInfo:
     id: str; title: str; url: str; ws_url: str
+
+
+class _LeaseCtx:
+    """`async with lease.high(): ...` — an acquired-and-released lease."""
+
+    def __init__(self, lease: "CdpLease", priority: int):
+        self._lease, self._priority = lease, priority
+
+    async def __aenter__(self):
+        await self._lease.acquire(self._priority)
+        return self._lease
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._lease.release()
+        return False
+
+
+class CdpLease:
+    """Priority mutex over the single CDP socket.
+
+    The action engine (HIGH) and the passive collector (LOW) share one
+    WebSocket. Whoever holds the lease is never interrupted mid-command,
+    but a queued HIGH waiter always jumps ahead of queued LOW waiters, so
+    a user-triggered run never waits behind background collection.
+    """
+
+    def __init__(self) -> None:
+        self._locked = False
+        self._waiters: list[tuple[int, int, asyncio.Future]] = []
+        self._seq = 0
+
+    # ── public api ───────────────────────────────────────────────
+    def high(self) -> _LeaseCtx:
+        return _LeaseCtx(self, HIGH)
+
+    def low(self) -> _LeaseCtx:
+        return _LeaseCtx(self, LOW)
+
+    @property
+    def busy(self) -> bool:
+        return self._locked
+
+    @property
+    def waiting(self) -> int:
+        return len(self._waiters)
+
+    @property
+    def high_waiting(self) -> bool:
+        return any(p == HIGH for p, _s, f in self._waiters if not f.done())
+
+    async def acquire(self, priority: int = LOW) -> None:
+        if not self._locked and not self._waiters:
+            self._locked = True
+            return
+        self._seq += 1
+        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        heapq.heappush(self._waiters, (priority, self._seq, fut))
+        try:
+            await fut
+        except asyncio.CancelledError:
+            # we may have been handed ownership just as we were cancelled
+            if fut.done() and not fut.cancelled():
+                self.release()
+            raise
+
+    def release(self) -> None:
+        while self._waiters:
+            _prio, _seq, fut = heapq.heappop(self._waiters)
+            if not fut.done():
+                fut.set_result(True)      # hand the lease over, stay locked
+                return
+        self._locked = False
 
 
 class CDPClient(QObject):
@@ -29,8 +105,75 @@ class CDPClient(QObject):
         self._ws: Any = None
         self._cmd_id = 0
         self._pending: dict[int, asyncio.Future] = {}
+        self._listeners: dict[str, list[Callable]] = {}
         self._receive_task: Optional[asyncio.Task] = None
         self._connected = False
+        self.lease = CdpLease()
+
+    # ── event fan-out ────────────────────────────────────────────
+    def on_event(self, method: str, callback: Callable) -> Callable:
+        """Subscribe to a CDP event (e.g. `Runtime.bindingCalled`)."""
+        self._listeners.setdefault(method, []).append(callback)
+        return callback
+
+    def off_event(self, method: str, callback: Callable | None = None) -> None:
+        """Unsubscribe one callback, or every callback for `method`."""
+        if callback is None:
+            self._listeners.pop(method, None)
+            return
+        handlers = self._listeners.get(method)
+        if handlers and callback in handlers:
+            handlers.remove(callback)
+
+    def _dispatch_event(self, frame: dict) -> None:
+        """Deliver one received event frame to its listeners.
+
+        A listener that raises (or an async listener with no running loop)
+        must never stop the remaining listeners or the receive loop.
+        """
+        method = frame.get("method")
+        if not method:
+            return
+        params = frame.get("params") or {}
+        for callback in list(self._listeners.get(method, ())):
+            try:
+                result = callback(params)
+                if inspect.isawaitable(result):
+                    try:
+                        asyncio.get_event_loop().create_task(result)
+                    except RuntimeError:      # no loop — drop, do not crash
+                        result.close()
+            except Exception as e:            # noqa: BLE001 - isolation
+                log.warning("CDP listener for %s failed: %s", method, e)
+
+    async def add_binding(self, name: str) -> bool:
+        """Expose `window[name](payload)` as a `Runtime.bindingCalled` event."""
+        try:
+            await self.send("Runtime.addBinding", {"name": name})
+            return True
+        except Exception as e:                # noqa: BLE001
+            log.warning("addBinding(%s) failed: %s", name, e)
+            return False
+
+    async def add_script_on_new_document(self, source: str) -> str:
+        """Re-inject `source` after every navigation. Returns its identifier."""
+        try:
+            res = await self.send("Page.addScriptToEvaluateOnNewDocument",
+                                  {"source": source})
+            return res.get("result", {}).get("identifier", "")
+        except Exception as e:                # noqa: BLE001
+            log.warning("addScriptToEvaluateOnNewDocument failed: %s", e)
+            return ""
+
+    async def remove_script_on_new_document(self, identifier: str) -> bool:
+        if not identifier:
+            return False
+        try:
+            await self.send("Page.removeScriptToEvaluateOnNewDocument",
+                            {"identifier": identifier})
+            return True
+        except Exception:                     # noqa: BLE001
+            return False
 
     @property
     def is_connected(self) -> bool:
@@ -128,6 +271,8 @@ class CDPClient(QObject):
                 mid = data.get("id")
                 if mid and mid in self._pending:
                     self._pending.pop(mid).set_result(data)
+                elif data.get("method"):
+                    self._dispatch_event(data)
         except (websockets.ConnectionClosed, asyncio.CancelledError):
             pass
         except Exception as e:
