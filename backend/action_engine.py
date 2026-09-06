@@ -145,6 +145,10 @@ class ActionEngine(QObject):
         # Remembered for the whole run ({{nick}} in any block field resolves
         # to it) until the next selection happens; reset on every run press.
         self.selected_nick = ""
+        # Message archive (HistoryService). main.py sets it at startup; it
+        # stays None in tests and headless runs, and the COLLECT_HISTORY
+        # block reports "archive disabled" in that case.
+        self.history = None
 
     # ── stack management ─────────────────────────────────────────
     def load_stack(self, blocks: list[dict]) -> None:

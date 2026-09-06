@@ -1,6 +1,7 @@
 """ChatBot Automator — Qt6 Desktop Application Entry Point."""
 
 import sys
+from datetime import datetime
 import os
 import asyncio
 import logging
@@ -21,6 +22,7 @@ from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine
 from backend.bridge import Bridge
+from backend.history_service import HistoryService
 
 log = logging.getLogger("chatbot")
 
@@ -191,10 +193,18 @@ def main() -> int:
     criteria = CriteriaEngine()
     engine = ActionEngine(cdp=cdp, memory=memory, criteria=criteria)
 
+    # Message archive: one database, one media cache, one passive collector
+    # shared by the COLLECT_HISTORY block, the history windows and the
+    # Chat Message Collector panel.
+    history = HistoryService(cdp=cdp, config=config,
+                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"))
+    engine.history = history
+
     # Window + bridge
     window = MainWindow(config=config)
     bridge = Bridge(cdp=cdp, memory=memory, criteria=criteria,
                     engine=engine, config=config)
+    bridge.attach_history(history)
     window.set_bridge(bridge)
     channel = QWebChannel()
     channel.registerObject("bridge", bridge)
@@ -221,6 +231,7 @@ def main() -> int:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             await cdp.disconnect()
+            await history.close()
             await memory.close()
         except Exception as exc:  # never let cleanup block the exit
             log.warning("Shutdown cleanup warning: %s", exc)
@@ -232,6 +243,11 @@ def main() -> int:
 
     async def startup() -> None:
         await memory.init()
+        try:
+            await history.init()
+            history.start()
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("Message archive unavailable: %s", exc)
         log.info("Backend ready")
         # Auto-fetch Chrome tabs once the UI has loaded
         await asyncio.sleep(0.5)

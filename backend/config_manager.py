@@ -39,6 +39,38 @@ DEFAULTS: dict[str, Any] = {
         "https://ru.virt-chat.com/chat",
         "https://ru.virt-chat.com/",
     ],
+    # message archive (Person History / User Database windows)
+    "history": {
+        "enabled": True,
+        "db_path": "history.db",
+        "use_fts": True,
+        "media": {
+            "enabled": True,
+            "download": True,
+            "cache_dir": "media_cache",
+            "max_file_mb": 2,
+            "max_cache_mb": 200,
+        },
+        "preview": {
+            "preload_rows": 40,
+            "page_size": 50,
+            "max_rows": 400,
+            "show_images": True,
+        },
+    },
+    # passive private-chat collector (Chat Message Collector window)
+    "collector": {
+        "enabled": True,
+        "my_nick": "",
+        "heartbeat_ms": 1500,
+        "idle_ms": 3000,
+        "throttle_factor": 3,
+        "require_private": True,
+        "download_media": True,
+        "chunk_size": 80,
+        "chunk_pause_ms": 40,
+        "bootstrap_max": 2000,
+    },
     # named action-stack presets: name -> {"blocks": [...], "updated_at": ...}
     "stack_presets": {},
     # named message templates: name -> {"body": "...", "updated_at": ...}
@@ -57,6 +89,8 @@ DEFAULTS: dict[str, Any] = {
     #   window_geometry    -> {x, y, width, height} for the desktop window
     "state": {
         "undo_history": [],
+        # recently used "My Nick" values, most recent first
+        "my_nick_recent": [],
         "undo_history_index": -1,
         "grid_layout": None,
         "block_config_pinned": False,

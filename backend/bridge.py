@@ -39,6 +39,17 @@ class Bridge(QObject):
     grid_layout_persisted = Signal(bool)     # close-time save acknowledgment
     template_loaded = Signal(str, str)       # name, body
     history_changed = Signal()               # global timeline grew / moved
+    # ── message archive (Person History / User Database / Collector) ──
+    history_page_ready = Signal(str, str)    # req_id, JSON page
+    history_search_ready = Signal(str, str)  # req_id, JSON results
+    history_stats_ready = Signal(str, str)   # req_id, JSON stats
+    userdb_page_ready = Signal(str, str)     # req_id, JSON persons / db stats
+    userdb_changed = Signal(str)             # JSON {action, nick}
+    media_ready = Signal(str, str)           # req_id, JSON media info
+    collector_status = Signal(str)           # JSON collector state payload
+    history_appended = Signal(str)           # JSON {nick, items, added}
+    my_nick_changed = Signal(str)            # the configured "my nick"
+    history_error = Signal(str, str)         # scope, message
 
     def __init__(self, cdp, memory, criteria, engine, config,
                  presets: PresetStore | None = None, parent=None):
@@ -47,6 +58,7 @@ class Bridge(QObject):
         self._criteria, self._engine = criteria, engine
         self._config, self._message_text = config, ""
         # Presets live in the SAME single JSON file as everything else.
+        self._history = None                 # set by attach_history()
         self._presets = presets or PresetStore(config=self._config)
         self._presets.import_legacy()
         self._cdp.connected.connect(lambda: self.connection_status.emit("connected"))
@@ -305,8 +317,11 @@ class Bridge(QObject):
         return self._get_hist(kind)
 
     # ── grid layout (flexible grid / sash layout) ────────────────
-    WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
-                  "people", "log"}
+    LEGACY_WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
+                         "people", "log"}
+    NEW_WINDOW_IDS = {"history", "userdb", "collector"}
+    WINDOW_IDS = LEGACY_WINDOW_IDS | NEW_WINDOW_IDS
+    GRID_VERSION = 2
     MIN_GRID_SIZE = 4
 
     @classmethod
@@ -379,23 +394,42 @@ class Bridge(QObject):
             return None, f"bad JSON ({exc})"
         if not isinstance(data, dict):
             return None, "payload must be an object"
-        if data.get("v") != 1:
-            return None, f"unsupported version {data.get('v')!r}"
+        version = data.get("v")
+        if version not in (1, cls.GRID_VERSION):
+            return None, f"unsupported version {version!r}"
         tree, err = cls._normalize_grid_tree(data.get("tree"))
         if err:
             return None, err
         got = sorted(i for i in cls._leaf_ids(tree) if i)
+        if version == 1 and got == sorted(cls.LEGACY_WINDOW_IDS):
+            # A layout saved before the archive windows existed. Rejecting it
+            # would throw away the user's arrangement on first start after the
+            # update, so it is upgraded instead.
+            tree = cls._migrate_grid_tree(tree)
+            got = sorted(i for i in cls._leaf_ids(tree) if i)
         if got != sorted(cls.WINDOW_IDS):
             return None, "window set mismatch (every window must appear once)"
         return tree, None
+
+    @classmethod
+    def _migrate_grid_tree(cls, tree: dict) -> dict:
+        """v1 → v2: keep the arrangement, add the three archive windows."""
+        return {"t": "split", "dir": "col", "children": [
+            tree,
+            {"t": "split", "dir": "row", "children": [
+                {"t": "leaf", "id": "history"},
+                {"t": "leaf", "id": "userdb"},
+                {"t": "leaf", "id": "collector"},
+            ], "sizes": [40, 35, 25]},
+        ], "sizes": [74, 26]}
 
     @classmethod
     def _canonical_grid_payload(cls, raw: str):
         tree, err = cls._parse_grid_payload(raw)
         if err:
             return None, err
-        return json.dumps({"v": 1, "tree": tree}, ensure_ascii=False,
-                          separators=(",", ":")), None
+        return json.dumps({"v": cls.GRID_VERSION, "tree": tree},
+                          ensure_ascii=False, separators=(",", ":")), None
 
     @Slot(result=str)
     def get_grid_layout(self):
@@ -430,7 +464,8 @@ class Bridge(QObject):
     @Slot(result=str)
     def reset_grid_layout(self):
         """Restore the default grid with every window visible."""
-        payload = json.dumps({"v": 1, "tree": self._default_grid_tree()},
+        payload = json.dumps({"v": self.GRID_VERSION,
+                              "tree": self._default_grid_tree()},
                              ensure_ascii=False, separators=(",", ":"))
         self._config.set_state(grid_layout=payload)
         self._push_global("grid", payload)
@@ -617,7 +652,7 @@ class Bridge(QObject):
 
     @staticmethod
     def _default_grid_tree() -> dict:
-        """Mirror of SashCore.defaultTree(): all seven windows, classic order."""
+        """Mirror of SashCore.defaultTree(): every window, classic order."""
         def leaf(i):
             return {"t": "leaf", "id": i}
 
@@ -631,7 +666,9 @@ class Bridge(QObject):
             ], [17, 83]),
             leaf("composer"),
             split("row", [leaf("people"), leaf("log")], [70, 30]),
-        ], [46, 24, 30])
+            split("row", [leaf("history"), leaf("userdb"),
+                          leaf("collector")], [40, 35, 25]),
+        ], [36, 18, 24, 22])
 
     def _push_history(self, blocks: list[dict]) -> tuple[list, int]:
         """Backward-compatible name; append the stack to global history."""
@@ -1205,3 +1242,382 @@ class Bridge(QObject):
               "order": ranks.get(u.nick)}
              for u in users], ensure_ascii=False))
         self.stats_updated.emit(json.dumps(await self._memory.get_stats()))
+
+    # ═════════════════════════════════════════════════════════════
+    # MESSAGE ARCHIVE (Person History / User Database / Collector)
+    #
+    # Reads hit an async SQLite database, so a @Slot cannot answer inline:
+    # JS passes a `req_id` and Python answers on a signal carrying the same
+    # id. Two windows can therefore ask for two pages at once without their
+    # answers crossing.
+    # ═════════════════════════════════════════════════════════════
+
+    def attach_history(self, service) -> None:
+        """Wire the archive service (created in main.py) into the UI."""
+        self._history = service
+        if service is None:
+            return
+        try:
+            service.collector.status_changed.connect(self.collector_status.emit)
+            service.collector.history_appended.connect(self._on_history_appended)
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("collector signals not connected: %s", exc)
+        engine = getattr(self, "_engine", None)
+        if engine is not None:
+            try:
+                engine.history = service
+            except Exception:                         # noqa: BLE001
+                pass
+
+    def _on_history_appended(self, payload: str) -> None:
+        self.history_appended.emit(payload)
+
+    @property
+    def _archive(self):
+        return getattr(self, "_history", None)
+
+    def _run_async(self, scope: str, coro) -> None:
+        """Run an archive coroutine, reporting failures on history_error."""
+        async def guarded():
+            try:
+                await coro
+            except Exception as exc:                  # noqa: BLE001
+                log.warning("archive %s failed: %s", scope, exc)
+                self.history_error.emit(scope, str(exc))
+        asyncio.ensure_future(guarded())
+
+    @staticmethod
+    def _json_arg(raw, default=None):
+        if isinstance(raw, dict):
+            return raw
+        try:
+            data = json.loads(raw or "{}")
+        except (TypeError, ValueError):
+            return dict(default or {})
+        return data if isinstance(data, dict) else dict(default or {})
+
+    def _need_archive(self, scope: str, req_id: str = "") -> bool:
+        if self._archive is None:
+            self.history_error.emit(scope, "the message archive is not running")
+            return False
+        return True
+
+    # ── person history ───────────────────────────────────────────
+    @Slot(str, str, str)
+    def history_open(self, req_id, nick, options_json):
+        """First page for a person (newest messages, oldest first on screen)."""
+        if not self._need_archive("history_open", req_id):
+            return
+        opts = self._json_arg(options_json)
+        self._run_async("history_open", self._history_page(req_id, nick, opts))
+
+    @Slot(str, str, str)
+    def history_page(self, req_id, nick, anchor_json):
+        """Another page: `before_ord`, `after_ord` or `around` an ord."""
+        if not self._need_archive("history_page", req_id):
+            return
+        opts = self._json_arg(anchor_json)
+        self._run_async("history_page", self._history_page(req_id, nick, opts))
+
+    async def _history_page(self, req_id, nick, opts):
+        service = self._archive
+        limit = int(opts.get("limit") or
+                    service.preview_settings().get("page_size", 50))
+        if opts.get("around") is not None:
+            payload = await service.query.around(
+                nick, int(opts["around"]),
+                radius=int(opts.get("radius") or 25))
+            payload["stats"] = await service.query.person_stats(nick)
+            payload["my_nick"] = service.my_nick
+        else:
+            payload = await service.page(
+                nick,
+                before_ord=(int(opts["before_ord"])
+                            if opts.get("before_ord") is not None else None),
+                after_ord=(int(opts["after_ord"])
+                           if opts.get("after_ord") is not None else None),
+                limit=limit)
+        payload["req_id"] = req_id
+        payload["preview"] = service.preview_settings()
+        self.history_page_ready.emit(req_id, json.dumps(payload,
+                                                        ensure_ascii=False))
+
+    @Slot(str, str)
+    def history_search(self, req_id, query_json):
+        """Search one conversation (`scope='person'`) or the whole archive."""
+        if not self._need_archive("history_search", req_id):
+            return
+        opts = self._json_arg(query_json)
+        self._run_async("history_search", self._history_search(req_id, opts))
+
+    async def _history_search(self, req_id, opts):
+        service = self._archive
+        query = str(opts.get("q") or opts.get("query") or "")
+        limit = int(opts.get("limit") or 100)
+        if str(opts.get("scope") or "person") == "person":
+            payload = await service.query.search_person(
+                str(opts.get("nick") or ""), query, limit=limit,
+                offset=int(opts.get("offset") or 0))
+            payload["scope"] = "person"
+        else:
+            payload = await service.query.search_global(query, limit=limit)
+            payload["scope"] = "global"
+        payload["req_id"] = req_id
+        self.history_search_ready.emit(req_id, json.dumps(payload,
+                                                          ensure_ascii=False))
+
+    @Slot(str, str)
+    def history_stats(self, req_id, nick):
+        if not self._need_archive("history_stats", req_id):
+            return
+
+        async def work():
+            payload = await self._archive.query.person_stats(nick)
+            payload["req_id"] = req_id
+            self.history_stats_ready.emit(req_id, json.dumps(
+                payload, ensure_ascii=False))
+        self._run_async("history_stats", work())
+
+    # ── the all-time user database ───────────────────────────────
+    @Slot(str, str)
+    def userdb_page(self, req_id, query_json):
+        if not self._need_archive("userdb_page", req_id):
+            return
+        opts = self._json_arg(query_json)
+
+        async def work():
+            payload = await self._archive.query.list_persons(
+                q=str(opts.get("q") or ""),
+                limit=int(opts.get("limit") or 50),
+                offset=int(opts.get("offset") or 0),
+                sort=str(opts.get("sort") or "recent"),
+                include_deleted=bool(opts.get("include_deleted")))
+            payload["req_id"] = req_id
+            payload["my_nick"] = self._archive.my_nick
+            self.userdb_page_ready.emit(req_id, json.dumps(
+                payload, ensure_ascii=False))
+        self._run_async("userdb_page", work())
+
+    @Slot(str)
+    def userdb_stats(self, req_id):
+        if not self._need_archive("userdb_stats", req_id):
+            return
+
+        async def work():
+            payload = await self._archive.query.db_stats()
+            payload["req_id"] = req_id
+            payload.update(await self._archive.media.cache_usage())
+            self.userdb_page_ready.emit(req_id, json.dumps(
+                payload, ensure_ascii=False))
+        self._run_async("userdb_stats", work())
+
+    @Slot(str, bool, result=bool)
+    def history_delete_person(self, nick, hard=False):
+        """Tombstone (or, with `hard`, erase) one person's archive."""
+        if self._archive is None:
+            return False
+
+        async def work():
+            ok = await self._archive.repo.delete_person(nick, hard=bool(hard))
+            self.userdb_changed.emit(json.dumps(
+                {"action": "deleted", "nick": nick, "hard": bool(hard),
+                 "ok": ok}, ensure_ascii=False))
+        self._run_async("history_delete_person", work())
+        return True
+
+    @Slot(str, result=bool)
+    def history_restore_person(self, nick):
+        if self._archive is None:
+            return False
+
+        async def work():
+            ok = await self._archive.repo.restore_person(nick)
+            self.userdb_changed.emit(json.dumps(
+                {"action": "restored", "nick": nick, "ok": ok},
+                ensure_ascii=False))
+        self._run_async("history_restore_person", work())
+        return True
+
+    @Slot(str, str, result=bool)
+    def history_merge(self, from_nick, into_nick):
+        if self._archive is None:
+            return False
+
+        async def work():
+            moved = await self._archive.repo.merge_persons(from_nick,
+                                                           into_nick)
+            self.userdb_changed.emit(json.dumps(
+                {"action": "merged", "nick": into_nick, "from": from_nick,
+                 "moved": moved}, ensure_ascii=False))
+        self._run_async("history_merge", work())
+        return True
+
+    # ── media + clipboard ────────────────────────────────────────
+    @Slot(str, str)
+    def media_path(self, req_id, media_ref):
+        if not self._need_archive("media_path", req_id):
+            return
+
+        async def work():
+            payload = await self._archive.media.path_for(media_ref)
+            payload["req_id"] = req_id
+            payload["id"] = media_ref
+            self.media_ready.emit(req_id, json.dumps(payload,
+                                                     ensure_ascii=False))
+        self._run_async("media_path", work())
+
+    @Slot(str)
+    def copy_media(self, media_ref):
+        """Left click on an image/GIF: put it on the system clipboard."""
+        if self._archive is None:
+            return
+
+        async def work():
+            payload = await self._archive.media.clipboard_payload(media_ref)
+            if payload.get("ok"):
+                placed = self._to_clipboard(payload)
+                payload["copied"] = placed
+                if placed:
+                    self.log_message.emit(
+                        "📋 Copied " + (payload.get("path") or
+                                        payload.get("text") or "media"),
+                        "success")
+            self.media_ready.emit(str(media_ref), json.dumps(
+                payload, ensure_ascii=False))
+        self._run_async("copy_media", work())
+
+    @Slot(str, result=bool)
+    def copy_text(self, text):
+        """Copy selected history text through Qt (works without a browser)."""
+        return self._to_clipboard({"mode": "text", "text": str(text or "")})
+
+    @staticmethod
+    def _to_clipboard(payload: dict) -> bool:
+        try:
+            from PySide6.QtGui import QGuiApplication, QImage
+            app = QGuiApplication.instance()
+            if app is None:
+                return False
+            clipboard = app.clipboard()
+            if clipboard is None:
+                return False
+            mode = payload.get("mode")
+            path = payload.get("path") or ""
+            if mode == "image" and path:
+                image = QImage(path)
+                if not image.isNull():
+                    clipboard.setImage(image)
+                    return True
+            if path:
+                clipboard.setText(path if mode == "file_link" else path)
+                return True
+            clipboard.setText(str(payload.get("text") or ""))
+            return True
+        except Exception as exc:                      # noqa: BLE001
+            log.debug("clipboard unavailable: %s", exc)
+            return False
+
+    # ── the collector window ─────────────────────────────────────
+    @Slot(result=str)
+    def collector_state(self):
+        if self._archive is None:
+            return json.dumps({"state": "off", "text": "Archive not running",
+                               "settings": {}, "paused": False})
+        return json.dumps(self._archive.collector.state_payload(),
+                          ensure_ascii=False)
+
+    @Slot(str)
+    def collector_set(self, settings_json):
+        """Apply and persist collector settings from the panel."""
+        if self._archive is None:
+            return
+        patch = self._json_arg(settings_json)
+        applied = self._archive.collector.configure(**patch)
+        stored = self._config.get_copy("collector", default={})
+        if not isinstance(stored, dict):
+            stored = {}
+        stored.update({k: v for k, v in applied.items()})
+        self._config.set("collector", stored)
+        self._config.save()
+        self.collector_status.emit(json.dumps(
+            self._archive.collector.state_payload(), ensure_ascii=False))
+
+    @Slot(str)
+    def collector_command(self, command):
+        """pause / resume / start / stop / tick — anything else is ignored."""
+        if self._archive is None:
+            return
+        collector = self._archive.collector
+        action = str(command or "").strip().lower()
+        if action == "pause":
+            collector.pause()
+        elif action == "resume":
+            collector.resume()
+        elif action == "start":
+            collector.start()
+            self._archive.start()
+        elif action == "stop":
+            collector.stop()
+        elif action == "tick":
+            self._run_async("collector_tick", collector.tick())
+        else:
+            return
+        self.collector_status.emit(json.dumps(collector.state_payload(),
+                                              ensure_ascii=False))
+
+    # ── My Nick (pinned header) ──────────────────────────────────
+    @Slot(result=str)
+    def get_my_nick(self):
+        value = self._config.get("collector", "my_nick", default="")
+        return str(value or "")
+
+    @Slot(str)
+    def set_my_nick(self, nick):
+        clean = " ".join(str(nick or "").split()).strip()
+        stored = self._config.get_copy("collector", default={})
+        if not isinstance(stored, dict):
+            stored = {}
+        stored["my_nick"] = clean
+        self._config.set("collector", stored)
+        recent = [n for n in (self._config.get_state("my_nick_recent", []) or [])
+                  if isinstance(n, str) and n and n != clean]
+        if clean:
+            recent.insert(0, clean)
+        self._config.set_state(my_nick_recent=recent[:10])
+        if self._archive is not None:
+            self._archive.set_my_nick(clean)
+        self.my_nick_changed.emit(clean)
+        self.log_message.emit(f"👤 My Nick set to “{clean}”" if clean else
+                              "👤 My Nick cleared", "info")
+
+    @Slot(str)
+    def detect_my_nick(self, req_id):
+        """Read the bold nick from the page's user list as a suggestion."""
+        if not self._need_archive("detect_my_nick", req_id):
+            return
+
+        async def work():
+            state = await self._archive.parser.state()
+            self.history_stats_ready.emit(req_id, json.dumps(
+                {"req_id": req_id, "detected": state.get("me") or "",
+                 "partner": state.get("partner") or ""}, ensure_ascii=False))
+        self._run_async("detect_my_nick", work())
+
+    # ── archive settings ─────────────────────────────────────────
+    @Slot(result=str)
+    def get_history_settings(self):
+        if self._archive is None:
+            return json.dumps(self._config.get_copy("history", default={}))
+        return json.dumps(self._archive.settings(), ensure_ascii=False)
+
+    @Slot(str)
+    def save_history_settings(self, settings_json):
+        patch = self._json_arg(settings_json)
+        if self._archive is None:
+            stored = self._config.get_copy("history", default={})
+            stored.update(patch)
+            self._config.set("history", stored)
+            self._config.save()
+            return
+        self._archive.apply_settings(patch)
+        self.log_message.emit("💾 Archive settings saved", "info")
