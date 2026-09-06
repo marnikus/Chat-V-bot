@@ -152,12 +152,13 @@ class TestPersistence(unittest.TestCase):
         """restoreSession() must be able to see the stored layout."""
         import backend.config_manager as cm
         for key in ("grid_layout", "undo_history", "undo_history_index",
-                    "window_geometry"):
+                    "block_config_pinned", "window_geometry"):
             self.assertIn(key, cm.DEFAULTS["state"], key)
         import inspect
         src = inspect.getsource(Bridge.get_app_state)
         self.assertIn("undo_history", src)
         self.assertIn("grid_layout", src)
+        self.assertIn("block_config_pinned", src)
 
 
 # ── requirement 2: one global, tagged undo timeline ──────────────

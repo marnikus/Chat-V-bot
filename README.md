@@ -119,6 +119,13 @@ hardcoded ones. Example: a "Find Settings Button" block.
 6. Remove a preset you no longer need with the **×** on its chip (confirmed in
    an in-app dialog). Everything persists across app restarts.
 
+**Keep the config open while you work:** click the 📌 **pin** button in the
+Block Config title bar. While pinned, the panel stays open even when no block
+is selected (it shows the empty-state hint until you pick one). Click 📌 again
+to unpin and restore the default close-on-deselect behaviour; the **×** close
+button always closes and unpins. The pin state is remembered across app
+restarts, so the panel reopens when you come back.
+
 ### Reorder Blocks (drag & drop)
 Grab any block (or its **⠿** handle) and drag it up or down. While you move
 the mouse you get full visual feedback:

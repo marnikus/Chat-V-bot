@@ -53,11 +53,13 @@ DEFAULTS: dict[str, Any] = {
     #       surface (action stack and sash grid), capped at 100 entries
     #   undo_history_index -> current pointer in that single history
     #   grid_layout        -> serialized sash-layout tree (flexible grid)
+    #   block_config_pinned -> whether the Block Config panel is pinned open
     #   window_geometry    -> {x, y, width, height} for the desktop window
     "state": {
         "undo_history": [],
         "undo_history_index": -1,
         "grid_layout": None,
+        "block_config_pinned": False,
         "window_geometry": None,
         # Legacy read-only migration keys. They are never updated by the
         # global history implementation, but keeping defaults lets old config
