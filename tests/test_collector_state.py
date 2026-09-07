@@ -62,9 +62,30 @@ class CollectorCase(unittest.IsolatedAsyncioTestCase):
         self.statuses = []
         self.col.status_changed.connect(
             lambda payload: self.statuses.append(json.loads(payload)["state"]))
+        self.logs = []
+        self.col.collector_log.connect(
+            lambda payload: self.logs.append(json.loads(payload)))
 
     async def asyncTearDown(self):
         await self.db.close()
+
+
+class TestCollectorLog(CollectorCase):
+    async def test_the_window_gets_parser_and_nick_attempt_entries(self):
+        await self.col.tick()      # COLLECTED
+        messages = [x["message"] for x in self.logs]
+        self.assertTrue(any("Archived" in m for m in messages), messages)
+        self.assertTrue(any("Ански" in m or "Nick" in m or "Партнер" in m
+                            for m in messages), messages)
+        payload = next((x for x in self.logs if "Archived" in x["message"]), {})
+        self.assertEqual(payload["nick"], "Nick")
+        self.assertTrue(payload["ts"], "the log line carries a timestamp")
+
+    async def test_refusals_are_logged_too(self):
+        self.page.tab = "room"
+        await self.col.tick()
+        self.assertTrue(any("not private" in x["message"].lower()
+                            for x in self.logs), self.logs)
 
 
 class TestDetection(CollectorCase):
@@ -124,7 +145,8 @@ class TestCollectionFlow(CollectorCase):
         await self.col.tick()
         reads = len(self.page.slice_calls)
         self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
-        self.assertEqual(self.col.state_payload()["text"], "No new messages")
+        self.assertTrue(
+            self.col.state_payload()["text"].startswith("No new messages"))
         self.assertEqual(len(self.page.slice_calls), reads)
 
     async def test_new_messages_are_appended_on_the_next_tick(self):

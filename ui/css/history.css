@@ -159,6 +159,41 @@
   border-radius: 4px;
 }
 
+.msg-media-box { margin-top: 4px; }
+
+.msg-media-restore {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+}
+
+.msg-media-restore:hover {
+  color: var(--accent);
+  border-style: solid;
+}
+
+.msg-media-restore-kind {
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.msg-media-restore-label {
+  color: var(--text-muted);
+}
+
+.msg-media-restore:hover .msg-media-restore-label {
+  color: var(--accent);
+}
+
 /* ── separators and archive gaps ───────────────────────────────── */
 
 .day-sep {
@@ -319,6 +354,54 @@
 
 .collector-key { color: var(--text-muted); }
 .collector-val { color: var(--text-primary); user-select: text; }
+
+.collector-nick-link {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.collector-nick-link:hover {
+  filter: brightness(1.15);
+  text-decoration: underline;
+}
+
+/* ── collector-local history log ───────────────────────────────── */
+
+.collector-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.collector-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin-top: 4px;
+  padding: 4px 6px;
+  min-height: 60px;
+  max-height: 180px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.collector-log-entry { white-space: pre-wrap; overflow-wrap: anywhere; }
+.collector-log-entry .collector-log-nick { color: var(--accent); font-weight: 600; }
+.collector-log-entry.info   { color: var(--text-secondary); }
+.collector-log-entry.success { color: var(--green); }
+.collector-log-entry.warn   { color: var(--yellow); }
+.collector-log-entry.error  { color: var(--red); }
 
 /* ── the pinned "My Nick" field in the header ──────────────────── */
 

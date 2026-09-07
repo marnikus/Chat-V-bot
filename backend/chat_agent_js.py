@@ -4,8 +4,8 @@ The agent itself lives in `backend/js/chat_agent.js` (a real file, so Node can
 unit-test it). This module only loads it and builds the little expressions we
 hand to `Runtime.evaluate`. Each probe is tagged with a marker comment
 (`/*CVB_STATE*/` …) so the tests — and anyone reading a CDP log — can tell at
-a glance which probe is running, and arguments travel inside
-`/*ARGS*/{…}/*END*/` rather than being pasted into the source.
+a glance which probe is running, and arguments travel inside a single
+`/*ARGS:{…}*/` block comment rather than being pasted into the source.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import os
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
 #: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 6
+AGENT_VERSION = 9
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")
@@ -33,7 +33,11 @@ def agent_source() -> str:
 
 
 def _args(payload: dict) -> str:
-    return "/*ARGS*/" + json.dumps(payload, ensure_ascii=False) + "/*END*/"
+    # A single block comment. The old `/*ARGS*/{…}/*END*/` CLOSED the comment
+    # at `/*ARGS*/`, so the JSON object literal became real source and the
+    # probe caused a SyntaxError — which is why state() worked (8 messages)
+    # but every slice() returned [] and the archive stayed at 0.
+    return "/*ARGS:" + json.dumps(payload, ensure_ascii=False) + "*/"
 
 
 def install_expression() -> str:

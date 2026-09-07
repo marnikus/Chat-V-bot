@@ -5,7 +5,10 @@ under a size cap. Previews then survive the site expiring an image, without
 turning history.db into a multi-gigabyte blob store.
 
 Bytes are fetched by an in-page `fetch()` (the page owns the session cookies)
-and travel back as base64 through one CDP evaluate. Everything here is
+and travel back as base64 through one CDP evaluate. When that host blocks
+CORS the store falls back to a cookied Python download, then to reading the
+network response body of the request the browser itself already made for the
+visible `<img>` (CDP `Network.getResponseBody`). Everything here is
 best-effort: a missing file, a dead URL or a disabled cache degrades to
 "show the link", never to an exception in the UI.
 """
@@ -13,6 +16,7 @@ best-effort: a missing file, a dead URL or a disabled cache degrades to
 from __future__ import annotations
 
 import aiohttp
+import asyncio
 import base64
 import hashlib
 import json
@@ -21,7 +25,7 @@ import os
 import re
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from backend import chat_agent_js
 from backend.history_db import HistoryDB
@@ -259,26 +263,60 @@ class MediaStore:
                 stored += 1
         return stored
 
+    async def _abs_url(self, url: str) -> str:
+        """Resolve a relative/`//` image URL against the live page address.
+
+        The chat page may keep the real address in `data-src` or hand the
+        collector a path like `m_Питер2к7_7a861….jpg` instead of a full URL.
+        The `<img>` element resolves it against the page, so Python has to do
+        the same or every download gets a bogus relative path.
+        """
+        text = str(url or "").strip()
+        if not text:
+            return text
+        if text.startswith(("data:", "blob:", "javascript:", "about:")) \
+                or "://" in text:
+            return text
+        if callable(getattr(self.cdp, "evaluate", None)):
+            try:
+                # document.baseURI follows the page's <base href> — the chat
+                # can keep its CDN in <base> so the visible <img> works while
+                # location.href alone would resolve the path to the wrong host.
+                base = await self.cdp.evaluate("document.baseURI")
+                if str(base or "").startswith(("http://", "https://")):
+                    return urljoin(str(base), text)
+            except Exception:                    # noqa: BLE001
+                pass
+        return text
+
     async def _fetch_one(self, row: dict) -> bool:
         """Cache one media row.
 
         The in-page fetch is tried first (fastest). When the image host has no
         CORS headers the page fetch fails — the fallback downloads from Python
         with the browser's cookies instead, which is exactly the case the bug
-        report showed.
+        report showed.  The last resort reads the bytes out of the network
+        request the browser itself already made for the visible `<img>`.
         """
-        url = row["url"]
+        url = await self._abs_url(row["url"])
         payload = await self._fetch_in_page(url)
         page_ok = bool(payload.get("ok"))
         page_error = (payload.get("error") or "") if not page_ok else ""
+        python_error = ""
         if not payload.get("ok"):
             payload = await self._fetch_via_python(url)
+            python_error = payload.get("error") or ""
+        network_error = ""
         if not payload.get("ok"):
-            fallback_error = payload.get("error") or "no downloadable media"
-            reason = str(page_error or fallback_error)
-            if page_error and fallback_error and page_error != fallback_error:
-                reason = f"{page_error} / fallback: {fallback_error}"
-            await self._fail(row["id"], f"CORS/page fetch failed: {reason}")
+            payload = await self._fetch_via_network(url)
+            network_error = payload.get("error") or ""
+        if not payload.get("ok"):
+            errors = [e for e in (page_error, python_error, network_error)
+                      if e and e != "no downloadable media"]
+            if not errors:
+                errors = [payload.get("error") or "no downloadable media"]
+            await self._fail(row["id"], "CORS/page fetch failed: "
+                              + " / ".join(dict.fromkeys(errors)))
             return False
         try:
             data = base64.b64decode(payload.get("b64") or "")
@@ -339,11 +377,14 @@ class MediaStore:
             cookies = await self.cdp.get_cookies(url)
         except Exception as e:                        # noqa: BLE001
             cookies = ""
+        parsed = urlparse(str(url or ""))
+        referer = f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc \
+            else "https://ru.virt-chat.com/"
         headers = {
             "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
                            "Chrome/131.0.0.0 Safari/537.36"),
-            "Referer": "https://ru.virt-chat.com/",
+            "Referer": referer,
             "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
         }
@@ -369,6 +410,123 @@ class MediaStore:
                             "bytes": len(data)}
         except Exception as e:                        # noqa: BLE001
             return {"ok": False, "error": str(e)}
+
+    async def _fetch_via_network(self, url: str) -> dict:
+        """Grab the response bytes through the browser's normal <img> path.
+
+        The page can render an image even when `fetch()` is CORS-blocked and
+        a plain Python download is rejected by the host.  CDP lets us watch
+        the real network request made by an `<img>` element and read its
+        response body, so we save exactly the bytes the viewport shows.
+        """
+        if self.cdp is None or not all(
+                hasattr(self.cdp, name) for name in ("send", "on_event",
+                                                     "off_event")):
+            return {"ok": False, "error": "CDP network capture unavailable"}
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        info = {"request_id": None, "mime": ""}
+
+        def clean(value: Optional[str]) -> str:
+            return str(value or "").split("#", 1)[0].split("?", 1)[0]
+
+        def matches(value: Optional[str]) -> bool:
+            return clean(value) == clean(url)
+
+        def on_request(params) -> None:
+            if fut.done():
+                return
+            request = (params or {}).get("request") or {}
+            if matches(request.get("url")):
+                info["request_id"] = (params or {}).get("requestId")
+
+        def on_response(params) -> None:
+            if fut.done():
+                return
+            response = (params or {}).get("response") or {}
+            rid = (params or {}).get("requestId")
+            if matches(response.get("url")):
+                info["request_id"] = rid or info["request_id"]
+            # a CORS/CDN redirect can change the visible URL; keep the bytes
+            # and the real MIME for any response on the request we started.
+            if rid and rid == info["request_id"]:
+                info["mime"] = (response.get("mimeType") or
+                                (response.get("headers") or {})
+                                .get("Content-Type", ""))
+
+        def on_finished(params) -> None:
+            if fut.done():
+                return
+            if (params or {}).get("requestId") == info["request_id"]:
+                self._finish_network_body(fut, info)
+
+        def on_failed(params) -> None:
+            if fut.done():
+                return
+            if (params or {}).get("requestId") == info["request_id"]:
+                fut.set_result({"ok": False,
+                                "error": (params or {}).get("errorText")
+                                or "network load failed"})
+
+        on_req = self.cdp.on_event("Network.requestWillBeSent", on_request)
+        on_resp = self.cdp.on_event("Network.responseReceived", on_response)
+        cb = self.cdp.on_event("Network.loadingFinished", on_finished)
+        on_fail = self.cdp.on_event("Network.loadingFailed", on_failed)
+        try:
+            try:
+                await self.cdp.send("Network.setCacheDisabled",
+                                    {"cacheDisabled": True})
+            except Exception:                        # noqa: BLE001
+                pass
+            js = ("(function(){window.__cvbFetchImage=new Image();"
+                  "window.__cvbFetchImage.src=%s;})()"
+                  % json.dumps(url, ensure_ascii=False))
+            try:
+                await self.cdp.evaluate(js)
+            except Exception as e:                    # noqa: BLE001
+                return {"ok": False, "error": f"load trigger failed: {e}"}
+            try:
+                return await asyncio.wait_for(fut, timeout=10)
+            except asyncio.TimeoutError:
+                return {"ok": False, "error": "network capture timed out"}
+        finally:
+            self.cdp.off_event("Network.requestWillBeSent", on_req)
+            self.cdp.off_event("Network.responseReceived", on_resp)
+            self.cdp.off_event("Network.loadingFinished", cb)
+            self.cdp.off_event("Network.loadingFailed", on_fail)
+            try:
+                await self.cdp.send("Network.setCacheDisabled",
+                                    {"cacheDisabled": False})
+            except Exception:                        # noqa: BLE001
+                pass
+
+    def _finish_network_body(self, fut: asyncio.Future, info: dict) -> None:
+        async def work():
+            if fut.done():
+                return
+            rid = info.get("request_id")
+            try:
+                raw = await self.cdp.send("Network.getResponseBody",
+                                          {"requestId": rid})
+                result = (raw or {}).get("result", {}) or {}
+                body = result.get("body") or ""
+                if result.get("base64Encoded"):
+                    data = base64.b64decode(body)
+                    b64 = body
+                else:
+                    data = body.encode("utf-8")
+                    b64 = base64.b64encode(data).decode()
+                if not data:
+                    fut.set_result({"ok": False,
+                                    "error": "empty response body"})
+                    return
+                fut.set_result({"ok": True, "b64": b64,
+                                "mime": info.get("mime") or "",
+                                "bytes": len(data)})
+            except Exception as e:                    # noqa: BLE001
+                fut.set_result({"ok": False,
+                                "error": f"getResponseBody: {e}"})
+        asyncio.ensure_future(work())
 
     async def _twin(self, owner: str, digest: str) -> str:
         """An already-cached file with the same bytes in the same folder."""
@@ -424,10 +582,59 @@ class MediaStore:
     async def retry_failed(self) -> int:
         """Explicitly give up-front failures another chance (user action)."""
         cur = await self.db.execute(
-            "UPDATE media SET state='pending', fail_reason='' "
-            "WHERE state IN ('failed','skipped')")
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1 "
+            "WHERE state IN ('failed','skipped')",
+            (_now(),))
         await self.db.commit()
         return int(cur.rowcount or 0)
+
+    async def requeue(self, media_id, reason: str = "retry") -> bool:
+        """Re-queue one failed/skipped media row for another download.
+
+        Used by backfill recovery. The row is stamped so the UI/DB can prove
+        it was recovered (or tried again) and so a single backfill never
+        loops over the same URL endlessly.
+        """
+        row = await self.get(media_id)
+        if not row or not row.get("url"):
+            return False
+        if row.get("state") not in ("failed", "skipped"):
+            return False
+        await self.db.execute(
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1, "
+            "last_used=? WHERE id=?",
+            (_now(), _now(), self._as_id(media_id)))
+        await self.db.commit()
+        return True
+
+    async def download_one(self, media_id) -> dict:
+        """Force a single media row through the downloader and return its state.
+
+        Used by the "click to restore" marker in the History window.  A row
+        that is already cached and whose file still exists is returned as-is;
+        anything failed, skipped, pending or whose saved file is gone is
+        re-queued and downloaded once right here.
+        """
+        row = await self.get(media_id)
+        if not row:
+            return {"state": "missing", "id": media_id, "path": "", "url": ""}
+        if not self.enabled or self.paused or self.cdp is None:
+            return await self.path_for(media_id)
+        path = row.get("cache_path") or ""
+        if row.get("state") == "cached" and path and os.path.exists(path):
+            return await self.path_for(media_id)
+        await self.db.execute(
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1, "
+            "last_used=? WHERE id=?",
+            (_now(), _now(), self._as_id(media_id)))
+        await self.db.commit()
+        row = await self.get(media_id)
+        if row:
+            await self._fetch_one(row)
+        return await self.path_for(media_id)
 
     async def retry_failed_uncached(self) -> int:
         """Re-queue failed rows that have no local file.
@@ -437,8 +644,10 @@ class MediaStore:
         with the Python/cookie downloader.
         """
         cur = await self.db.execute(
-            "UPDATE media SET state='pending', fail_reason='' "
-            "WHERE state='failed' AND (cache_path='' OR cache_path IS NULL)")
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1 "
+            "WHERE state='failed' AND (cache_path='' OR cache_path IS NULL)",
+            (_now(),))
         await self.db.commit()
         return int(cur.rowcount or 0)
 

@@ -336,8 +336,14 @@
       const incoming = (rows || []).slice();
       if (!incoming.length) return 0;
       if (model.hasNewer) {
-        model.buffer = model.buffer.concat(incoming);
-        model.pendingLive = model.buffer.length;
+        const seen = new Set(model.buffer.map(
+          (r) => r.ord + '|' + (r.fp || '')));
+        const fresh = incoming.filter((r) =>
+          !seen.has(r.ord + '|' + (r.fp || '')));
+        if (fresh.length) {
+          model.buffer = model.buffer.concat(fresh);
+          model.pendingLive = model.buffer.length;
+        }
         return 0;
       }
       const seen = new Set(model.items.map((r) => r.ord + '|' + r.fp));

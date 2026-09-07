@@ -33,6 +33,8 @@ const CollectorPanel = {
       panel: $('winCollector'),
       status: $('collectorStatus'),
       rows: $('collectorRows'),
+      log: $('collectorLog'),
+      clearLog: $('collectorClearLogBtn'),
       pause: $('collectorPauseBtn'),
       now: $('collectorNowBtn'),
       backfill: $('collectorBackfillBtn'),
@@ -41,6 +43,18 @@ const CollectorPanel = {
       heartbeat: $('collectorHeartbeat'),
     };
     if (!this._els.status) return;
+    if (this._els.rows) {
+      this._els.rows.addEventListener('click', (event) => {
+        const target = event && event.target;
+        const link = target && target.closest
+          ? target.closest('.collector-nick-link') : null;
+        if (link && link.dataset && link.dataset.nick)
+          this.openPartner(link.dataset.nick);
+      });
+    }
+    if (this._els.clearLog) {
+      this._els.clearLog.addEventListener('click', () => this.clearLog());
+    }
     if (this._els.pause) {
       this._els.pause.addEventListener('click', () => {
         this.command(this.paused ? 'resume' : 'pause');
@@ -83,9 +97,59 @@ const CollectorPanel = {
       App.bridge.collector_set(JSON.stringify(patch));
   },
 
+  /** Open Person History for the partner and highlight that row in the DB. */
+  openPartner(nick) {
+    nick = String(nick || '').trim();
+    if (!nick) return;
+    if (typeof SashGrid !== 'undefined' && SashGrid.showWindow) {
+      SashGrid.showWindow('history');
+      SashGrid.showWindow('userdb');
+    }
+    if (typeof HistoryStore !== 'undefined' && HistoryStore.openPerson)
+      HistoryStore.openPerson(nick);
+    if (typeof HistoryDb !== 'undefined' && HistoryDb.highlightNick)
+      HistoryDb.highlightNick(nick);
+    if (typeof LogConsole !== 'undefined')
+      LogConsole.log(`👤 Open history for “${nick}”`, 'info');
+  },
+
   setMyNick(nick) {
     this.myNick = nick || '';
     this.renderRows(this._last || {});
+  },
+
+  /** One backend log line for this window only. */
+  onLog(json) {
+    let payload = null;
+    try { payload = JSON.parse(json); } catch (e) { return; }
+    if (!payload) return;
+    const level = payload.level || 'info';
+    const nick = String(payload.nick || '').trim();
+    const message = String(payload.message || '');
+    if (!message && !nick) return;
+    const entry = document.createElement('div');
+    entry.className = 'collector-log-entry ' + level;
+    const ts = document.createElement('span');
+    ts.className = 'collector-log-ts';
+    ts.textContent = '[' + (payload.ts || '') + '] ';
+    entry.appendChild(ts);
+    if (nick) {
+      const n = document.createElement('span');
+      n.className = 'collector-log-nick';
+      n.textContent = '«' + nick + '» ';
+      entry.appendChild(n);
+    }
+    entry.appendChild(document.createTextNode(message));
+    if (!this._els.log) return;
+    this._els.log.appendChild(entry);
+    this._els.log.scrollTop = this._els.log.scrollHeight;
+    while (this._els.log.children.length > 400)
+      this._els.log.removeChild(this._els.log.firstChild);
+  },
+
+  clearLog() {
+    if (!this._els.log) return;
+    this._els.log.replaceChildren();
   },
 
   onStatus(json) {
@@ -138,11 +202,29 @@ const CollectorPanel = {
     host.appendChild(v);
   },
 
+  _rowLink(host, key, nick) {
+    const k = document.createElement('span');
+    k.className = 'collector-key';
+    k.appendChild(document.createTextNode(key));
+    const v = document.createElement('span');
+    v.className = 'collector-val';
+    const link = document.createElement('span');
+    link.className = 'collector-nick-link';
+    link.dataset.nick = nick || '';
+    link.title = 'Open Person History and highlight “' + (nick || '') + '” in the database';
+    link.appendChild(document.createTextNode(nick || ''));
+    v.appendChild(link);
+    host.appendChild(k);
+    host.appendChild(v);
+  },
+
   renderRows(payload) {
     const host = this._els.rows;
     if (!host) return;
     host.replaceChildren();
-    this._row(host, 'Partner', payload.nick || payload.partner);
+    const partner = String(payload.nick || payload.partner || '').trim();
+    if (partner) this._rowLink(host, 'Partner', partner);
+    else this._row(host, 'Partner', '');
     this._row(host, 'My nick', this.myNick || (payload.settings || {}).my_nick);
     this._row(host, 'In archive', payload.total);
     this._row(host, 'Added this session', this._appended || payload.added || 0);
@@ -151,6 +233,23 @@ const CollectorPanel = {
     if (payload.throttled)
       this._row(host, 'Throttled', 'yes — an Action Stack run is in progress');
     if (payload.self_heals) this._row(host, 'Re-syncs', payload.self_heals);
+    if (payload.last_probe) {
+      const p = payload.last_probe;
+      this._row(host, 'Page count', p.count);
+      this._row(host, 'People',
+                String(p.participants) + ' · ' + String(p.panes) +
+                ' pane(s) · ' + (p.pane_source || 'n/a'));
+    }
+    if (payload.sync_reason) {
+      let sync = payload.sync_reason;
+      if (payload.sync_count !== undefined)
+        sync += ' · count ' + payload.sync_count;
+      if (payload.sync_added !== undefined)
+        sync += ' · added ' + payload.sync_added;
+      this._row(host, 'Sync', sync);
+    }
+    if (payload.backfill_pending)
+      this._row(host, 'Backfill', 'full scan pending retry');
     if (payload.warning) this._row(host, 'Warning', payload.warning);
     if (payload.error) this._row(host, 'Error', payload.error);
   },

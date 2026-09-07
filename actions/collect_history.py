@@ -157,7 +157,8 @@ class CollectHistory(BaseAction):
             max_messages=self.max_messages or None,
             chunk_pause_ms=self.chunk_pause_ms,
             should_stop=stopping, on_progress=progress, now=self.now(),
-            backfill_older=(self.mode == "full"))
+            backfill_older=(self.mode == "full"),
+            media=repo.media if self.download_media else None)
 
         if not result.ok:
             if result.reason == "not_private":

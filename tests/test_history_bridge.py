@@ -234,6 +234,26 @@ class TestMediaAndClipboard(BridgeCase):
         data = json.loads(info)
         self.assertEqual(data["url"], "https://x/y.gif")
 
+    async def test_media_restore_answers_and_reports_the_result(self):
+        self.page.messages = [raw("", kind="gif", idx=0,
+                                  media={"url": "https://x/y.gif",
+                                         "kind": "gif"})]
+        await self.service.collector.tick()
+        _r, payload = await self.ask(self.bridge.history_open, "r", "Nick",
+                                     "{}", signal=self.bridge.history_page_ready)
+        ref = json.loads(payload)["items"][0]["media"]["id"]
+        await self.service.db.execute(
+            "UPDATE media SET state='failed', cache_path='', "
+            "fail_reason='gone' WHERE id=?", (ref,))
+        await self.service.db.commit()
+        _r, info = await self.ask(self.bridge.media_restore, "m1", str(ref),
+                                  signal=self.bridge.media_ready)
+        data = json.loads(info)
+        self.assertEqual(str(data["id"]), str(ref))
+        # the fake page has no media downloader, so the attempt lands back
+        # in a non-cached state, but the restore marker got a real answer
+        self.assertIn(data["state"], ("failed", "pending"))
+
     def test_copy_text_never_needs_the_browser_clipboard(self):
         self.assertIsInstance(self.bridge.copy_text("hello"), bool)
 

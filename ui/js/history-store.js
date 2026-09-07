@@ -194,8 +194,34 @@ const HistoryStore = {
     if (!payload || !this.model) return;
     if (payload.nick !== this.nick) return;
     const added = this.model.appendLive(payload.items || []);
+    if (payload.total != null) {
+      const total = Number(payload.total);
+      this.stats = Object.assign({}, this.stats || {}, {
+        messages: total, message_count: total,
+      });
+    }
+    if (this.model && payload.total != null)
+      this.model.total = Number(payload.total);
     if (added) this.render({ stickToBottom: true });
-    this._updateLatestButton();
+    else this._updateLatestButton();
+    this.renderHeader();
+    this.refreshStats();
+  },
+
+  /** Ask Python for the authoritative person stats after a live append. */
+  refreshStats() {
+    if (!this.nick || !App.bridge || !App.bridge.history_stats) return;
+    App.bridge.history_stats('s' + (++this._seq), this.nick);
+  },
+
+  onStats(reqId, json) {
+    let stats = null;
+    try { stats = JSON.parse(json); } catch (e) { return; }
+    if (!stats || stats.nick !== this.nick) return;
+    this.stats = stats;
+    if (this.model && stats.message_count != null)
+      this.model.total = Number(stats.message_count);
+    this.renderHeader();
   },
 
   /** Show this person's saved images and GIFs in the file manager. */
@@ -217,9 +243,44 @@ const HistoryStore = {
   onMediaReady(reqId, json) {
     let info = null;
     try { info = JSON.parse(json); } catch (e) { return; }
-    if (!info || !info.path) return;
+    if (!info) return;
     const id = info.id != null ? info.id : reqId;
-    HistoryView.applyMediaPath(this._els.list, id, info.path);
+    if (info.path) {
+      // Put the fresh local path into the model, then re-render.  That lets
+      // a restored "click to restore" marker become a working <img> without
+      // a manual refresh, while the scroll anchor is preserved by render().
+      const hit = this._applyModelMedia(id, info);
+      if (hit) { this.render(); return; }
+      HistoryView.applyMediaPath(this._els.list, id, info.path);
+    }
+    if (!info.path && typeof LogConsole !== 'undefined')
+      LogConsole.log('⚠ ' + (info.error || 'media is not available yet') +
+                     (info.state ? ' (' + info.state + ')' : ''), 'warn');
+  },
+
+  _applyModelMedia(id, info) {
+    if (!this.model) return false;
+    const want = String(id == null ? '' : id);
+    let changed = false;
+    this.model.items.forEach((item) => {
+      if (!item.media || String(item.media.id) !== want) return;
+      if (info.path) item.media.path = info.path;
+      if (info.state) item.media.state = info.state;
+      if (info.url) item.media.url = info.url;
+      if (info.kind) item.media.kind = info.kind;
+      changed = true;
+    });
+    return changed;
+  },
+
+  /** Ask the backend to re-download one failed/missing image or GIF. */
+  restoreMedia(mediaId) {
+    if (App.bridge && App.bridge.media_restore)
+      App.bridge.media_restore('r' + (++this._seq), String(mediaId));
+    else if (App.bridge && App.bridge.media_path)
+      App.bridge.media_path('r' + (++this._seq), String(mediaId));
+    if (typeof LogConsole !== 'undefined')
+      LogConsole.log('↻ Restoring media…', 'info');
   },
 
   onError(scope, message) {
@@ -271,7 +332,8 @@ const HistoryStore = {
     return { nick: this.nick, myNick: this.myNick,
              showImages: this.showImages,
              today: new Date().toISOString().slice(0, 10),
-             onCopyMedia: (id) => this.copyMedia(id) };
+             onCopyMedia: (id) => this.copyMedia(id),
+             onRestoreMedia: (id) => this.restoreMedia(id) };
   },
 
   renderHeader() {

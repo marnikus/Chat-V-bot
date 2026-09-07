@@ -29,6 +29,7 @@ from PySide6.QtCore import QObject, Signal
 from backend import chat_agent_js
 from backend.chat_parser import (ChatParser, _signature, sync_conversation,
                                  verify_private)
+from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.user_memory import UserMemory, UserRecord
 
@@ -78,6 +79,7 @@ class Collector(QObject):
     status_changed = Signal(str)        # json state payload
     history_appended = Signal(str)      # json {nick, items, added, total}
     people_changed = Signal(str)        # json {nick, kind, source}
+    collector_log = Signal(str)         # json {ts, level, message, nick}
 
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
@@ -111,6 +113,11 @@ class Collector(QObject):
         self._stop_event: Optional[asyncio.Event] = None
         self._busy = False
         self._force_backfill = False
+        self._backfill_pending = False
+        self._last_probe: dict = {}
+        self._last_sync_reason = ""
+        self._last_sync_added = 0
+        self._last_sync_count = 0
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -249,23 +256,41 @@ class Collector(QObject):
             await self.parser.install()
             self._self_heals += 1
             state = await self.parser.state()
+            self._log(f"Re-installed the in-page agent "
+                      f"(v{int(state.get('agent') or 0)})", "info")
         self._agent = int(state.get("agent") or 0)
         self._error = ""
+        self._last_probe = {
+            "count": int(state.get("count") or 0),
+            "panes": int(state.get("panes") or 0),
+            "pane_source": str(state.get("pane_source") or ""),
+            "participants": int(state.get("participants") or 0),
+            "partner": str(state.get("partner") or ""),
+            "in_authors": list(state.get("in_authors") or []),
+            "out_authors": list(state.get("out_authors") or []),
+            "scroll": dict(state.get("scroll") or {}),
+        }
 
         if not state.get("ok", True):
+            self._log("No chat on this page (state not ok)", "warn")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
         if state.get("tab") != "private":
+            self._log(f"Active tab is “{state.get('tab')}”, not private —",
+                      "warn", state.get("me") or "")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
         participants = int(state.get("participants") or 0)
         if self._settings["require_two_participants"] and participants != 2:
+            self._log(f"Refused: {participants} participants, not a private "
+                      "chat", "warn", state.get("partner") or "")
             return self._refuse(
                 CollectorState.GROUP_TAB,
                 f"Group tab ({participants} people) — not collected")
 
         nick = " ".join(str(state.get("partner") or "").split()).strip()
         if not nick:
+            self._log("No partner nick in the active tab", "warn")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
 
@@ -282,9 +307,12 @@ class Collector(QObject):
         if not self.my_nick and detected_me:
             self.configure(my_nick=detected_me)
             self._detected_my_nick = detected_me
+            self._log(f"Detected My Nick as “{detected_me}”", "info", nick)
 
         my_nick = self.my_nick or detected_me
         if my_nick and nick.lower() == my_nick.lower():
+            self._log("Partner is the same as My Nick — refusing", "warn",
+                      nick)
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Partner is ambiguous (same as My Nick)")
 
@@ -293,12 +321,15 @@ class Collector(QObject):
         # The author gate below protects the message rows from a mixed pane;
         # the People row itself is safe even before that check passes.
         person_id = await self.repo.ensure_person(nick)
-        await self._remember_partner(nick, state)
+        remembered = await self._remember_partner(nick, state)
+        self._log(f"Partner “{nick}”: {remembered}", "info", nick)
 
         # ── the two-step gate ─────────────────────────────────────
         check = verify_private(state, nick, self.my_nick)
         if not check.ok:
             self._nick = nick
+            self._log(f"Private-chat gate refused “{nick}” ({check.reason})",
+                      "warn", nick)
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
         if check.me and not self._detected_my_nick:
@@ -322,12 +353,17 @@ class Collector(QObject):
         self._total = int(person.get("message_count") or 0)
         if unchanged:
             self._added = 0
-            return self._set(CollectorState.NO_NEW, "No new messages")
+            self._last_sync_reason = "unchanged_cursor"
+            self._last_sync_added = 0
+            self._last_sync_count = count
+            return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
         full_scan_complete = bool(cursor.get("full_scan_complete"))
-        want_backfill = (bool(self._settings.get("auto_backfill", True))
-                         and not full_scan_complete) or self._force_backfill
+        want_backfill = ((bool(self._settings.get("auto_backfill", True))
+                          and not full_scan_complete
+                          and not self._backfill_pending)
+                         or self._force_backfill)
         self._force_backfill = False
         self._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
@@ -335,6 +371,10 @@ class Collector(QObject):
 
         result = await self._sync(nick, my_nick, bootstrap,
                                   backfill_older=want_backfill)
+        self._backfill_pending = bool(result.backfill_pending)
+        self._last_sync_reason = str(result.reason or "")
+        self._last_sync_added = int(result.added or 0)
+        self._last_sync_count = int(result.count or 0)
         self._added = result.added
         self._total = result.total
         if self.media is not None and self._settings["download_media"]:
@@ -346,15 +386,22 @@ class Collector(QObject):
 
         suffix = " (throttled — a run is active)" if self._throttled else ""
         if result.added:
-            self._notify_appended(nick, [], result.added, result.total)
+            await self._notify_appended(nick, list(result.records[:200]),
+                                        result.added, result.total)
+            self._log(f"Archived {result.added} new message(s) "
+                      f"(total {result.total})", "success", nick)
             return self._set(CollectorState.COLLECTED,
                              f"Collected {result.added} new "
                              f"message{'s' if result.added != 1 else ''} "
                              f"from {nick}{suffix}")
         if not result.ok:
+            self._log(f"Sync failed for “{nick}” ({result.reason})", "error",
+                      nick)
             return self._set(CollectorState.NOT_PRIVATE,
                              "Not in private tab now")
-        return self._set(CollectorState.NO_NEW, "No new messages")
+        self._log(f"No new messages ({result.reason}, page count "
+                  f"{result.count}, added {result.added})", "info", nick)
+        return self._set(CollectorState.NO_NEW, self._no_new_text())
 
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
                     backfill_older: bool = False):
@@ -365,7 +412,8 @@ class Collector(QObject):
                       max_messages=cap or None,
                       backfill_older=backfill_older,
                       backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
-                      now=self.now())
+                      now=self.now(),
+                      media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
             async with self.lease.low():
                 return await sync_conversation(self.parser, self.repo, nick,
@@ -408,6 +456,24 @@ class Collector(QObject):
             log.warning("cannot add %s to the People list: %s", clean, e)
             return "error"
 
+    def _log(self, message: str, level: str = "info",
+             nick: Optional[str] = None) -> None:
+        """One line for the Collector window's own log.
+
+        Kept deliberately separate from `log.debug`: this is user-facing
+        (parsing history / trying to identify the nick), not a stack trace.
+        """
+        try:
+            payload = {
+                "ts": self.now().strftime("%H:%M:%S"),
+                "level": str(level or "info"),
+                "message": str(message or ""),
+                "nick": nick or self._nick or "",
+            }
+            self.collector_log.emit(json.dumps(payload, ensure_ascii=False))
+        except Exception as e:                       # noqa: BLE001
+            log.debug("collector_log emit failed: %s", e)
+
     def _notify_people(self, nick: str, kind: str) -> None:
         try:
             self.people_changed.emit(json.dumps(
@@ -428,6 +494,9 @@ class Collector(QObject):
         self._set(CollectorState.COLLECTING,
                   f"Backfilling older messages from {self._nick}…")
         self._force_backfill = True
+        self._backfill_pending = False
+        self._log(f"Manual backfill requested for “{self._nick}”", "info",
+                  self._nick)
         return await self.tick()
 
     # ── the gate helpers ─────────────────────────────────────────
@@ -489,8 +558,9 @@ class Collector(QObject):
         if result.added:
             self._added = result.added
             self._total = result.total
-            self._notify_appended(self._nick, items, result.added,
-                                  result.total)
+            await self._notify_appended(self._nick,
+                                        list(result.records[:200]),
+                                        result.added, result.total)
             self._set(CollectorState.COLLECTED,
                       f"Collected {result.added} new "
                       f"message{'s' if result.added != 1 else ''} "
@@ -520,11 +590,27 @@ class Collector(QObject):
             return []
         return [item for item in items if isinstance(item, dict)]
 
-    def _notify_appended(self, nick: str, items: list, added: int,
-                         total: int) -> None:
+    async def _notify_appended(self, nick: str, items: list, added: int,
+                               total: int) -> None:
+        """Emit UI-shaped rows, never the raw parser records.
+
+        The UI rows need `ord`, `day`, `time` and the joined media fields;
+        `AppendResult.records` now carries that shape from the write.  If it
+        is somehow empty, re-read the newest page from SQLite as a fallback.
+        """
+        live = list(items or [])[:200]
+        if not live:
+            try:
+                page = await HistoryQuery(self.repo.db).page(
+                    nick, limit=min(200, max(50, added or 50)))
+                live = page.get("items") or []
+                if page.get("total") is not None:
+                    total = int(page.get("total") or 0)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("live history page for %s failed: %s", nick, e)
         try:
             self.history_appended.emit(json.dumps(
-                {"nick": nick, "my_nick": self.my_nick, "items": items,
+                {"nick": nick, "my_nick": self.my_nick, "items": live,
                  "added": added, "total": total}, ensure_ascii=False))
         except Exception as e:                        # noqa: BLE001
             log.debug("history_appended emit failed: %s", e)
@@ -540,16 +626,28 @@ class Collector(QObject):
             "added": self._added,
             "total": self._total,
             "throttled": self._throttled,
+            "backfill_pending": self._backfill_pending,
             "error": self._error,
             "warning": self._warning,
             "self_heals": self._self_heals,
             "agent": self._agent,
+            "sync_reason": self._last_sync_reason,
+            "sync_added": self._last_sync_added,
+            "sync_count": self._last_sync_count,
+            "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
             "enabled": self.enabled,
             "interval_ms": self.next_interval_ms(),
             "settings": self.settings(),
         }
+
+    def _no_new_text(self) -> str:
+        p = self._last_probe or {}
+        return (f"No new messages (count {p.get('count')}, "
+                f"participants {p.get('participants')}, "
+                f"panes {p.get('panes')}, "
+                f"pane {p.get('pane_source') or 'n/a'})")
 
     def _set(self, state: str, text: str) -> str:
         self._state = state
@@ -561,6 +659,8 @@ class Collector(QObject):
         payload = self.state_payload()
         signature = (payload["state"], payload["text"], payload["nick"],
                      payload["added"], payload["total"], payload["throttled"],
+                     payload["backfill_pending"], payload["sync_reason"],
+                     payload["sync_added"], payload["sync_count"],
                      payload["error"], payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI

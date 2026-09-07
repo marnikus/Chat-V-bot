@@ -195,7 +195,189 @@ Pane selection is now **identity-first**, not “biggest pane wins”:
 
 ---
 
-## 6. Files that change
+## 6. Follow-up (fourth pass): backfill_older scrolls the wrong element
+
+### Symptom
+
+Clicking **⬆ Backfill older** "did nothing": `full_scan_complete` could even be
+set while `In archive` stayed at `0`.
+
+### Root cause
+
+`messagesRoot()` (the MutationObserver target) returns the **content wrapper**
+inside `.messages-root`, not the element that owns the scrollbar. The old
+`scrollBox()` walked upward from that wrapper and stopped on the first element
+whose `scrollHeight > clientHeight`. The wrapper has `clientHeight = 0`, so it
+was selected and `scrollTop` was set on a non-scrolling `<div>` — the real
+`.messages-root` (which has `overflow-y: scroll`) never moved, no older
+messages were loaded, and after the short "settle" the archive was marked as
+fully checked.
+
+### Fix
+
+Agent **v7**:
+
+* `scrollerCandidates()` walks up from the message wrapper and selects the
+  actual scrollers: `.messages-root` / `app-messages`, any
+  `cdk-virtual-scrollable` / virtual-scroll viewport, or an ancestor whose
+  computed `overflow-y` is `scroll`/`auto`. A bare content wrapper is never a
+  candidate.
+* `scrollInfo()`/`state().scroll` reports the **real scroller** (`atTop` is
+  truthful).
+* `scrollToTop()` sets `scrollTop = 0` on every real scroller (using
+  `scrollTo({top:0})` when available), records each scroller’s old position,
+  and dispatches a scroll event. `restoreScroll()` restores each recorded
+  position.
+* Python `settle_after_top()` now waits longer and requires the DOM count to
+  stay stable for **3 consecutive polls** (initial default 6 s), and
+  `sync_conversation()` only marks `full_scan_complete` when that settle
+  actually succeeded. A slow page is retried instead of being permanently
+  flagged "done".
+
+### Tests locked
+
+* JS: `scrollToTop drives the real scroller, not the wrapped message content`
+  — sets scrollTop on the content wrapper to `999`, ignores it, and checks
+  that the `.messages-root` position is used and moved.
+* Python: existing backfill tests now run through the longer settle path.
+
+---
+
+## 7. Follow-up (fifth pass): "private win" but the DB still has 0 messages
+
+### Symptom
+
+The collector reports the real private chat (it no longer picks the room
+pane), but `In archive` stays at `0` and clicking **⬆ Backfill older** either
+does nothing or reports `NO NEW MESSAGES`.
+
+### Root causes now covered
+
+The live DOM has **more than one `div.container`**: the main room and each
+open private tab keep their own `.container` with an `app-messages` **and** a
+`users-list`. Three things were still read from *document order* instead of
+from the active conversation:
+
+1. **`.users-counter`** was taken from the first list in the document. If the
+   room's user list (978 users) came first, the collector thought the private
+   tab was a group tab and refused to write anything — DB stays 0.
+2. **`.primary-text.bold`** (My Nick) was likewise read globally, so the gate
+   could compare against the wrong "me".
+3. When scroll-to-top made the active pane momentarily empty, the old
+   `visiblePane()` fell back to the **first `.messages-root` in the document**,
+   which is the room/another tab. `state()` then reported that pane's count and
+   scroll (a non-empty conversation is made to look empty, or worse a stranger
+   pane gets selected), so no rows were ever written.
+
+### Fix (agent v8 + collector)
+
+* `describeTab()` reads only the active tab (kind/partner/title).
+  `describe()` scopes `.users-counter` and `.primary-text.bold` to the
+  `.container` that owns the selected pane, so a room list in front never
+  leaks 17 / 978 participants or the wrong My Nick.
+* `visiblePane()` keeps `lastPane` and the last partner. If that pane is still
+  mounted but its message nodes were removed while it loads, the agent reports
+  `count=0` for the active pane instead of selecting another `.messages-root`.
+* `sync_conversation()` waits for the post-scroll count to come **back to the
+  pre-scroll floor** (`minimum_count`), needs 3 stable polls, and if the pane
+  never comes back it **restores the viewport**, reads the visible window, and
+  leaves `full_scan_complete` off. The collector marks such a pass
+  `backfill_pending` and does not re-scroll on every heartbeat; the user can
+  ask again with **⬆ Backfill older**.
+
+### Diagnosis surface
+
+The Collector window now shows the numbers it actually read, so the next
+report is not a guess:
+
+* `Page count` — `state().count` of the selected pane;
+* `People` — `participants · panes · pane_source` (`last`, `first`,
+  `last-empty`, …);
+* `Sync` — the last `sync_conversation` reason (`added`, `no_new`,
+  `unchanged`, `empty`, `gap`, …);
+* `Backfill` — `full scan pending retry` when a scroll could not be proven
+  complete.
+
+The same data is in the JSON state returned by `collector_state`, under
+`last_probe` / `sync_reason`.
+
+### Tests locked
+
+* `participants and My Nick come from the active container, not the first one`
+  — a room container with 17 users / `RoomMe` is prepended, but the private
+  chat still reports 2 and the real My Nick.
+* `a momentarily empty pane does not fall back to another .messages-root` —
+  room nodes exist and come first, yet an emptied active pane reports 0.
+* `scroll_that_empties_the_pane_is_retried_not_marked_done` — after a
+  scroll that clears the DOM the visible window is still archived and
+  `full_scan_complete` stays false.
+
+---
+
+## 8. Follow-up (sixth pass, ROOT CAUSE): slice() probes were a SyntaxError
+
+### Symptom (from the live Collector window)
+
+```
+Partner  гольдейдки      My nick  Хорошо Все
+Page count  8            People   2 · 1 pane(s) · n/a
+In archive  0            Sync     no_new
+```
+
+`state()` correctly reports **8 messages** in the active private chat, but
+`Sync` is `no_new` and `In archive` stays `0`. So the pane selection, the
+private gate and the user-list scoping were all working — the data never left
+the page.
+
+### Root cause
+
+The CDP probe expressions appended their arguments with
+
+```js
+…})()/*ARGS*/{"from":0,"to":8}/*END*/
+```
+
+`/*ARGS*/` is already a complete block comment, so the JSON object after it
+was **real JavaScript source**, not a comment. `Runtime.evaluate` threw a
+`SyntaxError`, and `ChatParser.slice()` swallowed the failure as `items: []`.
+
+This is exactly why:
+
+* `state()` worked (it takes no `_args` and returns “8 messages”);
+* `slice()` always returned no rows → `add 0`, `Sync no_new`;
+* the database (and In archive) stayed at 0;
+* every pane/scroll/user-list fix made the probe *report* the right pane but
+  could never make the collector *read* it.
+
+### Fix
+
+`backend/chat_agent_js.py` now wraps the payload in **one** block comment:
+
+```js
+…})()/*ARGS:{"from":0,"to":8}*/
+```
+
+The JSON is now inside the comment. The same fix applies to
+`restore_scroll_expression` and `fetch_media_expression`, so scroll restore
+and the cookie-backed media downloader also work again.
+
+Also hardened the read path:
+
+* `sync_conversation` retries a slice range **4 times** with a short pause
+  (and restores the viewport once) if the virtualised DOM drops its nodes
+  between probes.
+* The Collector window now shows `Sync: reason · count N · added M` so a
+  “reported 8, saved 0” case is immediately visible instead of a bare
+  `no_new`.
+
+### Regression test
+
+`test_arg_probes_are_single_block_comments` asserts every arg-bearing probe
+contains `/*ARGS:` and never the broken `/*ARGS*/.../*END*/` shape.
+
+---
+
+## 9. Files that change
 
 | File | Change |
 |---|---|
@@ -212,3 +394,109 @@ Pane selection is now **identity-first**, not “biggest pane wins”:
 | `backend/bridge.py` | `collector_command('backfill_older')` |
 | `actions/collect_history.py` | `full` mode uses the scroll backfill |
 | tests | new/existing coverage for scroll, dedupe, media-fallback |
+| `backend/js/chat_agent.js` | **v8** — per-container `.users-counter`/`.primary-text.bold`, last-pane fallback when empty |
+| `backend/chat_agent_js.py` | `AGENT_VERSION=8` |
+| `backend/chat_parser.py` | `minimum_count` settle, restore-and-read fallback, `backfill_pending` |
+| `backend/history_models.py` | `SyncResult.backfill_pending` |
+| `backend/collector.py` | `_backfill_pending` gate so a failed full scan is not repeated every heartbeat |
+| `tests/dom_stub.js` | real per-conversation `.container` + `users-list` shape, `prependContainer()` |
+| `backend/chat_agent_js.py` | **ROOT FIX** — argument payloads are a single `/*ARGS:{…}*/` comment, not the broken `/*ARGS*/…/*END*/` |
+| `backend/chat_parser.py` | retry slice ranges 4×; `SyncResult.count`; slice-empty viewport restore |
+| `backend/collector.py` | `sync_count` / `sync_added` diagnostics in the Collector window |
+| `ui/js/collector-panel.js` | show `Sync: reason · count N · added M` |
+
+---
+
+## 10. Follow-up (seventh pass): live updates + backfill media recovery
+
+Current report: "REAL-TIME UPDATES & MEDIA BACKFILL".
+
+### 10.1 Bug 1 — the Person History pane does not move for new messages
+
+* **Root cause A.** The heartbeat sync saved the new rows but emitted
+  `history_appended` with `items=[]`, so the open pane never merged them.
+* **Root cause B.** When it did emit (the observer push), it emitted the raw
+  DOM records, which lack `ord`, `day` and the joined `media` fields — the UI
+  either swallowed or mis-rendered them.
+* **Root cause C.** The header count only came from the initial page's
+  `person_stats`; a live append never refreshed it.
+* **Root cause D.** When the user had scrolled up, `appendLive()` buffered
+  rows but duplicated the same latest page on repeated pushes.
+
+Fix:
+
+* `AppendResult.records` now carries **UI-shaped rows** built at write time
+  (`ord`, `day`, `time`, `media{id,url,kind,state,path}`), capped at 200.
+* `sync_conversation` merges only rows with `ord > previous last_ord` into
+  `SyncResult.records`, so a backfill that inserts *older* rows never pushes
+  them through the live channel.
+* `Collector._notify_appended` emits those shaped rows; only if no shaped
+  rows exist does it fall back to re-reading the newest page.
+* `HistoryStore.onLiveAppend` re-renders immediately, bumps the header count
+  from the payload and asks Python for the authoritative `person_stats`.
+* `HistoryModel.appendLive()` now dedupes the held-back buffer, so a
+  collector that resends the latest page does not inflate "N new".
+
+### 10.2 Bug 2 — failed / missing media is permanently lost
+
+* **Root cause A.** A row whose media URL was empty at parse time has
+  `media_id IS NULL`; nothing ever re-reads the DOM to recover it.
+* **Root cause B.** A row whose download failed is `state='failed'/'skipped'`;
+  `process_pending()` only works on `pending`, and backfill never re-queued
+  it.
+* **Root cause C.** Recovery was not connected to the scroll-to-top pass, so
+  the DOM pass that could supply the URL never repaired the archive.
+
+Fix (runs on every `backfill_older` pass):
+
+* `HistoryRepo.recover_media(person_id, records, media, nick)` scans saved
+  image/GIF rows that have no `media_id` (never scanned) or point at a
+  failed/skipped media row.
+* It matches each saved row to a freshly parsed DOM record by
+  `direction + from_nick + HH:MM`, registers the real URL in the correct
+  person folder (`saved_media/<Latin-nick>/images|gifs/`), and re-queues
+  failed rows so the normal downloader retries them.
+* New schema markers: `messages.media_scan_at` and
+  `messages.media_recovered_at`, plus `media.recovered_at` /
+  `media.recovery_attempts`, so a message that cannot be found is scanned
+  once instead of infinitely and a recovered URL is visibly marked.
+* `MediaStore.requeue()` is the single re-queue primitive used by startup
+  repair and by backfill recovery.
+
+`status`: schema `3`. Tests: `tests/test_media_recovery.py`,
+`tests/test_history_lazy_paging.js`, `tests/test_history_panels_boot.js`.
+
+---
+
+## 11. Follow-up (eighth pass): do not render broken GIFs — mark to restore
+
+Live report after the media backfill landed: an earlier image/GIF still
+shows as the classic broken `GIF` placeholder, with the copied URL being a
+long percent-encoded `images.virt-chat.com/...gif` address.
+
+* **Root cause A.** A row marked `cached` whose local file has been deleted
+  still sent `cache_path` to the UI; the UI pointed `<img>` at a `file://`
+  path that no longer exists and rendered the broken-image icon.
+* **Root cause B.** Any non-cached media (pending/failed/skipped/missing)
+  used the remote URL as the `<img>` fallback; once that remote URL is
+  invalid/expired the History window shows a broken placeholder with no way
+  to retry.
+
+Fix:
+
+* `HistoryQuery._item` now ignores a `cache_path` whose file does not exist
+  and reports `state='missing'` instead, so the UI never points at a dead
+  local path.
+* `HistoryView` no longer renders the remote, likely-broken `<img>` for
+  non-local media. It draws a `.msg-media-restore` marker ("GIF — click to
+  restore") instead.
+* Clicking the marker calls the new `media_restore` bridge slot ->
+  `MediaStore.download_one(media_id)`, which re-queues that one row and
+  downloads it immediately; `media_ready` feeds the result back into the
+  model and re-renders the row.
+* A cached image whose `<img>` still fails to load falls back to the same
+  restore marker via the `error` handler.
+
+`status`: same schema `3`. Tests:
+`tests/test_history_render.js`, `tests/test_media_paths_js.js`,
+`tests/test_history_panels_boot.js`, `tests/test_history_bridge.py`.

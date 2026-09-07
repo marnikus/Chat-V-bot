@@ -25,11 +25,17 @@ from datetime import datetime
 from typing import Callable, Iterable, Optional
 
 from backend import chat_agent_js
-from backend.history_models import (Alignment, MessageRecord,  # noqa: F401
+from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+                                    MessageRecord,  # noqa: F401
                                     SyncResult)
 from backend.history_repo import HistoryRepo, align_batch
 
 log = logging.getLogger("chatbot")
+
+#: A virtualised pane can drop its message nodes between a state() probe and
+#: the slice() that follows. Do not archive "0" on the first read — retry the
+#: range a few times (and restore the viewport once) before giving up.
+SLICE_RETRIES = 4
 
 
 def align(dom_fps, tail_fps) -> Alignment:
@@ -60,6 +66,27 @@ def _signature(value) -> str:
 
 def _norm(nick: str) -> str:
     return " ".join(str(nick or "").split()).strip().lower()
+
+
+def _merge_live(result: SyncResult, appended: AppendResult,
+                baseline: int = 0) -> None:
+    """Keep only the newest records actually inserted for a live UI update.
+
+    `baseline` is the previous archive `last_ord`: rows a backfill prepends
+    (they are *older* than everything the user already had) must not be
+    pushed through the live-append channel; only rows appended after the
+    previous tail belong there.
+    """
+    for record in (getattr(appended, "records", None) or []):
+        if len(result.records) >= MAX_LIVE_ITEMS:
+            break
+        try:
+            ord_value = int(record.get("ord") or 0)
+        except (TypeError, ValueError):
+            ord_value = 0
+        if ord_value <= baseline:
+            continue
+        result.records.append(record)
 
 
 # ── the two-step private-chat gate (bug report of 2026-09-07) ─────
@@ -265,33 +292,46 @@ class ChatParser:
         return raw if isinstance(raw, dict) else {}
 
     async def settle_after_top(self, first_state: dict,
-                               wait_ms: int = 250,
-                               stable_polls: int = 2,
-                               max_wait_s: float = 2.5) -> dict:
+                               wait_ms: int = 300,
+                               stable_polls: int = 3,
+                               max_wait_s: float = 6.0,
+                               minimum_count: int = 0) -> dict:
         """Poll until the pane is at the top and older lines stopped arriving.
 
         The chat loads older history asynchronously when it is scrolled up, so
-        the collector must wait for the DOM to settle before it reads.
+        the collector must wait for the DOM to settle before it reads. A slow
+        or virtualised page must not be mistaken for an empty chat: if the
+        conversation had messages before the scroll and the DOM loses them
+        while it re-renders older lines, `minimum_count` keeps us polling until
+        the visible count returns (and stays) above that floor. A page that
+        times out reports `_settled=False` so the caller knows the full scan
+        is incomplete and must be retried.
         """
+        floor = max(0, int(minimum_count or 0))
         last_count = int(first_state.get("count") or 0)
         stable = 0
         deadline = asyncio.get_event_loop().time() + max_wait_s
+        state = first_state
         while stable < stable_polls:
             state = await self.state()
             state = state if isinstance(state, dict) else {}
             scroll = state.get("scroll") or {}
             count = int(state.get("count") or 0)
-            if bool(scroll.get("atTop")) and count == last_count:
+            settled = bool(scroll.get("atTop")) and count >= floor
+            if settled and count == last_count:
                 stable += 1
             else:
                 stable = 0
             last_count = count
+            state["_settled"] = stable >= stable_polls
             if stable >= stable_polls:
                 return state
             if asyncio.get_event_loop().time() >= deadline:
+                state["_settled"] = False
                 return state
             await asyncio.sleep(wait_ms / 1000.0)
-        return first_state
+        state["_settled"] = True
+        return state
 
     async def pause(self) -> None:
         if self.chunk_pause_ms:
@@ -308,7 +348,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             on_progress: Optional[Callable[[int, int], None]] = None,
                             now: Optional[datetime] = None,
                             backfill_older: bool = False,
-                            backfill_wait_s: float = 2.0) -> SyncResult:
+                            backfill_wait_s: float = 2.0,
+                            media=None) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 
     With `backfill_older=True` the pane is first scrolled to its first message
@@ -345,6 +386,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             return result
 
     restored_top = None
+    backfill_pending = False
+    before_count = int(state.get("count") or 0)
     if backfill_older and not (should_stop and should_stop()):
         scroll = state.get("scroll") or {}
         old_top = int(scroll.get("top") or 0)
@@ -352,22 +395,45 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         if got.get("ok") and not (should_stop and should_stop()):
             try:
                 state = await parser.settle_after_top(
-                    state, wait_ms=250, stable_polls=2,
-                    max_wait_s=float(backfill_wait_s or 2.0))
+                    state, wait_ms=300, stable_polls=3,
+                    max_wait_s=max(float(backfill_wait_s or 2.0), 4.0),
+                    minimum_count=before_count)
             except Exception:                        # noqa: BLE001
                 state = await parser.state()
             after = state.get("scroll") or {}
-            if bool(after.get("atTop")):
+            post_count = int(state.get("count") or 0)
+            settled = bool(after.get("atTop")) and \
+                bool(state.get("_settled")) and post_count >= before_count
+            if settled:
                 result.backfilled = True
                 restored_top = old_top if old_top else None
+            elif before_count > 0 and post_count < before_count:
+                # Scroll-to-top emptied (or virtualised away) the active
+                # pane before older history re-rendered. Put the viewport
+                # back and read the window we can see now; do NOT mark the
+                # full scan complete so a later tick retries from the top.
+                backfill_pending = True
+                try:
+                    await parser.restore_scroll(old_top)
+                except Exception:                    # noqa: BLE001
+                    pass
+                fallback = await parser.state()
+                if int(fallback.get("count") or 0) > 0:
+                    state = fallback
+            else:
+                backfill_pending = True
+                result.backfill_pending = True
         # a page that cannot scroll falls through to the normal visible range
+    result.backfill_pending = bool(result.backfill_pending or backfill_pending)
 
     count = int(state.get("count") or 0)
+    result.count = count
     head_sig = _signature(state.get("head"))
     tail_sig = _signature(state.get("tail"))
 
     person_id = await repo.ensure_person(nick)
     cursor = await repo.get_cursor(person_id)
+    live_baseline = int(cursor.get("last_ord") or 0)
     person = await repo.get_person_by_id(person_id) or {}
     result.total = int(person.get("message_count") or 0)
 
@@ -419,7 +485,33 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             result.stopped = True
             break
         end = min(count, position + parser.chunk_size)
-        records = await parser.slice(position, end)
+        records = []
+        for _attempt in range(SLICE_RETRIES):
+            records = await parser.slice(position, end)
+            if records:
+                break
+            # The settle probe reported count=count, then the DOM lost the
+            # nodes between probes (a virtualised pane re-rendering). Do not
+            # give up and save nothing: restore the viewport, take the state
+            # again, and retry the same range a few times.
+            if (position == start and backfill_older and
+                    not result.backfilled and before_count > 0 and
+                    _attempt == 0):
+                try:
+                    await parser.restore_scroll(old_top)
+                except Exception:                    # noqa: BLE001
+                    pass
+                fallback = await parser.state()
+                if int(fallback.get("count") or 0) > 0:
+                    state = fallback
+                    count = int(state.get("count") or 0)
+                    result.count = count
+                    end = min(count, position + parser.chunk_size)
+                    head_sig = _signature(state.get("head"))
+                    tail_sig = _signature(state.get("tail"))
+                    result.backfill_pending = True
+            else:
+                await asyncio.sleep(0.2)
         if not records:
             break
         scanned += len(records)
@@ -432,10 +524,17 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 now=now)
             result.added += appended.added
             result.gap = result.gap or appended.gap
+            _merge_live(result, appended, live_baseline)
         else:
             collected.extend(records)
         result.chunks.append({"from": position, "to": end,
                               "added": result.added})
+        if backfill_older and media is not None and records:
+            try:
+                await repo.recover_media(person_id, records, media=media,
+                                         nick=nick, now=now)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("media recovery for %s failed: %s", nick, e)
         position = end
         first = False
         if on_progress:
@@ -451,6 +550,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                                      align=True, now=now)
         result.added += appended.added
         result.gap = result.gap or appended.gap
+        _merge_live(result, appended, live_baseline)
         # anything that appeared ABOVE the part we already knew
         tail = cursor.get("tail_keys") or cursor.get("tail_fps") or []
         alignment = align([r.dup_key for r in collected], tail)
@@ -459,17 +559,24 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                                          my_nick=my_nick, prepend=True,
                                          now=now)
             result.added += backfill.added
+            _merge_live(result, backfill, live_baseline)
+        if backfill_older and media is not None and collected:
+            try:
+                await repo.recover_media(person_id, collected, media=media,
+                                         nick=nick, now=now)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("media recovery for %s failed: %s", nick, e)
 
     if restored_top is not None:
         try:
             await parser.restore_scroll(restored_top)
         except Exception:                            # noqa: BLE001
             log.debug("could not restore scroll position for %s", nick)
-        if result.backfilled and not result.stopped:
-            try:
-                await repo.mark_backfilled(person_id)
-            except Exception as e:                   # noqa: BLE001
-                log.debug("could not mark %s fully backfilled: %s", nick, e)
+    if result.backfilled and not result.stopped and not result.backfill_pending:
+        try:
+            await repo.mark_backfilled(person_id)
+        except Exception as e:                       # noqa: BLE001
+            log.debug("could not mark %s fully backfilled: %s", nick, e)
 
     complete = (not result.stopped) and position >= count
     await repo.append(nick, [], my_nick=my_nick,

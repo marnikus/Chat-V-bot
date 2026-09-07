@@ -48,6 +48,7 @@ class Bridge(QObject):
     userdb_changed = Signal(str)             # JSON {action, nick}
     media_ready = Signal(str, str)           # req_id, JSON media info
     collector_status = Signal(str)           # JSON collector state payload
+    collector_log = Signal(str)              # JSON {ts, level, message, nick}
     history_appended = Signal(str)           # JSON {nick, items, added}
     my_nick_changed = Signal(str)            # the configured "my nick"
     history_error = Signal(str, str)         # scope, message
@@ -1303,6 +1304,7 @@ class Bridge(QObject):
             return
         try:
             service.collector.status_changed.connect(self.collector_status.emit)
+            service.collector.collector_log.connect(self.collector_log.emit)
             service.collector.history_appended.connect(self._on_history_appended)
             # a private chat with an unknown partner creates a People row:
             # refresh the list as soon as the collector discovers it.
@@ -1513,6 +1515,20 @@ class Bridge(QObject):
             self.media_ready.emit(req_id, json.dumps(payload,
                                                      ensure_ascii=False))
         self._run_async("media_path", work())
+
+    @Slot(str, str)
+    def media_restore(self, req_id, media_ref):
+        """Re-download one failed/missing image or GIF on the user's request."""
+        if not self._need_archive("media_restore", req_id):
+            return
+
+        async def work():
+            payload = await self._archive.media.download_one(media_ref)
+            payload["req_id"] = req_id
+            payload["id"] = media_ref
+            self.media_ready.emit(req_id, json.dumps(payload,
+                                                     ensure_ascii=False))
+        self._run_async("media_restore", work())
 
     @Slot(str, result=str)
     def media_folder(self, nick):

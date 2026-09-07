@@ -50,8 +50,8 @@ class FakeCDP:
     async def evaluate(self, expression):
         if "/*CVB_FETCH_MEDIA*/" not in expression:
             return None
-        url = json.loads(expression.split("/*ARGS*/")[1]
-                         .split("/*END*/")[0])["url"]
+        url = json.loads(expression.split("/*ARGS:")[1]
+                         .split("*/")[0])["url"]
         data = self.payloads.get(url, GIF)
         mime = ("image/gif" if url.endswith(".gif")
                 else "image/png" if url.endswith(".png") else "image/jpeg")

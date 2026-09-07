@@ -78,6 +78,21 @@ t('scrollToTop moves the conversation to its first message', () => {
   ok(res.atTop, 'the pane reports that it reached the top');
 });
 
+t('scrollToTop drives the real scroller, not the wrapped message content', () => {
+  // `messagesRoot()` (observer target) is the content wrapper that holds the
+  // individual message nodes; the element with `overflow-y:scroll` is the
+  // `.messages-root`. The old code read scrollTop from the wrapper and set it
+  // there too, which is why backfill did nothing on the real site.
+  const env = load({ messages: many(3) });
+  const wrapper = env.messagesRoot.children[0];   // content wrapper
+  wrapper.scrollTop = 999;                        // must be ignored
+  env.messagesRoot.scrollTop = 150;               // the actual scroller
+  const res = env.agent.scrollToTop();
+  eq(res.beforeTop, 150, 'the read comes from the real scroller');
+  eq(res.top, 0, 'the real scroller is moved to the top');
+  ok(res.atTop);
+});
+
 t('restoreScroll puts the conversation back where it was', () => {
   const env = load({ messages: many(3) });
   env.messagesRoot.scrollTop = 18;
@@ -184,6 +199,31 @@ t('images and gifs become media records with no text', () => {
   eq(items[0].text, '');
   eq(items[1].kind, 'gif', 'a .gif url must be recognised as animated');
   eq(items[1].media.url, 'https://cdn.example/anim.gif?x=1');
+});
+
+t('a lazy image with an empty src falls back to data-src/currentSrc', () => {
+  const env = load({ messages: [
+    { dir: 'in', from: 'Nick', media: 'https://cdn.example/pic.jpg' },
+  ] });
+  const img = env.messagesRoot.querySelector('.message-content img');
+  ok(img, 'the page has a chat image');
+  img.setAttribute('src', '');
+  img.setAttribute('data-src', 'https://cdn.example/lazy.jpg?token=1');
+  const item = env.agent.slice(0, 1).items[0];
+  eq(item.media.url, 'https://cdn.example/lazy.jpg?token=1',
+     'the real lazy URL must replace the cached empty src');
+  eq(item.kind, 'image');
+});
+
+t('currentSrc wins when the site resolves a relative src', () => {
+  const env = load({ messages: [
+    { dir: 'in', from: 'Nick', media: 'm_Питер2к7_7a861cc.jpg' },
+  ] });
+  const img = env.messagesRoot.querySelector('.message-content img');
+  img.currentSrc = 'https://cdn.virt-chat.com/m_Питер2к7_7a861cc.jpg';
+  const item = env.agent.slice(0, 1).items[0];
+  eq(item.media.url, 'https://cdn.virt-chat.com/m_Питер2к7_7a861cc.jpg',
+     'the resolved absolute URL must replace the relative src from the DOM');
 });
 
 t('identical neighbours get increasing occurrence numbers', () => {

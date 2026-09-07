@@ -156,6 +156,8 @@ global.App = {
     userdb_stats: slot('userdb_stats'),
     history_delete_person: slot('history_delete_person'),
     copy_media: slot('copy_media'),
+    media_restore: slot('media_restore'),
+    media_path: slot('media_path'),
     copy_text: slot('copy_text'),
     collector_command: slot('collector_command'),
     collector_set: slot('collector_set'),
@@ -256,6 +258,34 @@ t('the answer is rendered, newest last, with both nicks in the header', () => {
   ok(header.includes('Nick') && header.includes('Me'), header);
 });
 
+t('a live append appears immediately and bumps the header count', () => {
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', items: rows(1, 3), total: 3, has_more: false,
+    has_newer: false, gaps: [], missing: false,
+    stats: { messages: 3, first_day: '2026-09-06', last_day: '2026-09-06' },
+  }));
+  const list = document.getElementById('historyList');
+  ok(document.getElementById('historyHeader').textContent
+    .includes('3 messages'), 'header shows the count before the append');
+  HistoryStore.onLiveAppend(JSON.stringify({
+    nick: 'Nick', added: 1, total: 4,
+    items: [{ ord: 4, fp: 'fp4', dir: 'in', from: 'Nick', kind: 'text',
+              text: 'fresh', media: null, time: '17:34', day: '2026-09-06' }],
+  }));
+  eq(list.querySelectorAll('.msg').length, 4, 'the new row is rendered');
+  ok(document.getElementById('historyHeader').textContent
+    .includes('4 messages'), 'the header count is updated');
+
+  // restore the state the following tests assume
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', items: rows(1, 20), total: 20, has_more: false,
+    has_newer: false, gaps: [], missing: false,
+    stats: { messages: 20, first_day: '2026-09-01', last_day: '2026-09-06' },
+  }));
+});
+
 t('an answer for another person is ignored', () => {
   HistoryStore.onPage('stale', JSON.stringify({
     nick: 'Someone Else', items: rows(1, 5), total: 5, has_more: false,
@@ -281,11 +311,32 @@ t('a left click on media asks the bridge to copy it', () => {
     missing: false,
     items: [{ ord: 30, fp: 'g', dir: 'in', from: 'Nick', kind: 'gif',
               text: '', time: '18:00', day: '2026-09-06',
-              media: { id: 7, url: 'https://x/y.gif', kind: 'gif' } }],
+              media: { id: 7, url: 'https://x/y.gif', kind: 'gif',
+                       state: 'cached',
+                       path: '/home/user/saved_media/Nick/gifs/x.gif' } }],
   }));
   document.getElementById('historyList').querySelector('.msg-media')
     .fire('click', { button: 0 });
   eq(named('copy_media').pop().args, ['7']);
+});
+
+t('a failed media row offers a restore marker and asks the bridge', () => {
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', total: 1, has_more: false, has_newer: false, gaps: [],
+    missing: false,
+    items: [{ ord: 31, fp: 'g2', dir: 'in', from: 'Nick', kind: 'gif',
+              text: '', time: '18:01', day: '2026-09-06',
+              media: { id: 8, url: 'https://x/y.gif', kind: 'gif',
+                       state: 'failed', path: '' } }],
+  }));
+  const marker =
+    document.getElementById('historyList').querySelector('.msg-media-restore');
+  ok(marker, 'the marker is drawn instead of a broken img');
+  marker.fire('click', { button: 0 });
+  const call = named('media_restore').pop();
+  ok(call.args[0].indexOf('r') === 0, 'a request id is sent');
+  eq(call.args[1], '8', 'the media id travels as the second argument');
 });
 
 t('typing in the search box searches this conversation', () => {
@@ -393,6 +444,63 @@ t('the window names the partner and my nick', () => {
   const text = document.getElementById('collectorRows').textContent;
   ok(text.includes('Ангелина'), text);
   ok(text.includes('HiHoney') || text.includes('Другой'), text);
+});
+
+t('the partner name is a clickable link to its history', () => {
+  CollectorPanel.onStatus(JSON.stringify(
+    { state: 'collected', text: 'Collected', nick: 'Ангелина', total: 120,
+      settings: {} }));
+  const link = document.getElementById('collectorRows')
+    .querySelector('.collector-nick-link');
+  ok(link, 'the partner row must expose a clickable nick');
+  eq(link.dataset.nick, 'Ангелина');
+  const shown = [];
+  global.SashGrid = { showWindow: (id) => shown.push(id) };
+  try {
+    // Real clicks bubble through the rows host, so simulate that exactly
+    // (the stub's .fire() only invokes listeners on the target itself).
+    document.getElementById('collectorRows').fire('click', { target: link });
+    ok(shown.includes('history') && shown.includes('userdb'),
+       'both archive windows are brought into view');
+    const open = named('history_open').pop();
+    ok(open && open.args[1] === 'Ангелина',
+       'the person is opened in Person History');
+    const db = named('userdb_page').pop();
+    eq(JSON.parse(db.args[1]).q, 'Ангелина',
+       'the database is filtered to that nick');
+  } finally {
+    global.SashGrid = undefined;
+  }
+});
+
+t('the collector keeps its own parsing log in this window', () => {
+  const log = document.getElementById('collectorLog');
+  const clear = document.getElementById('collectorClearLogBtn');
+  ok(log && clear, 'the collector log area and its Clear button exist');
+  CollectorPanel.onLog(JSON.stringify(
+    { ts: '12:00:01', level: 'info', nick: 'Ангелина',
+      message: 'No new messages (unchanged, page count 7)' }));
+  CollectorPanel.onLog(JSON.stringify(
+    { ts: '12:00:02', level: 'warn', nick: '',
+      message: 'Refused: 17 participants, not a private chat' }));
+  ok(log.textContent.includes('Ангелина'), log.textContent);
+  ok(log.textContent.includes('No new messages'), log.textContent);
+  ok(log.textContent.includes('Refused'), log.textContent);
+  clear.fire('click');
+  eq(log.children.length, 0, 'Clear empties the collector log');
+});
+
+t('the highlighted person is flashed in the database row', () => {
+  const req = named('userdb_page').pop().args[0];
+  HistoryDb.onPage(req, JSON.stringify({
+    items: [{ nick: 'Ангелина', message_count: 120, media_count: 2,
+              first_seen: '2026-09-01 10:00:00',
+              last_seen: '2026-09-07 12:00:00', my_nicks: ['Хорошо Все'] }],
+    total: 1, has_more: false, offset: 0 }));
+  const row = document.getElementById('userdbBody').querySelector('.userdb-row');
+  ok(row, 'the filter result is rendered');
+  ok(row.classList.contains('row-flash'),
+     'the clicked partner is highlighted in the database');
 });
 
 t('pause / resume and collect-now reach the backend', () => {
