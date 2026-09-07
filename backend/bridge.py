@@ -468,11 +468,50 @@ class Bridge(QObject):
         payload = json.dumps({"v": self.GRID_VERSION,
                               "tree": self._default_grid_tree()},
                              ensure_ascii=False, separators=(",", ":"))
-        self._config.set_state(grid_layout=payload)
+        self._config.set_state(grid_layout=payload,
+                               window_states={"closed": [], "minimized": [], "maximized": None})
         self._push_global("grid", payload)
         self.log_message.emit("↺ Grid layout reset to default "
                               "(all windows visible)", "info")
         return payload
+
+    # ── window open/close/minimize/maximize states ───────────────
+    @Slot(result=str)
+    def get_window_states(self):
+        raw = self._config.get_state("window_states", None)
+        if isinstance(raw, dict):
+            closed = raw.get("closed", [])
+            minimized = raw.get("minimized", [])
+            maximized = raw.get("maximized")
+            closed = [i for i in closed if isinstance(i, str) and i in self.WINDOW_IDS]
+            minimized = [i for i in minimized if isinstance(i, str) and i in self.WINDOW_IDS and i not in closed]
+            if maximized is not None and (not isinstance(maximized, str) or maximized not in self.WINDOW_IDS or maximized in closed):
+                maximized = None
+            return json.dumps({"closed": closed, "minimized": minimized, "maximized": maximized},
+                              ensure_ascii=False)
+        return ""
+
+    @Slot(str, result=bool)
+    def save_window_states(self, states_json):
+        try:
+            data = json.loads(states_json or "{}")
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(data, dict):
+            return False
+        closed = data.get("closed", [])
+        minimized = data.get("minimized", [])
+        maximized = data.get("maximized")
+        if not isinstance(closed, list):
+            closed = []
+        if not isinstance(minimized, list):
+            minimized = []
+        closed = [i for i in closed if isinstance(i, str) and i in self.WINDOW_IDS]
+        minimized = [i for i in minimized if isinstance(i, str) and i in self.WINDOW_IDS and i not in closed]
+        if maximized is not None and (not isinstance(maximized, str) or maximized not in self.WINDOW_IDS or maximized in closed):
+            maximized = None
+        self._config.set_state(window_states={"closed": closed, "minimized": minimized, "maximized": maximized})
+        return True
 
     @classmethod
     def _legacy_grid_payload(cls, raw):
@@ -708,6 +747,7 @@ class Bridge(QObject):
                 "grid_layout": self.get_grid_layout() or None,
                 "block_config_pinned":
                     self._config.get_state("block_config_pinned", False),
+                "window_states": self._config.get_state("window_states", None),
                 "window_geometry": self._config.get_state("window_geometry", None),
             },
         }

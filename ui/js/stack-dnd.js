@@ -872,6 +872,9 @@ const StackDnD = {
         this.configPinned = false;
         this._updateConfigPinButton();
         this._updateConfigVisibility(null);
+        if (typeof SashGrid !== 'undefined' && SashGrid.closeWindow) {
+          SashGrid.closeWindow('config');
+        }
       };
     }
   },
@@ -910,6 +913,10 @@ const StackDnD = {
     const hasBlock = !!block;
     if (this.configPinned || hasBlock) {
       panel.classList.remove('hidden');
+      // If Block Config was closed via the generic window close, selecting a block should reopen it
+      if (hasBlock && typeof SashGrid !== 'undefined' && SashGrid.isClosed && SashGrid.isClosed('config')) {
+        if (SashGrid.openWindow) SashGrid.openWindow('config');
+      }
     } else {
       panel.classList.add('hidden');
     }
@@ -1181,6 +1188,9 @@ const StackDnD = {
         this.configPinned = false;
         this._updateConfigPinButton();
         this._updateConfigVisibility(null);
+        if (typeof SashGrid !== 'undefined' && SashGrid.closeWindow) {
+          SashGrid.closeWindow('config');
+        }
       };
     }
 
