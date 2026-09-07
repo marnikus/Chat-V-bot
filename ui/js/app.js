@@ -389,6 +389,8 @@ function setupBridgeListeners() {
     b.userdb_changed.connect(() => HistoryDb.onChanged());
   if (b.collector_status)
     b.collector_status.connect((json) => CollectorPanel.onStatus(json));
+  if (b.collector_log)
+    b.collector_log.connect((json) => CollectorPanel.onLog(json));
   if (b.history_appended) {
     b.history_appended.connect((json) => {
       HistoryStore.onLiveAppend(json);

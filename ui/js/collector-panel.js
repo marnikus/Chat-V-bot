@@ -33,6 +33,8 @@ const CollectorPanel = {
       panel: $('winCollector'),
       status: $('collectorStatus'),
       rows: $('collectorRows'),
+      log: $('collectorLog'),
+      clearLog: $('collectorClearLogBtn'),
       pause: $('collectorPauseBtn'),
       now: $('collectorNowBtn'),
       backfill: $('collectorBackfillBtn'),
@@ -49,6 +51,9 @@ const CollectorPanel = {
         if (link && link.dataset && link.dataset.nick)
           this.openPartner(link.dataset.nick);
       });
+    }
+    if (this._els.clearLog) {
+      this._els.clearLog.addEventListener('click', () => this.clearLog());
     }
     if (this._els.pause) {
       this._els.pause.addEventListener('click', () => {
@@ -111,6 +116,40 @@ const CollectorPanel = {
   setMyNick(nick) {
     this.myNick = nick || '';
     this.renderRows(this._last || {});
+  },
+
+  /** One backend log line for this window only. */
+  onLog(json) {
+    let payload = null;
+    try { payload = JSON.parse(json); } catch (e) { return; }
+    if (!payload) return;
+    const level = payload.level || 'info';
+    const nick = String(payload.nick || '').trim();
+    const message = String(payload.message || '');
+    if (!message && !nick) return;
+    const entry = document.createElement('div');
+    entry.className = 'collector-log-entry ' + level;
+    const ts = document.createElement('span');
+    ts.className = 'collector-log-ts';
+    ts.textContent = '[' + (payload.ts || '') + '] ';
+    entry.appendChild(ts);
+    if (nick) {
+      const n = document.createElement('span');
+      n.className = 'collector-log-nick';
+      n.textContent = '«' + nick + '» ';
+      entry.appendChild(n);
+    }
+    entry.appendChild(document.createTextNode(message));
+    if (!this._els.log) return;
+    this._els.log.appendChild(entry);
+    this._els.log.scrollTop = this._els.log.scrollHeight;
+    while (this._els.log.children.length > 400)
+      this._els.log.removeChild(this._els.log.firstChild);
+  },
+
+  clearLog() {
+    if (!this._els.log) return;
+    this._els.log.replaceChildren();
   },
 
   onStatus(json) {

@@ -422,6 +422,23 @@ t('the partner name is a clickable link to its history', () => {
   }
 });
 
+t('the collector keeps its own parsing log in this window', () => {
+  const log = document.getElementById('collectorLog');
+  const clear = document.getElementById('collectorClearLogBtn');
+  ok(log && clear, 'the collector log area and its Clear button exist');
+  CollectorPanel.onLog(JSON.stringify(
+    { ts: '12:00:01', level: 'info', nick: 'Ангелина',
+      message: 'No new messages (unchanged, page count 7)' }));
+  CollectorPanel.onLog(JSON.stringify(
+    { ts: '12:00:02', level: 'warn', nick: '',
+      message: 'Refused: 17 participants, not a private chat' }));
+  ok(log.textContent.includes('Ангелина'), log.textContent);
+  ok(log.textContent.includes('No new messages'), log.textContent);
+  ok(log.textContent.includes('Refused'), log.textContent);
+  clear.fire('click');
+  eq(log.children.length, 0, 'Clear empties the collector log');
+});
+
 t('the highlighted person is flashed in the database row', () => {
   const req = named('userdb_page').pop().args[0];
   HistoryDb.onPage(req, JSON.stringify({

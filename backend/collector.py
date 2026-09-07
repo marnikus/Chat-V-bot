@@ -78,6 +78,7 @@ class Collector(QObject):
     status_changed = Signal(str)        # json state payload
     history_appended = Signal(str)      # json {nick, items, added, total}
     people_changed = Signal(str)        # json {nick, kind, source}
+    collector_log = Signal(str)         # json {ts, level, message, nick}
 
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
@@ -254,6 +255,8 @@ class Collector(QObject):
             await self.parser.install()
             self._self_heals += 1
             state = await self.parser.state()
+            self._log(f"Re-installed the in-page agent "
+                      f"(v{int(state.get('agent') or 0)})", "info")
         self._agent = int(state.get("agent") or 0)
         self._error = ""
         self._last_probe = {
@@ -268,19 +271,25 @@ class Collector(QObject):
         }
 
         if not state.get("ok", True):
+            self._log("No chat on this page (state not ok)", "warn")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
         if state.get("tab") != "private":
+            self._log(f"Active tab is “{state.get('tab')}”, not private —",
+                      "warn", state.get("me") or "")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
         participants = int(state.get("participants") or 0)
         if self._settings["require_two_participants"] and participants != 2:
+            self._log(f"Refused: {participants} participants, not a private "
+                      "chat", "warn", state.get("partner") or "")
             return self._refuse(
                 CollectorState.GROUP_TAB,
                 f"Group tab ({participants} people) — not collected")
 
         nick = " ".join(str(state.get("partner") or "").split()).strip()
         if not nick:
+            self._log("No partner nick in the active tab", "warn")
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
 
@@ -297,9 +306,12 @@ class Collector(QObject):
         if not self.my_nick and detected_me:
             self.configure(my_nick=detected_me)
             self._detected_my_nick = detected_me
+            self._log(f"Detected My Nick as “{detected_me}”", "info", nick)
 
         my_nick = self.my_nick or detected_me
         if my_nick and nick.lower() == my_nick.lower():
+            self._log("Partner is the same as My Nick — refusing", "warn",
+                      nick)
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Partner is ambiguous (same as My Nick)")
 
@@ -308,12 +320,15 @@ class Collector(QObject):
         # The author gate below protects the message rows from a mixed pane;
         # the People row itself is safe even before that check passes.
         person_id = await self.repo.ensure_person(nick)
-        await self._remember_partner(nick, state)
+        remembered = await self._remember_partner(nick, state)
+        self._log(f"Partner “{nick}”: {remembered}", "info", nick)
 
         # ── the two-step gate ─────────────────────────────────────
         check = verify_private(state, nick, self.my_nick)
         if not check.ok:
             self._nick = nick
+            self._log(f"Private-chat gate refused “{nick}” ({check.reason})",
+                      "warn", nick)
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
         if check.me and not self._detected_my_nick:
@@ -371,13 +386,19 @@ class Collector(QObject):
         suffix = " (throttled — a run is active)" if self._throttled else ""
         if result.added:
             self._notify_appended(nick, [], result.added, result.total)
+            self._log(f"Archived {result.added} new message(s) "
+                      f"(total {result.total})", "success", nick)
             return self._set(CollectorState.COLLECTED,
                              f"Collected {result.added} new "
                              f"message{'s' if result.added != 1 else ''} "
                              f"from {nick}{suffix}")
         if not result.ok:
+            self._log(f"Sync failed for “{nick}” ({result.reason})", "error",
+                      nick)
             return self._set(CollectorState.NOT_PRIVATE,
                              "Not in private tab now")
+        self._log(f"No new messages ({result.reason}, page count "
+                  f"{result.count}, added {result.added})", "info", nick)
         return self._set(CollectorState.NO_NEW, self._no_new_text())
 
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
@@ -432,6 +453,24 @@ class Collector(QObject):
             log.warning("cannot add %s to the People list: %s", clean, e)
             return "error"
 
+    def _log(self, message: str, level: str = "info",
+             nick: Optional[str] = None) -> None:
+        """One line for the Collector window's own log.
+
+        Kept deliberately separate from `log.debug`: this is user-facing
+        (parsing history / trying to identify the nick), not a stack trace.
+        """
+        try:
+            payload = {
+                "ts": self.now().strftime("%H:%M:%S"),
+                "level": str(level or "info"),
+                "message": str(message or ""),
+                "nick": nick or self._nick or "",
+            }
+            self.collector_log.emit(json.dumps(payload, ensure_ascii=False))
+        except Exception as e:                       # noqa: BLE001
+            log.debug("collector_log emit failed: %s", e)
+
     def _notify_people(self, nick: str, kind: str) -> None:
         try:
             self.people_changed.emit(json.dumps(
@@ -453,6 +492,8 @@ class Collector(QObject):
                   f"Backfilling older messages from {self._nick}…")
         self._force_backfill = True
         self._backfill_pending = False
+        self._log(f"Manual backfill requested for “{self._nick}”", "info",
+                  self._nick)
         return await self.tick()
 
     # ── the gate helpers ─────────────────────────────────────────
