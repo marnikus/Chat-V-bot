@@ -263,6 +263,7 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 
 /* ═══════════════════════════════════════════════════════════════
    WINDOW CONTROLS — close, minimize, maximize per window
+   Clean icons: ─ minimize, □ maximize, ✕ close, with tooltip
    ═══════════════════════════════════════════════════════════════ */
 
 /* title bar flex: grip + title text + spacer + controls + other buttons */
@@ -272,35 +273,40 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   gap: 4px;
 }
 
-/* container for win controls (right side of title bar) */
+/* container for win controls (right side of title bar) — compact */
 .win-controls {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   margin-left: 6px;
   flex-shrink: 0;
 }
 .win-controls .win-btn {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background .12s, color .12s;
+  transition: background .12s, color .12s, transform .08s;
   padding: 0;
   border: none;
+  font-size: 12px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  user-select: none;
 }
 .win-controls .win-btn:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
+  transform: scale(1.08);
 }
-.win-controls .win-btn .material-icons {
-  font-size: 16px;
-  line-height: 1;
+.win-controls .win-btn:active {
+  transform: scale(0.95);
 }
 .win-controls .win-btn.win-close:hover {
   background: var(--red-dim, rgba(255,80,80,.18));
@@ -310,12 +316,16 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   background: var(--accent-soft, rgba(108,140,255,.15));
   color: var(--accent);
 }
+.win-controls .win-btn.win-minimize:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
 
 /* minimized window — only title bar visible */
 .sash-window.sash-win-minimized {
   flex: 0 0 auto !important;
-  min-height: 34px !important;
-  max-height: 38px;
+  min-height: 32px !important;
+  max-height: 36px;
   overflow: hidden;
 }
 .sash-window.sash-win-minimized > .panel {
@@ -360,8 +370,17 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   display: none !important;
 }
 
+/* empty splits (rows/cols where all windows are closed) — auto hidden */
+.sash-split.sash-split-hidden {
+  display: none !important;
+}
+.sash-split.sash-split-hidden > .panel {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════
-   WINDOWS MENU — dropdown listing all windows
+   WINDOWS MENU — dropdown listing all windows — CLEAN ICONS
    ═══════════════════════════════════════════════════════════════ */
 .windows-menu {
   min-width: 300px;
@@ -378,42 +397,48 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-primary);
   transition: background .12s;
   user-select: none;
+  line-height: 1.2;
 }
 .wm-item:hover { background: var(--bg-card-hover); }
-.wm-item.wm-closed { opacity: .62; }
+.wm-item.wm-closed { opacity: .58; }
 .wm-item.wm-closed .wm-title { text-decoration: line-through; text-decoration-color: var(--text-muted); }
 .wm-state-icon {
-  font-size: 16px;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
   flex-shrink: 0;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  line-height: 1;
 }
 .wm-state-icon.open { color: var(--green, #4ade80); }
 .wm-state-icon.closed { color: var(--text-muted); }
 .wm-state-icon.minimized { color: var(--yellow, #facc15); }
 .wm-state-icon.maximized { color: var(--accent); }
-.wm-win-icon {
-  font-size: 16px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
 .wm-title {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 12.5px;
 }
 .wm-badge {
-  font-size: 10px;
+  font-size: 9px;
   text-transform: uppercase;
   letter-spacing: .4px;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-muted);
@@ -425,27 +450,31 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .wm-badge.b-max { background: rgba(108,140,255,.18); color: var(--accent); }
 .wm-actions {
   display: inline-flex;
-  gap: 2px;
+  gap: 1px;
   margin-left: 4px;
 }
 .wm-actions .wm-mini-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   border: none;
   padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  transition: background .12s, color .12s;
 }
 .wm-actions .wm-mini-btn:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
 }
-.wm-actions .wm-mini-btn .material-icons { font-size: 14px; }
 
 /* empty grid placeholder when all windows closed */
 .sash-grid-empty {
@@ -454,9 +483,14 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   color: var(--text-muted);
   font-size: 13px;
   padding: 24px;
+  text-align: center;
 }
-.sash-grid-empty .material-icons { font-size: 36px; opacity: .5; }
+.sash-grid-empty .sash-empty-icon {
+  font-size: 28px;
+  opacity: .6;
+  line-height: 1;
+}
