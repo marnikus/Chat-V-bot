@@ -151,6 +151,12 @@ class HistoryService:
             if moved:
                 log.info("moved %d cached file(s) into the per-person "
                          "media tree", moved)
+            # the page-only fetch could be blocked by CORS; give the rows that
+            # failed before once more with the cookie-backed Python downloader
+            retried = await self.media.retry_failed_uncached()
+            if retried:
+                log.info("re-queued %d media row(s) for the CORS-free "
+                         "downloader", retried)
         except Exception as e:                        # noqa: BLE001
             log.warning("media layout migration skipped: %s", e)
         await self._install_push_binding()

@@ -1,0 +1,145 @@
+# Message History — remaining bugs design — 2026-09-07
+
+Date: 2026-09-07
+Status: **DESIGN — then implemented in the same turn**
+
+This document is the research/design step for the three remaining bugs in the
+message-history feature. Private-chat detection already landed
+(`PRIVATE_GATE_AND_MEDIA_TREE_2026-09-07.md`); this document only addresses:
+
+| # | Bug | Root cause (after the audit) | Fix |
+|---|---|---|---|
+| 1 | First messages are missing | The passive collector only starts from the messages that are already in the DOM. The chat virtualises history, so the earliest lines are not in the DOM until the pane is scrolled to the top. Nothing ever scrolled it, and the head-changed backfill only fires when the *user* scrolls. | A controlled scroll-to-top backfill, executed once per conversation when the archive has not yet done a full check, then marked complete so it is never repeated on every heartbeat. |
+| 2 | Same message saved twice / three times | Identity was `fp = f(direction, author, HH:MM, kind, payload, occ)` + day. `occ` is global within the current DOM run and `day` is resolved relative to “now”. When older duplicates are prepended (or a sync crosses midnight), the same physical line gets a new `occ`/`day` and is treated as a new row. | Store a deterministic **dedupe key** `k = f(direction, author, HH:MM, kind, payload)` (timestamp + content), dedupe before insert, and add a unique index `(person_id, dup_key)`. The site has no message id, so timestamp+content is the practical unique identity — exactly what the bug report asks for. |
+| 3 | Media still shows percent-encoded URLs and no folders | The folder/readable-name work exists, but bytes are only fetched by an in-page `fetch()`. A cross-origin image host without CORS headers makes that fetch fail, so `media.state` stays `pending`/`failed` and the UI falls back to the remote percent-encoded URL. | Keep the in-page fetch as a first try, then fall back to a Python `aiohttp` download using the CDP session cookies (same cookies the browser uses; no CORS). Existing failed/uncached rows are re-queued once so previously missed images/GIFs are migrated into `saved_media/<person>/images|gifs/…`. |
+
+---
+
+## 1. Bug 1 — full-history check
+
+### 1.1 Decisions
+
+| # | Decision |
+|---|---|
+| B-1 | The collector may scroll the conversation pane to the top **on its own** (this overrides the old A-9 conservative rule). The current bug report explicitly requires “check full message history from the beginning”. The user has no other automatic way to get the earliest lines. |
+| B-2 | The full check runs **once per conversation**. The `cursors` table gets `full_scan_complete` / `full_scan_at`. After a successful top-to-bottom scan, later heartbeat ticks never re-scroll that person. |
+| B-3 | The scroll is **restored** after the read so the user’s viewport is not left at the top. Reading is done from the DOM snapshot, so restoring afterwards cannot lose anything already read. |
+| B-4 | A manual `backfill_older` collector command clears the flag and forces one more full check. The `COLLECT_HISTORY` block with `mode=full` also clears the cursor and runs the same path. |
+| B-5 | The in-page agent grows a `scrollToTop()` / `restoreScroll(top)` probe (agent **v5**). Python waits for the top to settle (count stable for two polls, bounded by a small timeout), then runs the existing `sync_conversation` which already handles prepended-older history through `_prepend()`. |
+| B-6 | If the page cannot scroll or does not grow, the sync still runs on the visible range, and the backfill is recorded only when the agent confirms it reached the top. |
+
+### 1.2 Flow
+
+```
+tick / CollectHistory(full)
+  state()  → cursor.full_scan_complete?
+     no + auto_backfill
+        parser.scroll_to_top()
+        poll state() until scroll.atTop && count stable (≤ ~2 s)
+        sync_conversation(...)     # existing align/prepend logic
+        restoreScroll(oldTop)
+        repo.mark_backfilled()
+     yes
+        normal incremental sync    # cheap
+```
+
+Performance: the expensive full check is **one time per person** (stored in
+the cursor), so opening the archive nor the heartbeat never re-reads or
+re-scrolls a whole conversation repeatedly.
+
+---
+
+## 2. Bug 2 — deduplicate by timestamp + content
+
+### 2.1 Data change
+
+`messages` gains:
+
+```sql
+dup_key TEXT NOT NULL DEFAULT ''
+CREATE UNIQUE INDEX idx_messages_dup_key
+    ON messages(person_id, dup_key) WHERE dup_key <> '';
+```
+
+`dup_key` is the 64-bit FNV fingerprint of:
+
+```
+direction ⌁ from_nick ⌁ HH:MM ⌁ kind ⌁ payload   (occ = 0, no day)
+```
+
+`fp` and `day` stay in the row for diagnostics and day grouping; the *identity*
+used by the writer is `dup_key`.
+
+### 2.2 Migration
+
+On `HistoryDB.init()` for existing databases:
+
+1. add the column;
+2. back-fill `dup_key` from each row’s existing fields;
+3. delete rows whose `dup_key` is already present earlier for the same person
+   (keep the lowest `id`);
+4. recount persons, resequence `ord`, rebuild the tail fingerprints;
+5. create the unique index.
+
+### 2.3 Consequences
+
+* Same text, same HH:MM, same author, same direction is **one row** — even if
+  the same “Nice” was rendered twice by the page, or the same message is read
+  again on another day.
+* The old test `identical_text_in_the_same_minute_stays_distinct` is updated:
+  with no message-id on the site, three identical same-minute lines are
+  considered the same archived record (this is the bug report’s requested
+  key). `same_text_on_two_days_is_two_rows` is likewise updated.
+
+---
+
+## 3. Bug 3 — readable media tree + GIF support
+
+### 3.1 Current state (verified)
+
+* `MediaStore` already creates `saved_media/<slug>/images|gifs/YYYY-MM-DD_NNN.ext`
+  and the UI already renders `file://…` for cached files.
+* What was missing: the **bytes** were only fetched by in-page `fetch()`, which
+  can be blocked by CORS on `images.virt-chat.com`. The fallback to the remote
+  percent-encoded URL then looks like “still not fixed”.
+
+### 3.2 Fix
+
+`MediaStore._fetch_one()` becomes:
+
+1. try in-page `fetch()` (existing path — fastest, uses page origin);
+2. if it fails, try **Python `aiohttp`** with:
+   * cookie header from `CDPClient.get_cookies()` (via `Network.getAllCookies`);
+   * `Referer: https://ru.virt-chat.com/` and a browser user-agent;
+   * the same size cap and SHA-256 twin-file logic;
+3. if both fail → `state='failed'` with the real reason (no silent broken image).
+
+GIF support needs **no** extra engine: a `.gif` file saved with the `.gif`
+extension is rendered/animated natively by `<img>` in Qt WebEngine. The bug was
+that the file was never saved; once cached, `file:///…/gifs/…gif` animates.
+
+### 3.3 Re-queue previously failed media
+
+`HistoryService.init()` runs `MediaStore.retry_failed_uncached()` once so rows
+that were marked `failed` (and have no `cache_path`) get another chance with
+the Python CORS-free downloader.
+
+---
+
+## 4. Files that change
+
+| File | Change |
+|---|---|
+| `backend/js/chat_agent.js` | v5: `scrollToTop`, `restoreScroll`, stable `scroll` info |
+| `backend/chat_agent_js.py` | `AGENT_VERSION=5`, new probe expressions |
+| `backend/chat_parser.py` | `scroll_to_top`, `restore_scroll`, `_backfill_to_top`, `backfill_older` in `sync_conversation` |
+| `backend/history_db.py` | `messages.dup_key`, cursor full-scan columns, unique index, migration/dedupe |
+| `backend/history_models.py` | `dedupe_key()`, `MessageRecord.dup_key` |
+| `backend/history_repo.py` | pre-insert dedupe, `mark_backfilled`, cursor fields |
+| `backend/collector.py` | `auto_backfill` setting, per-conversation full check, `backfill_older` |
+| `backend/cdp_client.py` | `get_cookies()` |
+| `backend/media_store.py` | Python download fallback, `retry_failed_uncached` |
+| `backend/history_service.py` | re-queue failed media on init |
+| `backend/bridge.py` | `collector_command('backfill_older')` |
+| `actions/collect_history.py` | `full` mode uses the scroll backfill |
+| tests | new/existing coverage for scroll, dedupe, media-fallback |

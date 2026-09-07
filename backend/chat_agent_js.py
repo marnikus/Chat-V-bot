@@ -16,7 +16,7 @@ import os
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
 #: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 4
+AGENT_VERSION = 5
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")
@@ -70,6 +70,25 @@ def drain_expression() -> str:
             "if(!a)return JSON.stringify({ok:false,items:[]});"
             "try{return JSON.stringify(a.drain());}"
             "catch(e){return JSON.stringify({ok:false,items:[]});}})()")
+
+
+def scroll_top_expression() -> str:
+    """Ask the agent to scroll the conversation to its first message."""
+    return ("/*CVB_SCROLL_TOP*/(function(){var a=window.__cvbAgent;"
+            "if(!a)return JSON.stringify({ok:false,error:'agent missing'});"
+            "try{return JSON.stringify(a.scrollToTop());}"
+            "catch(e){return JSON.stringify({ok:false,error:String(e)});}})()")
+
+
+def restore_scroll_expression(top: int) -> str:
+    """Put the conversation back where the collector found it."""
+    payload = {"top": int(top or 0)}
+    return ("/*CVB_RESTORE_SCROLL*/(function(){var a=window.__cvbAgent;"
+            "if(!a)return JSON.stringify({ok:false,error:'agent missing'});"
+            "var p=" + json.dumps(payload) + ";"
+            "try{return JSON.stringify(a.restoreScroll(p.top));}"
+            "catch(e){return JSON.stringify({ok:false,error:String(e)});}})()" +
+            _args(payload))
 
 
 def fetch_media_expression(url: str) -> str:

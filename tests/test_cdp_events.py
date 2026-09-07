@@ -161,6 +161,51 @@ class TestBindings(unittest.TestCase):
         self.assertFalse(run(scenario()))
 
 
+class TestCookies(unittest.TestCase):
+    def _header(self, cookies, url="https://images.virt-chat.com/a.gif"):
+        async def scenario():
+            cdp = CDPClient()
+
+            async def fake_send(method, params=None):
+                return {"result": {"cookies": cookies}}
+
+            cdp.send = fake_send
+            return await cdp.get_cookies(url)
+        return run(scenario())
+
+    def test_matches_site_and_parent_domain_cookies(self):
+        header = self._header([
+            {"name": "sid", "value": "abc", "domain": ".virt-chat.com"},
+            {"name": "foo", "value": "1", "domain": "ru.virt-chat.com"},
+        ])
+        self.assertIn("sid=abc", header)
+        self.assertNotIn("foo", header)
+
+    def test_includes_exact_host_cookie(self):
+        header = self._header([
+            {"name": "img", "value": "ok", "domain": "images.virt-chat.com"},
+        ])
+        self.assertIn("img=ok", header)
+
+    def test_flattens_same_name_cookies(self):
+        header = self._header([
+            {"name": "a", "value": "1", "domain": ".virt-chat.com"},
+            {"name": "a", "value": "2", "domain": "images.virt-chat.com"},
+        ])
+        self.assertEqual(header.count("a="), 2)
+
+    def test_failure_is_empty_not_an_exception(self):
+        async def scenario():
+            cdp = CDPClient()
+
+            async def boom(method, params=None):
+                raise RuntimeError("net down")
+
+            cdp.send = boom
+            return await cdp.get_cookies("https://x/y.png")
+        self.assertEqual(run(scenario()), "")
+
+
 class TestCdpLease(unittest.TestCase):
     def test_high_waiter_overtakes_a_queued_low_waiter(self):
         async def scenario():

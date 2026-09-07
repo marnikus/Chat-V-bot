@@ -64,6 +64,8 @@ DEFAULTS = {
     "chunk_pause_ms": 40,
     "download_media": True,
     "max_bootstrap": 0,          # 0 = no cap
+    "auto_backfill": True,       # scroll to top once per person for full history
+    "backfill_wait_s": 2.0,
 }
 
 MAX_PROBE_PENALTY = 4.0
@@ -105,6 +107,7 @@ class Collector(QObject):
         self._last_emitted: tuple = ()
         self._stop_event: Optional[asyncio.Event] = None
         self._busy = False
+        self._force_backfill = False
 
     # ── settings ─────────────────────────────────────────────────
     def configure(self, **kwargs) -> dict:
@@ -296,11 +299,16 @@ class Collector(QObject):
             return self._set(CollectorState.NO_NEW, "No new messages")
 
         bootstrap = not cursor["bootstrapped"]
+        full_scan_complete = bool(cursor.get("full_scan_complete"))
+        want_backfill = (bool(self._settings.get("auto_backfill", True))
+                         and not full_scan_complete) or self._force_backfill
+        self._force_backfill = False
         self._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
                   f"Collecting from {nick}…")
 
-        result = await self._sync(nick, my_nick, bootstrap)
+        result = await self._sync(nick, my_nick, bootstrap,
+                                  backfill_older=want_backfill)
         self._added = result.added
         self._total = result.total
         if self.media is not None and self._settings["download_media"]:
@@ -322,18 +330,35 @@ class Collector(QObject):
                              "Not in private tab now")
         return self._set(CollectorState.NO_NEW, "No new messages")
 
-    async def _sync(self, nick: str, my_nick: str, bootstrap: bool):
+    async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
+                    backfill_older: bool = False):
         cap = int(self._settings["max_bootstrap"] or 0) if bootstrap else 0
         kwargs = dict(my_nick=my_nick,
                       require_private=bool(self._settings["require_private"]),
                       verify_partner=True,
                       max_messages=cap or None,
+                      backfill_older=backfill_older,
+                      backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
                       now=self.now())
         if self.lease is not None:
             async with self.lease.low():
                 return await sync_conversation(self.parser, self.repo, nick,
                                                **kwargs)
         return await sync_conversation(self.parser, self.repo, nick, **kwargs)
+
+    async def backfill_older(self) -> str:
+        """Force one scroll-to-top full-history pass for the current person."""
+        if not self._nick:
+            return self._state
+        try:
+            await self.repo.reset_cursor(self._nick)
+        except Exception as e:                        # noqa: BLE001
+            self._error = str(e)
+            return self._set(CollectorState.ERROR, f"Backfill failed: {e}")
+        self._set(CollectorState.COLLECTING,
+                  f"Backfilling older messages from {self._nick}…")
+        self._force_backfill = True
+        return await self.tick()
 
     # ── the gate helpers ─────────────────────────────────────────
     def _refuse(self, state: str, text: str) -> str:

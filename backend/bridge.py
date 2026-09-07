@@ -1600,6 +1600,8 @@ class Bridge(QObject):
             collector.stop()
         elif action == "tick":
             self._run_async("collector_tick", collector.tick())
+        elif action in ("backfill_older", "backfill"):
+            self._run_async("collector_backfill", collector.backfill_older())
         else:
             return
         self.collector_status.emit(json.dumps(collector.state_payload(),

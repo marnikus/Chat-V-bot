@@ -24,6 +24,7 @@ Run with:  python3 tests/test_history_repo.py
 
 import asyncio
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -83,7 +84,7 @@ class TestSchema(ArchiveCase):
         for t in ("persons", "messages", "media", "cursors", "gaps",
                   "schema_meta"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), "1")
+        self.assertEqual(await self.db.get_meta("schema_version"), "2")
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)
@@ -93,6 +94,59 @@ class TestSchema(ArchiveCase):
         repo2 = HistoryRepo(db2)
         stats = await repo2.get_person("Nick")
         self.assertEqual(stats["message_count"], 3)
+        await db2.close()
+
+
+class TestLegacyMigration(ArchiveCase):
+    async def test_an_old_db_is_upgraded_and_duplicate_rows_are_deduped(self):
+        path = os.path.join(self.dir, "legacy.db")
+        conn = sqlite3.connect(path)
+        conn.executescript(
+            "CREATE TABLE messages ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " person_id INTEGER NOT NULL,"
+            " ord INTEGER NOT NULL,"
+            " fp TEXT NOT NULL,"
+            " direction TEXT NOT NULL,"
+            " from_nick TEXT NOT NULL DEFAULT '',"
+            " my_nick TEXT NOT NULL DEFAULT '',"
+            " kind TEXT NOT NULL DEFAULT 'text',"
+            " text TEXT NOT NULL DEFAULT '',"
+            " text_lc TEXT NOT NULL DEFAULT '',"
+            " media_id INTEGER,"
+            " ts_display TEXT NOT NULL DEFAULT '',"
+            " ts_resolved TEXT NOT NULL DEFAULT '',"
+            " day TEXT NOT NULL DEFAULT '',"
+            " ts_exact INTEGER NOT NULL DEFAULT 0,"
+            " occ INTEGER NOT NULL DEFAULT 0,"
+            " dom_idx INTEGER NOT NULL DEFAULT 0,"
+            " session_id TEXT NOT NULL DEFAULT '',"
+            " created_at TEXT,"
+            " UNIQUE(person_id, fp, day))")
+        fp0 = fingerprint("in", "Nick", "12:00", "text", "Nice", 0)
+        fp1 = fingerprint("in", "Nick", "12:00", "text", "Nice", 1)
+        for i, fp in enumerate((fp0, fp1), start=1):
+            conn.execute(
+                "INSERT INTO messages(person_id, ord, fp, direction, "
+                "from_nick, kind, text, text_lc, ts_display, ts_resolved, "
+                "day, occ, session_id, created_at) "
+                "VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (i, fp, "in", "Nick", "text", "Nice", "nice", "12:00",
+                 "2026-09-07 12:00", "2026-09-07", 0, "s", "t"))
+        conn.commit()
+        conn.close()
+
+        db2 = HistoryDB(path)
+        await db2.init()
+        rows = await db2.fetchall("SELECT COUNT(*) FROM messages")
+        self.assertEqual(rows[0][0], 1, "the old duplicate is removed")
+        keys = await db2.fetchall(
+            "SELECT dup_key FROM messages WHERE dup_key <> ''")
+        self.assertEqual(len(keys), 1)
+        index = await db2.fetchall(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND name='idx_messages_dup_key'")
+        self.assertEqual(len(index), 1)
         await db2.close()
 
 
@@ -149,14 +203,33 @@ class TestAppendAndDedupe(ArchiveCase):
         person = await self.repo.get_person("Nick")
         self.assertEqual(person["message_count"], 8)
 
-    async def test_identical_text_in_the_same_minute_stays_distinct(self):
+    async def test_the_same_line_read_with_a_shifted_occurrence_is_not_duplicated(self):
+        # Bug #2: older identical messages are prepended, so a line that was
+        # saved as occ=0 is re-read as occ=1. The archive must see it once.
+        first = await self.repo.append("Nick",
+                                       [rec(text="Nice", time="12:00", idx=2,
+                                            direction="in", from_nick="Nick")],
+                                       now=NOW)
+        self.assertEqual(first.added, 1)
+        shifted = await self.repo.append("Nick",
+                                         [rec(text="Nice", time="12:00", idx=1,
+                                              direction="in", from_nick="Nick",
+                                              occ=1)], now=NOW)
+        self.assertEqual(shifted.added, 0)
+        rows = await self.db.fetchall("SELECT COUNT(*) FROM messages")
+        self.assertEqual(rows[0][0], 1)
+
+    async def test_identical_text_in_the_same_minute_is_deduped_once(self):
+        # The site has no message id; the bug report asks for
+        # timestamp + content as the unique key, so a re-render with a
+        # different occurrence number is the SAME archived line, not a new one.
         batch = [rec(text="ok", time="17:31", occ=0, idx=0),
                  rec(text="ok", time="17:31", occ=1, idx=1),
                  rec(text="ok", time="17:31", occ=2, idx=2)]
         res = await self.repo.append("Nick", batch, now=NOW)
-        self.assertEqual(res.added, 3)
+        self.assertEqual(res.added, 1)
         again = await self.repo.append("Nick", batch, now=NOW)
-        self.assertEqual(again.added, 0)     # …and still idempotent
+        self.assertEqual(again.added, 0)     # and still idempotent
 
     async def test_live_delta_without_alignment_is_appended(self):
         await self.repo.append("Nick", convo(5), now=NOW)
@@ -204,13 +277,17 @@ class TestOrderingAndTime(ArchiveCase):
         self.assertTrue(rows[2][1].startswith("2026-09-06"))
         self.assertEqual(rows[0][2], 0)   # never claims to be exact
 
-    async def test_same_text_on_two_days_is_two_rows(self):
+    async def test_same_text_on_two_days_is_one_timestamp_content_record(self):
+        # The archive has no per-message date from the site (only HH:MM), so
+        # timestamp + content collapses "Привет @ 09:00" regardless of which
+        # day the sync resolved it to. The day on the surviving row stays the
+        # first day the message was seen.
         one = [rec(text="Привет", time="09:00", idx=0)]
         await self.repo.append("Nick", one, now=datetime(2026, 9, 5, 9, 5))
         await self.repo.reset_cursor("Nick")
         res = await self.repo.append("Nick", one,
                                      now=datetime(2026, 9, 6, 9, 5))
-        self.assertEqual(res.added, 1)
+        self.assertEqual(res.added, 0)
 
     async def test_ord_keeps_growing_across_appends(self):
         await self.repo.append("Nick", convo(3), now=NOW)
@@ -262,6 +339,18 @@ class TestCountersAndCursor(ArchiveCase):
         cur = await self.repo.get_cursor(pid)
         self.assertLessEqual(len(cur["tail_fps"]), 200)
         self.assertEqual(cur["last_ord"], 260)
+
+    async def test_full_scan_flag_is_sticky_until_reset(self):
+        pid = await self.repo.ensure_person("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertFalse(cur["full_scan_complete"])
+        await self.repo.mark_backfilled(pid)
+        cur = await self.repo.get_cursor(pid)
+        self.assertTrue(cur["full_scan_complete"])
+        self.assertTrue(cur.get("full_scan_at"))
+        await self.repo.reset_cursor("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertFalse(cur["full_scan_complete"])
 
     async def test_reset_cursor_does_not_delete_messages(self):
         await self.repo.append("Nick", convo(3), now=NOW)

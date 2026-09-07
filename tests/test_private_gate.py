@@ -237,6 +237,40 @@ class TestCollectorGate(GateCase):
         self.assertGreaterEqual(self.page.installs, 1)
         self.assertEqual(self.col.state_payload()["agent"], AGENT_VERSION)
 
+    async def test_manual_backfill_scrolls_even_when_auto_backfill_is_off(self):
+        self.col.configure(auto_backfill=False)
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        self.page.prepend_on_scroll = [
+            raw("самое первое", from_nick=PARTNER, time="11:55", idx=0),
+            raw("затем моё", direction="out", from_nick=ME, time="11:58",
+                idx=1)]
+        self.page.scroll_top = 120
+        self.assertEqual(await self.col.backfill_older(),
+                         CollectorState.COLLECTED)
+        self.assertEqual(self.page.scroll_top_calls, 1)
+        self.assertEqual(await self.stored(), 4)
+
+    async def test_first_tick_backfills_older_and_marks_the_full_scan(self):
+        self.page.messages = [
+            raw("мне привет", from_nick=PARTNER, time="12:00", idx=0),
+            raw("привет :)", direction="out", from_nick=ME, time="12:01",
+                idx=1)]
+        self.page.prepend_on_scroll = [
+            raw("самое первое", from_nick=PARTNER, time="11:55", idx=0),
+            raw("затем моё", direction="out", from_nick=ME, time="11:58",
+                idx=1)]
+        self.page.scroll_top = 120
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        pid = await self.repo.ensure_person(PARTNER)
+        cur = await self.repo.get_cursor(pid)
+        self.assertTrue(cur["full_scan_complete"])
+        self.assertEqual(self.page.scroll_top_calls, 1)
+        before = self.page.scroll_top_calls
+        self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
+        self.assertEqual(self.page.scroll_top_calls, before,
+                         "once complete, the heart beat must not re-scroll")
+        self.assertEqual(await self.stored(), 4)
+
 
 class TestPushGate(GateCase):
     def push(self, items, **over):

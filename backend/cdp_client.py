@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional
 import aiohttp
 import websockets
 from PySide6.QtCore import QObject, Signal
+from urllib.parse import urlparse
 
 log = logging.getLogger("chatbot")
 
@@ -240,6 +241,34 @@ class CDPClient(QObject):
         r = await self.send("Runtime.evaluate", {"expression": expression,
                                                    "returnByValue": True, "awaitPromise": True})
         return r.get("result", {}).get("result", {}).get("value")
+
+    async def get_cookies(self, url: str = "") -> str:
+        """A `Cookie` header string for the given origin.
+
+        Used by the media cache's Python download path: the browser tab can
+        load `images.virt-chat.com` through an `<img>` tag with the session
+        cookies (no CORS), but the in-page `fetch()` needed for the old cache
+        can be blocked by CORS. Downloading from Python with the same cookies
+        bypasses that while still authenticating like the page.
+        """
+        try:
+            result = await self.send("Network.getAllCookies")
+        except Exception as e:                     # noqa: BLE001
+            log.debug("getCookies failed: %s", e)
+            return ""
+        cookies = result.get("result", {}).get("cookies", []) or []
+        host = str(urlparse(str(url or "")).hostname or "").lower()
+        pairs = []
+        for cookie in cookies:
+            name, value = cookie.get("name"), cookie.get("value")
+            if not name:
+                continue
+            domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
+            if host and domain:
+                if not (domain == host or host.endswith("." + domain)):
+                    continue
+            pairs.append(f"{name}={value or ''}")
+        return "; ".join(pairs)
 
     async def click_at(self, x: float, y: float) -> None:
         for t in ("mousePressed", "mouseReleased"):

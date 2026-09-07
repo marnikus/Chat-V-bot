@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 4;
+  var VERSION = 5;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -383,6 +383,46 @@
              atBottom: height === 0 || top + client >= height - 4 };
   }
 
+  /** the scrollable box (the .messages-root or its scroll parent) */
+  function scrollBox() {
+    var root = messagesRoot() || qs(document, '.messages-root') ||
+               qs(document, 'app-messages');
+    for (var el = root; el; el = el.parentElement) {
+      if (num(el.scrollHeight) > num(el.clientHeight) + 4) return el;
+    }
+    return root || {};
+  }
+
+  function dispatchScroll(box) {
+    if (box && typeof box.dispatchEvent === 'function' &&
+        typeof window.Event === 'function') {
+      try { box.dispatchEvent(new Event('scroll', { bubbles: true })); }
+      catch (e) { /* a stub with no Event must never break the collector */ }
+    }
+  }
+
+  /** Scroll the chat to the very first message. Returns the old position. */
+  function scrollToTop() {
+    reattach();
+    var box = scrollBox();
+    var beforeTop = num(box.scrollTop);
+    box.scrollTop = 0;
+    dispatchScroll(box);
+    return { ok: true, beforeTop: beforeTop, top: num(box.scrollTop),
+             atTop: num(box.scrollTop) <= 4,
+             height: num(box.scrollHeight),
+             count: containers().length };
+  }
+
+  /** Put the conversation back where the user had it. */
+  function restoreScroll(top) {
+    reattach();
+    var box = scrollBox();
+    box.scrollTop = num(top);
+    dispatchScroll(box);
+    return { ok: true, top: num(box.scrollTop) };
+  }
+
   function state() {
     reattach();
     var anchor = qs(document, 'app-messages') || qs(document, '.messages-root') ||
@@ -442,6 +482,8 @@
     slice: slice,
     drain: drain,
     fingerprint: fingerprint,
+    scrollToTop: scrollToTop,
+    restoreScroll: restoreScroll,
     stats: function () { return { parsed: stats.parsed, cached: stats.cached,
                                   walks: stats.walks, pending: buffer.length,
                                   dropped: dropped }; },

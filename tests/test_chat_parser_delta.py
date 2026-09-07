@@ -67,6 +67,12 @@ class FakePage:
         self.slice_calls = []
         self.queue = []
         self.evaluates = 0
+        self.scroll_top = 0
+        self.scroll_height = 200
+        self.client_height = 100
+        self.scroll_top_calls = 0
+        self.restore_calls = []
+        self.prepend_on_scroll = []
 
     # ── page mutations used by the tests ──
     def append(self, *records):
@@ -117,7 +123,12 @@ class FakePage:
                 "head": msgs[0]["fp"] if msgs else "",
                 "tail": msgs[-1]["fp"] if msgs else "",
                 "pending": len(self.queue),
-                "scroll": {"top": 0, "height": 100},
+                "scroll": {"top": self.scroll_top,
+                           "height": self.scroll_height,
+                           "client": self.client_height,
+                           "atTop": self.scroll_top <= 4,
+                           "atBottom": self.scroll_top + self.client_height
+                           >= self.scroll_height - 4},
             })
         if "/*CVB_SLICE*/" in expression:
             self._reindex()
@@ -129,7 +140,26 @@ class FakePage:
         if "/*CVB_DRAIN*/" in expression:
             out, self.queue = self.queue, []
             return json.dumps(out)
+        if "/*CVB_SCROLL_TOP*/" in expression:
+            return json.dumps(self._scroll_to_top())
+        if "/*CVB_RESTORE_SCROLL*/" in expression:
+            payload = json.loads(expression.split("/*ARGS*/")[1]
+                                 .split("/*END*/")[0])
+            top = int(payload.get("top") or 0)
+            self.scroll_top = top
+            self.restore_calls.append(top)
+            return json.dumps({"ok": True, "top": self.scroll_top})
         return None
+
+    def _scroll_to_top(self):
+        self.scroll_top_calls += 1
+        before = self.scroll_top
+        if self.scroll_top_calls == 1 and self.prepend_on_scroll:
+            self.prepend(*self.prepend_on_scroll)
+            self.prepend_on_scroll = []
+        self.scroll_top = 0
+        return {"ok": True, "beforeTop": before, "top": 0, "atTop": True,
+                "height": self.scroll_height, "count": len(self.messages)}
 
 
 async def make_repo():
@@ -291,6 +321,54 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.added, 2)
         person = await self.repo.get_person("Nick")
         self.assertEqual(person["message_count"], 7)
+
+    async def test_backfill_scrolls_to_the_first_message_and_backfills_it(self):
+        # The virtualiser only kept the newest 5 lines in the DOM; the first 5
+        # arrive only after the pane is scrolled to the top.
+        page = FakePage([raw(f"m{i}", idx=i) for i in range(5, 10)])
+        page.prepend_on_scroll = [raw(f"m{i}", idx=i) for i in range(5)]
+        page.scroll_top = 150
+        parser = ChatParser(page, chunk_size=4, chunk_pause_ms=0)
+        res = await self.sync(parser, backfill_older=True)
+        self.assertEqual(res.added, 10)
+        self.assertTrue(res.backfilled)
+        pid = await self.repo.ensure_person("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertTrue(cur["full_scan_complete"])
+        self.assertEqual(page.scroll_top_calls, 1)
+        self.assertEqual(page.restore_calls, [150], "the viewport is put back")
+        texts = [r[0] for r in await self.db.fetchall(
+            "SELECT text FROM messages ORDER BY ord")]
+        self.assertEqual(texts, [f"m{i}" for i in range(10)])
+
+    async def test_incremental_after_backfill_does_not_rescroll(self):
+        page = FakePage([raw(f"m{i}", idx=i) for i in range(5, 10)])
+        page.prepend_on_scroll = [raw(f"m{i}", idx=i) for i in range(5)]
+        page.scroll_top = 150
+        parser = ChatParser(page, chunk_size=10, chunk_pause_ms=0)
+        await self.sync(parser, backfill_older=True)
+        self.assertEqual(page.scroll_top_calls, 1)
+        # the collector now sees full_scan_complete and will NOT ask again
+        await self.sync(parser, backfill_older=False)
+        self.assertEqual(page.scroll_top_calls, 1)
+        self.assertEqual(page.restore_calls, [150])
+        person = await self.repo.get_person("Nick")
+        self.assertEqual(person["message_count"], 10)
+
+    async def test_shifted_occurrence_does_not_create_a_gap_or_a_duplicate(self):
+        # Bug #2: older identical lines are prepended, so the same stored line
+        # is re-read with a different occurrence number. The archive must keep
+        # one row and must NOT report a bogus alignment gap.
+        page = FakePage([raw("Nice", time="12:00", idx=0, occ=1)])
+        parser = ChatParser(page, chunk_size=10, chunk_pause_ms=0)
+        first = await self.sync(parser)
+        self.assertEqual(first.added, 1)
+        page.prepend(raw("Nice", time="12:00", idx=0, occ=0))
+        res = await self.sync(parser)
+        self.assertEqual(res.added, 0)
+        self.assertFalse(res.gap)
+        rows = await self.db.fetchall("SELECT COUNT(*) FROM messages")
+        self.assertEqual(rows[0][0], 1)
 
     async def test_trimmed_buffer_with_overlap_adds_only_new_lines(self):
         page = FakePage([raw(f"m{i}", idx=i) for i in range(10)])

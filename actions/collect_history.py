@@ -156,7 +156,8 @@ class CollectHistory(BaseAction):
             require_private=self.require_private, verify_partner=verify,
             max_messages=self.max_messages or None,
             chunk_pause_ms=self.chunk_pause_ms,
-            should_stop=stopping, on_progress=progress, now=self.now())
+            should_stop=stopping, on_progress=progress, now=self.now(),
+            backfill_older=(self.mode == "full"))
 
         if not result.ok:
             if result.reason == "not_private":

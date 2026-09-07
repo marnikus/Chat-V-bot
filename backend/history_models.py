@@ -46,6 +46,21 @@ def fingerprint(direction: str, from_nick: str, ts_display: str, kind: str,
                          _fnv1a(joined + "\u0001", _FNV_PRIME))
 
 
+def dedupe_key(direction: str, from_nick: str, ts_display: str, kind: str,
+               payload: str) -> str:
+    """The identity the archive deduplicates on.
+
+    The site exposes no message id. A line is therefore identified by the
+    fields a human can see and the bug report asks for: timestamp + content
+    (plus direction/author/kind so `out` and `in` are never confused).
+    `occ` is deliberately NOT included — occurrence numbers are relative to
+    whatever part of the conversation happens to be in the DOM at that moment,
+    so re-reading the same line with older duplicates prepended changes them
+    and produces the 2x/3x duplicate rows.
+    """
+    return fingerprint(direction, from_nick, ts_display, kind, payload, 0)
+
+
 @dataclass
 class MessageRecord:
     """One parsed chat line, as it leaves the parser and enters the archive."""
@@ -64,6 +79,12 @@ class MessageRecord:
     @property
     def payload(self) -> str:
         return self.media_url or self.text
+
+    @property
+    def dup_key(self) -> str:
+        """Timestamp + content identity used for idempotent storage."""
+        return dedupe_key(self.direction, self.from_nick, self.ts_display,
+                          self.kind, self.payload)
 
     def ensure_fp(self) -> str:
         if not self.fp:
@@ -140,6 +161,7 @@ class SyncResult:
     total: int = 0
     nick: str = ""
     my_nick: str = ""
+    backfilled: bool = False
     chunks: list = field(default_factory=list)
 
     def to_dict(self) -> dict:

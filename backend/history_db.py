@@ -18,7 +18,7 @@ import aiosqlite
 
 log = logging.getLogger("chatbot")
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS messages (
     dom_idx     INTEGER NOT NULL DEFAULT 0,
     session_id  TEXT NOT NULL DEFAULT '',
     created_at  TEXT,
+    dup_key     TEXT NOT NULL DEFAULT '',
     UNIQUE(person_id, fp, day)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_person_ord ON messages(person_id, ord);
@@ -96,7 +97,10 @@ CREATE TABLE IF NOT EXISTS cursors (
     head_sig     TEXT NOT NULL DEFAULT '',
     tail_sig     TEXT NOT NULL DEFAULT '',
     tail_fps     TEXT NOT NULL DEFAULT '[]',
+    tail_keys    TEXT NOT NULL DEFAULT '[]',
     bootstrapped INTEGER NOT NULL DEFAULT 0,
+    full_scan_complete INTEGER NOT NULL DEFAULT 0,
+    full_scan_at TEXT NOT NULL DEFAULT '',
     updated_at   TEXT
 );
 
@@ -161,6 +165,7 @@ class HistoryDB:
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(SCHEMA)
         await self._add_missing_columns()
+        await self._migrate_dup_keys()
         if self._want_fts:
             self.fts_enabled = await self._try_fts()
         await self.set_meta("schema_version", SCHEMA_VERSION)
@@ -172,6 +177,10 @@ class HistoryDB:
     LATE_COLUMNS = {
         "media": [("owner", "TEXT NOT NULL DEFAULT ''"),
                   ("day", "TEXT NOT NULL DEFAULT ''")],
+        "messages": [("dup_key", "TEXT NOT NULL DEFAULT ''")],
+        "cursors": [("tail_keys", "TEXT NOT NULL DEFAULT '[]'"),
+                    ("full_scan_complete", "INTEGER NOT NULL DEFAULT 0"),
+                    ("full_scan_at", "TEXT NOT NULL DEFAULT ''")],
     }
 
     async def _add_missing_columns(self) -> None:
@@ -187,6 +196,62 @@ class HistoryDB:
                         f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
                 except Exception as e:              # noqa: BLE001
                     log.warning("cannot add %s.%s: %s", table, name, e)
+
+    async def _migrate_dup_keys(self) -> None:
+        """Compute `dup_key`, drop pre-existing duplicates and add its index.
+
+        Old databases stored identity as `fingerprint(.., occ) + day`. That is
+        why the same physical line was re-inserted when occurrences shifted or
+        the day resolution changed. The new key is timestamp + content for the
+        person; here we back-fill it for existing rows and keep the earliest
+        row for each key, then resequence as a consequence.
+        """
+        from backend.history_models import dedupe_key  # local: avoid cycles
+        rows = await self.fetchall(
+            "SELECT m.id, m.person_id, m.direction, m.from_nick, m.kind, "
+            "m.text, m.ts_display, COALESCE(md.url, '') AS media_url "
+            "FROM messages m LEFT JOIN media md ON md.id = m.media_id "
+            "WHERE m.dup_key=''")
+        for row in rows:
+            payload = row[7] or row[5]
+            key = dedupe_key(row[2], row[3], row[6], row[4], payload)
+            await self.execute("UPDATE messages SET dup_key=? WHERE id=?",
+                               (key, row[0]))
+        if rows:
+            await self.commit()
+
+        # keep the earliest id for each (person, dup_key)
+        before = int(await self.scalar(
+            "SELECT COUNT(*) FROM messages WHERE dup_key<>''", (), 0))
+        await self.execute(
+            "DELETE FROM messages WHERE dup_key<>'' AND id NOT IN ("
+            "SELECT MIN(id) FROM messages WHERE dup_key<>'' "
+            "GROUP BY person_id, dup_key)")
+        await self.commit()
+        deleted = before - int(await self.scalar(
+            "SELECT COUNT(*) FROM messages WHERE dup_key<>''", (), 0))
+
+        # resequence ord only when duplicate removal left holes
+        if deleted:
+            res = await self.fetchall(
+                "SELECT person_id, id FROM messages "
+                "ORDER BY person_id, day, ts_display, ord, id")
+            current = None
+            position = 0
+            for person_id, mid in res:
+                if current != person_id:
+                    current = person_id
+                    position = 0
+                position += 1
+                await self.execute("UPDATE messages SET ord=? WHERE id=?",
+                                   (position, mid))
+            await self.commit()
+
+        # the index must exist even before the first insert (fresh DBs)
+        await self.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dup_key "
+            "ON messages(person_id, dup_key) WHERE dup_key <> ''")
+        await self.commit()
 
     async def _try_fts(self) -> bool:
         try:

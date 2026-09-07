@@ -213,6 +213,57 @@ class TestFolders(LayoutCase):
         self.assertTrue(folder.endswith(os.path.join("saved_media", "Anski")))
 
 
+# ── the CORS-free Python fallback ────────────────────────────────
+
+class BlockingCDP(FakeCDP):
+    """A page whose in-page fetch is blocked (no CORS on the image host)."""
+    def __init__(self):
+        super().__init__({})
+
+    async def evaluate(self, expression):
+        if "/*CVB_FETCH_MEDIA*/" in expression:
+            return json.dumps({"ok": False, "error": "CORS blocked"})
+        return None
+
+
+class TestCorsFallback(LayoutCase):
+    async def test_python_fallback_caches_a_gif_when_the_page_fetch_is_blocked(self):
+        self.cdp = BlockingCDP()
+        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root,
+                                max_file_mb=1, max_cache_mb=10)
+        self.store.now = lambda: DAY
+
+        async def fetch(url):
+            mime = "image/gif" if url.endswith(".gif") else "image/png"
+            data = GIF if url.endswith(".gif") else PNG
+            return {"ok": True, "b64": base64.b64encode(data).decode(),
+                    "mime": mime, "bytes": len(data)}
+        self.store._http_fetcher = fetch
+
+        row = await self.cache("https://images.virt-chat.com/images/m_1.gif",
+                               "gif", PARTNER)
+        self.assertEqual(row["state"], "cached")
+        self.assertEqual(self.rel(row["cache_path"]),
+                         "Anski/gifs/2026-09-07_001.gif")
+        self.assertTrue(os.path.exists(row["cache_path"]))
+        self.assertEqual(row["fail_reason"], "")
+
+    async def test_failed_uncached_rows_are_re_queued_once(self):
+        self.cdp = BlockingCDP()
+        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root)
+        self.store.now = lambda: DAY
+        mid = await self.store.register(
+            "https://images.virt-chat.com/images/m_1.gif", "gif",
+            nick=PARTNER)
+        await self.store.process_pending()
+        row = await self.store.get(mid)
+        self.assertEqual(row["state"], "failed")
+        self.assertEqual(await self.store.retry_failed_uncached(), 1)
+        row = await self.store.get(mid)
+        self.assertEqual(row["state"], "pending")
+        self.assertEqual(await self.store.retry_failed_uncached(), 0)
+
+
 # ── moving an old flat cache into the new tree ───────────────────
 
 class TestMigration(LayoutCase):

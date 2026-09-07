@@ -35,6 +35,7 @@ const CollectorPanel = {
       rows: $('collectorRows'),
       pause: $('collectorPauseBtn'),
       now: $('collectorNowBtn'),
+      backfill: $('collectorBackfillBtn'),
       enabled: $('collectorEnabledToggle'),
       media: $('collectorMediaToggle'),
       heartbeat: $('collectorHeartbeat'),
@@ -47,6 +48,9 @@ const CollectorPanel = {
     }
     if (this._els.now)
       this._els.now.addEventListener('click', () => this.command('tick'));
+      if (this._els.backfill)
+        this._els.backfill.addEventListener('click',
+          () => this.command('backfill_older'));
     if (this._els.enabled) {
       this._els.enabled.addEventListener('change', () => {
         this.configure({ enabled: !!this._els.enabled.checked });

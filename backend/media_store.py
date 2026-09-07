@@ -12,6 +12,7 @@ best-effort: a missing file, a dead URL or a disabled cache degrades to
 
 from __future__ import annotations
 
+import aiohttp
 import base64
 import hashlib
 import json
@@ -116,6 +117,7 @@ class MediaStore:
         self.enabled = bool(enabled)
         self.paused = False
         self._dirs: dict[str, str] = {}      # nick → person folder
+        self._http_fetcher = None            # test hook for the Python downloader
 
     # ── the readable tree on disk ────────────────────────────────
     NICK_MARKER = "_nick.txt"
@@ -258,22 +260,25 @@ class MediaStore:
         return stored
 
     async def _fetch_one(self, row: dict) -> bool:
+        """Cache one media row.
+
+        The in-page fetch is tried first (fastest). When the image host has no
+        CORS headers the page fetch fails — the fallback downloads from Python
+        with the browser's cookies instead, which is exactly the case the bug
+        report showed.
+        """
         url = row["url"]
-        try:
-            raw = await self.cdp.evaluate(
-                chat_agent_js.fetch_media_expression(url))
-        except Exception as e:                        # noqa: BLE001
-            await self._fail(row["id"], f"probe error: {e}")
-            return False
-        payload = raw
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except (TypeError, ValueError):
-                payload = None
-        if not isinstance(payload, dict) or not payload.get("ok"):
-            reason = (payload or {}).get("error") or "no answer from the page"
-            await self._fail(row["id"], str(reason))
+        payload = await self._fetch_in_page(url)
+        page_ok = bool(payload.get("ok"))
+        page_error = (payload.get("error") or "") if not page_ok else ""
+        if not payload.get("ok"):
+            payload = await self._fetch_via_python(url)
+        if not payload.get("ok"):
+            fallback_error = payload.get("error") or "no downloadable media"
+            reason = str(page_error or fallback_error)
+            if page_error and fallback_error and page_error != fallback_error:
+                reason = f"{page_error} / fallback: {fallback_error}"
+            await self._fail(row["id"], f"CORS/page fetch failed: {reason}")
             return False
         try:
             data = base64.b64decode(payload.get("b64") or "")
@@ -304,6 +309,66 @@ class MediaStore:
             (digest, len(data), path, _now(), row["id"]))
         await self.db.commit()
         return True
+
+    async def _fetch_in_page(self, url: str) -> dict:
+        """The original page-origin fetch (works when CORS permits it)."""
+        try:
+            raw = await self.cdp.evaluate(
+                chat_agent_js.fetch_media_expression(url))
+        except Exception as e:                        # noqa: BLE001
+            return {"ok": False, "error": f"probe error: {e}"}
+        payload = raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (TypeError, ValueError):
+                payload = None
+        if not isinstance(payload, dict) or not payload.get("ok"):
+            reason = (payload or {}).get("error") if isinstance(payload, dict) \
+                else "no answer from the page"
+            return {"ok": False, "error": str(reason or "no answer")}
+        return payload
+
+    async def _fetch_via_python(self, url: str) -> dict:
+        """Download with the browser session cookies (CORS-free fallback)."""
+        if callable(self._http_fetcher):
+            return await self._http_fetcher(url)
+        if self.cdp is None or not hasattr(self.cdp, "get_cookies"):
+            return {"ok": False, "error": "no authenticated download available"}
+        try:
+            cookies = await self.cdp.get_cookies(url)
+        except Exception as e:                        # noqa: BLE001
+            cookies = ""
+        headers = {
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/131.0.0.0 Safari/537.36"),
+            "Referer": "https://ru.virt-chat.com/",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+        }
+        if cookies:
+            headers["Cookie"] = cookies
+        try:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers,
+                                       timeout=timeout,
+                                       allow_redirects=True) as resp:
+                    if resp.status != 200:
+                        return {"ok": False,
+                                "error": f"HTTP {resp.status}"}
+                    data = await resp.read()
+                    if len(data) > self.max_file_bytes:
+                        return {"ok": False,
+                                "error": "too large (%d bytes, cap %d)"
+                                         % (len(data), self.max_file_bytes)}
+                    return {"ok": True,
+                            "b64": base64.b64encode(data).decode(),
+                            "mime": resp.headers.get("Content-Type", ""),
+                            "bytes": len(data)}
+        except Exception as e:                        # noqa: BLE001
+            return {"ok": False, "error": str(e)}
 
     async def _twin(self, owner: str, digest: str) -> str:
         """An already-cached file with the same bytes in the same folder."""
@@ -361,6 +426,19 @@ class MediaStore:
         cur = await self.db.execute(
             "UPDATE media SET state='pending', fail_reason='' "
             "WHERE state IN ('failed','skipped')")
+        await self.db.commit()
+        return int(cur.rowcount or 0)
+
+    async def retry_failed_uncached(self) -> int:
+        """Re-queue failed rows that have no local file.
+
+        This is the one-time startup repair for the CORS download regression:
+        rows that were marked failed by the old page-only fetch get a chance
+        with the Python/cookie downloader.
+        """
+        cur = await self.db.execute(
+            "UPDATE media SET state='pending', fail_reason='' "
+            "WHERE state='failed' AND (cache_path='' OR cache_path IS NULL)")
         await self.db.commit()
         return int(cur.rowcount or 0)
 

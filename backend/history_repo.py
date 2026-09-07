@@ -161,13 +161,19 @@ class HistoryRepo:
         if not row:
             return {"person_id": person_id, "last_ord": 0, "dom_count": 0,
                     "head_sig": "", "tail_sig": "", "tail_fps": [],
-                    "bootstrapped": False}
+                    "tail_keys": [], "bootstrapped": False,
+                    "full_scan_complete": False, "full_scan_at": ""}
         data = dict(row)
         try:
             data["tail_fps"] = json.loads(data.get("tail_fps") or "[]")
         except Exception:                            # noqa: BLE001
             data["tail_fps"] = []
+        try:
+            data["tail_keys"] = json.loads(data.get("tail_keys") or "[]")
+        except Exception:                            # noqa: BLE001
+            data["tail_keys"] = []
         data["bootstrapped"] = bool(data.get("bootstrapped"))
+        data["full_scan_complete"] = bool(data.get("full_scan_complete"))
         return data
 
     async def reset_cursor(self, nick: str) -> None:
@@ -175,10 +181,13 @@ class HistoryRepo:
         person_id = await self.ensure_person(nick)
         await self.db.execute(
             "INSERT INTO cursors(person_id, last_ord, dom_count, head_sig, "
-            "tail_sig, tail_fps, bootstrapped, updated_at) "
-            "VALUES(?,?,0,'','','[]',0,?) "
+            "tail_sig, tail_fps, tail_keys, bootstrapped, "
+            "full_scan_complete, full_scan_at, updated_at) "
+            "VALUES(?,?,0,'','','[]','[]',0,0,'',?) "
             "ON CONFLICT(person_id) DO UPDATE SET dom_count=0, head_sig='', "
-            "tail_sig='', tail_fps='[]', bootstrapped=0, updated_at=excluded.updated_at",
+            "tail_sig='', tail_fps='[]', tail_keys='[]', bootstrapped=0, "
+            "full_scan_complete=0, full_scan_at='', "
+            "updated_at=excluded.updated_at",
             (person_id, await self._last_ord(person_id),
              datetime.now().isoformat(timespec="seconds")))
         await self.db.commit()
@@ -186,6 +195,25 @@ class HistoryRepo:
     async def _last_ord(self, person_id: int) -> int:
         return int(await self.db.scalar(
             "SELECT MAX(ord) FROM messages WHERE person_id=?", (person_id,), 0))
+
+    async def mark_backfilled(self, nick_or_id) -> None:
+        """Record that the full-top-to-bottom scan for this person is done.
+
+        Once set, the passive collector and the incremental `COLLECT_HISTORY`
+        block do NOT spend another full history check on that conversation.
+        """
+        person_id = (int(nick_or_id) if isinstance(nick_or_id, int)
+                     else await self.ensure_person(str(nick_or_id)))
+        stamp = datetime.now().isoformat(timespec="seconds")
+        await self.db.execute(
+            "INSERT INTO cursors(person_id, last_ord, dom_count, head_sig, "
+            "tail_sig, tail_fps, tail_keys, bootstrapped, "
+            "full_scan_complete, full_scan_at, updated_at) "
+            "VALUES(?,0,0,'','','[]','[]',0,1,?,?) "
+            "ON CONFLICT(person_id) DO UPDATE SET full_scan_complete=1, "
+            "full_scan_at=excluded.full_scan_at, updated_at=excluded.updated_at",
+            (person_id, stamp, stamp))
+        await self.db.commit()
 
     # ── append ───────────────────────────────────────────────────
     async def append(self, nick: str, records: Iterable, my_nick: str = "",
@@ -213,10 +241,11 @@ class HistoryRepo:
                                        session_id, nick=nick)
 
         cursor = await self.get_cursor(person_id)
-        batch_fps = [r.ensure_fp() for r in recs]
+        batch_keys = [r.dup_key for r in recs]
         gap, reason, start = False, "", 0
         if align:
-            alignment = align_batch(batch_fps, cursor["tail_fps"])
+            tail = cursor.get("tail_keys") or cursor.get("tail_fps") or []
+            alignment = align_batch(batch_keys, tail)
             start, gap, reason = alignment.start, alignment.gap, alignment.reason
         elif expect_idx is not None and recs[0].idx != expect_idx:
             gap, reason = True, "dom_jump"
@@ -230,20 +259,32 @@ class HistoryRepo:
                                    f"{recs[0].idx}" if reason == "dom_jump"
                                    else "")
 
+        # Timestamp + content is the identity. `fp` keeps its occurrence
+        # number for diagnostics, but must never cause a re-read to insert a
+        # second copy of a line that is already stored.
+        pending = recs[start:]
+        known = await self._existing_dup_keys(person_id,
+                                              [r.dup_key for r in pending])
+
         stamp = datetime.now().isoformat(timespec="seconds")
         added = 0
-        for rec, day in zip(recs[start:], days[start:]):
+        for rec, day in zip(pending, days[start:]):
+            dup_key = rec.dup_key
+            if dup_key in known:
+                continue
+            known.add(dup_key)
             media_id = await self._media_id(rec, nick, day)
             cur = await self.db.execute(
                 "INSERT OR IGNORE INTO messages("
                 "person_id, ord, fp, direction, from_nick, my_nick, kind, "
                 "text, text_lc, media_id, ts_display, ts_resolved, day, "
-                "ts_exact, occ, dom_idx, session_id, created_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)",
+                "ts_exact, occ, dom_idx, session_id, created_at, dup_key) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
                 (person_id, last_ord + 1, rec.fp, rec.direction, rec.from_nick,
                  my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
                  media_id, rec.ts_display, f"{day} {rec.ts_display or '00:00'}",
-                 day, rec.occ, rec.idx, session_id or self.session_id, stamp))
+                 day, rec.occ, rec.idx, session_id or self.session_id, stamp,
+                 dup_key))
             if cur.rowcount:
                 added += 1
                 last_ord += 1
@@ -271,13 +312,14 @@ class HistoryRepo:
         """
         result = AppendResult(person_id=person_id)
         days = resolve_days([r.ts_display for r in recs], now)
+        known = await self._existing_dup_keys(person_id,
+                                              [r.dup_key for r in recs])
         fresh = []
         for rec, day in zip(recs, days):
-            known = await self.db.fetchone(
-                "SELECT 1 FROM messages WHERE person_id=? AND fp=? AND day=?",
-                (person_id, rec.ensure_fp(), day))
-            if not known:
-                fresh.append((rec, day))
+            if rec.dup_key in known:
+                continue
+            known.add(rec.dup_key)
+            fresh.append((rec, day))
         result.skipped = len(recs) - len(fresh)
         if fresh:
             shift = len(fresh)
@@ -293,13 +335,14 @@ class HistoryRepo:
                     "INSERT OR IGNORE INTO messages("
                     "person_id, ord, fp, direction, from_nick, my_nick, kind, "
                     "text, text_lc, media_id, ts_display, ts_resolved, day, "
-                    "ts_exact, occ, dom_idx, session_id, created_at) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)",
+                    "ts_exact, occ, dom_idx, session_id, created_at, dup_key) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
                     (person_id, position, rec.fp, rec.direction, rec.from_nick,
                      my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
                      media_id, rec.ts_display,
                      f"{day} {rec.ts_display or '00:00'}", day, rec.occ,
-                     rec.idx, session_id or self.session_id, stamp))
+                     rec.idx, session_id or self.session_id, stamp,
+                     rec.dup_key))
                 if cur.rowcount:
                     result.added += 1
             await self.db.commit()
@@ -317,6 +360,31 @@ class HistoryRepo:
         person_id = (int(nick_or_id) if isinstance(nick_or_id, int)
                      else await self.ensure_person(str(nick_or_id)))
         await self._record_gap(person_id, after_ord, reason, detail)
+
+    async def _existing_dup_keys(self, person_id: int, keys) -> set:
+        """The subset of `keys` already stored for this person.
+
+        Chunked so a 5000-message bootstrap does not blow SQLite's parameter
+        limit, and so a small heartbeat does not read the whole table.
+        """
+        out: set = set()
+        batch = []
+        for key in keys:
+            batch.append(str(key or ""))
+            if len(batch) >= 400:
+                out |= await self._query_dup_keys(person_id, batch)
+                batch = []
+        if batch:
+            out |= await self._query_dup_keys(person_id, batch)
+        return out
+
+    async def _query_dup_keys(self, person_id: int, keys: list) -> set:
+        placeholders = ",".join("?" for _ in keys)
+        rows = await self.db.fetchall(
+            f"SELECT dup_key FROM messages WHERE person_id=? "
+            f"AND dup_key IN ({placeholders})",
+            [person_id] + keys)
+        return {r[0] for r in rows if r[0]}
 
     async def _media_id(self, rec: MessageRecord, nick: str = "",
                         day: str = "") -> Optional[int]:
@@ -367,25 +435,29 @@ class HistoryRepo:
         tells the next pass that it may not trust the shortcut.
         """
         await self._recount(person_id, my_nick)
-        tail = [r[0] for r in await self.db.fetchall(
-            "SELECT fp FROM (SELECT fp, ord FROM messages WHERE person_id=? "
-            "ORDER BY ord DESC LIMIT ?) ORDER BY ord",
+        tail = [r for r in await self.db.fetchall(
+            "SELECT fp, dup_key FROM (SELECT fp, dup_key, ord FROM messages "
+            "WHERE person_id=? ORDER BY ord DESC LIMIT ?) ORDER BY ord",
             (person_id, TAIL_FP_LIMIT))]
+        tail_fps = [r[0] for r in tail]
+        tail_keys = [r[1] for r in tail]
         current = await self.get_cursor(person_id)
         flag = current["bootstrapped"] if bootstrapped is None else bootstrapped
         await self.db.execute(
             "INSERT INTO cursors(person_id, last_ord, dom_count, head_sig, "
-            "tail_sig, tail_fps, bootstrapped, updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?) "
+            "tail_sig, tail_fps, tail_keys, bootstrapped, "
+            "full_scan_complete, full_scan_at, updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,0,'',?) "
             "ON CONFLICT(person_id) DO UPDATE SET last_ord=excluded.last_ord, "
             "dom_count=excluded.dom_count, head_sig=excluded.head_sig, "
             "tail_sig=excluded.tail_sig, tail_fps=excluded.tail_fps, "
+            "tail_keys=excluded.tail_keys, "
             "bootstrapped=excluded.bootstrapped, updated_at=excluded.updated_at",
             (person_id, await self._last_ord(person_id),
              dom_count or current.get("dom_count") or 0,
              current.get("head_sig", "") if head_sig is None else head_sig,
              current.get("tail_sig", "") if tail_sig is None else tail_sig,
-             json.dumps(tail), 1 if flag else 0,
+             json.dumps(tail_fps), json.dumps(tail_keys), 1 if flag else 0,
              datetime.now().isoformat(timespec="seconds")))
         await self.db.commit()
 

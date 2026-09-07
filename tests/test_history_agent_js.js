@@ -67,6 +67,25 @@ t('the agent reports a version', () => {
      'version must be a number');
 });
 
+// ── the full-history scroll probes ───────────────────────────────
+
+t('scrollToTop moves the conversation to its first message', () => {
+  const env = load({ messages: many(3) });
+  env.messagesRoot.scrollTop = 150;
+  const res = env.agent.scrollToTop();
+  ok(res.ok, 'scrollToTop.ok');
+  eq(res.beforeTop, 150, 'the old position is remembered');
+  ok(res.atTop, 'the pane reports that it reached the top');
+});
+
+t('restoreScroll puts the conversation back where it was', () => {
+  const env = load({ messages: many(3) });
+  env.messagesRoot.scrollTop = 18;
+  const res = env.agent.restoreScroll(18);
+  ok(res.ok, 'restoreScroll.ok');
+  eq(res.top, 18);
+});
+
 // ── state ────────────────────────────────────────────────────────
 
 t('state describes a private conversation', () => {

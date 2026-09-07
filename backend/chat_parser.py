@@ -241,6 +241,58 @@ class ChatParser:
         raw = await self._eval(chat_agent_js.drain_expression())
         return parse_records(_payload(raw))
 
+    async def scroll_to_top(self) -> dict:
+        """Scroll the active conversation pane to its first message."""
+        raw = await self._eval(chat_agent_js.scroll_top_expression())
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                raw = {}
+        return raw if isinstance(raw, dict) else {}
+
+    async def restore_scroll(self, top: int) -> dict:
+        """Put the conversation back where the user had it."""
+        try:
+            raw = await self._eval(chat_agent_js.restore_scroll_expression(top))
+        except Exception:                            # noqa: BLE001
+            return {"ok": False}
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                raw = {}
+        return raw if isinstance(raw, dict) else {}
+
+    async def settle_after_top(self, first_state: dict,
+                               wait_ms: int = 250,
+                               stable_polls: int = 2,
+                               max_wait_s: float = 2.5) -> dict:
+        """Poll until the pane is at the top and older lines stopped arriving.
+
+        The chat loads older history asynchronously when it is scrolled up, so
+        the collector must wait for the DOM to settle before it reads.
+        """
+        last_count = int(first_state.get("count") or 0)
+        stable = 0
+        deadline = asyncio.get_event_loop().time() + max_wait_s
+        while stable < stable_polls:
+            state = await self.state()
+            state = state if isinstance(state, dict) else {}
+            scroll = state.get("scroll") or {}
+            count = int(state.get("count") or 0)
+            if bool(scroll.get("atTop")) and count == last_count:
+                stable += 1
+            else:
+                stable = 0
+            last_count = count
+            if stable >= stable_polls:
+                return state
+            if asyncio.get_event_loop().time() >= deadline:
+                return state
+            await asyncio.sleep(wait_ms / 1000.0)
+        return first_state
+
     async def pause(self) -> None:
         if self.chunk_pause_ms:
             await asyncio.sleep(self.chunk_pause_ms / 1000.0)
@@ -254,8 +306,16 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             chunk_pause_ms: Optional[int] = None,
                             should_stop: Optional[Callable[[], bool]] = None,
                             on_progress: Optional[Callable[[int, int], None]] = None,
-                            now: Optional[datetime] = None) -> SyncResult:
-    """Bring the archive up to date with what the page currently shows."""
+                            now: Optional[datetime] = None,
+                            backfill_older: bool = False,
+                            backfill_wait_s: float = 2.0) -> SyncResult:
+    """Bring the archive up to date with what the page currently shows.
+
+    With `backfill_older=True` the pane is first scrolled to its first message
+    (and put back after the read). This is the “full history from the
+    beginning” path: the in-page virtualiser only keeps recent nodes, so the
+    earliest lines visit the DOM only after scrolling up.
+    """
     now = now or datetime.now()
     pause_ms = parser.chunk_pause_ms if chunk_pause_ms is None \
         else max(0, int(chunk_pause_ms))
@@ -284,6 +344,24 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             result.ok, result.reason = False, check.reason
             return result
 
+    restored_top = None
+    if backfill_older and not (should_stop and should_stop()):
+        scroll = state.get("scroll") or {}
+        old_top = int(scroll.get("top") or 0)
+        got = await parser.scroll_to_top()
+        if got.get("ok") and not (should_stop and should_stop()):
+            try:
+                state = await parser.settle_after_top(
+                    state, wait_ms=250, stable_polls=2,
+                    max_wait_s=float(backfill_wait_s or 2.0))
+            except Exception:                        # noqa: BLE001
+                state = await parser.state()
+            after = state.get("scroll") or {}
+            if bool(after.get("atTop")):
+                result.backfilled = True
+                restored_top = old_top if old_top else None
+        # a page that cannot scroll falls through to the normal visible range
+
     count = int(state.get("count") or 0)
     head_sig = _signature(state.get("head"))
     tail_sig = _signature(state.get("tail"))
@@ -296,6 +374,11 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     if count == 0:
         await repo.append(nick, [], my_nick=my_nick, dom_count=0,
                           head_sig=head_sig, tail_sig=tail_sig, now=now)
+        if result.backfilled:
+            try:
+                await repo.mark_backfilled(person_id)
+            except Exception as e:                   # noqa: BLE001
+                log.debug("could not mark %s fully backfilled: %s", nick, e)
         result.reason = "empty"
         return result
 
@@ -363,12 +446,24 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         result.added += appended.added
         result.gap = result.gap or appended.gap
         # anything that appeared ABOVE the part we already knew
-        alignment = align([r.fp for r in collected], cursor["tail_fps"])
+        tail = cursor.get("tail_keys") or cursor.get("tail_fps") or []
+        alignment = align([r.dup_key for r in collected], tail)
         if alignment.start and not alignment.gap:
             backfill = await repo.append(nick, collected[:alignment.start],
                                          my_nick=my_nick, prepend=True,
                                          now=now)
             result.added += backfill.added
+
+    if restored_top is not None:
+        try:
+            await parser.restore_scroll(restored_top)
+        except Exception:                            # noqa: BLE001
+            log.debug("could not restore scroll position for %s", nick)
+        if result.backfilled and not result.stopped:
+            try:
+                await repo.mark_backfilled(person_id)
+            except Exception as e:                   # noqa: BLE001
+                log.debug("could not mark %s fully backfilled: %s", nick, e)
 
     complete = (not result.stopped) and position >= count
     await repo.append(nick, [], my_nick=my_nick,
