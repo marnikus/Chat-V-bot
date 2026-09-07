@@ -31374,7 +31374,10 @@
       "width": 2560,
       "height": 1377
     },
-    "block_config_pinned": true
+    "block_config_pinned": true,
+    "my_nick_recent": [
+      "Хорошо Все"
+    ]
   },
   "custom_blocks": [
     {
@@ -31477,5 +31480,17 @@
       },
       "updated_at": "2026-09-06T14:09:50"
     }
-  ]
+  ],
+  "collector": {
+    "enabled": true,
+    "my_nick": "Хорошо Все",
+    "heartbeat_ms": 1500,
+    "idle_ms": 3000,
+    "throttle_factor": 3,
+    "require_private": true,
+    "download_media": true,
+    "chunk_size": 80,
+    "chunk_pause_ms": 40,
+    "bootstrap_max": 2000
+  }
 }
