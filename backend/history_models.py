@@ -162,6 +162,7 @@ class SyncResult:
     nick: str = ""
     my_nick: str = ""
     backfilled: bool = False
+    backfill_pending: bool = False
     chunks: list = field(default_factory=list)
 
     def to_dict(self) -> dict:

@@ -111,6 +111,7 @@ class Collector(QObject):
         self._stop_event: Optional[asyncio.Event] = None
         self._busy = False
         self._force_backfill = False
+        self._backfill_pending = False
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -326,8 +327,10 @@ class Collector(QObject):
 
         bootstrap = not cursor["bootstrapped"]
         full_scan_complete = bool(cursor.get("full_scan_complete"))
-        want_backfill = (bool(self._settings.get("auto_backfill", True))
-                         and not full_scan_complete) or self._force_backfill
+        want_backfill = ((bool(self._settings.get("auto_backfill", True))
+                          and not full_scan_complete
+                          and not self._backfill_pending)
+                         or self._force_backfill)
         self._force_backfill = False
         self._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
@@ -335,6 +338,7 @@ class Collector(QObject):
 
         result = await self._sync(nick, my_nick, bootstrap,
                                   backfill_older=want_backfill)
+        self._backfill_pending = bool(result.backfill_pending)
         self._added = result.added
         self._total = result.total
         if self.media is not None and self._settings["download_media"]:
@@ -428,6 +432,7 @@ class Collector(QObject):
         self._set(CollectorState.COLLECTING,
                   f"Backfilling older messages from {self._nick}…")
         self._force_backfill = True
+        self._backfill_pending = False
         return await self.tick()
 
     # ── the gate helpers ─────────────────────────────────────────
@@ -540,6 +545,7 @@ class Collector(QObject):
             "added": self._added,
             "total": self._total,
             "throttled": self._throttled,
+            "backfill_pending": self._backfill_pending,
             "error": self._error,
             "warning": self._warning,
             "self_heals": self._self_heals,
@@ -561,7 +567,8 @@ class Collector(QObject):
         payload = self.state_payload()
         signature = (payload["state"], payload["text"], payload["nick"],
                      payload["added"], payload["total"], payload["throttled"],
-                     payload["error"], payload["warning"])
+                     payload["backfill_pending"], payload["error"],
+                     payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI
         self._last_emitted = signature

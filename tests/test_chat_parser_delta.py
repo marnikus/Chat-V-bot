@@ -73,6 +73,8 @@ class FakePage:
         self.scroll_top_calls = 0
         self.restore_calls = []
         self.prepend_on_scroll = []
+        self.clear_on_scroll = False
+        self._cleared_messages = None
 
     # ── page mutations used by the tests ──
     def append(self, *records):
@@ -148,6 +150,9 @@ class FakePage:
             top = int(payload.get("top") or 0)
             self.scroll_top = top
             self.restore_calls.append(top)
+            if self._cleared_messages is not None:
+                self.messages = self._cleared_messages
+                self._cleared_messages = None
             return json.dumps({"ok": True, "top": self.scroll_top})
         return None
 
@@ -157,6 +162,11 @@ class FakePage:
         if self.scroll_top_calls == 1 and self.prepend_on_scroll:
             self.prepend(*self.prepend_on_scroll)
             self.prepend_on_scroll = []
+        if self.clear_on_scroll and self._cleared_messages is None:
+            # Some virtualised panes clear the active conversation while it
+            # re-renders older history; temporarily show an empty pane.
+            self._cleared_messages = list(self.messages)
+            self.messages = []
         self.scroll_top = 0
         return {"ok": True, "beforeTop": before, "top": 0, "atTop": True,
                 "height": self.scroll_height, "count": len(self.messages)}
@@ -376,6 +386,30 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
         cur = await self.repo.get_cursor(pid)
         self.assertTrue(cur["full_scan_complete"],
                         "a truly empty pane is safe to mark complete")
+
+    async def test_scroll_that_empties_the_pane_is_retried_not_marked_done(self):
+        # Live regression: scrolling to the top can make a virtualised pane
+        # lose its message nodes while older history is being requested. The
+        # old code saw "0 messages, atTop, stable" and either marked the full
+        # scan complete or reported no new messages while the archive stayed
+        # at 0. We restore the viewport, read the visible window, and leave
+        # full_scan_complete off so a later tick retries from the top.
+        page = FakePage([raw(f"m{i}", idx=i) for i in range(5, 10)])
+        page.scroll_top = 150
+        page.clear_on_scroll = True
+        parser = ChatParser(page, chunk_size=10, chunk_pause_ms=0)
+        res = await self.sync(parser, backfill_older=True)
+        self.assertEqual(res.added, 5)
+        self.assertFalse(res.backfilled,
+                         "a pane that emptied during the scroll is not done")
+        self.assertTrue(res.backfill_pending)
+        pid = await self.repo.ensure_person("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertFalse(cur["full_scan_complete"],
+                         "the full scan must be retried")
+        texts = [r[0] for r in await self.db.fetchall(
+            "SELECT text FROM messages ORDER BY ord")]
+        self.assertEqual(texts, [f"m{i}" for i in range(5, 10)])
 
     async def test_shifted_occurrence_does_not_create_a_gap_or_a_duplicate(self):
         # Bug #2: older identical lines are prepended, so the same stored line

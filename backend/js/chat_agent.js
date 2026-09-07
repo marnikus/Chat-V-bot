@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 7;
+  var VERSION = 8;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -166,7 +166,7 @@
       return groups[0] ||
              { pane: nodes[0] ? paneOf(nodes[0]) : null, nodes: nodes, panes: 0 };
     }
-    var summary = describe();
+    var summary = describeTab();
     var wantsPrivate = summary.tab === 'private' && !!clean(summary.partner);
     var title = normNick(summary.partner);
     var me = normNick(summary.me);
@@ -208,15 +208,62 @@
     return groups[best];
   }
 
+  var lastPane = null;
+  var lastPartner = '';
+
+  function inDocument(el) {
+    for (var p = el; p; p = p.parentElement) {
+      if (p === document || p === document.body) return true;
+    }
+    return false;
+  }
+
+  function paneAmong(group, pane) {
+    return group && group.pane === pane;
+  }
+
   function visiblePane() {
+    var summary = describeTab();
+    var currentPartner = normNick(summary.partner);
     var nodes = qsa(document, 'div.message-container');
     if (!nodes.length) {
-      return { pane: qs(document, '.messages-root') ||
-                     qs(document, 'app-messages'), nodes: nodes, panes: 0 };
+      /* No message nodes right now. The active pane can be momentarily
+         empty while it is loading older history, and document order may put
+         the room's .messages-root first. Falling back to the first pane in
+         the document then reports the wrong scroll state and count, so the
+         collector sees "empty" on a non-empty conversation. If we already
+         know which pane the user is watching, keep using that pane. */
+      var known = lastPane && inDocument(lastPane) ? lastPane : null;
+      var pane = known || qs(document, '.messages-root') ||
+                 qs(document, 'app-messages');
+      return { pane: pane, nodes: nodes, panes: 0,
+               source: known ? 'last' : 'first' };
     }
     var groups = paneGroups(nodes);
+    /* The pane we are watching is still mounted but its nodes were removed
+       while it loads older lines. Another pane may still have nodes (the
+       room, or a second private chat); selecting that one is exactly the
+       "visible messages exist but nothing is collected" regression. Stay on
+       the known pane and report empty instead. */
+    if (lastPane && inDocument(lastPane) && lastPartner &&
+        currentPartner === lastPartner) {
+      var hasOwnNode = false;
+      for (var g = 0; g < groups.length; g++) {
+        if (paneAmong(groups[g], lastPane)) { hasOwnNode = true; break; }
+      }
+      if (!hasOwnNode) {
+        return { pane: lastPane, nodes: [], panes: groups.length,
+                 source: 'last-empty' };
+      }
+    }
     var chosen = selectPane(nodes, groups);
-    return { pane: chosen.pane, nodes: chosen.nodes, panes: groups.length };
+    if (chosen && chosen.pane) {
+      lastPane = chosen.pane;
+      lastPartner = currentPartner;
+    }
+    return { pane: chosen ? chosen.pane : null,
+             nodes: chosen ? chosen.nodes : nodes,
+             panes: groups.length };
   }
 
   function containers() {
@@ -423,7 +470,22 @@
   }
 
   // ── the public probes ──────────────────────────────────────────
-  function describe() {
+  function classContains(cls, token) {
+    if (!cls) return false;
+    return cls.indexOf(token) >= 0;
+  }
+
+  function containerOf(el) {
+    for (var p = el; p; p = p.parentElement) {
+      var cls = String(p.className || '');
+      if (classContains(cls, 'container') || classContains(cls, 'pane-host'))
+        return p;
+    }
+    return null;
+  }
+
+  /** Active-tab facts only. `describe()` adds pane-scoped user data. */
+  function describeTab() {
     var active = qs(document, '.tab-item.active');
     var tab = 'none', partner = '', title = '';
     if (active) {
@@ -433,15 +495,31 @@
       title = ownText(qs(active, 'p.chat-title'));
       partner = title;
     }
-    var counter = qs(document, '.users-counter');
     var mine = qs(document, '.primary-text.bold');
+    return { tab: tab, partner: partner, title: title,
+             me: clean(mine ? mine.textContent : ''), participants: 0 };
+  }
+
+  function describePane(pane) {
+    var base = describeTab();
+    var container = containerOf(pane);
+    var counter = container ? qs(container, '.users-counter') : null;
+    var mine = container ? qs(container, '.primary-text.bold') : null;
+    var globalMine = qs(document, '.primary-text.bold');
     return {
-      tab: tab,
-      partner: partner,
-      title: title,
-      me: clean(mine ? mine.textContent : ''),
+      tab: base.tab,
+      partner: base.partner,
+      title: base.title,
+      me: clean(mine ? mine.textContent :
+                (globalMine ? globalMine.textContent : '')),
       participants: counter ? num(clean(counter.textContent)) : 0,
     };
+  }
+
+  function describe() {
+    var pane = lastPane || visiblePane().pane ||
+               qs(document, '.messages-root') || qs(document, 'app-messages');
+    return describePane(pane);
   }
 
   function scrollInfo() {
@@ -568,6 +646,7 @@
     var fps = records.map(function (r) { return r.fp; });
     var summary = describe();
     var authors = authorsOf(records);
+    var pv = visiblePane();
     return {
       ok: true,
       agent: VERSION,
@@ -580,7 +659,8 @@
       authors: authors.all,
       in_authors: authors.inbound,
       out_authors: authors.outbound,
-      panes: visiblePane().panes,
+      panes: pv.panes,
+      pane_source: pv.source || '',
       head: fps.slice(0, HEAD_FPS),
       tail: fps.slice(Math.max(0, fps.length - TAIL_FPS)),
       pending: buffer.length,

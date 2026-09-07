@@ -243,18 +243,18 @@ function buildChat(spec) {
     tabNode({ kind: 'user', title: spec.title || partner,
               active: kind === 'user' }),
   ]);
+  const userList = el('users-list', { class: 'users users_showed' }, [
+    el('cdk-virtual-scroll-viewport', { class: 'users-list-viewport' },
+       userRows),
+  ]);
   const paneHost = el('div', { class: 'container' }, [
     el('app-messages', { class: 'messages' }, [messagesRoot]),
+    userList,
   ]);
+  const containerHost = el('div', { class: 'pane-host' }, [paneHost]);
   const root = el('body', {}, [
     el('app-tab-scroller', {}, [tabsList]),
-    paneHost,
-    el('div', { class: 'container' }, [
-      el('users-list', {}, [
-        el('cdk-virtual-scroll-viewport', { class: 'users-list-viewport' },
-           userRows),
-      ]),
-    ]),
+    containerHost,
   ]);
 
   const timers = [];
@@ -314,7 +314,7 @@ function buildChat(spec) {
     },
     /* A second conversation pane, exactly as the site keeps them: every
        open tab has its own app-messages/.messages-root, only one visible. */
-    addPane(messages, opts) {
+    _addPane(messages, opts, atStart) {
       opts = opts || {};
       const paneRoot = el('div', { class: 'messages-root',
                                    hidden: opts.hidden !== false });
@@ -322,7 +322,8 @@ function buildChat(spec) {
       const pane = el('app-messages', { class: 'messages',
                                         hidden: opts.hidden !== false },
                       [paneRoot]);
-      paneHost.append(pane);
+      if (atStart) paneHost.children.unshift(pane);
+      else paneHost.append(pane);
       return { pane, root: paneRoot,
         show() { pane.hidden = false; paneRoot.hidden = false; },
         hide() { pane.hidden = true; paneRoot.hidden = true; },
@@ -337,6 +338,47 @@ function buildChat(spec) {
           return nodes;
         },
       };
+    },
+    addPane(messages, opts) { return env._addPane(messages, opts, false); },
+    /* Put a pane BEFORE the active one in document order, so a blind
+       "first .messages-root" fallback would pick the wrong conversation. */
+    prependPane(messages, opts) { return env._addPane(messages, opts, true); },
+    /* A complete other conversation container (messages + users list), like
+       the main room that the site keeps mounted before the private chat. */
+    prependContainer(messages, opts) {
+      opts = opts || {};
+      const paneRoot = el('div', { class: 'messages-root',
+                                   hidden: opts.hidden !== false });
+      (messages || []).forEach((m) => paneRoot.append(messageNode(m)));
+      const pane = el('app-messages', { class: 'messages',
+                                        hidden: opts.hidden !== false },
+                      [paneRoot]);
+      const rows = [el('container-item', {}, [
+        el('users-header-item', {}, [
+          el('div', { class: 'header-container' }, [
+            el('div', { class: 'text-stack' }, [
+              el('div', { class: 'primary-text-line' }, [
+                el('span', { class: 'primary-text', text: 'Пользователи' }),
+              ]),
+              el('div', { class: 'secondary-text' }, [
+                el('span', { class: 'users-counter',
+                             text: String(opts.participants ||
+                                          (messages || []).length) }),
+              ]),
+            ]),
+          ]),
+        ]),
+      ])];
+      if (opts.me) rows.push(userItem(opts.me, true));
+      (opts.users || []).forEach((u) => rows.push(userItem(u, false)));
+      const users = el('users-list', { class: 'users' }, [
+        el('cdk-virtual-scroll-viewport',
+           { class: 'users-list-viewport' }, rows),
+      ]);
+      const container = el('div', { class: 'container' }, [pane, users]);
+      containerHost.children.unshift(container);
+      container.parentElement = containerHost;
+      return { pane, root: paneRoot, container };
     },
     hideMainPane() {
       messagesRoot.hidden = true;

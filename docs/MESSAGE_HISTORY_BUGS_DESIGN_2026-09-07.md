@@ -243,7 +243,62 @@ Agent **v7**:
 
 ---
 
-## 7. Files that change
+## 7. Follow-up (fifth pass): "private win" but the DB still has 0 messages
+
+### Symptom
+
+The collector reports the real private chat (it no longer picks the room
+pane), but `In archive` stays at `0` and clicking **⬆ Backfill older** either
+does nothing or reports `NO NEW MESSAGES`.
+
+### Root causes now covered
+
+The live DOM has **more than one `div.container`**: the main room and each
+open private tab keep their own `.container` with an `app-messages` **and** a
+`users-list`. Three things were still read from *document order* instead of
+from the active conversation:
+
+1. **`.users-counter`** was taken from the first list in the document. If the
+   room's user list (978 users) came first, the collector thought the private
+   tab was a group tab and refused to write anything — DB stays 0.
+2. **`.primary-text.bold`** (My Nick) was likewise read globally, so the gate
+   could compare against the wrong "me".
+3. When scroll-to-top made the active pane momentarily empty, the old
+   `visiblePane()` fell back to the **first `.messages-root` in the document**,
+   which is the room/another tab. `state()` then reported that pane's count and
+   scroll (a non-empty conversation is made to look empty, or worse a stranger
+   pane gets selected), so no rows were ever written.
+
+### Fix (agent v8 + collector)
+
+* `describeTab()` reads only the active tab (kind/partner/title).
+  `describe()` scopes `.users-counter` and `.primary-text.bold` to the
+  `.container` that owns the selected pane, so a room list in front never
+  leaks 17 / 978 participants or the wrong My Nick.
+* `visiblePane()` keeps `lastPane` and the last partner. If that pane is still
+  mounted but its message nodes were removed while it loads, the agent reports
+  `count=0` for the active pane instead of selecting another `.messages-root`.
+* `sync_conversation()` waits for the post-scroll count to come **back to the
+  pre-scroll floor** (`minimum_count`), needs 3 stable polls, and if the pane
+  never comes back it **restores the viewport**, reads the visible window, and
+  leaves `full_scan_complete` off. The collector marks such a pass
+  `backfill_pending` and does not re-scroll on every heartbeat; the user can
+  ask again with **⬆ Backfill older**.
+
+### Tests locked
+
+* `participants and My Nick come from the active container, not the first one`
+  — a room container with 17 users / `RoomMe` is prepended, but the private
+  chat still reports 2 and the real My Nick.
+* `a momentarily empty pane does not fall back to another .messages-root` —
+  room nodes exist and come first, yet an emptied active pane reports 0.
+* `scroll_that_empties_the_pane_is_retried_not_marked_done` — after a
+  scroll that clears the DOM the visible window is still archived and
+  `full_scan_complete` stays false.
+
+---
+
+## 8. Files that change
 
 | File | Change |
 |---|---|
@@ -260,3 +315,9 @@ Agent **v7**:
 | `backend/bridge.py` | `collector_command('backfill_older')` |
 | `actions/collect_history.py` | `full` mode uses the scroll backfill |
 | tests | new/existing coverage for scroll, dedupe, media-fallback |
+| `backend/js/chat_agent.js` | **v8** — per-container `.users-counter`/`.primary-text.bold`, last-pane fallback when empty |
+| `backend/chat_agent_js.py` | `AGENT_VERSION=8` |
+| `backend/chat_parser.py` | `minimum_count` settle, restore-and-read fallback, `backfill_pending` |
+| `backend/history_models.py` | `SyncResult.backfill_pending` |
+| `backend/collector.py` | `_backfill_pending` gate so a failed full scan is not repeated every heartbeat |
+| `tests/dom_stub.js` | real per-conversation `.container` + `users-list` shape, `prependContainer()` |
