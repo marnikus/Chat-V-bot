@@ -112,6 +112,49 @@ t('among private panes, the one matching the active partner wins', () => {
   eq(st.out_authors, [ME]);
 });
 
+t('participants and My Nick come from the active container, not the first one', () => {
+  const env = load({ partner: PARTNER, me: ME, messages: priv });
+  const room = [];
+  for (let i = 0; i < 10; i++) {
+    room.push({ dir: 'in', from: 'Макс__Б', text: 'room ' + i,
+                time: '12:0' + (i % 10) });
+  }
+  // The main room's .container (and its huge users list) comes FIRST in the
+  // document. A global '.users-counter'/'.primary-text.bold' lookup would
+  // report 17 users / "RoomMe"; the archive must use the active pane's own
+  // container instead.
+  env.prependContainer(room, { hidden: false, participants: 17,
+                               me: 'RoomMe',
+                               users: ['Макс__Б', 'Lizalo4ka'] });
+  const st = env.agent.state();
+  eq(st.tab, 'private');
+  eq(st.participants, 2, 'the active private conversation has 2 people');
+  eq(st.me, ME, 'My Nick is read from the active pane user list');
+  eq(st.count, priv.length);
+  eq(st.in_authors, [PARTNER]);
+  eq(st.out_authors, [ME]);
+});
+
+t('a momentarily empty pane does not fall back to another .messages-root', () => {
+  // The live regression: scroll-to-top can leave the active pane without any
+  // message-container for a moment. `document.querySelectorAll` then finds
+  // only the room pane's nodes; the old fallback picked document's FIRST
+  // .messages-root, which is the room (or another tab) when it comes first.
+  const env = load({ partner: PARTNER, me: ME, messages: priv });
+  const bigRoom = [];
+  for (let i = 0; i < 12; i++) {
+    bigRoom.push({ dir: 'in', from: 'Макс__Б', text: 'room ' + i,
+                   time: '12:0' + (i % 10) });
+  }
+  env.prependPane(bigRoom, { hidden: false });   // room is FIRST in the DOM
+  eq(env.agent.state().count, 2, 'the private pane is still parsed first');
+  env.messagesRoot.children = [];                 // active pane goes empty
+  const st = env.agent.state();
+  eq(st.count, 0, 'an empty active pane reports empty, never the room');
+  eq(st.panes, 1, 'the room pane still exists, but is not selected');
+  eq(st.in_authors, [], 'no room authors are reported as the partner');
+});
+
 t('slice() ships the visible pane too', () => {
   const env = load({ partner: PARTNER, me: ME, messages: priv });
   env.addPane(room, { hidden: true });

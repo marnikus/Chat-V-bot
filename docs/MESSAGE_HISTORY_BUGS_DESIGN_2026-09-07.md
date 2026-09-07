@@ -195,7 +195,110 @@ Pane selection is now **identity-first**, not “biggest pane wins”:
 
 ---
 
-## 6. Files that change
+## 6. Follow-up (fourth pass): backfill_older scrolls the wrong element
+
+### Symptom
+
+Clicking **⬆ Backfill older** "did nothing": `full_scan_complete` could even be
+set while `In archive` stayed at `0`.
+
+### Root cause
+
+`messagesRoot()` (the MutationObserver target) returns the **content wrapper**
+inside `.messages-root`, not the element that owns the scrollbar. The old
+`scrollBox()` walked upward from that wrapper and stopped on the first element
+whose `scrollHeight > clientHeight`. The wrapper has `clientHeight = 0`, so it
+was selected and `scrollTop` was set on a non-scrolling `<div>` — the real
+`.messages-root` (which has `overflow-y: scroll`) never moved, no older
+messages were loaded, and after the short "settle" the archive was marked as
+fully checked.
+
+### Fix
+
+Agent **v7**:
+
+* `scrollerCandidates()` walks up from the message wrapper and selects the
+  actual scrollers: `.messages-root` / `app-messages`, any
+  `cdk-virtual-scrollable` / virtual-scroll viewport, or an ancestor whose
+  computed `overflow-y` is `scroll`/`auto`. A bare content wrapper is never a
+  candidate.
+* `scrollInfo()`/`state().scroll` reports the **real scroller** (`atTop` is
+  truthful).
+* `scrollToTop()` sets `scrollTop = 0` on every real scroller (using
+  `scrollTo({top:0})` when available), records each scroller’s old position,
+  and dispatches a scroll event. `restoreScroll()` restores each recorded
+  position.
+* Python `settle_after_top()` now waits longer and requires the DOM count to
+  stay stable for **3 consecutive polls** (initial default 6 s), and
+  `sync_conversation()` only marks `full_scan_complete` when that settle
+  actually succeeded. A slow page is retried instead of being permanently
+  flagged "done".
+
+### Tests locked
+
+* JS: `scrollToTop drives the real scroller, not the wrapped message content`
+  — sets scrollTop on the content wrapper to `999`, ignores it, and checks
+  that the `.messages-root` position is used and moved.
+* Python: existing backfill tests now run through the longer settle path.
+
+---
+
+## 7. Follow-up (fifth pass): "private win" but the DB still has 0 messages
+
+### Symptom
+
+The collector reports the real private chat (it no longer picks the room
+pane), but `In archive` stays at `0` and clicking **⬆ Backfill older** either
+does nothing or reports `NO NEW MESSAGES`.
+
+### Root causes now covered
+
+The live DOM has **more than one `div.container`**: the main room and each
+open private tab keep their own `.container` with an `app-messages` **and** a
+`users-list`. Three things were still read from *document order* instead of
+from the active conversation:
+
+1. **`.users-counter`** was taken from the first list in the document. If the
+   room's user list (978 users) came first, the collector thought the private
+   tab was a group tab and refused to write anything — DB stays 0.
+2. **`.primary-text.bold`** (My Nick) was likewise read globally, so the gate
+   could compare against the wrong "me".
+3. When scroll-to-top made the active pane momentarily empty, the old
+   `visiblePane()` fell back to the **first `.messages-root` in the document**,
+   which is the room/another tab. `state()` then reported that pane's count and
+   scroll (a non-empty conversation is made to look empty, or worse a stranger
+   pane gets selected), so no rows were ever written.
+
+### Fix (agent v8 + collector)
+
+* `describeTab()` reads only the active tab (kind/partner/title).
+  `describe()` scopes `.users-counter` and `.primary-text.bold` to the
+  `.container` that owns the selected pane, so a room list in front never
+  leaks 17 / 978 participants or the wrong My Nick.
+* `visiblePane()` keeps `lastPane` and the last partner. If that pane is still
+  mounted but its message nodes were removed while it loads, the agent reports
+  `count=0` for the active pane instead of selecting another `.messages-root`.
+* `sync_conversation()` waits for the post-scroll count to come **back to the
+  pre-scroll floor** (`minimum_count`), needs 3 stable polls, and if the pane
+  never comes back it **restores the viewport**, reads the visible window, and
+  leaves `full_scan_complete` off. The collector marks such a pass
+  `backfill_pending` and does not re-scroll on every heartbeat; the user can
+  ask again with **⬆ Backfill older**.
+
+### Tests locked
+
+* `participants and My Nick come from the active container, not the first one`
+  — a room container with 17 users / `RoomMe` is prepended, but the private
+  chat still reports 2 and the real My Nick.
+* `a momentarily empty pane does not fall back to another .messages-root` —
+  room nodes exist and come first, yet an emptied active pane reports 0.
+* `scroll_that_empties_the_pane_is_retried_not_marked_done` — after a
+  scroll that clears the DOM the visible window is still archived and
+  `full_scan_complete` stays false.
+
+---
+
+## 8. Files that change
 
 | File | Change |
 |---|---|
@@ -212,3 +315,9 @@ Pane selection is now **identity-first**, not “biggest pane wins”:
 | `backend/bridge.py` | `collector_command('backfill_older')` |
 | `actions/collect_history.py` | `full` mode uses the scroll backfill |
 | tests | new/existing coverage for scroll, dedupe, media-fallback |
+| `backend/js/chat_agent.js` | **v8** — per-container `.users-counter`/`.primary-text.bold`, last-pane fallback when empty |
+| `backend/chat_agent_js.py` | `AGENT_VERSION=8` |
+| `backend/chat_parser.py` | `minimum_count` settle, restore-and-read fallback, `backfill_pending` |
+| `backend/history_models.py` | `SyncResult.backfill_pending` |
+| `backend/collector.py` | `_backfill_pending` gate so a failed full scan is not repeated every heartbeat |
+| `tests/dom_stub.js` | real per-conversation `.container` + `users-list` shape, `prependContainer()` |

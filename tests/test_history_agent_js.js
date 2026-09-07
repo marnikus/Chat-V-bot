@@ -78,6 +78,21 @@ t('scrollToTop moves the conversation to its first message', () => {
   ok(res.atTop, 'the pane reports that it reached the top');
 });
 
+t('scrollToTop drives the real scroller, not the wrapped message content', () => {
+  // `messagesRoot()` (observer target) is the content wrapper that holds the
+  // individual message nodes; the element with `overflow-y:scroll` is the
+  // `.messages-root`. The old code read scrollTop from the wrapper and set it
+  // there too, which is why backfill did nothing on the real site.
+  const env = load({ messages: many(3) });
+  const wrapper = env.messagesRoot.children[0];   // content wrapper
+  wrapper.scrollTop = 999;                        // must be ignored
+  env.messagesRoot.scrollTop = 150;               // the actual scroller
+  const res = env.agent.scrollToTop();
+  eq(res.beforeTop, 150, 'the read comes from the real scroller');
+  eq(res.top, 0, 'the real scroller is moved to the top');
+  ok(res.atTop);
+});
+
 t('restoreScroll puts the conversation back where it was', () => {
   const env = load({ messages: many(3) });
   env.messagesRoot.scrollTop = 18;
