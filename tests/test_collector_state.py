@@ -124,7 +124,8 @@ class TestCollectionFlow(CollectorCase):
         await self.col.tick()
         reads = len(self.page.slice_calls)
         self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
-        self.assertEqual(self.col.state_payload()["text"], "No new messages")
+        self.assertTrue(
+            self.col.state_payload()["text"].startswith("No new messages"))
         self.assertEqual(len(self.page.slice_calls), reads)
 
     async def test_new_messages_are_appended_on_the_next_tick(self):

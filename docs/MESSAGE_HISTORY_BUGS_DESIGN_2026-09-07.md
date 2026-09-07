@@ -285,6 +285,22 @@ from the active conversation:
   `backfill_pending` and does not re-scroll on every heartbeat; the user can
   ask again with **⬆ Backfill older**.
 
+### Diagnosis surface
+
+The Collector window now shows the numbers it actually read, so the next
+report is not a guess:
+
+* `Page count` — `state().count` of the selected pane;
+* `People` — `participants · panes · pane_source` (`last`, `first`,
+  `last-empty`, …);
+* `Sync` — the last `sync_conversation` reason (`added`, `no_new`,
+  `unchanged`, `empty`, `gap`, …);
+* `Backfill` — `full scan pending retry` when a scroll could not be proven
+  complete.
+
+The same data is in the JSON state returned by `collector_state`, under
+`last_probe` / `sync_reason`.
+
 ### Tests locked
 
 * `participants and My Nick come from the active container, not the first one`

@@ -112,6 +112,8 @@ class Collector(QObject):
         self._busy = False
         self._force_backfill = False
         self._backfill_pending = False
+        self._last_probe: dict = {}
+        self._last_sync_reason = ""
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -252,6 +254,16 @@ class Collector(QObject):
             state = await self.parser.state()
         self._agent = int(state.get("agent") or 0)
         self._error = ""
+        self._last_probe = {
+            "count": int(state.get("count") or 0),
+            "panes": int(state.get("panes") or 0),
+            "pane_source": str(state.get("pane_source") or ""),
+            "participants": int(state.get("participants") or 0),
+            "partner": str(state.get("partner") or ""),
+            "in_authors": list(state.get("in_authors") or []),
+            "out_authors": list(state.get("out_authors") or []),
+            "scroll": dict(state.get("scroll") or {}),
+        }
 
         if not state.get("ok", True):
             return self._refuse(CollectorState.NOT_PRIVATE,
@@ -323,7 +335,7 @@ class Collector(QObject):
         self._total = int(person.get("message_count") or 0)
         if unchanged:
             self._added = 0
-            return self._set(CollectorState.NO_NEW, "No new messages")
+            return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
         full_scan_complete = bool(cursor.get("full_scan_complete"))
@@ -339,6 +351,7 @@ class Collector(QObject):
         result = await self._sync(nick, my_nick, bootstrap,
                                   backfill_older=want_backfill)
         self._backfill_pending = bool(result.backfill_pending)
+        self._last_sync_reason = str(result.reason or "")
         self._added = result.added
         self._total = result.total
         if self.media is not None and self._settings["download_media"]:
@@ -358,7 +371,7 @@ class Collector(QObject):
         if not result.ok:
             return self._set(CollectorState.NOT_PRIVATE,
                              "Not in private tab now")
-        return self._set(CollectorState.NO_NEW, "No new messages")
+        return self._set(CollectorState.NO_NEW, self._no_new_text())
 
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
                     backfill_older: bool = False):
@@ -550,12 +563,21 @@ class Collector(QObject):
             "warning": self._warning,
             "self_heals": self._self_heals,
             "agent": self._agent,
+            "sync_reason": self._last_sync_reason,
+            "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
             "enabled": self.enabled,
             "interval_ms": self.next_interval_ms(),
             "settings": self.settings(),
         }
+
+    def _no_new_text(self) -> str:
+        p = self._last_probe or {}
+        return (f"No new messages (count {p.get('count')}, "
+                f"participants {p.get('participants')}, "
+                f"panes {p.get('panes')}, "
+                f"pane {p.get('pane_source') or 'n/a'})")
 
     def _set(self, state: str, text: str) -> str:
         self._state = state

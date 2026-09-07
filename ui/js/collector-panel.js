@@ -151,6 +151,16 @@ const CollectorPanel = {
     if (payload.throttled)
       this._row(host, 'Throttled', 'yes — an Action Stack run is in progress');
     if (payload.self_heals) this._row(host, 'Re-syncs', payload.self_heals);
+    if (payload.last_probe) {
+      const p = payload.last_probe;
+      this._row(host, 'Page count', p.count);
+      this._row(host, 'People',
+                String(p.participants) + ' · ' + String(p.panes) +
+                ' pane(s) · ' + (p.pane_source || 'n/a'));
+    }
+    if (payload.sync_reason) this._row(host, 'Sync', payload.sync_reason);
+    if (payload.backfill_pending)
+      this._row(host, 'Backfill', 'full scan pending retry');
     if (payload.warning) this._row(host, 'Warning', payload.warning);
     if (payload.error) this._row(host, 'Error', payload.error);
   },
