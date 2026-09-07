@@ -36,7 +36,12 @@ from backend.chat_parser import (  # noqa: E402
     parse_records,
     sync_conversation,
 )
-from backend.chat_agent_js import AGENT_VERSION  # noqa: E402
+from backend.chat_agent_js import (  # noqa: E402
+    AGENT_VERSION,
+    fetch_media_expression,
+    restore_scroll_expression,
+    slice_expression,
+)
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
@@ -75,6 +80,7 @@ class FakePage:
         self.prepend_on_scroll = []
         self.clear_on_scroll = False
         self._cleared_messages = None
+        self.slice_empty_times = 0
 
     # ── page mutations used by the tests ──
     def append(self, *records):
@@ -134,10 +140,13 @@ class FakePage:
             })
         if "/*CVB_SLICE*/" in expression:
             self._reindex()
-            payload = json.loads(expression.split("/*ARGS*/")[1]
-                                 .split("/*END*/")[0])
+            payload = json.loads(expression.split("/*ARGS:")[1]
+                                 .split("*/")[0])
             a, b = payload["from"], payload["to"]
             self.slice_calls.append((a, b))
+            if self.slice_empty_times > 0:
+                self.slice_empty_times -= 1
+                return json.dumps([])
             return json.dumps(self.messages[a:b])
         if "/*CVB_DRAIN*/" in expression:
             out, self.queue = self.queue, []
@@ -145,8 +154,8 @@ class FakePage:
         if "/*CVB_SCROLL_TOP*/" in expression:
             return json.dumps(self._scroll_to_top())
         if "/*CVB_RESTORE_SCROLL*/" in expression:
-            payload = json.loads(expression.split("/*ARGS*/")[1]
-                                 .split("/*END*/")[0])
+            payload = json.loads(expression.split("/*ARGS:")[1]
+                                 .split("*/")[0])
             top = int(payload.get("top") or 0)
             self.scroll_top = top
             self.restore_calls.append(top)
@@ -281,6 +290,23 @@ class TestParserProbes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r.text for r in recs], ["new"])
         self.assertEqual(await parser.drain(), [])
 
+    def test_arg_probes_are_single_block_comments(self):
+        """Regression: `/*ARGS*/{…}/*END*/` closed the comment immediately, so
+        the JSON payload became real source and `Runtime.evaluate` failed with
+        a SyntaxError. state() worked, but every slice() returned [] and the
+        archive stayed at 0. The argument payload must be INSIDE one comment."""
+        probes = [
+            slice_expression(0, 8),
+            restore_scroll_expression(120),
+            fetch_media_expression("https://example.test/x.gif"),
+        ]
+        for expr in probes:
+            self.assertIn("/*ARGS:", expr)
+            self.assertNotIn("/*ARGS*/", expr)
+            self.assertNotIn("/*END*/", expr)
+            marker = expr.split("/*ARGS:", 1)[1]
+            self.assertIn("*/", marker, "the args comment must be closed")
+
 
 class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -410,6 +436,18 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
         texts = [r[0] for r in await self.db.fetchall(
             "SELECT text FROM messages ORDER BY ord")]
         self.assertEqual(texts, [f"m{i}" for i in range(5, 10)])
+
+    async def test_slice_that_temporarily_returns_empty_is_retried(self):
+        # Live report: state() sees 8 messages, slice() then returns no rows
+        # because the DOM is re-rendering. The archive must not say "nothing
+        # new" and stay at 0 — the range is retried a few times.
+        page = FakePage([raw(f"m{i}", idx=i) for i in range(8)])
+        page.slice_empty_times = 2
+        parser = ChatParser(page, chunk_size=10, chunk_pause_ms=0)
+        res = await self.sync(parser)
+        self.assertEqual(res.added, 8)
+        person = await self.repo.get_person("Nick")
+        self.assertEqual(person["message_count"], 8)
 
     async def test_shifted_occurrence_does_not_create_a_gap_or_a_duplicate(self):
         # Bug #2: older identical lines are prepended, so the same stored line

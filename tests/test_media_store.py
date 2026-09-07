@@ -39,8 +39,8 @@ class FakeCDP:
     async def evaluate(self, expression):
         if "/*CVB_FETCH_MEDIA*/" not in expression:
             return None
-        url = json.loads(expression.split("/*ARGS*/")[1]
-                         .split("/*END*/")[0])["url"]
+        url = json.loads(expression.split("/*ARGS:")[1]
+                         .split("*/")[0])["url"]
         self.fetched.append(url)
         if url in self.fail:
             return json.dumps({"ok": False, "error": "network error"})

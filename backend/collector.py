@@ -114,6 +114,8 @@ class Collector(QObject):
         self._backfill_pending = False
         self._last_probe: dict = {}
         self._last_sync_reason = ""
+        self._last_sync_added = 0
+        self._last_sync_count = 0
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -335,6 +337,9 @@ class Collector(QObject):
         self._total = int(person.get("message_count") or 0)
         if unchanged:
             self._added = 0
+            self._last_sync_reason = "unchanged_cursor"
+            self._last_sync_added = 0
+            self._last_sync_count = count
             return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
@@ -352,6 +357,8 @@ class Collector(QObject):
                                   backfill_older=want_backfill)
         self._backfill_pending = bool(result.backfill_pending)
         self._last_sync_reason = str(result.reason or "")
+        self._last_sync_added = int(result.added or 0)
+        self._last_sync_count = int(result.count or 0)
         self._added = result.added
         self._total = result.total
         if self.media is not None and self._settings["download_media"]:
@@ -564,6 +571,8 @@ class Collector(QObject):
             "self_heals": self._self_heals,
             "agent": self._agent,
             "sync_reason": self._last_sync_reason,
+            "sync_added": self._last_sync_added,
+            "sync_count": self._last_sync_count,
             "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
@@ -589,8 +598,9 @@ class Collector(QObject):
         payload = self.state_payload()
         signature = (payload["state"], payload["text"], payload["nick"],
                      payload["added"], payload["total"], payload["throttled"],
-                     payload["backfill_pending"], payload["error"],
-                     payload["warning"])
+                     payload["backfill_pending"], payload["sync_reason"],
+                     payload["sync_added"], payload["sync_count"],
+                     payload["error"], payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI
         self._last_emitted = signature

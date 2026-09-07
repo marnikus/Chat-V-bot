@@ -314,7 +314,70 @@ The same data is in the JSON state returned by `collector_state`, under
 
 ---
 
-## 8. Files that change
+## 8. Follow-up (sixth pass, ROOT CAUSE): slice() probes were a SyntaxError
+
+### Symptom (from the live Collector window)
+
+```
+Partner  гольдейдки      My nick  Хорошо Все
+Page count  8            People   2 · 1 pane(s) · n/a
+In archive  0            Sync     no_new
+```
+
+`state()` correctly reports **8 messages** in the active private chat, but
+`Sync` is `no_new` and `In archive` stays `0`. So the pane selection, the
+private gate and the user-list scoping were all working — the data never left
+the page.
+
+### Root cause
+
+The CDP probe expressions appended their arguments with
+
+```js
+…})()/*ARGS*/{"from":0,"to":8}/*END*/
+```
+
+`/*ARGS*/` is already a complete block comment, so the JSON object after it
+was **real JavaScript source**, not a comment. `Runtime.evaluate` threw a
+`SyntaxError`, and `ChatParser.slice()` swallowed the failure as `items: []`.
+
+This is exactly why:
+
+* `state()` worked (it takes no `_args` and returns “8 messages”);
+* `slice()` always returned no rows → `add 0`, `Sync no_new`;
+* the database (and In archive) stayed at 0;
+* every pane/scroll/user-list fix made the probe *report* the right pane but
+  could never make the collector *read* it.
+
+### Fix
+
+`backend/chat_agent_js.py` now wraps the payload in **one** block comment:
+
+```js
+…})()/*ARGS:{"from":0,"to":8}*/
+```
+
+The JSON is now inside the comment. The same fix applies to
+`restore_scroll_expression` and `fetch_media_expression`, so scroll restore
+and the cookie-backed media downloader also work again.
+
+Also hardened the read path:
+
+* `sync_conversation` retries a slice range **4 times** with a short pause
+  (and restores the viewport once) if the virtualised DOM drops its nodes
+  between probes.
+* The Collector window now shows `Sync: reason · count N · added M` so a
+  “reported 8, saved 0” case is immediately visible instead of a bare
+  `no_new`.
+
+### Regression test
+
+`test_arg_probes_are_single_block_comments` asserts every arg-bearing probe
+contains `/*ARGS:` and never the broken `/*ARGS*/.../*END*/` shape.
+
+---
+
+## 9. Files that change
 
 | File | Change |
 |---|---|
@@ -337,3 +400,7 @@ The same data is in the JSON state returned by `collector_state`, under
 | `backend/history_models.py` | `SyncResult.backfill_pending` |
 | `backend/collector.py` | `_backfill_pending` gate so a failed full scan is not repeated every heartbeat |
 | `tests/dom_stub.js` | real per-conversation `.container` + `users-list` shape, `prependContainer()` |
+| `backend/chat_agent_js.py` | **ROOT FIX** — argument payloads are a single `/*ARGS:{…}*/` comment, not the broken `/*ARGS*/…/*END*/` |
+| `backend/chat_parser.py` | retry slice ranges 4×; `SyncResult.count`; slice-empty viewport restore |
+| `backend/collector.py` | `sync_count` / `sync_added` diagnostics in the Collector window |
+| `ui/js/collector-panel.js` | show `Sync: reason · count N · added M` |

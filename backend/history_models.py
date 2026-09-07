@@ -156,6 +156,7 @@ class SyncResult:
     reason: str = ""
     added: int = 0
     scanned: int = 0
+    count: int = 0
     stopped: bool = False
     gap: bool = False
     total: int = 0

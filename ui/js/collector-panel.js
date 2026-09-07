@@ -158,7 +158,14 @@ const CollectorPanel = {
                 String(p.participants) + ' · ' + String(p.panes) +
                 ' pane(s) · ' + (p.pane_source || 'n/a'));
     }
-    if (payload.sync_reason) this._row(host, 'Sync', payload.sync_reason);
+    if (payload.sync_reason) {
+      let sync = payload.sync_reason;
+      if (payload.sync_count !== undefined)
+        sync += ' · count ' + payload.sync_count;
+      if (payload.sync_added !== undefined)
+        sync += ' · added ' + payload.sync_added;
+      this._row(host, 'Sync', sync);
+    }
     if (payload.backfill_pending)
       this._row(host, 'Backfill', 'full scan pending retry');
     if (payload.warning) this._row(host, 'Warning', payload.warning);

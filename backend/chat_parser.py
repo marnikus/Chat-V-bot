@@ -31,6 +31,11 @@ from backend.history_repo import HistoryRepo, align_batch
 
 log = logging.getLogger("chatbot")
 
+#: A virtualised pane can drop its message nodes between a state() probe and
+#: the slice() that follows. Do not archive "0" on the first read — retry the
+#: range a few times (and restore the viewport once) before giving up.
+SLICE_RETRIES = 4
+
 
 def align(dom_fps, tail_fps) -> Alignment:
     """Where a freshly read conversation continues the stored one."""
@@ -399,6 +404,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     result.backfill_pending = bool(result.backfill_pending or backfill_pending)
 
     count = int(state.get("count") or 0)
+    result.count = count
     head_sig = _signature(state.get("head"))
     tail_sig = _signature(state.get("tail"))
 
@@ -449,23 +455,24 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     scanned = 0
     position = start
     first = True
-    slice_fallbacks = 0
 
     while position < count:
         if should_stop and should_stop():
             result.stopped = True
             break
         end = min(count, position + parser.chunk_size)
-        records = await parser.slice(position, end)
-        if not records:
+        records = []
+        for _attempt in range(SLICE_RETRIES):
+            records = await parser.slice(position, end)
+            if records:
+                break
             # The settle probe reported count=count, then the DOM lost the
             # nodes between probes (a virtualised pane re-rendering). Do not
             # give up and save nothing: restore the viewport, take the state
-            # again, and retry once on the window it still shows.
-            if (backfill_older and not result.backfilled and
-                    before_count > 0 and position == start and
-                    slice_fallbacks < 1):
-                slice_fallbacks += 1
+            # again, and retry the same range a few times.
+            if (position == start and backfill_older and
+                    not result.backfilled and before_count > 0 and
+                    _attempt == 0):
                 try:
                     await parser.restore_scroll(old_top)
                 except Exception:                    # noqa: BLE001
@@ -474,10 +481,14 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 if int(fallback.get("count") or 0) > 0:
                     state = fallback
                     count = int(state.get("count") or 0)
+                    result.count = count
+                    end = min(count, position + parser.chunk_size)
                     head_sig = _signature(state.get("head"))
                     tail_sig = _signature(state.get("tail"))
                     result.backfill_pending = True
-                    continue
+            else:
+                await asyncio.sleep(0.2)
+        if not records:
             break
         scanned += len(records)
         if streaming:
