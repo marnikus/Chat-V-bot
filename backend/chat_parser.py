@@ -449,6 +449,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     scanned = 0
     position = start
     first = True
+    slice_fallbacks = 0
 
     while position < count:
         if should_stop and should_stop():
@@ -457,6 +458,26 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         end = min(count, position + parser.chunk_size)
         records = await parser.slice(position, end)
         if not records:
+            # The settle probe reported count=count, then the DOM lost the
+            # nodes between probes (a virtualised pane re-rendering). Do not
+            # give up and save nothing: restore the viewport, take the state
+            # again, and retry once on the window it still shows.
+            if (backfill_older and not result.backfilled and
+                    before_count > 0 and position == start and
+                    slice_fallbacks < 1):
+                slice_fallbacks += 1
+                try:
+                    await parser.restore_scroll(old_top)
+                except Exception:                    # noqa: BLE001
+                    pass
+                fallback = await parser.state()
+                if int(fallback.get("count") or 0) > 0:
+                    state = fallback
+                    count = int(state.get("count") or 0)
+                    head_sig = _signature(state.get("head"))
+                    tail_sig = _signature(state.get("tail"))
+                    result.backfill_pending = True
+                    continue
             break
         scanned += len(records)
         if streaming:
