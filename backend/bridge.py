@@ -846,8 +846,11 @@ class Bridge(QObject):
             self.tab_match_result.emit(query, "[]")
             return
         if not tabs:
-            self.log_message.emit("⚠ No Chrome tabs found — is Chrome running with "
-                                  "--remote-debugging-port=9222?", "warn")
+            self.log_message.emit(
+                "⚠ No Chrome tabs found — start Chrome with "
+                "--remote-debugging-port=9222 "
+                "--user-data-dir=\"C:\\chatflow-chrome\" (see README §2)",
+                "warn")
             self.tab_match_result.emit(query, "[]")
             return
         matches = best_matches(query, [t.__dict__ for t in tabs])

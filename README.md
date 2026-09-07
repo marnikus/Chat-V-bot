@@ -28,24 +28,50 @@ This installs:
 
 You **must** launch Chrome with the remote debugging port flag:
 
-**Windows:**
+**Windows — recommended (dedicated profile):**
+```cmd
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chatflow-chrome"
+```
+
+`--user-data-dir` starts Chrome on a **separate profile** kept in
+`C:\chatflow-chrome`. That is the reliable way to do this:
+
+* it works even when your everyday Chrome is already open — a normal Chrome
+  without the flag simply hands the command over to the running instance and
+  the debug port never opens;
+* your normal profile, cookies, extensions and open tabs are untouched;
+* the first launch is a brand-new profile, so log in to the chat once inside
+  that window; the login is remembered in `C:\chatflow-chrome` for every
+  later launch.
+
+That exact command ships with the repo as **`start-chatflow-chrome.bat`** —
+double-click it (or make a shortcut to it) so Chrome always starts the same
+way. It also opens the chat page for you.
+
+**Windows — plain (uses your normal profile):**
 ```cmd
 "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
 ```
 
 **macOS:**
 ```bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/chatflow-chrome"
 ```
 
 **Linux:**
 ```bash
-google-chrome --remote-debugging-port=9222
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/chatflow-chrome"
 ```
 
-> ⚠️ **Important:** Close ALL Chrome windows before running this command.
-> If Chrome is already running without the debug flag, the flag will be ignored
-> and the app won't be able to connect.
+> ⚠️ **Important:** without `--user-data-dir`, close ALL Chrome windows before
+> running the command. If Chrome is already running without the debug flag,
+> the flag is ignored and the app won't be able to connect. With
+> `--user-data-dir` you can skip that — the dedicated profile always opens its
+> own instance and its own debug port.
+>
+> Check it worked: open **http://localhost:9222/json/version** in any browser.
+> A JSON page means the port is live; "connection refused" means Chrome was
+> started without the flag (or the old instance swallowed the command).
 
 In that Chrome window, open **https://ru.virt-chat.com/chat** and log in.
 
@@ -331,6 +357,7 @@ Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 ```
 ├── main.py                  # App entry point
 ├── requirements.txt         # Python dependencies
+├── start-chatflow-chrome.bat # Windows: Chrome + debug port on its own profile
 ├── backend/
 │   ├── cdp_client.py        # Chrome DevTools Protocol WebSocket client
 │   ├── action_engine.py     # Stack executor
