@@ -21,12 +21,13 @@
 (function () {
   'use strict';
 
-  var VERSION = 5;
+  var VERSION = 6;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
   var BUFFER_MAX = 500;     // push buffer cap before we start dropping
   var PUSH_DEBOUNCE_MS = 120;
+  var AUTHOR_SCAN_MAX = 1200;   // per-pane author scan cap (keeps state cheap)
   var SEP = '\u001f';
 
   if (window.__cvbAgent && window.__cvbAgent.version === VERSION) {
@@ -114,35 +115,108 @@
     return null;
   }
 
-  /** [pane, nodes] of the pane the user is actually looking at */
+  /** [pane, nodes] of the pane the user is actually looking at.
+   *
+   * v6: the site keeps every open chat in the DOM, and hiding is not always a
+   * `display:none` — a main-room pane can still report a measurable
+   * `offsetParent` and, being much longer, would be chosen by "most nodes".
+   * The active tab already tells us WHO we are talking to, so the pane is
+   * selected by author evidence first: the pane whose inbound authors are
+   * exactly the active partner (no strangers) beats a longer room pane. */
+  function normNick(x) {
+    return String(x == null ? '' : x).trim().toLowerCase();
+  }
+
+  function distinctNicks(names) {
+    var out = [];
+    for (var i = 0; i < names.length; i++) {
+      var n = clean(names[i]);
+      if (n && out.indexOf(n) < 0 && out.length < AUTHOR_MAX) out.push(n);
+    }
+    return out;
+  }
+
+  function paneGroups(nodes) {
+    var panes = [], groups = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var pane = paneOf(nodes[i]);
+      var at = panes.indexOf(pane);
+      if (at < 0) { panes.push(pane); groups.push({ pane: pane, nodes: [] }); }
+      groups[panes.indexOf(pane)].nodes.push(nodes[i]);
+    }
+    return groups;
+  }
+
+  function groupAuthors(g) {
+    var ins = [], outs = [];
+    var limit = Math.min(g.nodes.length, AUTHOR_SCAN_MAX);
+    for (var i = 0; i < limit; i++) {
+      var node = g.nodes[i];
+      var fields = cache.get(node);
+      if (!fields) { fields = parseNode(node); cache.set(node, fields); }
+      var name = clean(fields.from);
+      if (!name) continue;
+      (fields.dir === 'out' ? outs : ins).push(name);
+    }
+    return { inbound: distinctNicks(ins), outbound: distinctNicks(outs) };
+  }
+
+  function selectPane(nodes, groups) {
+    if (groups.length <= 1) {
+      return groups[0] ||
+             { pane: nodes[0] ? paneOf(nodes[0]) : null, nodes: nodes, panes: 0 };
+    }
+    var summary = describe();
+    var wantsPrivate = summary.tab === 'private' && !!clean(summary.partner);
+    var title = normNick(summary.partner);
+    var me = normNick(summary.me);
+    var best = -1, bestScore = -Infinity;
+    for (var g = 0; g < groups.length; g++) {
+      var group = groups[g];
+      var authors = groupAuthors(group);
+      var score = 0;
+      if (wantsPrivate && title) {
+        var ins = authors.inbound;
+        var outs = authors.outbound;
+        var insAllPartner = ins.length > 0 &&
+                            ins.every(function (a) { return normNick(a) === title; });
+        var insForeign = ins.filter(function (a) {
+          return normNick(a) !== title;
+        }).length;
+        var outsMe = outs.length > 0 &&
+                     (me ? outs.every(function (a) { return normNick(a) === me; })
+                         : outs.length === 1);
+        if (insAllPartner) score += 5;
+        score -= insForeign * 5;
+        if (outsMe) score += 1;
+        if (insAllPartner && (outs.length === 0 || outsMe)) score += 2;
+        if (!ins.length && !outs.length) score -= 2;
+        if (ins.length && !insAllPartner && insForeign === ins.length) score -= 2;
+      }
+      if (visible(group.pane)) score += 1;
+      group.score = score;
+      group.count = group.nodes.length;
+      if (score > bestScore ||
+          (score === bestScore && visible(group.pane) &&
+           !visible(groups[best].pane)) ||
+          (score === bestScore && visible(group.pane) ===
+           visible(groups[best].pane) && group.count > groups[best].count)) {
+        best = g; bestScore = score;
+      }
+    }
+    if (best < 0) best = 0;
+    return groups[best];
+  }
+
   function visiblePane() {
     var nodes = qsa(document, 'div.message-container');
     if (!nodes.length) {
       return { pane: qs(document, '.messages-root') ||
                      qs(document, 'app-messages'), nodes: nodes, panes: 0 };
     }
-    var panes = [], groups = [];
-    for (var i = 0; i < nodes.length; i++) {
-      var pane = paneOf(nodes[i]);
-      var at = panes.indexOf(pane);
-      if (at < 0) { panes.push(pane); groups.push([nodes[i]]); }
-      else groups[at].push(nodes[i]);
-    }
-    if (panes.length === 1) {
-      return { pane: panes[0], nodes: groups[0], panes: 1 };
-    }
-    var best = -1;
-    for (var g = 0; g < panes.length; g++) {
-      if (!visible(panes[g])) continue;
-      if (best < 0 || groups[g].length > groups[best].length) best = g;
-    }
-    if (best < 0) {                      // nothing measurably visible
-      best = 0;
-      for (var h = 1; h < groups.length; h++) {
-        if (groups[h].length > groups[best].length) best = h;
-      }
-    }
-    return { pane: panes[best], nodes: groups[best], panes: panes.length };
+    var groups = paneGroups(nodes);
+    var chosen = selectPane(nodes, groups);
+    return { pane: chosen.pane, nodes: chosen.nodes, panes: groups.length };
   }
 
   function containers() {
