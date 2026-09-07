@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="css/table.css">
 <link rel="stylesheet" href="css/composer.css">
 <link rel="stylesheet" href="css/history.css">
+<link rel="stylesheet" href="css/labels.css">
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
@@ -219,6 +220,10 @@
           <input type="checkbox" id="historyImagesToggle" checked> Images</label>
         <button id="historyFolderBtn" class="btn-small"
                 title="Open this person's saved images and GIFs (saved_media/<Nick>/images, /gifs)">📂 Files</button>
+        <button id="historyClearBtn" class="btn-small"
+                title="Delete this whole conversation but KEEP the person in the database (Ctrl+Z restores it)">🧹 Clear chat</button>
+        <button id="historyDeletePersonBtn" class="btn-small danger"
+                title="Remove this person together with their entire history (Ctrl+Z restores both)">🗑 Remove person</button>
       </div>
       <div class="history-header" id="historyHeader"></div>
       <div class="history-list" id="historyList"></div>
@@ -240,7 +245,7 @@
         <table class="userdb-table" id="userdbTable">
           <thead><tr>
             <th>Nick</th><th>Msgs</th><th>Media</th>
-            <th>First</th><th>Last</th><th>My nick</th>
+            <th>First</th><th>Last</th><th>My nick</th><th>Actions</th>
           </tr></thead>
           <tbody id="userdbBody"></tbody>
         </table>
@@ -272,6 +277,92 @@
         </div>
         <div class="collector-log" id="collectorLog"
              title="Collector / history parsing attempts for this window only"></div>
+      </div>
+    </div>
+
+
+    <!-- LABEL MANAGER — create, colour, filter and assign person labels -->
+    <div class="panel labels-panel" id="winLabels" data-window="labels">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">sell</span> Label Manager
+        <span class="spacer"></span>
+        <span id="labelFilterState" class="label-filter-state">No label filter</span>
+      </h3>
+      <div class="labels-body">
+
+        <section class="label-section">
+          <div class="label-section-title">Active Labels
+            <span class="label-section-hint">✕ deletes the label everywhere</span>
+          </div>
+          <div class="label-chip-row" id="labelActiveList"></div>
+        </section>
+
+        <section class="label-section">
+          <div class="label-section-title">Create New Label</div>
+          <div class="label-create-row">
+            <input id="labelNameInput" class="label-input" type="text"
+                   spellcheck="false" autocomplete="off" maxlength="40"
+                   placeholder="Label name, e.g. Rude">
+            <button id="labelColorBtn" class="label-color-btn" type="button"
+                    title="Pick the label colour"></button>
+            <button id="labelAddBtn" class="btn-small btn-primary" type="button"
+                    title="Create this label">+ Add Label</button>
+          </div>
+        </section>
+
+        <section class="label-section">
+          <div class="label-section-title">Filter By Labels
+            <span class="label-section-hint">applies to both tables and to auto-messaging</span>
+          </div>
+          <div class="label-filter-buttons">
+            <button id="labelIncludeBtn" class="btn-small label-inc" type="button"
+                    title="Only people carrying the ticked labels are shown and messaged">Include Selected</button>
+            <button id="labelExcludeBtn" class="btn-small label-exc" type="button"
+                    title="People carrying the ticked labels are skipped — e.g. ignore “Rude”">Exclude Selected</button>
+            <button id="labelClearFilterBtn" class="btn-small" type="button"
+                    title="Remove the label filter">Clear</button>
+          </div>
+          <div class="label-check-list" id="labelFilterList"></div>
+        </section>
+
+        <section class="label-section">
+          <div class="label-section-title">Assign To Person
+            <span class="label-section-hint" id="labelAssignHint">No person selected</span>
+          </div>
+          <div class="label-assign-row">
+            <select id="labelPersonSelect" class="label-select"
+                    title="Follows whichever person you select in People, Storage or Person History"></select>
+            <button id="labelAssignBtn" class="btn-small btn-primary" type="button"
+                    title="Give this person exactly the ticked labels">Assign</button>
+          </div>
+          <div class="label-check-list" id="labelAssignList"></div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- DB CONNECTION — create / load / delete / clean the history database -->
+    <div class="panel dbconn-panel" id="winDbconn" data-window="dbconn">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">dns</span> DB Connection
+        <span class="spacer"></span>
+        <button id="dbRefreshBtn" class="btn-icon-sm" title="Re-measure the database"><span class="material-icons">refresh</span></button>
+      </h3>
+      <div class="dbconn-body">
+        <div class="db-active" id="dbActivePath"></div>
+        <div class="db-stats" id="dbStatsGrid"></div>
+
+        <div class="db-section-title">Databases</div>
+        <div class="db-list" id="dbFileList"></div>
+
+        <div class="db-actions">
+          <input id="dbNewNameInput" class="label-input" type="text"
+                 spellcheck="false" autocomplete="off" maxlength="60"
+                 placeholder="New database name…">
+          <button id="dbCreateBtn" class="btn-small btn-primary" type="button"
+                  title="Create an empty database and connect to it">＋ Create</button>
+          <button id="dbCleanBtn" class="btn-small danger" type="button"
+                  title="Empty the connected database (a backup goes to db_trash — undoable)">🧹 Clean DB</button>
+        </div>
+        <div class="db-status" id="dbConnStatus"></div>
       </div>
     </div>
 
@@ -353,5 +444,8 @@
 <script src="js/history-store.js"></script>
 <script src="js/history-db.js"></script>
 <script src="js/collector-panel.js"></script>
+<script src="js/color-picker.js"></script>
+<script src="js/labels.js"></script>
+<script src="js/db-panel.js"></script>
 </body>
 </html>

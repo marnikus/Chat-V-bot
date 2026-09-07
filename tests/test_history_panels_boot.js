@@ -60,6 +60,12 @@ function mkEl(tag) {
       cs.forEach((c) => el.appendChild(typeof c === 'string' ? mkText(c) : c));
     },
     replaceChildren(...cs) { el.children = []; el.append(...cs); },
+    removeChild(c) {
+      el.children = el.children.filter((n) => n !== c);
+      c.parentNode = null;
+      return c;
+    },
+    remove() { if (el.parentNode) el.parentNode.removeChild(el); },
     setAttribute(k, v) { el.attrs[k] = String(v); },
     getAttribute(k) { return k in el.attrs ? el.attrs[k] : null; },
     addEventListener(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
@@ -122,6 +128,8 @@ function findAll(el, sel) {
 
 const byId = {};
 global.document = {
+  // the floating colour picker attaches itself to the page body
+  body: mkEl('body'),
   createElement: mkEl,
   createTextNode: mkText,
   getElementById(id) {
@@ -132,6 +140,7 @@ global.document = {
   querySelector: () => null,
   querySelectorAll: () => [],
   addEventListener() {},
+  removeEventListener() {},
   activeElement: null,
 };
 global.window = global;
@@ -140,6 +149,12 @@ global.getSelection = () => '';
 // ── bridge stub (records every call, replays the answers) ────────
 
 const calls = [];
+const LABEL_STATE = {
+  defs: [{ id: 'lbl_1', name: 'Rude', color: '#ff3b30' },
+         { id: 'lbl_2', name: 'VIP', color: '#34c759' }],
+  assign: { 'Ангелина': ['lbl_1'] },
+  filter: { include: [], exclude: [] },
+};
 function slot(name) {
   return function (...args) {
     calls.push({ name, args });
@@ -155,6 +170,22 @@ global.App = {
     userdb_page: slot('userdb_page'),
     userdb_stats: slot('userdb_stats'),
     history_delete_person: slot('history_delete_person'),
+    history_clear_person: slot('history_clear_person'),
+    history_delete_message: slot('history_delete_message'),
+    get_labels: (cb) => { calls.push({ name: 'get_labels', args: [] });
+                          cb(JSON.stringify(LABEL_STATE)); },
+    label_create: slot('label_create'),
+    label_delete: slot('label_delete'),
+    label_assign: slot('label_assign'),
+    label_unassign: slot('label_unassign'),
+    label_set_for: slot('label_set_for'),
+    label_set_filter: slot('label_set_filter'),
+    label_clear_filter: slot('label_clear_filter'),
+    db_info: slot('db_info'),
+    db_create: slot('db_create'),
+    db_load: slot('db_load'),
+    db_delete: slot('db_delete'),
+    db_clean: slot('db_clean'),
     copy_media: slot('copy_media'),
     media_restore: slot('media_restore'),
     media_path: slot('media_path'),
@@ -184,6 +215,15 @@ global.HistoryView = load('js/history-view.js', 'HistoryView');
 global.HistoryStore = load('js/history-store.js', 'HistoryStore');
 global.HistoryDb = load('js/history-db.js', 'HistoryDb');
 global.CollectorPanel = load('js/collector-panel.js', 'CollectorPanel');
+global.ColorPicker = load('js/color-picker.js', 'ColorPicker');
+global.Labels = load('js/labels.js', 'Labels');
+global.DbPanel = load('js/db-panel.js', 'DbPanel');
+global.PresetsUI = {
+  confirm(title, text, okLabel, onYes) {
+    calls.push({ name: 'confirm', args: [title, text] });
+    onYes();
+  },
+};
 
 // ── assertion kit ────────────────────────────────────────────────
 
@@ -524,6 +564,124 @@ t('the settings toggles are sent as a patch', () => {
   beat.value = '2222';
   beat.fire('change');
   eq(JSON.parse(named('collector_set').pop().args[0]), { heartbeat_ms: 2222 });
+});
+
+// ═════════════════════════════════════════════════════════════════
+// the Label Manager and DB Connection windows boot against the page
+// ═════════════════════════════════════════════════════════════════
+
+t('the Label Manager finds every element it needs and loads the labels', () => {
+  Labels.init();
+  eq(named('get_labels').length, 1, 'the state is requested on boot');
+  const active = document.getElementById('labelActiveList');
+  ok(active.textContent.includes('Rude'), active.textContent);
+  ok(active.textContent.includes('VIP'), active.textContent);
+});
+
+t('the DB Connection window asks for the sizes on boot', () => {
+  DbPanel.init();
+  eq(named('db_info').length, 1);
+  const req = named('db_info').pop().args[0];
+  DbPanel.onInfo(req, JSON.stringify({
+    req_id: req, path: '/app/history.db', connected: true,
+    db_bytes: 2048, text_bytes: 1024, media_bytes: 4096, media_files: 2,
+    persons: 3, messages: 40, messages_hidden: 0, total_bytes: 6144,
+    items: [{ path: '/app/history.db', name: 'history.db', bytes: 2048,
+              exists: true, active: true }] }));
+  const stats = document.getElementById('dbStatsGrid');
+  ok(stats.textContent.includes('Full DB size'), stats.textContent);
+  ok(document.getElementById('dbActivePath').textContent.includes('history.db'));
+});
+
+t('a label pill with its ✕ shows next to the nick in the database table', () => {
+  const req = named('userdb_page').pop().args[0];
+  HistoryDb.onPage(req, JSON.stringify({
+    items: [{ nick: 'Ангелина', message_count: 3, media_count: 0,
+              first_seen: '2026-09-01 10:00:00',
+              last_seen: '2026-09-07 12:00:00', my_nicks: ['Me'] }],
+    total: 1, has_more: false, offset: 0 }));
+  const row = document.getElementById('userdbBody').querySelector('.userdb-row');
+  ok(row.textContent.includes('Rude'), 'the pill is drawn: ' + row.textContent);
+  const x = row.querySelector('.label-pill-x');
+  ok(x, 'the pill carries an ✕');
+  x.fire('click');
+  eq(named('label_unassign').pop().args, ['Ангелина', 'lbl_1'],
+     'the ✕ only detaches the label from this person');
+});
+
+t('the database row can clear a chat or remove the person', () => {
+  const row = document.getElementById('userdbBody').querySelector('.userdb-row');
+  const buttons = row.querySelectorAll('.btn-row');
+  ok(buttons.length >= 3, 'label / clear / delete');
+  const body = document.getElementById('userdbBody');
+  const fireOn = (action) => {
+    const btn = buttons.filter((b) => b.dataset.action === action)[0];
+    ok(btn, 'a button for ' + action);
+    body.fire('click', { target: btn });
+  };
+  fireOn('clear');
+  eq(named('history_clear_person').pop().args, ['Ангелина']);
+  fireOn('delete');
+  eq(named('history_delete_person').pop().args, ['Ангелина', false]);
+});
+
+t('clicking a nick points the Label Manager at that person', () => {
+  const body = document.getElementById('userdbBody');
+  const row = body.querySelector('.userdb-row');
+  body.fire('click', { target: row });
+  eq(Labels.person, 'Ангелина');
+  const hint = document.getElementById('labelAssignHint');
+  ok(hint.textContent.includes('Ангелина'), hint.textContent);
+});
+
+t('a single message can be removed from the open conversation', () => {
+  HistoryStore.openPerson('Ангелина');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({
+    nick: 'Ангелина', my_nick: 'Me',
+    items: [{ id: 41, ord: 1, dir: 'in', from: 'Ангелина', text: 'hi',
+              time: '10:00', day: '2026-09-07' },
+            { id: 42, ord: 2, dir: 'out', from: 'Me', text: 'hello',
+              time: '10:01', day: '2026-09-07' }],
+    has_older: false, has_newer: false, stats: { messages: 2 } }));
+  const list = document.getElementById('historyList');
+  const dels = list.querySelectorAll('.msg-del');
+  eq(dels.length, 2, 'every message offers a delete');
+  dels[1].fire('click');
+  eq(named('history_delete_message').pop().args, ['Ангелина', '42']);
+});
+
+t('the toolbar can clear the chat or remove the person, with a confirmation', () => {
+  document.getElementById('historyClearBtn').fire('click');
+  ok(named('confirm').length >= 1, 'the user is asked first');
+  eq(named('history_clear_person').pop().args, ['Ангелина']);
+  document.getElementById('historyDeletePersonBtn').fire('click');
+  eq(named('history_delete_person').pop().args, ['Ангелина', false]);
+});
+
+t('creating a label from the manager reaches the backend', () => {
+  const input = document.getElementById('labelNameInput');
+  input.value = 'Ignoring';
+  document.getElementById('labelAddBtn').fire('click');
+  const call = named('label_create').pop();
+  eq(call.args[0], 'Ignoring');
+  ok(/^#[0-9a-f]{6}$/i.test(call.args[1]), 'a colour travels with it');
+});
+
+t('the colour button opens the movable picker', () => {
+  document.getElementById('labelColorBtn').fire('click');
+  ok(ColorPicker.isOpen, 'the picker is open');
+  ColorPicker.cancel();
+  ok(!ColorPicker.isOpen);
+});
+
+t('the filter buttons send an include/exclude rule', () => {
+  Labels.selected = new Set(['lbl_1']);
+  document.getElementById('labelExcludeBtn').fire('click');
+  eq(JSON.parse(named('label_set_filter').pop().args[0]),
+     { include: [], exclude: ['lbl_1'] });
+  document.getElementById('labelClearFilterBtn').fire('click');
+  eq(named('label_clear_filter').length, 1);
 });
 
 // ── reporting ────────────────────────────────────────────────────

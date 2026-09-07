@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta
 from typing import Iterable, Optional, Sequence
 
@@ -639,13 +640,17 @@ class HistoryRepo:
         await self.db.commit()
 
     async def _recount(self, person_id: int, my_nick: str = "") -> None:
+        # Counters describe what the user can SEE, so hidden (soft-deleted)
+        # rows are excluded — while `last_ord` still spans every row so a
+        # deletion can never make the next append reuse an ord.
         row = await self.db.fetchone(
             "SELECT COUNT(*) AS n, "
             "SUM(direction='in') AS ins, SUM(direction='out') AS outs, "
             "SUM(media_id IS NOT NULL) AS media, "
             "MIN(ts_resolved) AS first_ts, MAX(ts_resolved) AS last_ts, "
-            "MAX(ord) AS last_ord FROM messages WHERE person_id=?",
-            (person_id,))
+            "(SELECT MAX(ord) FROM messages WHERE person_id=?) AS last_ord "
+            "FROM messages WHERE person_id=? AND deleted_at=''",
+            (person_id, person_id))
         person = await self.get_person_by_id(person_id) or {}
         nicks = list(person.get("my_nicks") or [])
         clean = self.normalise_nick(my_nick)
@@ -663,7 +668,101 @@ class HistoryRepo:
         await self.db.commit()
 
     # ── lifecycle ────────────────────────────────────────────────
-    async def delete_person(self, nick: str, hard: bool = False) -> bool:
+    @staticmethod
+    def new_op_token() -> str:
+        """One stamp shared by every row of a single delete operation.
+
+        Undo is then a single `WHERE deleted_at=?` update, so the history
+        entry stays tiny no matter how many messages were hidden.
+        """
+        return (datetime.now().isoformat(timespec="seconds") + "#" +
+                uuid.uuid4().hex[:8])
+
+    async def soft_delete_message(self, nick: str, message_id: int,
+                                  token: str = "") -> str:
+        """Hide ONE message. Returns the token that reverses it ('' = no-op)."""
+        person = await self.get_person(nick)
+        if not person:
+            return ""
+        stamp = token or self.new_op_token()
+        cur = await self.db.execute(
+            "UPDATE messages SET deleted_at=? "
+            "WHERE id=? AND person_id=? AND deleted_at=''",
+            (stamp, int(message_id), int(person["id"])))
+        if not cur.rowcount:
+            await self.db.commit()
+            return ""
+        await self.db.commit()
+        await self._recount(int(person["id"]))
+        return stamp
+
+    async def soft_delete_history(self, nick: str, token: str = "") -> str:
+        """Hide every visible message of a person, keeping the person."""
+        person = await self.get_person(nick)
+        if not person:
+            return ""
+        stamp = token or self.new_op_token()
+        cur = await self.db.execute(
+            "UPDATE messages SET deleted_at=? WHERE person_id=? AND deleted_at=''",
+            (stamp, int(person["id"])))
+        hidden = int(cur.rowcount or 0)
+        await self.db.commit()
+        if not hidden:
+            return ""
+        await self._recount(int(person["id"]))
+        return stamp
+
+    async def restore_deleted(self, nick: str, token: str) -> int:
+        """Exact reversal of one delete operation. Returns rows restored."""
+        person = await self.get_person(nick)
+        if not person or not token:
+            return 0
+        cur = await self.db.execute(
+            "UPDATE messages SET deleted_at='' WHERE person_id=? AND deleted_at=?",
+            (int(person["id"]), str(token)))
+        restored = int(cur.rowcount or 0)
+        await self.db.commit()
+        if restored:
+            await self._recount(int(person["id"]))
+        return restored
+
+    async def deleted_count(self, nick: str = "") -> int:
+        if nick:
+            person = await self.get_person(nick)
+            if not person:
+                return 0
+            return int(await self.db.scalar(
+                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+                "deleted_at<>''", (int(person["id"]),), 0))
+        return int(await self.db.scalar(
+            "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0))
+
+    async def purge_deleted(self, nick: str = "") -> int:
+        """Erase hidden rows for good — the ONLY path that removes bytes."""
+        params: tuple = ()
+        sql = "DELETE FROM messages WHERE deleted_at<>''"
+        person = None
+        if nick:
+            person = await self.get_person(nick)
+            if not person:
+                return 0
+            sql += " AND person_id=?"
+            params = (int(person["id"]),)
+        before = await self.deleted_count(nick)
+        await self.db.execute(sql, params)
+        await self.db.commit()
+        if person:
+            await self._recount(int(person["id"]))
+        return before
+
+    async def delete_person(self, nick: str, hard: bool = False,
+                            token: str = "") -> bool:
+        """Remove a person WITH their history.
+
+        Soft (the default) tombstones the person and hides every message
+        under one token, so a single Ctrl+Z brings both halves back. `hard`
+        erases the rows — used only by an explicit purge.
+        """
         person = await self.get_person(nick)
         if not person:
             return False
@@ -674,19 +773,31 @@ class HistoryRepo:
             await self.db.execute("DELETE FROM gaps WHERE person_id=?", (pid,))
             await self.db.execute("DELETE FROM persons WHERE id=?", (pid,))
         else:
+            stamp = token or self.new_op_token()
             await self.db.execute(
-                "UPDATE persons SET deleted_at=? WHERE id=?",
-                (datetime.now().isoformat(timespec="seconds"), pid))
+                "UPDATE messages SET deleted_at=? WHERE person_id=? AND "
+                "deleted_at=''", (stamp, pid))
+            await self.db.execute(
+                "UPDATE persons SET deleted_at=? WHERE id=?", (stamp, pid))
         await self.db.commit()
+        if not hard:
+            await self._recount(pid)
         return True
 
-    async def restore_person(self, nick: str) -> bool:
+    async def restore_person(self, nick: str, token: str = "") -> bool:
         person = await self.get_person(nick)
         if not person:
             return False
+        pid = int(person["id"])
+        stamp = token or (person.get("deleted_at") or "")
+        if stamp:
+            await self.db.execute(
+                "UPDATE messages SET deleted_at='' WHERE person_id=? AND "
+                "deleted_at=?", (pid, str(stamp)))
         await self.db.execute("UPDATE persons SET deleted_at=NULL WHERE id=?",
-                              (int(person["id"]),))
+                              (pid,))
         await self.db.commit()
+        await self._recount(pid)
         return True
 
     async def merge_persons(self, from_nick: str, into_nick: str) -> int:

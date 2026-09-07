@@ -12,6 +12,8 @@ from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine, normalize_blocks
 from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
+from backend.db_manager import DbManager
+from backend.label_store import LabelStore
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
 
@@ -52,6 +54,10 @@ class Bridge(QObject):
     history_appended = Signal(str)           # JSON {nick, items, added}
     my_nick_changed = Signal(str)            # the configured "my nick"
     history_error = Signal(str, str)         # scope, message
+    # ── person labels / database management ──
+    labels_changed = Signal(str)             # JSON: the whole labels state
+    db_info_ready = Signal(str, str)         # req_id, JSON db size info
+    db_changed = Signal(str)                 # JSON {action, path, ok}
 
     def __init__(self, cdp, memory, criteria, engine, config,
                  presets: PresetStore | None = None, parent=None):
@@ -63,6 +69,11 @@ class Bridge(QObject):
         self._history = None                 # set by attach_history()
         self._presets = presets or PresetStore(config=self._config)
         self._presets.import_legacy()
+        # Person labels live in the same single settings file; the run queue
+        # asks them who may be worked on.
+        self._labels = LabelStore(self._config)
+        self._dbs = DbManager(config=self._config)
+        self._install_label_guard()
         self._cdp.connected.connect(lambda: self.connection_status.emit("connected"))
         self._cdp.disconnected.connect(lambda: self.connection_status.emit("disconnected"))
         self._cdp.error.connect(lambda e: self.connection_status.emit("error"))
@@ -158,6 +169,149 @@ class Bridge(QObject):
                                   "error")
         await self._refresh_users()
 
+    # ── person labels ────────────────────────────────────────────
+    @property
+    def label_store(self) -> LabelStore:
+        """Lazily built so hand-assembled Bridges (tests) work unchanged."""
+        store = getattr(self, "_labels", None)
+        if store is None:
+            store = LabelStore(self._config)
+            self._labels = store
+        return store
+
+    @property
+    def db_manager(self) -> DbManager:
+        manager = getattr(self, "_dbs", None)
+        if manager is None:
+            manager = DbManager(config=self._config)
+            self._dbs = manager
+        return manager
+
+    def _install_label_guard(self) -> None:
+        """Let a run skip people carrying an excluded label."""
+        engine = getattr(self, "_engine", None)
+        if engine is None:
+            return
+        try:
+            engine.label_filter = self.label_store.allows
+            engine.label_reason = self.label_store.reject_reason
+        except Exception as exc:                      # noqa: BLE001
+            log.debug("label guard not installed: %s", exc)
+
+    def _emit_labels(self) -> None:
+        state = self.label_store.state()
+        self.labels_changed.emit(json.dumps(state, ensure_ascii=False))
+
+    def _labels_edit(self, mutate, message: str = "") -> bool:
+        """Run a labels mutation as ONE reversible entry of the timeline.
+
+        Every label action (create/delete/recolour/assign/unassign/filter)
+        stores the section before and after, so a single Ctrl+Z reverses it
+        no matter what other panels edited in between (RULE 12).
+        """
+        store = self.label_store
+        before = store.snapshot()
+        changed = bool(mutate(store))
+        if not changed:
+            return False
+        after = store.snapshot()
+        if self._values_equal(before, after):
+            return False
+        self._push_global("labels", {"before": before, "after": after})
+        self._emit_labels()
+        if message:
+            self.log_message.emit(message, "info")
+        # Labels can hide people from the queue, so the # column changes.
+        self._schedule(self._refresh_users())
+        return True
+
+    def _labels_for_nicks(self, nicks) -> dict:
+        try:
+            return self.label_store.labels_map(nicks)
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("labels unavailable: %s", exc)
+            return {}
+
+    @Slot(result=str)
+    def get_labels(self):
+        """The whole labels state: definitions, assignment map, filter."""
+        return json.dumps(self.label_store.state(), ensure_ascii=False)
+
+    @Slot(str, str, result=str)
+    def label_create(self, name, color):
+        created = {}
+
+        def mutate(store):
+            made = store.create(name, color)
+            if made:
+                created.update(made)
+            return bool(made)
+
+        if not self._labels_edit(mutate, ""):
+            self.log_message.emit(
+                f"⚠ Label “{name}” already exists (or has no name)", "warn")
+            return "null"
+        self.log_message.emit(f"🏷 Label “{created.get('name')}” created",
+                              "success")
+        return json.dumps(created, ensure_ascii=False)
+
+    @Slot(str, str, str, result=bool)
+    def label_update(self, label_id, name, color):
+        return self._labels_edit(
+            lambda store: bool(store.update(label_id,
+                                            name if name else None,
+                                            color if color else None)),
+            "🏷 Label updated")
+
+    @Slot(str, result=bool)
+    def label_delete(self, label_id):
+        label = self.label_store.by_id(label_id)
+        title = label["name"] if label else label_id
+        return self._labels_edit(lambda store: store.delete(label_id),
+                                 f"🗑 Label “{title}” removed everywhere")
+
+    @Slot(str, str, result=bool)
+    def label_assign(self, nick, label_id):
+        return self._labels_edit(lambda store: store.assign(nick, label_id),
+                                 "")
+
+    @Slot(str, str, result=bool)
+    def label_unassign(self, nick, label_id):
+        return self._labels_edit(lambda store: store.unassign(nick, label_id),
+                                 "")
+
+    @Slot(str, str, result=bool)
+    def label_set_for(self, nick, ids_json):
+        try:
+            ids = json.loads(ids_json or "[]")
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(ids, list):
+            return False
+        return self._labels_edit(lambda store: store.set_for(nick, ids),
+                                 f"🏷 Labels of “{nick}” updated")
+
+    @Slot(str, result=bool)
+    def label_set_filter(self, rule_json):
+        try:
+            rule = json.loads(rule_json or "{}")
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(rule, dict):
+            return False
+        include = rule.get("include") or []
+        exclude = rule.get("exclude") or []
+        return self._labels_edit(
+            lambda store: store.set_filter(include, exclude) is not None,
+            "🏷 Label filter updated")
+
+    @Slot(result=bool)
+    def label_clear_filter(self):
+        return self._labels_edit(
+            lambda store: bool(store.filter_active) and
+            store.clear_filter() is not None,
+            "🏷 Label filter cleared")
+
     # ── one global undo history ─────────────────────────────────
     # Stack edits and grid edits share this timeline.  The old stack/grid
     # histories are accepted only as a one-time migration source; no new
@@ -200,6 +354,10 @@ class Bridge(QObject):
                     if isinstance(value.get("before"), list) and \
                             isinstance(value.get("after"), list):
                         history.append(self._history_entry("people", value))
+                elif (entry.get("kind") in ("labels", "archive", "dbconn")
+                        and isinstance(entry.get("value"), dict)):
+                    history.append(self._history_entry(entry["kind"],
+                                                       entry["value"]))
             index = self._config.get_state("undo_history_index", len(history) - 1)
             index = index if isinstance(index, int) else len(history) - 1
             index = max(-1, min(index, len(history) - 1))
@@ -261,8 +419,20 @@ class Bridge(QObject):
         self._config.set_state(undo_history=copy.deepcopy(history),
                                undo_history_index=index)
 
+    #: Entries that are reversible COMMANDS ({before, after} or an op
+    #: description) rather than full state snapshots. Undoing the tip of one
+    #: of these reverses it in a single step; stack/grid entries are
+    #: snapshots and are undone by stepping back onto the previous one.
+    COMMAND_KINDS = ("people", "labels", "archive", "dbconn")
+    #: how each command kind is described in the log line
+    UNDO_LABELS = {"people": "people list restored",
+                   "labels": "labels restored",
+                   "archive": "archive restored",
+                   "dbconn": "database restored"}
+    HISTORY_KINDS = ("stack", "grid") + COMMAND_KINDS
+
     def _push_global(self, kind: str, value) -> tuple[list, int]:
-        if kind not in ("stack", "grid", "people"):
+        if kind not in self.HISTORY_KINDS:
             raise ValueError(f"unknown history kind: {kind}")
         history, index = self._get_global_history()
         entry = self._history_entry(kind, value)
@@ -319,11 +489,16 @@ class Bridge(QObject):
         return self._get_hist(kind)
 
     # ── grid layout (flexible grid / sash layout) ────────────────
-    LEGACY_WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
-                         "people", "log"}
-    NEW_WINDOW_IDS = {"history", "userdb", "collector"}
-    WINDOW_IDS = LEGACY_WINDOW_IDS | NEW_WINDOW_IDS
-    GRID_VERSION = 2
+    #: window sets per layout version — an older payload is UPGRADED, never
+    #: rejected, so nobody loses their arrangement on an app update
+    V1_WINDOW_IDS = {"stats", "filters", "stack", "config", "composer",
+                     "people", "log"}
+    V2_WINDOW_IDS = V1_WINDOW_IDS | {"history", "userdb", "collector"}
+    V3_WINDOW_IDS = V2_WINDOW_IDS | {"labels", "dbconn"}
+    LEGACY_WINDOW_IDS = V1_WINDOW_IDS            # kept for older callers
+    NEW_WINDOW_IDS = V3_WINDOW_IDS - V1_WINDOW_IDS
+    WINDOW_IDS = V3_WINDOW_IDS
+    GRID_VERSION = 3
     MIN_GRID_SIZE = 4
 
     @classmethod
@@ -397,15 +572,16 @@ class Bridge(QObject):
         if not isinstance(data, dict):
             return None, "payload must be an object"
         version = data.get("v")
-        if version not in (1, cls.GRID_VERSION):
+        if not isinstance(version, int) or not 1 <= version <= cls.GRID_VERSION:
             return None, f"unsupported version {version!r}"
         tree, err = cls._normalize_grid_tree(data.get("tree"))
         if err:
             return None, err
         got = sorted(i for i in cls._leaf_ids(tree) if i)
-        if version == 1 and got == sorted(cls.LEGACY_WINDOW_IDS):
-            # A layout saved before the archive windows existed. Rejecting it
-            # would throw away the user's arrangement on first start after the
+        known = {1: sorted(cls.V1_WINDOW_IDS), 2: sorted(cls.V2_WINDOW_IDS)}
+        if version < cls.GRID_VERSION and got == known.get(version):
+            # A layout saved before newer windows existed. Rejecting it would
+            # throw away the user's arrangement on first start after the
             # update, so it is upgraded instead.
             tree = cls._migrate_grid_tree(tree)
             got = sorted(i for i in cls._leaf_ids(tree) if i)
@@ -415,15 +591,27 @@ class Bridge(QObject):
 
     @classmethod
     def _migrate_grid_tree(cls, tree: dict) -> dict:
-        """v1 → v2: keep the arrangement, add the three archive windows."""
-        return {"t": "split", "dir": "col", "children": [
-            tree,
-            {"t": "split", "dir": "row", "children": [
-                {"t": "leaf", "id": "history"},
-                {"t": "leaf", "id": "userdb"},
-                {"t": "leaf", "id": "collector"},
-            ], "sizes": [40, 35, 25]},
-        ], "sizes": [74, 26]}
+        """Keep the stored arrangement and append whatever windows are new.
+
+        Works for any older version: the missing windows become one extra
+        row along the bottom (mirrors SashCore.migrate() in the UI).
+        """
+        present = {i for i in cls._leaf_ids(tree) if i}
+        missing = [i for i in sorted(cls.WINDOW_IDS) if i not in present]
+        if not missing:
+            return tree
+        if len(missing) == 1:
+            extra = {"t": "leaf", "id": missing[0]}
+        else:
+            share = round(100 / len(missing), 4)
+            sizes = [share] * len(missing)
+            sizes[0] = round(100 - share * (len(missing) - 1), 4)
+            extra = {"t": "split", "dir": "row",
+                     "children": [{"t": "leaf", "id": i} for i in missing],
+                     "sizes": sizes}
+        room = min(40, max(cls.MIN_GRID_SIZE, len(missing) * 9))
+        return {"t": "split", "dir": "col", "children": [tree, extra],
+                "sizes": [100 - room, room]}
 
     @classmethod
     def _canonical_grid_payload(cls, raw: str):
@@ -599,16 +787,129 @@ class Bridge(QObject):
             result["index"] = index
         return json.dumps(result, ensure_ascii=False)
 
+    # ── reversible commands (people / labels / archive / dbconn) ─
+    def _apply_command(self, entry, forward: bool) -> bool:
+        """Apply one command entry forward (redo) or backward (undo)."""
+        kind = entry.get("kind")
+        value = entry.get("value")
+        if not isinstance(value, dict):
+            return False
+        if kind == "people":
+            rows = value.get("after" if forward else "before")
+            if rows is None:
+                return False
+            self._apply_people(rows)
+            return True
+        if kind == "labels":
+            snapshot = value.get("after" if forward else "before")
+            if not isinstance(snapshot, dict):
+                return False
+            self.label_store.restore(snapshot)
+            self._emit_labels()
+            self._schedule(self._refresh_users())
+            return True
+        if kind == "archive":
+            return self._apply_archive_command(value, forward)
+        if kind == "dbconn":
+            return self._apply_db_command(value, forward)
+        return False
+
+    def _apply_archive_command(self, value: dict, forward: bool) -> bool:
+        """Re-apply / reverse a message, chat or person deletion.
+
+        Deletions are soft: rows are stamped with one operation token, so the
+        reversal is a single UPDATE and the undo entry never has to carry a
+        message body (see docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN).
+        """
+        archive = self._archive
+        op = str(value.get("op") or "")
+        nick = str(value.get("nick") or "")
+        token = str(value.get("token") or "")
+        people = value.get("people") if isinstance(value.get("people"), dict) else None
+        if people is not None:
+            rows = people.get("after" if forward else "before")
+            if isinstance(rows, list):
+                self._apply_people(rows)
+        if archive is None:
+            if op:
+                self.history_error.emit(
+                    "archive_undo", "the message archive is not running")
+            return people is not None
+
+        async def work():
+            repo = archive.repo
+            if forward:
+                if op == "delete_message":
+                    await repo.soft_delete_message(
+                        nick, int(value.get("message_id") or 0), token=token)
+                elif op == "clear_history":
+                    await repo.soft_delete_history(nick, token=token)
+                elif op == "delete_person":
+                    await repo.delete_person(nick, hard=False, token=token)
+            else:
+                if op == "delete_person":
+                    await repo.restore_person(nick, token=token)
+                else:
+                    await repo.restore_deleted(nick, token)
+            self.userdb_changed.emit(json.dumps(
+                {"action": "undo" if not forward else "redo", "op": op,
+                 "nick": nick}, ensure_ascii=False))
+        self._run_async("archive_undo", work())
+        return True
+
+    def _apply_db_command(self, value: dict, forward: bool) -> bool:
+        """Re-apply / reverse a DB Connection action."""
+        op = str(value.get("op") or "")
+        path = str(value.get("path") or "")
+        before_path = str(value.get("before_path") or "")
+        backup = str(value.get("backup") or "")
+        manager = self.db_manager
+
+        async def work():
+            if forward:
+                if op in ("create", "load"):
+                    result = await manager.load(path, create=(op == "create"))
+                elif op == "delete":
+                    result = await manager.delete(path)
+                elif op == "clean":
+                    result = await manager.clean()
+                else:
+                    return
+            else:
+                if op in ("create", "load"):
+                    result = await manager.load(before_path)
+                elif op in ("delete", "clean"):
+                    result = await manager.restore_backup(backup, path)
+                else:
+                    return
+            self._emit_db_change(op, result)
+        self._run_async("db_undo", work())
+        return True
+
+    def _emit_db_change(self, action: str, result) -> None:
+        payload = dict(result or {})
+        payload["action"] = action
+        self.db_changed.emit(json.dumps(payload, ensure_ascii=False))
+        self.userdb_changed.emit(json.dumps(
+            {"action": "db_" + action, "ok": bool(payload.get("ok"))},
+            ensure_ascii=False))
+        if payload.get("error"):
+            self.log_message.emit("⚠ " + str(payload["error"]), "warn")
+
     def _apply_global_entry(self, entry):
         """Apply the state represented by a history entry.
 
-        Stack/grid entries carry their after-state snapshot. A people entry
-        carries {"before":…, "after":…}; when an undo/redo walk reaches it as
-        the state to step ONTO, the after-state is the surface state at that
-        point in the timeline (the tip-reversal case is handled separately by
+        Stack/grid entries carry their after-state snapshot. A COMMAND entry
+        (people/labels/archive/dbconn) carries {"before":…, "after":…} or an
+        op description; when an undo/redo walk reaches it as the state to
+        step ONTO, its FORWARD half is the surface state at that point in the
+        timeline (the tip-reversal case is handled separately by
         undo()/redo(), which apply the matching half).
         """
         kind = entry.get("kind")
+        if kind in ("labels", "archive", "dbconn"):
+            self._apply_command(entry, forward=True)
+            return
         if kind == "grid":
             self._config.set_state(grid_layout=entry["value"])
             self.grid_layout_changed.emit(entry["value"])
@@ -624,7 +925,7 @@ class Bridge(QObject):
             self.stack_loaded.emit("", json.dumps(blocks, ensure_ascii=False))
             # Undo/redo of a stack edit can change the enabled Scroll & Parse
             # presence — re-rank the people list's # column to match.
-            asyncio.ensure_future(self._refresh_users())
+            self._schedule(self._refresh_users())
 
     @Slot(result=str)
     def undo(self):
@@ -633,24 +934,25 @@ class Bridge(QObject):
             self.log_message.emit("⚠ Nothing to undo", "warn")
             return "null"
         entry = history[index]
-        # People entries are reversible commands: undoing the TIP entry must
-        # restore the pre-edit list in a single step even when stack/grid
-        # edits surround it in the timeline — and even when the people edit
-        # is the FIRST entry of a fresh timeline (index 0 / nothing before).
-        if entry.get("kind") == "people":
-            value = entry.get("value")
-            before = value.get("before") if isinstance(value, dict) else None
-            if before is None:
+        # Command entries are reversible: undoing the TIP entry must reverse
+        # it in a single step even when stack/grid edits surround it in the
+        # timeline — and even when it is the FIRST entry of a fresh timeline
+        # (index 0 / nothing before).
+        if entry.get("kind") in self.COMMAND_KINDS:
+            if not self._apply_command(entry, forward=False):
                 self.log_message.emit("⚠ Nothing to undo", "warn")
                 return "null"
-            self._apply_people(before)
             index -= 1
             self._set_global_history(history, index)
             self.history_changed.emit()
-            self.log_message.emit("↩ Undo — people list restored", "info")
-            result = {"kind": "people", "value": before}
-            if index is not None:
-                result["index"] = index
+            kind = entry["kind"]
+            self.log_message.emit(
+                "↩ Undo — " + self.UNDO_LABELS.get(kind, kind + " restored"),
+                "info")
+            value = entry.get("value") or {}
+            payload = (value.get("before") if kind in ("people", "labels")
+                       else value)
+            result = {"kind": kind, "value": payload, "index": index}
             return json.dumps(result, ensure_ascii=False)
         if index <= 0:
             self.log_message.emit("⚠ Nothing to undo", "warn")
@@ -671,19 +973,20 @@ class Bridge(QObject):
             return "null"
         index += 1
         entry = history[index]
-        if entry.get("kind") == "people":
-            value = entry.get("value")
-            after = value.get("after") if isinstance(value, dict) else None
-            if after is None:
+        if entry.get("kind") in self.COMMAND_KINDS:
+            if not self._apply_command(entry, forward=True):
                 self.log_message.emit("⚠ Nothing to redo", "warn")
                 return "null"
-            self._apply_people(after)
             self._set_global_history(history, index)
             self.history_changed.emit()
-            self.log_message.emit("↪ Redo — people list restored", "info")
-            result = {"kind": "people", "value": after}
-            if index is not None:
-                result["index"] = index
+            kind = entry["kind"]
+            self.log_message.emit(
+                "↪ Redo — " + self.UNDO_LABELS.get(kind, kind + " restored"),
+                "info")
+            value = entry.get("value") or {}
+            payload = (value.get("after") if kind in ("people", "labels")
+                       else value)
+            result = {"kind": kind, "value": payload, "index": index}
             return json.dumps(result, ensure_ascii=False)
         self._set_global_history(history, index)
         self.history_changed.emit()
@@ -709,7 +1012,8 @@ class Bridge(QObject):
             split("row", [leaf("people"), leaf("log")], [70, 30]),
             split("row", [leaf("history"), leaf("userdb"),
                           leaf("collector")], [40, 35, 25]),
-        ], [36, 18, 24, 22])
+            split("row", [leaf("labels"), leaf("dbconn")], [55, 45]),
+        ], [30, 15, 21, 20, 14])
 
     def _push_history(self, blocks: list[dict]) -> tuple[list, int]:
         """Backward-compatible name; append the stack to global history."""
@@ -732,6 +1036,7 @@ class Bridge(QObject):
                       if isinstance(raw_last_stack, list) else raw_last_stack)
         payload = {
             "url_presets": list(self._config.get("url_presets", default=[])),
+            "labels": self.label_store.state(),
             "custom_blocks": self._custom_blocks_raw(),
             "stack_presets": self._presets.list_stacks(),
             "template_presets": self._presets.list_templates(),
@@ -1268,6 +1573,8 @@ class Bridge(QObject):
 
     # ── user list refresh ────────────────────────────────────────
     async def _refresh_users(self):
+        if self._memory is None:      # archive-only bridges (tests, headless)
+            return
         users = await self._memory.get_all()
         # Processing-order ranks (# column). The engine's queue_order()
         # mirrors the queue the run loop would build (A–Z under an enabled
@@ -1280,11 +1587,15 @@ class Bridge(QObject):
         except Exception:
             queue = await self._memory.get_queue()
             ranks = {u.nick: i + 1 for i, u in enumerate(queue)}
+        # Labels are stored per nick in config.json and joined here, at read
+        # time — neither database owns them (RULE 14).
+        labels = self._labels_for_nicks([u.nick for u in users])
         self.users_updated.emit(json.dumps(
             [{"nick": u.nick, "gender": u.gender, "registered": u.registered,
               "anonymous": u.anonymous, "guest": u.guest, "messaged": u.messaged,
               "first_seen": u.first_seen, "last_messaged": u.last_messaged,
-              "order": ranks.get(u.nick)}
+              "order": ranks.get(u.nick),
+              "labels": labels.get(u.nick, [])}
              for u in users], ensure_ascii=False))
         self.stats_updated.emit(json.dumps(await self._memory.get_stats()))
 
@@ -1300,6 +1611,7 @@ class Bridge(QObject):
     def attach_history(self, service) -> None:
         """Wire the archive service (created in main.py) into the UI."""
         self._history = service
+        self.db_manager.attach(service)
         if service is None:
             return
         try:
@@ -1334,7 +1646,23 @@ class Bridge(QObject):
             except Exception as exc:                  # noqa: BLE001
                 log.warning("archive %s failed: %s", scope, exc)
                 self.history_error.emit(scope, str(exc))
-        asyncio.ensure_future(guarded())
+        if not self._schedule(guarded()):
+            coro.close()
+
+    @staticmethod
+    def _schedule(coro) -> bool:
+        """Start a coroutine on the running loop; False when there is none.
+
+        The app always runs one (qasync), but a slot must never explode in a
+        loop-less context such as a unit test — the synchronous half of the
+        work has already been done by then.
+        """
+        try:
+            asyncio.ensure_future(coro)
+            return True
+        except RuntimeError:
+            log.debug("no event loop — skipping a background refresh")
+            return False
 
     @staticmethod
     def _json_arg(raw, default=None):
@@ -1444,6 +1772,10 @@ class Bridge(QObject):
                 include_deleted=bool(opts.get("include_deleted")))
             payload["req_id"] = req_id
             payload["my_nick"] = self._archive.my_nick
+            labels = self._labels_for_nicks(
+                [item.get("nick") for item in payload.get("items") or []])
+            for item in payload.get("items") or []:
+                item["labels"] = labels.get(item.get("nick"), [])
             self.userdb_page_ready.emit(req_id, json.dumps(
                 payload, ensure_ascii=False))
         self._run_async("userdb_page", work())
@@ -1461,18 +1793,145 @@ class Bridge(QObject):
                 payload, ensure_ascii=False))
         self._run_async("userdb_stats", work())
 
+    async def _people_snapshot(self):
+        """The People rows, or None when there is no user memory attached."""
+        if self._memory is None:
+            return None
+        try:
+            return await self._people_rows()
+        except Exception as exc:                      # noqa: BLE001
+            log.debug("people snapshot unavailable: %s", exc)
+            return None
+
+    # ── deleting from the archive (all reversible, RULE 12) ──────
     @Slot(str, bool, result=bool)
     def history_delete_person(self, nick, hard=False):
-        """Tombstone (or, with `hard`, erase) one person's archive."""
+        """Remove a person WITH their whole history.
+
+        Soft (the default) tombstones the person, hides every message under
+        one operation token and drops the People-list row — all three halves
+        travel in ONE history entry, so a single Ctrl+Z brings the person
+        back. `hard=True` erases the rows and is NOT reversible; it is only
+        reachable from an explicit purge.
+        """
+        clean = " ".join(str(nick or "").split()).strip()
+        if not clean:
+            return False
+        if self._archive is None:
+            self.history_error.emit("history_delete_person",
+                                    "the message archive is not running")
+            return False
+
+        async def work():
+            repo = self._archive.repo
+            token = repo.new_op_token()
+            # The People list is a separate database; when it is present the
+            # row travels inside the SAME undo entry, so one Ctrl+Z restores
+            # the person, their messages and their queue position together.
+            people_before = await self._people_snapshot()
+            ok = await repo.delete_person(clean, hard=bool(hard), token=token)
+            if people_before is not None:
+                try:
+                    await self._memory.delete_user(clean)
+                except Exception as exc:              # noqa: BLE001
+                    log.debug("people row for %s not removed: %s", clean, exc)
+            people_after = await self._people_snapshot()
+            if ok and not hard:
+                entry = {"op": "delete_person", "nick": clean, "token": token}
+                if people_before is not None and people_after is not None:
+                    entry["people"] = {"before": people_before,
+                                       "after": people_after}
+                self._push_global("archive", entry)
+                self.log_message.emit(
+                    f"🗑 “{clean}” and their history removed — Ctrl+Z restores "
+                    "both", "warn")
+            elif ok and hard:
+                self.label_store.forget(clean)
+                self.log_message.emit(
+                    f"🔥 “{clean}” erased permanently (not undoable)", "warn")
+            self.userdb_changed.emit(json.dumps(
+                {"action": "deleted", "nick": clean, "hard": bool(hard),
+                 "ok": ok}, ensure_ascii=False))
+            await self._refresh_users()
+        self._run_async("history_delete_person", work())
+        return True
+
+    @Slot(str, result=bool)
+    def history_clear_person(self, nick):
+        """Remove the whole conversation but KEEP the person in the database."""
+        clean = " ".join(str(nick or "").split()).strip()
+        if not clean:
+            return False
+        if self._archive is None:
+            self.history_error.emit("history_clear_person",
+                                    "the message archive is not running")
+            return False
+
+        async def work():
+            repo = self._archive.repo
+            token = await repo.soft_delete_history(clean)
+            if not token:
+                self.log_message.emit(
+                    f"ℹ “{clean}” has no messages to clear", "info")
+            else:
+                self._push_global("archive", {
+                    "op": "clear_history", "nick": clean, "token": token})
+                self.log_message.emit(
+                    f"🧹 History of “{clean}” cleared — the person stays in "
+                    "the database (Ctrl+Z restores the messages)", "warn")
+            self.userdb_changed.emit(json.dumps(
+                {"action": "cleared", "nick": clean, "ok": bool(token)},
+                ensure_ascii=False))
+        self._run_async("history_clear_person", work())
+        return True
+
+    @Slot(str, str, result=bool)
+    def history_delete_message(self, nick, message_id):
+        """Remove ONE message from a person's history."""
+        clean = " ".join(str(nick or "").split()).strip()
+        try:
+            mid = int(str(message_id or "0").strip() or 0)
+        except (TypeError, ValueError):
+            mid = 0
+        if not clean or mid <= 0:
+            return False
+        if self._archive is None:
+            self.history_error.emit("history_delete_message",
+                                    "the message archive is not running")
+            return False
+
+        async def work():
+            token = await self._archive.repo.soft_delete_message(clean, mid)
+            if not token:
+                self.log_message.emit("⚠ That message is already gone", "warn")
+                return
+            self._push_global("archive", {
+                "op": "delete_message", "nick": clean, "token": token,
+                "message_id": mid})
+            self.log_message.emit(
+                f"🗑 One message removed from “{clean}” (Ctrl+Z restores it)",
+                "info")
+            self.userdb_changed.emit(json.dumps(
+                {"action": "message_deleted", "nick": clean, "id": mid},
+                ensure_ascii=False))
+        self._run_async("history_delete_message", work())
+        return True
+
+    @Slot(str, result=bool)
+    def history_purge_deleted(self, nick):
+        """Erase the hidden rows for good (explicit, not undoable)."""
         if self._archive is None:
             return False
 
         async def work():
-            ok = await self._archive.repo.delete_person(nick, hard=bool(hard))
+            gone = await self._archive.repo.purge_deleted(
+                " ".join(str(nick or "").split()).strip())
+            self.log_message.emit(
+                f"🔥 {gone} hidden message(s) erased permanently", "warn")
             self.userdb_changed.emit(json.dumps(
-                {"action": "deleted", "nick": nick, "hard": bool(hard),
-                 "ok": ok}, ensure_ascii=False))
-        self._run_async("history_delete_person", work())
+                {"action": "purged", "nick": nick, "count": gone},
+                ensure_ascii=False))
+        self._run_async("history_purge_deleted", work())
         return True
 
     @Slot(str, result=bool)
@@ -1485,6 +1944,7 @@ class Bridge(QObject):
             self.userdb_changed.emit(json.dumps(
                 {"action": "restored", "nick": nick, "ok": ok},
                 ensure_ascii=False))
+            await self._refresh_users()
         self._run_async("history_restore_person", work())
         return True
 
@@ -1540,6 +2000,85 @@ class Bridge(QObject):
         except Exception as exc:                      # noqa: BLE001
             log.debug("media folder unavailable: %s", exc)
             return ""
+
+    # ═════════════════════════════════════════════════════════════
+    # DB CONNECTION — create / load / delete / clean + size info
+    #
+    # Nothing is ever unlinked: delete and clean move the file into
+    # db_trash/ first, so both are reversible with one Ctrl+Z.
+    # ═════════════════════════════════════════════════════════════
+    @Slot(result=str)
+    def db_list(self):
+        try:
+            return json.dumps({"active": self.db_manager.active_path(),
+                               "items": self.db_manager.list_dbs()},
+                              ensure_ascii=False)
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("db_list failed: %s", exc)
+            return json.dumps({"active": "", "items": [], "error": str(exc)})
+
+    @Slot(str)
+    def db_info(self, req_id):
+        manager = self.db_manager
+        manager.attach(self._archive)
+
+        async def work():
+            payload = await manager.info()
+            payload["req_id"] = req_id
+            payload["items"] = manager.list_dbs()
+            self.db_info_ready.emit(req_id, json.dumps(payload,
+                                                       ensure_ascii=False))
+        self._run_async("db_info", work())
+
+    def _db_action(self, op: str, runner, success: str):
+        """Run one DB action and record it as a single undo entry."""
+        manager = self.db_manager
+        manager.attach(self._archive)
+
+        async def work():
+            result = await runner(manager)
+            result = dict(result or {})
+            result["op"] = result.get("op", op)
+            if result.get("ok") and not result.get("unchanged"):
+                self._push_global("dbconn", {
+                    "op": result["op"],
+                    "path": result.get("path", ""),
+                    "before_path": result.get("before_path", ""),
+                    "backup": result.get("backup", ""),
+                })
+                self.log_message.emit(success.format(**{
+                    "path": result.get("path", ""),
+                    "name": os.path.basename(result.get("path", "")),
+                }), "success")
+            elif result.get("error"):
+                self.log_message.emit("⚠ " + str(result["error"]), "warn")
+            self._emit_db_change(op, result)
+        self._run_async("db_" + op, work())
+        return True
+
+    @Slot(str, result=bool)
+    def db_create(self, name):
+        return self._db_action(
+            "create", lambda m: m.create(name),
+            "🆕 New database {name} created and connected")
+
+    @Slot(str, result=bool)
+    def db_load(self, path):
+        return self._db_action(
+            "load", lambda m: m.load(path),
+            "🔌 Connected to {name}")
+
+    @Slot(str, result=bool)
+    def db_delete(self, path):
+        return self._db_action(
+            "delete", lambda m: m.delete(path),
+            "🗑 {name} moved to db_trash — Ctrl+Z puts it back")
+
+    @Slot(result=bool)
+    def db_clean(self):
+        return self._db_action(
+            "clean", lambda m: m.clean(),
+            "🧹 Database emptied (a backup went to db_trash — Ctrl+Z restores it)")
 
     @Slot(str, result=bool)
     def open_media_folder(self, nick):

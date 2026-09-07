@@ -109,9 +109,25 @@ var HistoryView = (function () {
     const wrap = el('div', 'msg ' + (row.side === 'out' ? 'out' : 'in'));
     wrap.dataset.ord = String(row.ord);
     wrap.dataset.fp = String(row.fp == null ? '' : row.fp);
+    if (row.id != null && row.id !== '') wrap.dataset.id = String(row.id);
     const head = el('div', 'msg-head');
     head.appendChild(el('span', 'msg-author', row.author));
     head.appendChild(el('span', 'msg-time', row.time));
+    // Remove THIS message from the history. Soft delete on the backend, so
+    // the global Ctrl+Z brings it straight back.
+    if (typeof opts.onDeleteMessage === 'function' && row.id != null &&
+        row.id !== '') {
+      const del = el('button', 'msg-del', '✕');
+      del.type = 'button';
+      del.title = 'Remove this message from the history (Ctrl+Z restores it)';
+      del.dataset.id = String(row.id);
+      del.addEventListener('click', (event) => {
+        if (event && event.preventDefault) event.preventDefault();
+        if (event && event.stopPropagation) event.stopPropagation();
+        opts.onDeleteMessage(row.id, row);
+      });
+      head.appendChild(del);
+    }
     wrap.appendChild(head);
     const body = el('div', 'msg-text');
     if (row.text) appendHighlighted(body, row.text, opts.query);
@@ -188,6 +204,13 @@ var HistoryView = (function () {
     title.appendChild(el('span', 'history-arrow', ' ⇄ '));
     title.appendChild(el('span', 'history-me',
                          info.myNick ? info.myNick : 'my nick not set'));
+    // The same label pills as in both tables, ✕ removes the label from this
+    // person only.
+    if (typeof info.pill === 'function' && (info.labels || []).length) {
+      const pills = el('span', 'label-pills');
+      info.labels.forEach((label) => pills.appendChild(info.pill(label)));
+      title.appendChild(pills);
+    }
     nodes.push(title);
     const meta = el('div', 'history-meta');
     if (stats) {

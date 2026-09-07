@@ -105,6 +105,8 @@
       : null;
     return {
       type: 'msg',
+      // The database row id — needed to delete exactly this one message.
+      id: item.id == null ? null : item.id,
       ord: item.ord,
       fp: item.fp,
       side: side,

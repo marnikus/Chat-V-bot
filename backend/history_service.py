@@ -219,6 +219,98 @@ class HistoryService:
             self._task = None
         await self.db.close()
 
+    # ── swapping the database file (DB Connection window) ────────
+    async def _stop_collector(self) -> dict:
+        """Park the collector so the file can be closed.
+
+        Returns what was live, so the exact same state can be restored:
+        the background loop AND the collector's own running flag (a tick
+        driven by the app or a test does not need a task).
+        """
+        state = {
+            "task": bool(self._task and not self._task.done()),
+            "collector": bool(getattr(self.collector, "running", False)),
+        }
+        self.collector.stop()
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):   # noqa: BLE001
+                pass
+            self._task = None
+        return state
+
+    def _restart_collector(self, state) -> None:
+        """Put the collector back exactly as `_stop_collector` found it."""
+        if not state:
+            return
+        if state.get("task"):
+            self.start()                 # background loop + running flag
+        elif state.get("collector"):
+            self.collector.start()       # flag only: ticks stay manual
+
+    def _rebind_db(self, db: HistoryDB) -> None:
+        """Point every collaborator at the new connection (one DB per process)."""
+        self.db = db
+        self.repo.db = db
+        self.query.db = db
+        self.media.db = db
+
+    async def detach_db(self) -> bool:
+        """Close the archive file without losing the service (used by delete)."""
+        self._detached_running = await self._stop_collector()
+        await self.db.close()
+        return True
+
+    async def switch_db(self, path: str) -> dict:
+        """Open another database file, keeping the app connected either way.
+
+        The collector is parked first (it writes), then the current file is
+        closed and the new one opened. If the new file cannot be opened the
+        previous one is re-opened before the error is raised — a failed swap
+        must never leave the app without an archive.
+        """
+        target = str(path or "").strip()
+        if not target:
+            raise ValueError("no database path given")
+        previous = self.db.path
+        parked = getattr(self, "_detached_running", None)
+        if parked is None:
+            parked = await self._stop_collector()
+        self._detached_running = None
+        if self.db.is_open:
+            await self.db.close()
+        fresh = HistoryDB(target, use_fts=bool(self._settings.get("use_fts", True)))
+        try:
+            await fresh.init()
+        except Exception as exc:                          # noqa: BLE001
+            log.warning("cannot open %s (%s) — reopening %s", target, exc,
+                        previous)
+            fallback = HistoryDB(
+                previous, use_fts=bool(self._settings.get("use_fts", True)))
+            try:
+                await fallback.init()
+                self._rebind_db(fallback)
+            except Exception as inner:                    # noqa: BLE001
+                log.error("reopening %s failed too: %s", previous, inner)
+            self._restart_collector(parked)
+            raise
+        self._rebind_db(fresh)
+        self._settings["db_path"] = target
+        if self.config is not None:
+            stored = {k: v for k, v in self._settings.items()
+                      if k not in ("collector",)}
+            self.config.set("history", stored)
+            self.config.save()
+        try:
+            self.collector.reset_state()
+        except Exception:                                 # noqa: BLE001
+            pass
+        self._restart_collector(parked)
+        log.info("Message archive switched to %s", target)
+        return self.settings()
+
     # ── convenience used by the bridge ───────────────────────────
     async def page(self, nick: str, **kwargs) -> dict:
         payload = await self.query.page(nick, **kwargs)

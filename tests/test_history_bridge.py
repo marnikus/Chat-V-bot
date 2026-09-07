@@ -37,7 +37,10 @@ from test_chat_parser_delta import FakePage, raw  # noqa: E402
 LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer",
                   "people", "log"]
 NEW_WINDOWS = ["history", "userdb", "collector"]
-ALL_WINDOWS = LEGACY_WINDOWS + NEW_WINDOWS
+# Layout v3 adds the two management windows.
+MANAGEMENT_WINDOWS = ["labels", "dbconn"]
+ALL_WINDOWS = LEGACY_WINDOWS + NEW_WINDOWS + MANAGEMENT_WINDOWS
+CURRENT_GRID_VERSION = Bridge.GRID_VERSION
 
 
 def leaf(i):
@@ -312,7 +315,7 @@ class TestGridWindowSetV2(unittest.TestCase):
         br._engine = types.SimpleNamespace(load_stack=lambda _b: None)
         return br, cfg
 
-    def test_window_set_contains_the_three_new_windows(self):
+    def test_window_set_contains_every_new_window(self):
         self.assertEqual(sorted(Bridge.WINDOW_IDS), sorted(ALL_WINDOWS))
 
     def test_default_tree_contains_every_window(self):
@@ -334,29 +337,31 @@ class TestGridWindowSetV2(unittest.TestCase):
         for new in NEW_WINDOWS:
             self.assertIn(new, flat)
 
-    def test_saving_a_v1_layout_stores_v2(self):
+    def test_saving_a_v1_layout_stores_the_current_version(self):
         br, cfg = self.make_bridge()
         self.assertTrue(br.save_grid_layout(legacy_payload(v1_custom_tree())))
         stored = json.loads(cfg.get_state("grid_layout"))
-        self.assertEqual(stored["v"], 2)
+        self.assertEqual(stored["v"], CURRENT_GRID_VERSION)
         self.assertEqual(sorted(Bridge._leaf_ids(stored["tree"])),
                          sorted(ALL_WINDOWS))
 
-    def test_v2_payload_round_trips_unchanged(self):
+    def test_current_payload_round_trips_unchanged(self):
         br, _cfg = self.make_bridge()
-        canonical = json.dumps({"v": 2, "tree": Bridge._default_grid_tree()})
+        canonical = json.dumps({"v": CURRENT_GRID_VERSION,
+                                "tree": Bridge._default_grid_tree()})
         self.assertTrue(br.save_grid_layout(canonical))
         got = json.loads(br.get_grid_layout())
-        self.assertEqual(got["v"], 2)
+        self.assertEqual(got["v"], CURRENT_GRID_VERSION)
 
     def test_unknown_version_is_still_rejected(self):
         _tree, err = Bridge._parse_grid_payload(
             json.dumps({"v": 9, "tree": Bridge._default_grid_tree()}))
         self.assertIn("version", err)
 
-    def test_incomplete_v2_set_is_still_rejected(self):
+    def test_incomplete_set_is_still_rejected(self):
         tree = split("row", [leaf("stats"), leaf("log")], [50, 50])
-        _t, err = Bridge._parse_grid_payload(json.dumps({"v": 2, "tree": tree}))
+        _t, err = Bridge._parse_grid_payload(
+            json.dumps({"v": CURRENT_GRID_VERSION, "tree": tree}))
         self.assertIn("window set", err)
 
     def test_a_rejected_payload_leaves_the_stored_one_intact(self):

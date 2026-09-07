@@ -62,6 +62,9 @@ const App = {
     }
   },
 
+  /** Entry kinds the local mirror understands (the backend owns the list). */
+  UNDO_KINDS: ['stack', 'grid', 'people', 'labels', 'archive', 'dbconn'],
+
   _peopleRowsOf(value) {
     // People entries carry {"before": rows, "after": rows}; undo/redo return
     // the matching half. A bare array is accepted too (defensive).
@@ -94,6 +97,17 @@ const App = {
         // users_updated + stats_updated; a refresh keeps every panel in sync.
         if (this.bridge && this.bridge.refresh_users) this.bridge.refresh_users();
       }
+    } else if (result.kind === 'labels' && typeof Labels !== 'undefined') {
+      // The backend already re-emitted labels_changed; refreshing keeps the
+      // pills right even if that signal was missed.
+      Labels.refresh();
+    } else if (result.kind === 'archive') {
+      if (typeof HistoryDb !== 'undefined') HistoryDb.onChanged();
+      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
+        HistoryStore.reloadCurrent();
+      if (this.bridge && this.bridge.refresh_users) this.bridge.refresh_users();
+    } else if (result.kind === 'dbconn' && typeof DbPanel !== 'undefined') {
+      DbPanel.onChanged('{}');
     }
     this._updateUndoButtons();
     return true;
@@ -108,8 +122,7 @@ const App = {
         const state = JSON.parse(json);
         if (state && Array.isArray(state.history)) {
           this.globalHistory = state.history
-            .filter((e) => e && (e.kind === 'stack' || e.kind === 'grid' ||
-                                 e.kind === 'people'))
+            .filter((e) => e && App.UNDO_KINDS.indexOf(e.kind) >= 0)
             .map((e) => ({ kind: e.kind, value: this._copy(e.value) }));
           this.globalHistoryIndex = Number.isInteger(state.index)
             ? state.index : this.globalHistory.length - 1;
@@ -179,6 +192,9 @@ function initApp() {
   if (typeof HistoryStore !== 'undefined') HistoryStore.init();
   if (typeof HistoryDb !== 'undefined') HistoryDb.init();
   if (typeof CollectorPanel !== 'undefined') CollectorPanel.init();
+  // Label Manager + DB Connection windows.
+  if (typeof Labels !== 'undefined') Labels.init();
+  if (typeof DbPanel !== 'undefined') DbPanel.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
@@ -204,6 +220,9 @@ function restoreSession(json) {
   PresetsUI.setCustomBlocks(payload.custom_blocks || []);
   StackDnD.setCustomBlocks(payload.custom_blocks || []);
   UrlToolbar.setPresets(JSON.stringify(payload.url_presets || []));
+
+  if (payload.labels && typeof Labels !== 'undefined')
+    Labels.applyState(payload.labels);
 
   const state = payload.state || {};
 
@@ -387,8 +406,28 @@ function setupBridgeListeners() {
     b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
   if (b.userdb_page_ready)
     b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
-  if (b.userdb_changed)
-    b.userdb_changed.connect(() => HistoryDb.onChanged());
+  if (b.userdb_changed) {
+    b.userdb_changed.connect(() => {
+      HistoryDb.onChanged();
+      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
+        HistoryStore.reloadCurrent();
+      if (typeof DbPanel !== 'undefined') DbPanel.refresh();
+    });
+  }
+
+  // ── labels + database management ──────────────────────────
+  if (b.labels_changed)
+    b.labels_changed.connect((json) => Labels.applyState(json));
+  if (b.db_info_ready)
+    b.db_info_ready.connect((req, json) => DbPanel.onInfo(req, json));
+  if (b.db_changed) {
+    b.db_changed.connect((json) => {
+      DbPanel.onChanged(json);
+      HistoryDb.onChanged();
+      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
+        HistoryStore.reloadCurrent();
+    });
+  }
   if (b.collector_status)
     b.collector_status.connect((json) => CollectorPanel.onStatus(json));
   if (b.collector_log)

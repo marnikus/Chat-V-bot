@@ -473,6 +473,60 @@ class Bridge(QObject):
     @Slot(str)          def save_settings(self, settings_json: str)
 ```
 
+### 8.6 Archive management, labels & databases (added 2026-09-07)
+
+Full rationale, undo matrix and test matrix:
+`docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
+
+```python
+class Bridge(QObject):
+    # Python → JS signals
+    labels_changed  = Signal(str)        # {defs, assign, filter} JSON
+    db_info_ready   = Signal(str, str)   # req_id, measurements JSON
+    db_changed      = Signal(str)        # {path, op, ok, error?} JSON
+    userdb_changed  = Signal()           # the archive tables must re-read
+
+    # JS → Python slots — history management (all undoable)
+    @Slot(str, bool)    def history_delete_person(self, nick, hard)
+    @Slot(str)          def history_clear_person(self, nick)
+    @Slot(str, str)     def history_delete_message(self, nick, message_id)
+    @Slot(str)          def history_restore_person(self, nick)
+    @Slot(str)          def history_purge_deleted(self, nick)
+
+    # JS → Python slots — labels (all undoable)
+    @Slot(result=str)   def get_labels(self) -> str
+    @Slot(str, str)     def label_create(self, name, color)
+    @Slot(str, str, str) def label_update(self, label_id, name, color)
+    @Slot(str)          def label_delete(self, label_id)      # system-wide
+    @Slot(str, str)     def label_assign(self, nick, label_id)
+    @Slot(str, str)     def label_unassign(self, nick, label_id)  # one person
+    @Slot(str, str)     def label_set_for(self, nick, ids_json)
+    @Slot(str)          def label_set_filter(self, rule_json)  # include/exclude
+    @Slot()             def label_clear_filter(self)
+
+    # JS → Python slots — DB Connection (all undoable, nothing is unlinked)
+    @Slot(result=str)   def db_list(self) -> str
+    @Slot(str)          def db_info(self, req_id)      # → db_info_ready
+    @Slot(str)          def db_create(self, name)
+    @Slot(str)          def db_load(self, path)
+    @Slot(str)          def db_delete(self, path)      # → db_trash/<file>
+    @Slot()             def db_clean(self)             # backup, then empty
+```
+
+Undo entries reuse the ONE global history (`state.undo_history`, RULE 12);
+the kinds are `stack`, `grid`, `people`, `archive`, `labels`, `dbconn`:
+
+| kind | value shape |
+|---|---|
+| `archive` | `{op: "delete_message"｜"clear_history"｜"delete_person", nick, token, message_id?, people?}` |
+| `labels` | `{before, after}` — whole label state snapshots |
+| `dbconn` | `{op: "create"｜"load"｜"delete"｜"clean", path, before_path, backup}` |
+
+Grid layout is **v3**: `GRID_VERSION = 3` (Python) / `SashCore.VERSION = 3`
+(JS) with the window ids `stats, filters, stack, config, composer, people,
+log, history, userdb, collector, labels, dbconn`. Older payloads migrate by
+appending the missing ids as a bottom row.
+
 ---
 
 ## 9. Configuration Schema
@@ -520,6 +574,12 @@ class Bridge(QObject):
   "ui": {
     "theme": "dark",
     "language": "ru"
+  },
+  "labels": {
+    "defs": [{ "id": "lbl_1", "name": "Rude", "color": "#ff3b30" }],
+    "assign": { "SomeNick": ["lbl_1"] },
+    "filter": { "include": [], "exclude": ["lbl_1"] },
+    "next_id": 1
   }
 }
 ```
@@ -527,6 +587,21 @@ class Bridge(QObject):
 ---
 
 ## 10. Database Schema
+
+### Archive (`history.db`) — schema v4 soft delete
+
+Since 2026-09-07 the archive is at `SCHEMA_VERSION = "4"`: `messages` and
+`persons` carry a nullable `deleted_at` tombstone (added in place by
+`LATE_COLUMNS`, indexed by `idx_messages_alive`, which is created in
+`init()` — never in the `CREATE TABLE` script, or opening a v3 file fails).
+
+* Every read path (`page`, `around`, `search_*`, `list_persons`, `db_stats`,
+  `person_stats`) filters on `deleted_at IS NULL` and reports the hidden
+  count as `messages_hidden`.
+* Removing a message, a conversation or a person stamps `deleted_at` with an
+  operation token (`new_op_token()`); undo clears exactly the rows carrying
+  that token (`restore_deleted(nick, token)`), so nothing is lost and no
+  unrelated row comes back. `purge_deleted(nick)` is the only real DELETE.
 
 ### Users Table
 

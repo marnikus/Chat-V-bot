@@ -149,6 +149,13 @@ class ActionEngine(QObject):
         # stays None in tests and headless runs, and the COLLECT_HISTORY
         # block reports "archive disabled" in that case.
         self.history = None
+        # Person-label guard (LabelStore.allows). The Bridge installs it so a
+        # run can ignore people carrying an excluded label ("never message
+        # the rude ones"). It is a GUARD, not a purge: rejected people keep
+        # their row and their history, they are merely passed over
+        # (AGENT_RULES RULE 6/11).
+        self.label_filter = None
+        self.label_reason = None
 
     # ── stack management ─────────────────────────────────────────
     def load_stack(self, blocks: list[dict]) -> None:
@@ -252,6 +259,48 @@ class ActionEngine(QObject):
                 self._tracer.note({"type": "person_purged", **payload})
         return removed
 
+    # ── person labels ────────────────────────────────────────────
+    def label_allows(self, nick) -> bool:
+        """Does the label filter let this person be worked on?
+
+        Fails OPEN: a missing or broken guard can never stop a run
+        (AGENT_RULES RULE 9).
+        """
+        if not callable(self.label_filter):
+            return True
+        try:
+            return bool(self.label_filter(nick))
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("label filter failed for %r: %s", nick, exc)
+            return True
+
+    def filter_by_labels(self, users: list, announce: bool = False) -> list:
+        """Drop the people an excluded/missing label rules out."""
+        if not callable(self.label_filter):
+            return list(users or [])
+        kept, skipped = [], []
+        for user in users or []:
+            nick = getattr(user, "nick", user)
+            if self.label_allows(nick):
+                kept.append(user)
+            else:
+                skipped.append(str(nick))
+        if skipped and announce:
+            reasons = []
+            for nick in skipped[:5]:
+                why = ""
+                if callable(self.label_reason):
+                    try:
+                        why = str(self.label_reason(nick) or "")
+                    except Exception:                  # noqa: BLE001
+                        why = ""
+                reasons.append(f"{nick}{f' ({why})' if why else ''}")
+            more = f" +{len(skipped) - len(reasons)} more" if len(skipped) > len(reasons) else ""
+            self.debug_msg.emit(
+                f"🏷 Label filter skipped {len(skipped)} person(s): "
+                + ", ".join(reasons) + more, "info")
+        return kept
+
     # ── main execution loop ──────────────────────────────────────
     def queue_order(self, users: list) -> list[str]:
         """The nick order a run would process right now (1st → last).
@@ -268,6 +317,10 @@ class ActionEngine(QObject):
                              if b.block_id == "SCROLL_PARSE"
                              and getattr(b, "enabled", True)), None)
         unmessaged = [u for u in users if not getattr(u, "messaged", False)]
+        # The People-list "#" column must show the order a run would REALLY
+        # use, so the label guard applies here too (RULE 10: one decision,
+        # one place).
+        unmessaged = self.filter_by_labels(unmessaged)
         if scroll_block is not None:
             from backend.person_filter import sort_people
             ordered = sort_people(unmessaged)
@@ -398,6 +451,10 @@ class ActionEngine(QObject):
         # Phase 2: build queue
         queue = collected if scroll_block is not None \
             else await self._memory.get_queue()
+        # Phase 2a: person labels — people carrying an excluded label (or
+        # missing a required one) are passed over for this run. Nothing is
+        # deleted: the guard only decides who is worked on right now.
+        queue = self.filter_by_labels(queue, announce=True)
         # Phase 2b: Click User "Respect the Order (#) column" override — when
         # an enabled CLICK_USER asks for it, work the People list in Order (#)
         # sequence (#1 first … #N) instead of whatever this run collected.

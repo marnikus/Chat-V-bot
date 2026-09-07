@@ -36,12 +36,18 @@
     { id: 'history',   title: 'Person History' },
     { id: 'userdb',    title: 'Full User Database' },
     { id: 'collector', title: 'Chat Message Collector' },
+    // Labels + database management (added in layout version 3)
+    { id: 'labels',    title: 'Label Manager' },
+    { id: 'dbconn',    title: 'DB Connection' },
   ];
   /** Windows that existed in layout version 1 — used by migrate(). */
   const V1_WINDOW_IDS = ['stats', 'filters', 'stack', 'config', 'composer',
                          'people', 'log'];
-  /** Current serialisation version. v1 layouts are migrated on load. */
-  const VERSION = 2;
+  /** Windows that existed in layout version 2. */
+  const V2_WINDOW_IDS = V1_WINDOW_IDS.concat(['history', 'userdb',
+                                              'collector']);
+  /** Current serialisation version. Older layouts are migrated on load. */
+  const VERSION = 3;
   const WINDOW_IDS = WINDOWS.map((w) => w.id);
   const WINDOW_TITLES = Object.fromEntries(WINDOWS.map((w) => [w.id, w.title]));
 
@@ -81,7 +87,8 @@
       split('row', [leaf('people'), leaf('log')], [70, 30]),
       split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
             [40, 35, 25]),
-    ], [36, 18, 24, 22]);
+      split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
+    ], [30, 15, 21, 20, 14]);
   }
 
   /**
@@ -93,7 +100,8 @@
       leaf('stats'), leaf('filters'), leaf('stack'), leaf('config'),
       leaf('composer'), leaf('people'), leaf('log'),
       leaf('history'), leaf('userdb'), leaf('collector'),
-    ], [6, 6, 16, 12, 12, 12, 10, 10, 9, 7]);
+      leaf('labels'), leaf('dbconn'),
+    ], [6, 6, 14, 10, 10, 10, 8, 9, 8, 7, 6, 6]);
   }
 
   /**
@@ -111,7 +119,8 @@
         split('col', [leaf('history'), leaf('collector')], [65, 35]),
         leaf('userdb'),
       ], [55, 45]),
-    ], [30, 20, 28, 22]);
+      split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
+    ], [26, 17, 24, 19, 14]);
   }
 
   /**
@@ -130,7 +139,8 @@
       ], [25, 75]),
       split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
             [38, 34, 28]),
-    ], [40, 30, 30]);
+      split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
+    ], [34, 25, 26, 15]);
   }
 
   const PRESETS = {
@@ -589,14 +599,14 @@
     const versioned = obj && typeof obj === 'object' && !obj.t;
     const version = versioned ? obj.v : 1;      // a bare tree is a v1 layout
     const tree = versioned ? obj.tree : obj;
-    if (version !== 1 && version !== VERSION)
+    if (!Number.isInteger(version) || version < 1 || version > VERSION)
       return { ok: false, error: 'unsupported layout version ' + version };
     if (version === VERSION) {
       const err = validate(tree, expectedIds);
       return err ? { ok: false, error: err } : { ok: true, tree: clone(tree) };
     }
-    // v1: refuse structural rubbish rather than half-migrating it, then
-    // upgrade the arrangement so nobody loses their layout on update.
+    // Older layout: refuse structural rubbish rather than half-migrating it,
+    // then upgrade the arrangement so nobody loses their layout on update.
     const structural = validate(tree, leafIds(tree));
     if (structural) return { ok: false, error: structural };
     const upgraded = migrate(tree);
@@ -606,7 +616,8 @@
   }
 
   return {
-    WINDOWS, WINDOW_IDS, WINDOW_TITLES, V1_WINDOW_IDS, VERSION,
+    WINDOWS, WINDOW_IDS, WINDOW_TITLES, V1_WINDOW_IDS, V2_WINDOW_IDS,
+    VERSION,
     MAX_DEPTH, MIN_SIZE, pruneTree, migrate,
     leaf, split, clone, firstLeafId,
     defaultTree, layoutA, layoutB, layoutC, PRESETS,

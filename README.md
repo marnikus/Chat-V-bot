@@ -303,10 +303,12 @@ in the chat; it is stored in `config.json` (`collector.my_nick`) and written
 next to every archived message, so a conversation always shows both sides
 even when your nick changes between sessions.
 
-### The three windows
+### The archive windows
 
 They are ordinary grid windows — drag, split, merge and resize them like any
-other panel (`📐` menu → *Reset to default* brings them all back).
+other panel (`📐` menu → *Reset to default* brings them all back). Two more
+ordinary windows manage the archive itself: **Label Manager** and
+**DB Connection** (see *Person labels* and *The database window* below).
 
 | Window | What it does |
 |---|---|
@@ -370,6 +372,89 @@ screen on demand: `target` (current tab or the selected person), `mode`
 (delta / full re-scan), `max_messages`, chunk size and pause, media on/off,
 and *fail if empty*. It reports progress as `done/total` and honours Stop.
 
+## Managing the archive — delete, labels, databases
+
+Everything in this chapter is **undoable with the same global ↶ / ↷ buttons**
+(Ctrl+Z / Ctrl+Y) that undo stack edits and layout changes: one history, one
+pair of buttons, no per-window undo (docs RULE 12).
+
+### Removing history
+
+Nothing is ever hard-deleted behind your back. A delete hides the rows
+(tombstone `deleted_at`, docs RULE 14) and the undo entry puts them back
+byte-for-byte.
+
+| Where | Control | What it does |
+|---|---|---|
+| **Person History** toolbar | `🧹 Clear chat` | Removes every message of the open conversation, **keeps the person** in the database. |
+| **Person History** toolbar | `🗑 Remove person` | Removes the person *and* the whole conversation. |
+| **Person History** message | the small `✕` on a message row | Removes that single message. |
+| **Full User Database** row | `🧹` / `🗑` | The same two actions for any archived person, straight from the table. |
+
+The People list keeps working the way it did: a person deleted from the
+archive is also dropped from the queue table, and the undo restores both
+sides together.
+
+### Person labels
+
+Labels are free text tags with a colour, e.g. `Rude`, `VIP`, `Later`. They
+live in `config.json` (so they survive restarts) and every change is undoable.
+
+* Labels are drawn as small coloured pills **next to the nick in both the
+  People table and the Full User Database table**.
+* The `✕` on a pill removes that label **from that person only** — it never
+  deletes the label itself.
+* One person can carry as many labels as you like.
+
+**Label Manager** (a normal grid window — minimize, maximize, close, drag it
+anywhere, it is listed in the `🪟 Windows` menu and remembers its state) has
+four sections:
+
+1. **Active Labels** — every label; its `✕` deletes the label *system-wide*
+   (and strips it from everyone). This is the only place that can do that.
+2. **Create New Label** — a name field, a colour dot that opens the Color
+   Picker, and `＋ Add Label`. Empty or duplicate names are refused with a
+   message instead of creating junk.
+3. **Filter By Labels** — tick labels, then `Include Selected` (green) or
+   `Exclude Selected` (red). *Exclusion wins*: a person carrying an excluded
+   label is skipped by an Action Stack run even if they also carry an
+   included one — so `Rude` can be ignored during auto-messaging. The title
+   bar shows the active rule; `Clear` removes it.
+4. **Assign To Person** — a `Select Person…` dropdown that automatically
+   follows the person you clicked in the People list or the database, the
+   label list (labels the person already has are not offered again) and
+   `Assign`.
+
+### The Color Picker
+
+A small dark popup (280×320) you can **drag by its title bar**; it remembers
+where you left it. Twenty bright presets in a 5×4 grid — Red, Orange, Yellow,
+Lime, Green / Teal, Cyan, Sky Blue, Blue, Indigo / Violet, Purple, Magenta,
+Pink, Hot Pink / Coral, Amber, Chartreuse, Spring Green, Aqua. The current
+colour wears a white ring; picking one closes the popup, so do `Cancel`, the
+`✕` and `Esc`.
+
+### The database window
+
+**DB Connection** is also a normal grid window. It shows the connected file,
+its measurements and every `*.db` next to it:
+
+| Reading | Meaning |
+|---|---|
+| **Full DB size** | `history.db` on disk, including its `-wal` / `-shm` companions. |
+| **Text size** | How many bytes of the messages are actual text. |
+| **Images folder** | Size *and* file count of `saved_media/`. |
+
+Buttons: `Load` (connect to another database — the collector is parked and
+restarted around the switch), `＋ Create` (a fresh empty database, named
+safely, and connect to it), `🗑` (remove a database) and `🧹 Clean DB` (empty
+the connected one). **Delete and Clean never unlink anything**: the file is
+moved to `db_trash/` first, the path is stored in the undo entry, and Ctrl+Z
+brings the database back and reconnects it.
+
+Design document:
+`docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
+
 ### Settings (config.json)
 
 ```jsonc
@@ -379,7 +464,13 @@ and *fail if empty*. It reports progress as `done/total` and honours Stop.
                "preview": { "preload_rows": 40, "page_size": 50,
                             "show_images": true } },
 "collector": { "enabled": true, "my_nick": "", "heartbeat_ms": 1500,
-               "require_private": true, "download_media": true }
+               "require_private": true, "download_media": true },
+"labels":    { "defs":   [ { "id": "lbl_1", "name": "Rude",
+                             "color": "#ff3b30" } ],
+               "assign": { "Ангелина": ["lbl_1"] },
+               "filter": { "include": [], "exclude": ["lbl_1"] },
+               "next_id": 1 },
+"state":     { "db_recent": ["history.db", "archive_2026.db"] }
 ```
 
 Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
@@ -414,6 +505,8 @@ Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 │   ├── chat_agent_js.py     # Probe expressions for the in-page agent
 │   ├── collector.py         # Passive private-chat collector state machine
 │   ├── media_store.py       # Image/GIF cache (url + sha256 + bytes on disk)
+│   ├── label_store.py       # Person labels: defs, per-person tags, filter rule
+│   ├── db_manager.py        # DB Connection: create/load/delete/clean + sizes
 │   ├── js/chat_agent.js     # The in-page agent (fingerprints, slices, push)
 │   ├── preset_store.py      # JSON-backed stack/template presets (same file)
 │   ├── dom_probe.py         # DOM probe JS + result interpreter (debugger)
@@ -440,11 +533,16 @@ Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 │   ├── js/history-store.js  # Person History window
 │   ├── js/history-db.js     # Full User Database window
 │   ├── js/collector-panel.js# Chat Message Collector window
+│   ├── js/labels.js         # Label pills + the Label Manager window
+│   ├── js/db-panel.js       # DB Connection window
+│   ├── js/color-picker.js   # Draggable 5×4 colour popup
 │   └── js/                  # stack-dnd, presets-ui, url-toolbar, composer, log…
 ├── docs/
 │   ├── ARCHITECTURE.md      # Full architecture document
 │   ├── DOM_SELECTORS.md     # DOM selector reference
 │   ├── FIXES_DESIGN_2026-09-04.md   # v1 fix design (presets/URL/debugger)
-│   └── FIXES2_DESIGN_2026-09-04.md  # v2 fix design (exit/restore/custom blocks)
+│   ├── FIXES2_DESIGN_2026-09-04.md  # v2 fix design (exit/restore/custom blocks)
+│   ├── AGENT_RULES.md       # Rules every change must obey (undo, empty states…)
+│   └── PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md  # this feature set
 └── logs/                    # Runtime log files
 ```

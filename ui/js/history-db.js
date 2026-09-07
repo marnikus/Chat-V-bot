@@ -39,10 +39,17 @@ const HistoryDb = {
       if (!row) return;
       const nick = row.dataset.nick;
       if (!nick) return;
-      if (event.target.dataset && event.target.dataset.action === 'delete') {
-        this.deletePerson(nick);
+      const action = (event.target.dataset && event.target.dataset.action) || '';
+      if (action) {
+        if (event.stopPropagation) event.stopPropagation();
+        if (action === 'delete') this.deletePerson(nick);
+        else if (action === 'clear') this.clearHistory(nick);
+        else if (action === 'label') this.labelPerson(nick);
         return;
       }
+      // A click anywhere else opens the conversation and points the Label
+      // Manager at this person — one click, one obvious outcome (RULE 10).
+      if (typeof Labels !== 'undefined') Labels.setPerson(nick);
       if (typeof HistoryStore !== 'undefined') HistoryStore.openPerson(nick);
     });
     if (this._els.search) {
@@ -146,9 +153,22 @@ const HistoryDb = {
     if (remaining < 120) this._request(this.rows.length);
   },
 
+  /** Remove the person AND their whole history (one undoable step). */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
     App.bridge.history_delete_person(nick, false);
+  },
+
+  /** Wipe the conversation but keep the person in the database. */
+  clearHistory(nick) {
+    if (!App.bridge || !App.bridge.history_clear_person) return;
+    App.bridge.history_clear_person(nick);
+  },
+
+  /** Point the Label Manager at this person and bring the window forward. */
+  labelPerson(nick) {
+    if (typeof Labels === 'undefined') return;
+    Labels.setPerson(nick, { focus: true });
   },
 
   /** Show one person in the database: filter to that nick, flash the row. */
@@ -187,6 +207,12 @@ const HistoryDb = {
     }, 1800);
   },
 
+  /** Rows left after the Label Manager's include/exclude filter. */
+  visibleRows() {
+    if (typeof Labels === 'undefined' || !Labels.filterActive) return this.rows;
+    return this.rows.filter((person) => Labels.allows(person.nick));
+  },
+
   /** 'YYYY-MM-DD HH:MM:SS' → 'YYYY-MM-DD' (the table only has room for a day). */
   _day(value) {
     return value ? String(value).slice(0, 10) : '—';
@@ -200,27 +226,66 @@ const HistoryDb = {
     return cell;
   },
 
+  /** Per-row buttons: label · clear history · remove person + history. */
+  _actions(person) {
+    const cell = document.createElement('td');
+    cell.className = 'userdb-actions';
+    const nick = person.nick || '';
+    const button = (action, text, title, cls) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-row' + (cls ? ' ' + cls : '');
+      btn.dataset.action = action;
+      btn.textContent = text;
+      btn.title = title;
+      cell.appendChild(btn);
+      return btn;
+    };
+    button('label', '🏷', 'Label “' + nick + '” in the Label Manager');
+    button('clear', '🧹', 'Delete the whole conversation but KEEP “' + nick +
+           '” in the database (Ctrl+Z restores it)');
+    button('delete', '🗑', 'Remove “' + nick + '” together with their entire ' +
+           'history (Ctrl+Z restores both)', 'btn-row-danger');
+    return cell;
+  },
+
   render() {
     const body = this._els.body;
     if (!body) return;
     const nodes = [];
-    if (!this.rows.length) {
+    const visible = this.visibleRows();
+    if (!visible.length) {
       const empty = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.setAttribute('colspan', '6');
+      cell.setAttribute('colspan', '7');
       cell.className = 'history-notice';
+      const filtered = this.rows.length && !visible.length;
       cell.appendChild(document.createTextNode(
-        this.query ? 'No person matches “' + this.query + '”.'
-                   : 'The archive is still empty — the collector fills it ' +
-                     'while you chat.'));
+        filtered
+          ? 'Every loaded person is hidden by the label filter — clear it in ' +
+            'the Label Manager to see them again.'
+          : this.query ? 'No person matches “' + this.query + '”.'
+                       : 'The archive is still empty — the collector fills it ' +
+                         'while you chat.'));
       empty.appendChild(cell);
       nodes.push(empty);
     }
-    this.rows.forEach((person) => {
+    visible.forEach((person) => {
       const row = document.createElement('tr');
       row.className = 'userdb-row' + (person.deleted ? ' deleted' : '');
       row.dataset.nick = person.nick || '';
-      this._cell(row, person.nick, 'userdb-nick');
+      const nickCell = this._cell(row, person.nick, 'userdb-nick');
+      nickCell.title = 'Open this conversation';
+      // The very same pill renderer the People table uses, so a label can
+      // never look different in the two tables.
+      if (typeof Labels !== 'undefined') {
+        nickCell.appendChild(Labels.pills(person.nick, {
+          labels: Array.isArray(person.labels)
+            ? person.labels.map((l) => (typeof l === 'string'
+              ? Labels.byId(l) : l)).filter(Boolean)
+            : undefined,
+        }));
+      }
       this._cell(row, person.message_count != null ? person.message_count
                                                    : (person.messages || 0));
       this._cell(row, person.media_count != null ? person.media_count
@@ -229,6 +294,7 @@ const HistoryDb = {
       this._cell(row, this._day(person.last_seen || person.last_day));
       this._cell(row, Array.isArray(person.my_nicks)
         ? person.my_nicks.join(', ') : (person.my_nick || '—'));
+      row.appendChild(this._actions(person));
       nodes.push(row);
     });
     body.replaceChildren.apply(body, nodes);

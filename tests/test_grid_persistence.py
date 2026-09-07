@@ -23,9 +23,9 @@ from backend.config_manager import (MAX_STACK_HISTORY,  # noqa: E402
 
 LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer", "people",
                   "log"]
-NEW_WINDOWS = ["history", "userdb", "collector"]
+NEW_WINDOWS = ["history", "userdb", "collector", "labels", "dbconn"]
 ALL_WINDOWS = set(LEGACY_WINDOWS + NEW_WINDOWS)
-GRID_VERSION = 2
+GRID_VERSION = Bridge.GRID_VERSION
 
 
 def leaf(i):
@@ -44,14 +44,30 @@ def legacy_split(d, kids, sizes):
     return {"type": "split", "dir": d, "children": kids, "sizes": sizes}
 
 
+def even(ids):
+    """Equal shares that sum to exactly 100, whatever the window count is."""
+    share = round(100 / len(ids), 4)
+    sizes = [share] * len(ids)
+    sizes[0] = round(100 - share * (len(ids) - 1), 4)
+    return sizes
+
+
 def a_valid_tree():
     """A non-default but legal arrangement: one flat column of all windows."""
     ids = LEGACY_WINDOWS + NEW_WINDOWS
-    return split("col", [leaf(i) for i in ids], [10] * 10)
+    return split("col", [leaf(i) for i in ids], even(ids))
+
+
+def tweaked(sizes, delta):
+    """Same shares with `delta` moved from the last pane to the first."""
+    out = list(sizes)
+    out[0] = round(out[0] + delta, 4)
+    out[-1] = round(out[-1] - delta, 4)
+    return out
 
 
 def payload(tree):
-    """A payload in the current (v2) format."""
+    """A payload in the current layout format."""
     return json.dumps({"v": GRID_VERSION, "tree": tree}, ensure_ascii=False)
 
 
@@ -107,12 +123,12 @@ class TestValidation(unittest.TestCase):
 
     def test_rejects_duplicate_window(self):
         ids = LEGACY_WINDOWS + NEW_WINDOWS + ["log"]
-        tree = split("col", [leaf(i) for i in ids], [100 / 11] * 11)
+        tree = split("col", [leaf(i) for i in ids], even(ids))
         self.assertIn("window set", self._err(payload(tree)))
 
     def test_rejects_sizes_that_do_not_sum_to_100(self):
         tree = a_valid_tree()
-        tree["sizes"] = [9] * 10
+        tree["sizes"] = [9] * len(tree["children"])
         self.assertIn("sum to 100", self._err(payload(tree)))
 
     def test_rejects_split_with_one_child(self):
@@ -121,7 +137,8 @@ class TestValidation(unittest.TestCase):
 
     def test_rejects_unknown_node_type(self):
         self.assertIn("unknown node type",
-                      self._err(json.dumps({"v": 2, "tree": {"type": "blob"}})))
+                      self._err(json.dumps({"v": Bridge.GRID_VERSION,
+                                            "tree": {"type": "blob"}})))
 
     def test_accepts_a_legal_custom_tree(self):
         self.assertIsNone(self._err(payload(a_valid_tree())))
@@ -225,7 +242,8 @@ class TestGlobalHistory(unittest.TestCase):
         br.save_grid_layout(payload(a_valid_tree()))
         br.undo()
         other = a_valid_tree()
-        other["sizes"] = [20, 5, 10, 10, 10, 10, 10, 10, 10, 5]
+        # a different but still legal set of shares (sums to 100)
+        other["sizes"] = tweaked(other["sizes"], 3)
         br.save_grid_layout(payload(other))
         self.assertEqual(br.redo(), "null", "the old redo branch must be gone")
 
@@ -233,7 +251,7 @@ class TestGlobalHistory(unittest.TestCase):
         br, _ = make_bridge()
         for i in range(MAX_STACK_HISTORY + 20):
             tree = a_valid_tree()
-            tree["sizes"] = [10 + (i % 5)] + [10] * 8 + [10 - (i % 5)]
+            tree["sizes"] = tweaked(tree["sizes"], 1 + (i % 5))
             br.save_grid_layout(payload(tree))
         history, idx = br._get_global_history()
         self.assertLessEqual(len(history), MAX_STACK_HISTORY)
@@ -266,9 +284,8 @@ class TestGlobalHistory(unittest.TestCase):
         self.assertEqual(result["value"], br._clean_blocks(stack_b))
 
     def test_legacy_type_nodes_are_normalized_to_t(self):
-        legacy = legacy_split("col", [legacy_leaf(i) for i in
-                                      LEGACY_WINDOWS + NEW_WINDOWS],
-                              [10] * 10)
+        ids = LEGACY_WINDOWS + NEW_WINDOWS
+        legacy = legacy_split("col", [legacy_leaf(i) for i in ids], even(ids))
         br, _ = make_bridge()
         self.assertTrue(br.save_grid_layout(payload(legacy)))
         tree = json.loads(br.get_grid_layout())["tree"]

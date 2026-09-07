@@ -18,7 +18,7 @@ import aiosqlite
 
 log = logging.getLogger("chatbot")
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS messages (
     ts_resolved TEXT NOT NULL DEFAULT '',
     day         TEXT NOT NULL DEFAULT '',
     ts_exact    INTEGER NOT NULL DEFAULT 0,
+    deleted_at  TEXT NOT NULL DEFAULT '',
     occ         INTEGER NOT NULL DEFAULT 0,
     dom_idx     INTEGER NOT NULL DEFAULT 0,
     session_id  TEXT NOT NULL DEFAULT '',
@@ -169,6 +170,12 @@ class HistoryDB:
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(SCHEMA)
         await self._add_missing_columns()
+        # Created only AFTER the late columns exist: an old file reaches this
+        # point without `messages.deleted_at`, and an index in SCHEMA would
+        # make opening it fail outright.
+        await self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_alive "
+            "ON messages(person_id, deleted_at)")
         await self._migrate_dup_keys()
         if self._want_fts:
             self.fts_enabled = await self._try_fts()
@@ -185,7 +192,11 @@ class HistoryDB:
                   ("recovery_attempts", "INTEGER NOT NULL DEFAULT 0")],
         "messages": [("dup_key", "TEXT NOT NULL DEFAULT ''"),
                      ("media_scan_at", "TEXT NOT NULL DEFAULT ''"),
-                     ("media_recovered_at", "TEXT NOT NULL DEFAULT ''")],
+                     ("media_recovered_at", "TEXT NOT NULL DEFAULT ''"),
+                     # Explicit user deletions hide a row instead of erasing
+                     # it, so one Ctrl+Z can put it back (RULE 14 stays true:
+                     # only an explicit purge ever removes bytes).
+                     ("deleted_at", "TEXT NOT NULL DEFAULT ''")],
         "cursors": [("tail_keys", "TEXT NOT NULL DEFAULT '[]'"),
                     ("full_scan_complete", "INTEGER NOT NULL DEFAULT 0"),
                     ("full_scan_at", "TEXT NOT NULL DEFAULT ''")],
@@ -331,7 +342,16 @@ class HistoryDB:
             (key, str(value)))
 
     def file_size(self) -> int:
-        try:
-            return os.path.getsize(self.path)
-        except OSError:
-            return 0
+        """Bytes on disk for this database — the file AND its WAL siblings.
+
+        With `journal_mode=WAL` a freshly written database keeps a large part
+        of its content in `-wal` until a checkpoint, so reporting only the
+        main file would show a size that shrinks for no visible reason.
+        """
+        total = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                total += os.path.getsize(self.path + suffix)
+            except OSError:
+                continue
+        return total

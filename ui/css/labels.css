@@ -1,0 +1,265 @@
+/* ═══════════════════════════════════════════════════════════════
+   labels.css — person labels, the Label Manager window,
+                the DB Connection window and the Pick Color popup
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── label pills (People table + Full User Database rows) ─────── */
+.label-pills {
+  display: inline-flex; flex-wrap: wrap; align-items: center;
+  gap: 3px; vertical-align: middle; margin-left: 6px;
+}
+.label-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 160px; padding: 1px 5px 1px 4px;
+  border: 1px solid transparent; border-radius: 999px;
+  font-size: 10px; line-height: 15px; white-space: nowrap;
+}
+.label-pill-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto;
+  box-shadow: 0 0 4px rgba(0, 0, 0, .5);
+}
+.label-pill-text {
+  overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+  font-weight: 600; letter-spacing: .2px;
+}
+.label-pill-x {
+  background: none; border: 0; cursor: pointer; padding: 0 1px;
+  color: rgba(255, 255, 255, .55); font-size: 10px; line-height: 1;
+}
+.label-pill-x:hover { color: #fff; transform: scale(1.2); }
+.label-empty { color: var(--text-muted); font-size: var(--font-size-xs); }
+
+/* ── Label Manager window ─────────────────────────────────────── */
+.labels-panel .labels-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--gap-sm);
+  padding-right: 2px;
+}
+.label-filter-state {
+  font-size: var(--font-size-xs); font-weight: 500;
+  color: var(--text-muted); max-width: 55%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.label-filter-state.on { color: var(--yellow); }
+
+.label-section {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--gap-sm);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.label-section-title {
+  display: flex; align-items: baseline; gap: var(--gap-sm);
+  font-size: var(--font-size-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  color: var(--text-secondary);
+}
+.label-section-hint {
+  font-size: 10px; font-weight: 400; text-transform: none;
+  letter-spacing: 0; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.label-notice {
+  color: var(--text-muted); font-size: var(--font-size-xs);
+  line-height: 1.5; padding: 2px 0;
+}
+
+.label-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.label-manage-item {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 999px; padding: 2px 4px 2px 2px;
+}
+.label-manage-item .label-pill { cursor: pointer; }
+.label-count {
+  font-size: 9px; color: var(--text-muted); min-width: 12px;
+  text-align: center;
+}
+.label-del {
+  background: none; border: 0; cursor: pointer; padding: 0 3px;
+  color: var(--text-muted); font-size: 11px; line-height: 1;
+}
+.label-del:hover { color: var(--red); transform: scale(1.15); }
+
+.label-create-row, .label-assign-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.label-input, .label-select {
+  flex: 1; min-width: 0; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-primary); padding: 5px 8px;
+  font-size: var(--font-size-sm); font-family: var(--font);
+}
+.label-input:focus, .label-select:focus {
+  outline: none; border-color: var(--border-focus);
+}
+.label-color-btn {
+  width: 26px; height: 26px; flex: 0 0 auto; cursor: pointer;
+  border-radius: 50%; border: 2px solid var(--border-light);
+  background: #ff3b30;
+}
+.label-color-btn:hover { border-color: #fff; }
+
+.label-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.label-inc.active {
+  background: var(--green-dim); border-color: var(--green); color: var(--green);
+}
+.label-exc.active {
+  background: var(--red-dim); border-color: var(--red); color: var(--red);
+}
+
+.label-check-list {
+  display: flex; flex-direction: column; gap: 3px;
+  max-height: 150px; overflow-y: auto;
+}
+.label-filter-row {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 2px 4px; border-radius: var(--radius-sm);
+}
+.label-filter-row:hover { background: var(--bg-panel-hover); }
+.label-filter-row input[type="checkbox"] { accent-color: var(--accent); }
+.label-role { font-size: 9px; font-weight: 700; letter-spacing: .3px; }
+.label-role.include { color: var(--green); }
+.label-role.exclude { color: var(--red); }
+
+/* ── DB Connection window ─────────────────────────────────────── */
+.dbconn-panel .dbconn-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--gap-sm);
+}
+.db-active {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 6px 8px;
+}
+.db-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--text-muted);
+}
+.db-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.db-active-name { font-weight: 700; font-size: var(--font-size-sm); }
+.db-active-path {
+  color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.db-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+}
+.db-stat {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 5px 7px;
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.db-stat-k {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-muted);
+}
+.db-stat-v { font-size: var(--font-size-lg); font-weight: 700; }
+.db-stat-h {
+  font-size: 9px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.db-section-title {
+  font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--text-secondary);
+}
+.db-list {
+  display: flex; flex-direction: column; gap: 3px;
+  max-height: 180px; overflow-y: auto;
+}
+.db-row {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 4px 6px;
+}
+.db-row:hover { background: var(--bg-card-hover); }
+.db-row.active { border-color: var(--green); }
+.db-row.missing { opacity: .55; }
+.db-row-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: var(--font-size-sm);
+}
+.db-row-size {
+  font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);
+}
+.db-row-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+.db-tag {
+  font-size: 9px; font-weight: 700; color: var(--green);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.db-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.db-empty { color: var(--text-muted); font-size: var(--font-size-xs); }
+.db-status { font-size: var(--font-size-xs); color: var(--text-secondary); min-height: 14px; }
+.db-status.error { color: var(--red); }
+.btn-small.danger { color: var(--red); border-color: var(--red-dim); }
+.btn-small.danger:hover { background: var(--red-dim); }
+.btn-small:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── "Pick Color" popup (draggable, ~280×320) ─────────────────── */
+.color-picker {
+  position: fixed; z-index: 4000;
+  background: var(--bg-panel); border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; overflow: hidden;
+  user-select: none;
+}
+.color-picker.dragging { opacity: .93; cursor: grabbing; }
+.cp-bar {
+  display: flex; align-items: center; gap: 6px; cursor: grab;
+  background: var(--bg-header); border-bottom: 1px solid var(--border);
+  padding: 7px 8px;
+}
+.color-picker.dragging .cp-bar { cursor: grabbing; }
+.cp-grip { font-size: 15px !important; color: var(--text-muted); }
+.cp-title {
+  flex: 1; font-size: var(--font-size-sm); font-weight: 700;
+  letter-spacing: .3px;
+}
+.cp-close {
+  background: none; border: 0; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px;
+}
+.cp-close:hover { color: var(--red); }
+.cp-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 12px; padding: 16px 14px;
+}
+.cp-dot {
+  width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  transition: transform .08s ease;
+}
+.cp-dot:hover { transform: scale(1.12); }
+.cp-dot.selected {
+  border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, .35);
+}
+.cp-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap-sm); padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+.cp-hint { font-size: 10px; color: var(--text-muted); }
+
+/* ── per-message delete ✕ inside the Person History rows ──────── */
+.msg-head .msg-del {
+  margin-left: auto; background: none; border: 0; cursor: pointer;
+  color: var(--text-muted); font-size: 10px; line-height: 1;
+  padding: 0 2px; opacity: 0; transition: opacity .12s ease;
+}
+.msg:hover .msg-del, .msg-del:focus { opacity: 1; }
+.msg-head .msg-del:hover { color: var(--red); }
+
+/* ── the Storage table's per-row action buttons ───────────────── */
+.userdb-actions { white-space: nowrap; text-align: right; }
+.userdb-actions .btn-row {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-secondary);
+  cursor: pointer; font-size: 11px; line-height: 1; padding: 3px 5px;
+  margin-left: 2px;
+}
+.userdb-actions .btn-row:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.userdb-actions .btn-row-danger { color: var(--red); border-color: rgba(248, 113, 113, .35); }
+.userdb-actions .btn-row-danger:hover { background: var(--red-dim); border-color: var(--red); }
+.userdb-nick .label-pills { margin-left: 4px; }

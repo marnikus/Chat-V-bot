@@ -94,6 +94,7 @@ class HistoryQuery:
                      "state": state,
                      "path": path}
         return {
+            "id": int(data.get("id") or 0),
             "ord": int(data.get("ord") or 0),
             "fp": data.get("fp") or "",
             "dir": data.get("direction") or "in",
@@ -114,6 +115,10 @@ class HistoryQuery:
     _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
                "md.state AS media_state, md.cache_path AS cache_path "
                "FROM messages m LEFT JOIN media md ON md.id = m.media_id ")
+    #: soft-deleted rows are invisible to every read (they exist only so a
+    #: single Ctrl+Z can bring them back)
+    _COUNT_ALIVE = ("SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+                    "deleted_at=''")
 
     # ── paging ───────────────────────────────────────────────────
     async def page(self, nick: str, before_ord: Optional[int] = None,
@@ -129,31 +134,35 @@ class HistoryQuery:
             return empty
         pid = int(person["id"])
         total = int(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=?", (pid,), 0))
+            self._COUNT_ALIVE, (pid,), 0))
 
         if after_ord is not None:
             rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.ord>? "
-                "ORDER BY m.ord LIMIT ?", (pid, int(after_ord), limit))
+                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
+                "AND m.ord>? ORDER BY m.ord LIMIT ?",
+                (pid, int(after_ord), limit))
         elif before_ord is not None:
             rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.ord<? "
-                "ORDER BY m.ord DESC LIMIT ?", (pid, int(before_ord), limit))
+                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
+                "AND m.ord<? ORDER BY m.ord DESC LIMIT ?",
+                (pid, int(before_ord), limit))
             rows = list(reversed(rows))
         else:
             rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? ORDER BY m.ord DESC "
-                "LIMIT ?", (pid, limit))
+                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
+                "ORDER BY m.ord DESC LIMIT ?", (pid, limit))
             rows = list(reversed(rows))
 
         items = [self._item(r) for r in rows]
         first = items[0]["ord"] if items else 0
         last = items[-1]["ord"] if items else 0
         has_more = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND ord<?",
+            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+            "deleted_at='' AND ord<?",
             (pid, first if items else 0), 0)) if items else False
         has_newer = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND ord>?",
+            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+            "deleted_at='' AND ord>?",
             (pid, last), 0)) if items else False
         return {
             "nick": person["nick"],
@@ -174,7 +183,8 @@ class HistoryQuery:
                     "total": 0, "gaps": []}
         pid = int(person["id"])
         rows = await self.db.fetchdicts(
-            self._SELECT + "WHERE m.person_id=? AND m.ord BETWEEN ? AND ? "
+            self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
+            "AND m.ord BETWEEN ? AND ? "
             "ORDER BY m.ord", (pid, int(ord_) - int(radius),
                                int(ord_) + int(radius)))
         items = [self._item(r) for r in rows]
@@ -183,11 +193,11 @@ class HistoryQuery:
             "items": items,
             "anchor_ord": int(ord_),
             "missing": False,
-            "total": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE person_id=?", (pid,), 0)),
+            "total": int(await self.db.scalar(self._COUNT_ALIVE, (pid,), 0)),
             "has_more": bool(items) and items[0]["ord"] > 1,
             "has_newer": bool(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE person_id=? AND ord>?",
+                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+                "deleted_at='' AND ord>?",
                 (pid, items[-1]["ord"] if items else 0), 0)),
             "gaps": await self.gaps(pid),
         }
@@ -245,7 +255,7 @@ class HistoryQuery:
         text = (query or "").strip()
         if not text:
             return [], 0
-        where = "p.deleted_at IS NULL"
+        where = "p.deleted_at IS NULL AND m.deleted_at=''"
         params: list = []
         if person_id is not None:
             where += " AND m.person_id=?"
@@ -356,7 +366,11 @@ class HistoryQuery:
                 "SELECT COUNT(*) FROM persons WHERE deleted_at IS NOT NULL",
                 (), 0)),
             "messages": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages", (), 0)),
+                "SELECT COUNT(*) FROM messages WHERE deleted_at=''", (), 0)),
+            "messages_hidden": int(await self.db.scalar(
+                "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0)),
+            "text_bytes": int(await self.db.scalar(
+                "SELECT COALESCE(SUM(LENGTH(text)),0) FROM messages", (), 0)),
             "media": int(await self.db.scalar(
                 "SELECT COUNT(*) FROM media", (), 0)),
             "media_cached": int(await self.db.scalar(
@@ -379,8 +393,8 @@ class HistoryQuery:
         pid = int(data["id"])
         row = await self.db.fetchone(
             "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
-            "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=?",
-            (pid,))
+            "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
+            "AND deleted_at=''", (pid,))
         return {
             "nick": data["nick"],
             "missing": False,
@@ -395,6 +409,9 @@ class HistoryQuery:
             "first_day": (row["first_day"] if row else "") or "",
             "last_day": (row["last_day"] if row else "") or "",
             "days": int((row["days"] if row else 0) or 0),
+            "hidden": int(await self.db.scalar(
+                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+                "deleted_at<>''", (pid,), 0)),
             "deleted": bool(data.get("deleted_at")),
             "gaps": await self.gaps(pid),
         }

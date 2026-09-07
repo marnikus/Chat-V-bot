@@ -179,6 +179,29 @@ class Collector(QObject):
     def resume(self) -> None:
         self._paused = False
 
+    def reset_state(self) -> None:
+        """Forget everything learned about the CURRENT conversation.
+
+        Called when the archive database is swapped underneath us: the
+        cursors, totals and the verified private-chat gate all describe the
+        old file, and acting on them would attribute the next batch to a
+        conversation this database has never seen (RULE 15 fails closed).
+        """
+        self._nick = ""
+        self._text = ""
+        self._verified = False
+        self._added = 0
+        self._total = 0
+        self._error = ""
+        self._warning = ""
+        self._last_probe = {}
+        self._last_sync_reason = ""
+        self._last_sync_added = 0
+        self._last_sync_count = 0
+        self._backfill_pending = False
+        self._force_backfill = False
+        self._last_emitted = ()
+
     def on_run_started(self) -> None:
         """An Action-Stack run began: keep collecting, but stay out of its way."""
         self._throttled = True
