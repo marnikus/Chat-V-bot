@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 6;
+  var VERSION = 7;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -445,11 +445,7 @@
   }
 
   function scrollInfo() {
-    var root = messagesRoot();
-    for (var el = root; el; el = el.parentElement) {
-      if (num(el.scrollHeight) > num(el.clientHeight) + 4) break;
-    }
-    var box = el || root || {};
+    var box = chatScroller();
     var top = num(box.scrollTop), height = num(box.scrollHeight),
         client = num(box.clientHeight);
     return { top: top, height: height, client: client,
@@ -457,14 +453,54 @@
              atBottom: height === 0 || top + client >= height - 4 };
   }
 
-  /** the scrollable box (the .messages-root or its scroll parent) */
-  function scrollBox() {
-    var root = messagesRoot() || qs(document, '.messages-root') ||
-               qs(document, 'app-messages');
+  /** Every element that can actually scroll the conversation.
+   *
+   * `messagesRoot()` returns the CONTENT wrapper (the element the observer is
+   * bound to), not necessarily the box that has `overflow-y:scroll`. We
+   * therefore walk up from that wrapper and collect the real scrollers: the
+   * `.messages-root` / `app-messages`, any `cdk-virtual-scrollable` viewport,
+   * and any ancestor with a scrolling overflow. The first such element is the
+   * one `state()` reports and `scrollToTop()` drives. */
+  function scrollerCandidates() {
+    var root = messagesRoot() || visiblePane().pane ||
+               qs(document, '.messages-root') || qs(document, 'app-messages');
+    var candidates = [], seen = [];
     for (var el = root; el; el = el.parentElement) {
-      if (num(el.scrollHeight) > num(el.clientHeight) + 4) return el;
+      if (seen.indexOf(el) >= 0) break;
+      seen.push(el);
+      var tag = String(el.tagName || '').toLowerCase();
+      var cls = '';
+      if (el.classList && el.classList.contains) {
+        var klass = String(el.className || '');
+        cls = klass;
+      } else if (el.getAttribute) {
+        cls = String(el.getAttribute('class') || '');
+      }
+      var isMessagesRoot = cls.indexOf('messages-root') >= 0 ||
+                           tag === 'app-messages';
+      var isVirtual = cls.indexOf('cdk-virtual-scrollable') >= 0 ||
+                      cls.indexOf('virtual-scroll-viewport') >= 0;
+      var overflow = '';
+      try {
+        if (typeof window.getComputedStyle === 'function' && el !== root) {
+          overflow = String(window.getComputedStyle(el).overflowY || '')
+            .toLowerCase();
+        }
+      } catch (e) { /* stubs without computed style */ }
+      var isOverflow = overflow === 'scroll' || overflow === 'auto';
+      if (isMessagesRoot || isVirtual || isOverflow) candidates.push(el);
     }
-    return root || {};
+    if (!candidates.length) candidates.push(root || {});
+    return candidates;
+  }
+
+  function chatScroller() {
+    return scrollerCandidates()[0];
+  }
+
+  function scrollMetrics(box) {
+    return { top: num(box.scrollTop), height: num(box.scrollHeight),
+             client: num(box.clientHeight) };
   }
 
   function dispatchScroll(box) {
@@ -475,26 +511,46 @@
     }
   }
 
+  var lastBeforeTops = [];
+
   /** Scroll the chat to the very first message. Returns the old position. */
   function scrollToTop() {
     reattach();
-    var box = scrollBox();
-    var beforeTop = num(box.scrollTop);
-    box.scrollTop = 0;
-    dispatchScroll(box);
-    return { ok: true, beforeTop: beforeTop, top: num(box.scrollTop),
-             atTop: num(box.scrollTop) <= 4,
-             height: num(box.scrollHeight),
-             count: containers().length };
+    lastBeforeTops = [];
+    var boxes = scrollerCandidates();
+    var primary = boxes[0];
+    var beforeTop = num(primary.scrollTop);
+    for (var i = 0; i < boxes.length; i++) {
+      var box = boxes[i];
+      lastBeforeTops.push(num(box.scrollTop));
+      if (typeof box.scrollTo === 'function') {
+        try {
+          box.scrollTo({ top: 0, behavior: 'auto' });
+        } catch (e) {
+          try { box.scrollTo(0, 0); } catch (e2) { /* ignore */ }
+        }
+      }
+      box.scrollTop = 0;
+      dispatchScroll(box);
+    }
+    var top = num(primary.scrollTop);
+    return { ok: true, beforeTop: beforeTop, top: top,
+             atTop: top <= 4, height: num(primary.scrollHeight),
+             count: containers().length, boxes: boxes.length };
   }
 
   /** Put the conversation back where the user had it. */
   function restoreScroll(top) {
     reattach();
-    var box = scrollBox();
-    box.scrollTop = num(top);
-    dispatchScroll(box);
-    return { ok: true, top: num(box.scrollTop) };
+    var boxes = scrollerCandidates();
+    for (var i = 0; i < boxes.length; i++) {
+      var box = boxes[i];
+      var target = i < lastBeforeTops.length ? lastBeforeTops[i] : num(top);
+      box.scrollTop = target;
+      dispatchScroll(box);
+    }
+    var primary = boxes[0] || {};
+    return { ok: true, top: num(primary.scrollTop) };
   }
 
   function state() {

@@ -83,6 +83,19 @@ class El {
     this.children = [];
     this.parentElement = null;
     this.hidden = !!opts.hidden;
+    // scrolling surface — mirrors the real .messages-root / cdk viewport
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
+    this.clientHeight = 0;
+  }
+  scrollTo(target, y) {
+    if (target && typeof target === 'object' &&
+        Object.prototype.hasOwnProperty.call(target, 'top')) {
+      this.scrollTop = Number(target.top) || 0;
+    } else {
+      this.scrollTop = Number(target) || 0;
+    }
+    return this;
   }
   get classList() {
     const cls = String(this.className).trim().split(/\s+/).filter(Boolean);

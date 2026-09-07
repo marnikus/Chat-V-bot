@@ -16,7 +16,7 @@ import os
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
 #: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 6
+AGENT_VERSION = 7
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")

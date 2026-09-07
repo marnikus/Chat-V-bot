@@ -195,7 +195,55 @@ Pane selection is now **identity-first**, not “biggest pane wins”:
 
 ---
 
-## 6. Files that change
+## 6. Follow-up (fourth pass): backfill_older scrolls the wrong element
+
+### Symptom
+
+Clicking **⬆ Backfill older** "did nothing": `full_scan_complete` could even be
+set while `In archive` stayed at `0`.
+
+### Root cause
+
+`messagesRoot()` (the MutationObserver target) returns the **content wrapper**
+inside `.messages-root`, not the element that owns the scrollbar. The old
+`scrollBox()` walked upward from that wrapper and stopped on the first element
+whose `scrollHeight > clientHeight`. The wrapper has `clientHeight = 0`, so it
+was selected and `scrollTop` was set on a non-scrolling `<div>` — the real
+`.messages-root` (which has `overflow-y: scroll`) never moved, no older
+messages were loaded, and after the short "settle" the archive was marked as
+fully checked.
+
+### Fix
+
+Agent **v7**:
+
+* `scrollerCandidates()` walks up from the message wrapper and selects the
+  actual scrollers: `.messages-root` / `app-messages`, any
+  `cdk-virtual-scrollable` / virtual-scroll viewport, or an ancestor whose
+  computed `overflow-y` is `scroll`/`auto`. A bare content wrapper is never a
+  candidate.
+* `scrollInfo()`/`state().scroll` reports the **real scroller** (`atTop` is
+  truthful).
+* `scrollToTop()` sets `scrollTop = 0` on every real scroller (using
+  `scrollTo({top:0})` when available), records each scroller’s old position,
+  and dispatches a scroll event. `restoreScroll()` restores each recorded
+  position.
+* Python `settle_after_top()` now waits longer and requires the DOM count to
+  stay stable for **3 consecutive polls** (initial default 6 s), and
+  `sync_conversation()` only marks `full_scan_complete` when that settle
+  actually succeeded. A slow page is retried instead of being permanently
+  flagged "done".
+
+### Tests locked
+
+* JS: `scrollToTop drives the real scroller, not the wrapped message content`
+  — sets scrollTop on the content wrapper to `999`, ignores it, and checks
+  that the `.messages-root` position is used and moved.
+* Python: existing backfill tests now run through the longer settle path.
+
+---
+
+## 7. Files that change
 
 | File | Change |
 |---|---|

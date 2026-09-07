@@ -265,33 +265,38 @@ class ChatParser:
         return raw if isinstance(raw, dict) else {}
 
     async def settle_after_top(self, first_state: dict,
-                               wait_ms: int = 250,
-                               stable_polls: int = 2,
-                               max_wait_s: float = 2.5) -> dict:
+                               wait_ms: int = 300,
+                               stable_polls: int = 3,
+                               max_wait_s: float = 6.0) -> dict:
         """Poll until the pane is at the top and older lines stopped arriving.
 
         The chat loads older history asynchronously when it is scrolled up, so
-        the collector must wait for the DOM to settle before it reads.
+        the collector must wait for the DOM to settle before it reads. A slow
+        page must not cause us to mark the full scan complete after only two
+        quick polls — that was the "nothing was fixed" regression: the archive
+        was flagged done while the first pages of history were still loading.
         """
         last_count = int(first_state.get("count") or 0)
         stable = 0
         deadline = asyncio.get_event_loop().time() + max_wait_s
+        state = first_state
         while stable < stable_polls:
             state = await self.state()
             state = state if isinstance(state, dict) else {}
             scroll = state.get("scroll") or {}
             count = int(state.get("count") or 0)
-            if bool(scroll.get("atTop")) and count == last_count:
-                stable += 1
-            else:
-                stable = 0
+            stable = stable + 1 if (bool(scroll.get("atTop"))
+                                    and count == last_count) else 0
             last_count = count
+            state["_settled"] = stable >= stable_polls
             if stable >= stable_polls:
                 return state
             if asyncio.get_event_loop().time() >= deadline:
+                state["_settled"] = False
                 return state
             await asyncio.sleep(wait_ms / 1000.0)
-        return first_state
+        state["_settled"] = True
+        return state
 
     async def pause(self) -> None:
         if self.chunk_pause_ms:
@@ -357,7 +362,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             except Exception:                        # noqa: BLE001
                 state = await parser.state()
             after = state.get("scroll") or {}
-            if bool(after.get("atTop")):
+            if bool(after.get("atTop")) and bool(state.get("_settled")):
                 result.backfilled = True
                 restored_top = old_top if old_top else None
         # a page that cannot scroll falls through to the normal visible range
