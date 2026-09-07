@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Iterable, Optional
 
@@ -59,6 +60,121 @@ def _signature(value) -> str:
 
 def _norm(nick: str) -> str:
     return " ".join(str(nick or "").split()).strip().lower()
+
+
+# ── the two-step private-chat gate (bug report of 2026-09-07) ─────
+#
+# STEP 1  the conversation must contain exactly two nicks: mine and the
+#         partner's. A third author means this is not a private chat.
+# STEP 2  the ACTIVE tab title must name that same partner.
+#
+# Both must pass before a single line may be written to that person's
+# history. Everything that saves goes through `verify_private()`.
+
+@dataclass
+class PrivateCheck:
+    ok: bool = True
+    reason: str = "ok"          # ok|not_private|no_partner|title_mismatch|
+    #                             self_chat|strangers|no_author_data
+    detail: str = ""            # human text for the status window
+    me: str = ""                # my nick, detected when it was not configured
+    partner: str = ""           # the nick the page says we are talking to
+    strangers: list = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return bool(self.ok)
+
+
+def _distinct(names) -> list:
+    out = []
+    for name in names or []:
+        clean = " ".join(str(name or "").split()).strip()
+        if clean and clean not in out:
+            out.append(clean)
+    return out
+
+
+def _authors_from_items(items) -> tuple:
+    """Split a batch of records into (inbound nicks, outbound nicks)."""
+    ins, outs = [], []
+    for item in items or []:
+        if isinstance(item, MessageRecord):
+            direction = item.direction
+            nick = item.from_nick
+        elif isinstance(item, dict):
+            direction = item.get("dir") or item.get("direction") or "in"
+            nick = item.get("from") or item.get("from_nick") or ""
+        else:
+            continue
+        (outs if direction == "out" else ins).append(nick)
+    return _distinct(ins), _distinct(outs)
+
+
+def title_matches(title: str, nick: str) -> bool:
+    """Step 2: does the active tab title name this person?"""
+    want, have = _norm(nick), _norm(title)
+    if not want or not have:
+        return False
+    return have == want or want in have
+
+
+def verify_private(state: dict, nick: str, my_nick: str = "",
+                   items=None, require_private: bool = True) -> PrivateCheck:
+    """The gate. `ok` is False unless BOTH steps pass."""
+    state = state if isinstance(state, dict) else {}
+    target = " ".join(str(nick or "").split()).strip()
+    partner = " ".join(str(state.get("partner") or "").split()).strip()
+    title = str(state.get("title") or state.get("partner") or "")
+    me_cfg = " ".join(str(my_nick or "").split()).strip()
+
+    if require_private and str(state.get("tab") or "") != "private":
+        return PrivateCheck(False, "not_private",
+                            "the active tab is not a private chat",
+                            me_cfg, partner)
+    if not target or not partner:
+        return PrivateCheck(False, "no_partner",
+                            "the active tab does not name a person",
+                            me_cfg, partner)
+    # ── step 2: the tab title ─────────────────────────────────────
+    if not title_matches(title, target):
+        return PrivateCheck(
+            False, "title_mismatch",
+            f"the active tab is “{' '.join(str(title).split())}”, "
+            f"not “{target}”", me_cfg, partner)
+    if me_cfg and _norm(me_cfg) == _norm(target):
+        return PrivateCheck(False, "self_chat",
+                            "the partner is my own nick", me_cfg, partner)
+
+    # ── step 1: exactly two nicks ─────────────────────────────────
+    if items is not None:
+        ins, outs = _authors_from_items(items)
+    elif ("in_authors" in state or "out_authors" in state
+            or "authors" in state):
+        ins = _distinct(state.get("in_authors"))
+        outs = _distinct(state.get("out_authors"))
+        if not ins and not outs:
+            everyone = _distinct(state.get("authors"))
+            ins = [a for a in everyone if _norm(a) != _norm(me_cfg or target)]
+            outs = [a for a in everyone if _norm(a) == _norm(me_cfg)]
+    else:
+        return PrivateCheck(False, "no_author_data",
+                            "this page cannot tell me who wrote what",
+                            me_cfg, partner)
+
+    me = me_cfg or (outs[0] if len(outs) == 1 else "")
+    strangers = [a for a in ins if _norm(a) != _norm(target)]
+    if me:
+        strangers += [a for a in outs
+                      if _norm(a) != _norm(me) and _norm(a) != _norm(target)]
+    elif len(outs) > 1:
+        strangers += list(outs)
+    strangers = _distinct(strangers)
+    if strangers:
+        shown = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
+        return PrivateCheck(False, "strangers",
+                            f"other people write here: {shown}",
+                            me, partner, strangers)
+    return PrivateCheck(True, "ok", "", me, partner, [])
 
 
 def _payload(result) -> list:
@@ -159,6 +275,14 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     if verify_partner and _norm(state.get("partner")) != _norm(nick):
         result.ok, result.reason = False, "partner_mismatch"
         return result
+    if verify_partner:
+        # The two-step gate: nothing is written unless the pane holds only
+        # the two of us AND the active tab names this person.
+        check = verify_private(state, nick, my_nick,
+                               require_private=require_private)
+        if not check.ok:
+            result.ok, result.reason = False, check.reason
+            return result
 
     count = int(state.get("count") or 0)
     head_sig = _signature(state.get("head"))

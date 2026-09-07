@@ -30,6 +30,23 @@
 
   // ── static helpers (also used directly by the views) ─────────
 
+  /**
+   * Turn a saved media path into something the window can actually load.
+   * The archive stores absolute paths (saved_media/<Nick>/images/…); a bare
+   * path would resolve against the UI document and render as a broken
+   * image, which is exactly the bug this replaces.
+   */
+  function fileUrl(pathOrUrl) {
+    const raw = String(pathOrUrl == null ? '' : pathOrUrl);
+    if (!raw) return '';
+    if (/^(file|https?|data|blob|qrc):/i.test(raw)) return raw;
+    let p = raw.replace(/\\/g, '/');
+    if (/^[A-Za-z]:\//.test(p)) p = '/' + p;          // C:/… → /C:/…
+    if (p.charAt(0) !== '/') p = '/' + p;
+    return 'file://' + encodeURI(p).replace(/#/g, '%23').replace(/\?/g, '%3F');
+  }
+
+
   /** 'YYYY-MM-DD' → the day before, without touching the clock. */
   function previousDay(day) {
     const parts = String(day || '').split('-').map(Number);
@@ -80,6 +97,8 @@
           kind: item.media.kind || kind,
           state: item.media.state || '',
           path: item.media.path || '',
+          // what the <img> actually loads: the saved file when we have it
+          src: fileUrl(item.media.path) || item.media.url || '',
           copyable: true,
           show: showImages,
         }
@@ -371,8 +390,14 @@
     return model;
   }
 
+  /** `toRow` for a whole page. */
+  function toRows(items, ctx) {
+    return (items || []).map((item) => toRow(item, ctx));
+  }
+
   return {
     create, DEFAULTS,
-    groupByDay, dayLabel, previousDay, toRow, highlight, clipboardText,
+    groupByDay, dayLabel, previousDay, toRow, toRows, fileUrl, highlight,
+    clipboardText,
   };
 });

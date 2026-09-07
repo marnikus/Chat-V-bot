@@ -9,4 +9,5 @@ logs/*.log
 logs/*.jsonl
 .venv/
 media_cache/
+saved_media/
 history.db*

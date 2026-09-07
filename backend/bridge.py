@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import logging
+import os
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
@@ -1469,6 +1470,34 @@ class Bridge(QObject):
                                                      ensure_ascii=False))
         self._run_async("media_path", work())
 
+    @Slot(str, result=str)
+    def media_folder(self, nick):
+        """Where this person's saved images and GIFs live on disk."""
+        if self._archive is None:
+            return ""
+        try:
+            return self._archive.media.folder_for(str(nick or ""))
+        except Exception as exc:                      # noqa: BLE001
+            log.debug("media folder unavailable: %s", exc)
+            return ""
+
+    @Slot(str, result=bool)
+    def open_media_folder(self, nick):
+        """Open that folder in Explorer/Finder/the file manager."""
+        folder = self.media_folder(nick)
+        if not folder:
+            return False
+        try:
+            os.makedirs(folder, exist_ok=True)
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            ok = bool(QDesktopServices.openUrl(QUrl.fromLocalFile(folder)))
+        except Exception as exc:                      # noqa: BLE001
+            self.log_message.emit(f"⚠ Cannot open {folder}: {exc}", "warn")
+            return False
+        self.log_message.emit(f"📂 {folder}", "info")
+        return ok
+
     @Slot(str)
     def copy_media(self, media_ref):
         """Left click on an image/GIF: put it on the system clipboard."""
@@ -1506,13 +1535,21 @@ class Bridge(QObject):
                 return False
             mode = payload.get("mode")
             path = payload.get("path") or ""
-            if mode == "image" and path:
-                image = QImage(path)
-                if not image.isNull():
-                    clipboard.setImage(image)
-                    return True
+            if path and os.path.exists(path):
+                # Carry the FILE itself (so a chat can attach it), the path
+                # as text, and — for still images — the pixels as well.
+                from PySide6.QtCore import QMimeData, QUrl
+                mime = QMimeData()
+                mime.setUrls([QUrl.fromLocalFile(path)])
+                mime.setText(path)
+                if mode == "image":
+                    image = QImage(path)
+                    if not image.isNull():
+                        mime.setImageData(image)
+                clipboard.setMimeData(mime)
+                return True
             if path:
-                clipboard.setText(path if mode == "file_link" else path)
+                clipboard.setText(path)
                 return True
             clipboard.setText(str(payload.get("text") or ""))
             return True

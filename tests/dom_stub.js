@@ -224,16 +224,19 @@ function buildChat(spec) {
   ]), userItem(me, true), userItem(partner, false)];
   for (let i = 2; i < participants; i++) userRows.push(userItem('Extra' + i));
 
+  const tabsList = el('div', { class: 'tabs-list' }, [
+    tabNode({ kind: 'room', title: 'Гостиная', active: kind === 'room',
+              unread: 5 }),
+    tabNode({ kind: 'user', title: spec.title || partner,
+              active: kind === 'user' }),
+  ]);
+  const paneHost = el('div', { class: 'container' }, [
+    el('app-messages', { class: 'messages' }, [messagesRoot]),
+  ]);
   const root = el('body', {}, [
-    el('app-tab-scroller', {}, [
-      el('div', { class: 'tabs-list' }, [
-        tabNode({ kind: 'room', title: 'Гостиная', active: kind === 'room',
-                  unread: 5 }),
-        tabNode({ kind: 'user', title: partner, active: kind === 'user' }),
-      ]),
-    ]),
+    el('app-tab-scroller', {}, [tabsList]),
+    paneHost,
     el('div', { class: 'container' }, [
-      el('app-messages', { class: 'messages' }, [messagesRoot]),
       el('users-list', {}, [
         el('cdk-virtual-scroll-viewport', { class: 'users-list-viewport' },
            userRows),
@@ -295,6 +298,40 @@ function buildChat(spec) {
       observers.forEach((o) => {
         if (o.target === messagesRoot) o.cb([{ addedNodes: added }], o);
       });
+    },
+    /* A second conversation pane, exactly as the site keeps them: every
+       open tab has its own app-messages/.messages-root, only one visible. */
+    addPane(messages, opts) {
+      opts = opts || {};
+      const paneRoot = el('div', { class: 'messages-root',
+                                   hidden: opts.hidden !== false });
+      (messages || []).forEach((m) => paneRoot.append(messageNode(m)));
+      const pane = el('app-messages', { class: 'messages',
+                                        hidden: opts.hidden !== false },
+                      [paneRoot]);
+      paneHost.append(pane);
+      return { pane, root: paneRoot,
+        show() { pane.hidden = false; paneRoot.hidden = false; },
+        hide() { pane.hidden = true; paneRoot.hidden = true; },
+        append(...msgs) {
+          const nodes = msgs.map((m) => { const n = messageNode(m);
+                                          paneRoot.append(n); return n; });
+          observers.forEach((o) => {
+            if (o.target === paneRoot || o.target === pane) {
+              o.cb([{ addedNodes: nodes }], o);
+            }
+          });
+          return nodes;
+        },
+      };
+    },
+    hideMainPane() {
+      messagesRoot.hidden = true;
+      paneHost.children[0].hidden = true;
+    },
+    setTabTitle(title) {
+      const tab = queryAll(root, '.tab-item')[1];
+      tab.querySelector('p.chat-title').textContent = title;
     },
     setTab(kindNext) {
       queryAll(root, '.tab-item').forEach((tab) => {

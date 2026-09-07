@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS media (
     sha256      TEXT,
     bytes       INTEGER NOT NULL DEFAULT 0,
     cache_path  TEXT NOT NULL DEFAULT '',
+    owner       TEXT NOT NULL DEFAULT '',   -- whose conversation it belongs to
+    day         TEXT NOT NULL DEFAULT '',   -- YYYY-MM-DD used in the filename
     ref_count   INTEGER NOT NULL DEFAULT 0,
     fail_reason TEXT NOT NULL DEFAULT '',
     created_at  TEXT,
@@ -158,12 +160,33 @@ class HistoryDB:
         await self._conn.execute("PRAGMA synchronous=NORMAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(SCHEMA)
+        await self._add_missing_columns()
         if self._want_fts:
             self.fts_enabled = await self._try_fts()
         await self.set_meta("schema_version", SCHEMA_VERSION)
         await self.set_meta("fts", "1" if self.fts_enabled else "0")
         await self._conn.commit()
         return self
+
+    #: columns added after the first release — old files are upgraded in place
+    LATE_COLUMNS = {
+        "media": [("owner", "TEXT NOT NULL DEFAULT ''"),
+                  ("day", "TEXT NOT NULL DEFAULT ''")],
+    }
+
+    async def _add_missing_columns(self) -> None:
+        for table, columns in self.LATE_COLUMNS.items():
+            cur = await self._conn.execute(f"PRAGMA table_info({table})")
+            have = {row[1] for row in await cur.fetchall()}
+            await cur.close()
+            for name, decl in columns:
+                if name in have:
+                    continue
+                try:
+                    await self._conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                except Exception as e:              # noqa: BLE001
+                    log.warning("cannot add %s.%s: %s", table, name, e)
 
     async def _try_fts(self) -> bool:
         try:

@@ -268,3 +268,23 @@ The two stores are joined **by nick at read time only** — clicking a nick in
 User Memory looks the person up in the archive; it never copies data between
 the two databases.
 
+## RULE 15 — nothing is archived without the two-step gate
+
+A message may be written to a person's history **only** when both checks
+pass, and the checks must be re-applied on every path that saves (heartbeat
+tick, live `__cvbPush` batch, `COLLECT_HISTORY` block):
+
+1. the conversation on screen contains exactly two nicks — mine and that
+   person's (a third author ⇒ it is not a private chat);
+2. the active tab is a private tab whose title names that same person.
+
+The gate lives in one place, `backend/chat_parser.verify_private()`, and it
+fails **closed**: an agent that cannot report who wrote what collects
+nothing, and a refused check disarms the push channel until a tick verifies
+the conversation again. Never “save it anyway and clean up later” — a
+polluted history cannot be un-mixed.
+
+Media follows the same ownership rule: bytes are filed under the
+conversation they belong to (`saved_media/<Latin nick>/images|gifs/
+YYYY-MM-DD_NNN.ext`), never in an anonymous global pile, and the UI shows
+the saved file rather than the remote URL.

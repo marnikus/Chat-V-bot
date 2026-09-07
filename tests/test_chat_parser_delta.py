@@ -36,6 +36,7 @@ from backend.chat_parser import (  # noqa: E402
     parse_records,
     sync_conversation,
 )
+from backend.chat_agent_js import AGENT_VERSION  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
@@ -56,11 +57,12 @@ class FakePage:
     """A chat page the parser can talk to through CDP-style evaluates."""
 
     def __init__(self, messages=None, tab="private", partner="Nick",
-                 me="Me", participants=2, agent=True):
+                 me="Me", participants=2, agent=True, title=None):
         self.messages = list(messages or [])
         self.tab, self.partner, self.me = tab, partner, me
+        self.title = title              # None ⇒ the tab title IS the partner
         self.participants = participants
-        self.agent_version = 3 if agent else 0
+        self.agent_version = AGENT_VERSION if agent else 0
         self.installs = 0
         self.slice_calls = []
         self.queue = []
@@ -77,6 +79,17 @@ class FakePage:
     def trim(self, keep):
         self.messages = self.messages[-keep:]
 
+    def _authors(self, direction):
+        """Distinct nicks per direction, exactly like the in-page agent."""
+        seen = []
+        for m in self.messages:
+            if m.get("dir") != direction:
+                continue
+            nick = str(m.get("from") or "").strip()
+            if nick and nick not in seen:
+                seen.append(nick)
+        return seen
+
     def _reindex(self):
         for i, m in enumerate(self.messages):
             m["idx"] = i
@@ -85,7 +98,7 @@ class FakePage:
         self.evaluates += 1
         if "/*CVB_INSTALL*/" in expression:
             self.installs += 1
-            self.agent_version = 3
+            self.agent_version = AGENT_VERSION
             return 3
         if "/*CVB_STATE*/" in expression:
             self._reindex()
@@ -93,7 +106,13 @@ class FakePage:
             return json.dumps({
                 "ok": True, "agent": self.agent_version, "tab": self.tab,
                 "partner": self.partner, "me": self.me,
+                "title": self.partner if self.title is None else self.title,
                 "participants": self.participants,
+                "in_authors": self._authors("in"),
+                "out_authors": self._authors("out"),
+                "authors": self._authors("in") + [
+                    a for a in self._authors("out")
+                    if a not in self._authors("in")],
                 "count": len(msgs),
                 "head": msgs[0]["fp"] if msgs else "",
                 "tail": msgs[-1]["fp"] if msgs else "",

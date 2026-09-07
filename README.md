@@ -293,7 +293,7 @@ The **Log Console** is a live step-by-step debugger for every block:
 
 Everything said in a private chat — both directions, text, images and GIFs —
 is archived per nick in a second SQLite database (`history.db`, media bytes
-in `media_cache/`). The queue database (`chatbot.db`) is untouched by it:
+in `saved_media/`). The queue database (`chatbot.db`) is untouched by it:
 filters and People-list edits never delete archived messages (docs RULE 14).
 
 ### My Nick
@@ -313,6 +313,42 @@ other panel (`📐` menu → *Reset to default* brings them all back).
 | **Person History** | The whole conversation with one person, oldest first, with inline images/GIFs, day separators and gap markers. Click a nick in **User Memory** to open it. Text is selectable; a left click on an image copies it. Search this conversation, or switch to **All people** for a global search grouped per nick. |
 | **Full User Database** | Everyone ever archived, merged by nick (never a duplicate), lazily loaded as you scroll, searchable by nick. Clicking a row opens that person. `Preload` sets how many rows are fetched ahead of the scroll. |
 | **Chat Message Collector** | What the background collector is doing right now: *Collecting*, *Collected*, *No new messages* or *Not in private tab now*, plus the partner, my nick, the archive total and the heartbeat. Pause/resume it, force one pass, or turn media downloads off. |
+
+### Only real private chats are archived (two-step gate)
+
+Before a single line is written to a person's history, both checks must pass:
+
+1. **Only two nicks.** The in-page agent parses *the pane that is on screen*
+   and reports the distinct authors it saw. Mine + the partner ⇒ fine; a
+   third nick (the main room, a group tab, a pane left over from the chat
+   you just closed) ⇒ nothing is saved.
+2. **The tab names that person.** The active `.tab-item` must be a private
+   tab (`chat-type-icon = user`) whose title names the same nick.
+
+If either check fails the collector says so in the Chat Message Collector
+window (*“Not a private chat — Макс__Б writes here too (nothing saved for
+Ански)”*) and stores nothing. The live push channel obeys the same gate, so
+switching tabs mid-conversation can never file room chatter under a person.
+
+### Where the pictures are saved
+
+```
+saved_media/
+├─ Anski/                     ← Latin folder name (Ански), `_nick.txt` names the owner
+│  ├─ images/2026-09-07_001.png
+│  └─ gifs/2026-09-07_001.gif
+└─ Horosho_Vse/
+   └─ images/2026-09-07_001.jpg
+```
+
+One folder per conversation (both directions), `images/` and `gifs/` split,
+files named `YYYY-MM-DD_NNN.ext` — short, sorted, and safe to open, copy or
+drag anywhere. Person History renders the **saved file**, never the
+percent-encoded remote URL, and the toolbar's **📂 Files** button opens that
+person's folder in Explorer. A left click on a picture puts the file itself
+on the clipboard (plus the path as text), so it can be pasted straight into
+a chat. Older flat `media_cache/<sha256>.<ext>` files are moved into the new
+tree automatically on the first start.
 
 ### How collection works (and why it does not freeze the UI)
 
@@ -339,7 +375,7 @@ and *fail if empty*. It reports progress as `done/total` and honours Stop.
 ```jsonc
 "history":   { "enabled": true, "db_path": "history.db",
                "media":   { "enabled": true, "max_file_mb": 2,
-                            "max_cache_mb": 200, "cache_dir": "media_cache" },
+                            "max_cache_mb": 200, "cache_dir": "saved_media" },
                "preview": { "preload_rows": 40, "page_size": 50,
                             "show_images": true } },
 "collector": { "enabled": true, "my_nick": "", "heartbeat_ms": 1500,
@@ -348,7 +384,8 @@ and *fail if empty*. It reports progress as `done/total` and honours Stop.
 
 Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 `docs/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md`,
-`docs/HISTORY_UI_WINDOWS_DESIGN_2026-09-06.md`.
+`docs/HISTORY_UI_WINDOWS_DESIGN_2026-09-06.md`,
+`docs/PRIVATE_GATE_AND_MEDIA_TREE_2026-09-07.md`.
 
 ---
 

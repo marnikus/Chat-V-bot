@@ -21,9 +21,10 @@
 (function () {
   'use strict';
 
-  var VERSION = 3;
+  var VERSION = 4;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
+  var AUTHOR_MAX = 12;      // distinct nicks reported per direction
   var BUFFER_MAX = 500;     // push buffer cap before we start dropping
   var PUSH_DEBOUNCE_MS = 120;
   var SEP = '\u001f';
@@ -84,15 +85,77 @@
   function num(value) { var n = Number(value); return isFinite(n) ? n : 0; }
 
   // ── the conversation ───────────────────────────────────────────
+  /* The site keeps several chat panes alive at once (the main room plus one
+     per open private tab). Parsing `document.querySelectorAll` blindly mixes
+     them, which is how room messages used to end up in a person's archive.
+     Everything below therefore works on ONE pane: the visible one. */
+
+  function isHidden(el) {
+    if (!el) return true;
+    var tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'body' || tag === 'html') return false;
+    if (el.hidden === true) return true;
+    if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return true;
+    if ('offsetParent' in el && el.offsetParent === null) return true;
+    return false;
+  }
+
+  function visible(el) {
+    for (var p = el; p; p = p.parentElement) if (isHidden(p)) return false;
+    return true;
+  }
+
+  /** the conversation pane a message node belongs to (innermost match) */
+  function paneOf(node) {
+    for (var p = node; p; p = p.parentElement) {
+      if (p.classList && p.classList.contains('messages-root')) return p;
+      if (String(p.tagName || '').toLowerCase() === 'app-messages') return p;
+    }
+    return null;
+  }
+
+  /** [pane, nodes] of the pane the user is actually looking at */
+  function visiblePane() {
+    var nodes = qsa(document, 'div.message-container');
+    if (!nodes.length) {
+      return { pane: qs(document, '.messages-root') ||
+                     qs(document, 'app-messages'), nodes: nodes, panes: 0 };
+    }
+    var panes = [], groups = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var pane = paneOf(nodes[i]);
+      var at = panes.indexOf(pane);
+      if (at < 0) { panes.push(pane); groups.push([nodes[i]]); }
+      else groups[at].push(nodes[i]);
+    }
+    if (panes.length === 1) {
+      return { pane: panes[0], nodes: groups[0], panes: 1 };
+    }
+    var best = -1;
+    for (var g = 0; g < panes.length; g++) {
+      if (!visible(panes[g])) continue;
+      if (best < 0 || groups[g].length > groups[best].length) best = g;
+    }
+    if (best < 0) {                      // nothing measurably visible
+      best = 0;
+      for (var h = 1; h < groups.length; h++) {
+        if (groups[h].length > groups[best].length) best = h;
+      }
+    }
+    return { pane: panes[best], nodes: groups[best], panes: panes.length };
+  }
+
   function containers() {
-    return qsa(document, 'div.message-container');
+    return visiblePane().nodes;
   }
 
   /** the element that new messages are appended to (observer target) */
   function messagesRoot() {
-    var nodes = containers();
+    var found = visiblePane();
+    var nodes = found.nodes;
     if (!nodes.length) {
-      return qs(document, '.messages-root') || qs(document, 'app-messages');
+      return found.pane || qs(document, '.messages-root') ||
+             qs(document, 'app-messages');
     }
     var last = nodes[nodes.length - 1];
     for (var p = nodes[0].parentElement; p; p = p.parentElement) {
@@ -170,10 +233,27 @@
              time: record.time, occ: record.occ, idx: record.idx };
   }
 
+  /** distinct nicks per direction — the private-chat gate reads these */
+  function authorsOf(records) {
+    var ins = [], outs = [];
+    for (var i = 0; i < records.length; i++) {
+      var name = clean(records[i].from);
+      if (!name) continue;
+      var list = records[i].dir === 'out' ? outs : ins;
+      if (list.indexOf(name) < 0 && list.length < AUTHOR_MAX) list.push(name);
+    }
+    var all = ins.slice();
+    for (var o = 0; o < outs.length; o++) {
+      if (all.indexOf(outs[o]) < 0) all.push(outs[o]);
+    }
+    return { inbound: ins, outbound: outs, all: all };
+  }
+
   // ── the push buffer ────────────────────────────────────────────
   var buffer = [];
   var dropped = 0;
   var observer = null;
+  var observedRoot = null;
   var pushTimer = null;
 
   function bufferRecord(record) {
@@ -193,14 +273,19 @@
     var hook = window.__cvbPush;
     if (typeof hook !== 'function') return;
     var summary = describe();
+    var authors = authorsOf(walk());
     try {
       hook(JSON.stringify({
         kind: kind || 'append',
         agent: VERSION,
         count: count,
         partner: summary.partner,
+        title: summary.title,
         me: summary.me,
         tab: summary.tab,
+        in_authors: authors.inbound,
+        out_authors: authors.outbound,
+        authors: authors.all,
         pending: buffer.length,
         dropped: dropped,
         items: buffer.slice(-BUFFER_MAX),
@@ -242,29 +327,44 @@
     if (observer) observer.disconnect();
     observer = new MutationObserver(onMutations);
     observer.observe(root, { childList: true, subtree: true });
+    observedRoot = root;
     return true;
+  }
+
+  /* Switching tabs swaps the whole pane. An observer left on the old pane
+     would keep pushing the previous (or the room's) conversation, so every
+     probe re-checks that we are watching the pane that is on screen. */
+  function reattach() {
+    var root = messagesRoot();
+    if (root && root !== observedRoot) {
+      buffer = [];
+      install();
+    }
   }
 
   function uninstall() {
     if (observer) { observer.disconnect(); observer = null; }
+    observedRoot = null;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
   }
 
   // ── the public probes ──────────────────────────────────────────
   function describe() {
     var active = qs(document, '.tab-item.active');
-    var tab = 'none', partner = '';
+    var tab = 'none', partner = '', title = '';
     if (active) {
       var icon = qs(active, 'mat-icon.chat-type-icon') || qs(active, 'mat-icon');
       var name = icon ? icon.getAttribute('data-mat-icon-name') : '';
       tab = name === 'user' ? 'private' : 'room';
-      partner = ownText(qs(active, 'p.chat-title'));
+      title = ownText(qs(active, 'p.chat-title'));
+      partner = title;
     }
     var counter = qs(document, '.users-counter');
     var mine = qs(document, '.primary-text.bold');
     return {
       tab: tab,
       partner: partner,
+      title: title,
       me: clean(mine ? mine.textContent : ''),
       participants: counter ? num(clean(counter.textContent)) : 0,
     };
@@ -284,25 +384,33 @@
   }
 
   function state() {
+    reattach();
     var anchor = qs(document, 'app-messages') || qs(document, '.messages-root') ||
                  qs(document, '.tab-item.active');
     if (!anchor && !containers().length) {
       return { ok: false, reason: 'no chat on this page', agent: VERSION,
-               tab: 'none', partner: '', me: '', participants: 0, count: 0,
-               head: [], tail: [], pending: buffer.length,
+               tab: 'none', partner: '', title: '', me: '', participants: 0,
+               count: 0, head: [], tail: [], authors: [], in_authors: [],
+               out_authors: [], panes: 0, pending: buffer.length,
                scroll: { top: 0, height: 0, client: 0 } };
     }
     var records = walk();
     var fps = records.map(function (r) { return r.fp; });
     var summary = describe();
+    var authors = authorsOf(records);
     return {
       ok: true,
       agent: VERSION,
       tab: summary.tab,
       partner: summary.partner,
+      title: summary.title,
       me: summary.me,
       participants: summary.participants,
       count: records.length,
+      authors: authors.all,
+      in_authors: authors.inbound,
+      out_authors: authors.outbound,
+      panes: visiblePane().panes,
       head: fps.slice(0, HEAD_FPS),
       tail: fps.slice(Math.max(0, fps.length - TAIL_FPS)),
       pending: buffer.length,
@@ -312,6 +420,7 @@
   }
 
   function slice(from, to) {
+    reattach();
     var records = walk();
     var a = Math.max(0, Math.min(records.length, num(from)));
     var b = Math.max(a, Math.min(records.length, num(to)));

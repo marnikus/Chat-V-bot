@@ -26,7 +26,9 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from backend.chat_parser import ChatParser, _signature, sync_conversation
+from backend import chat_agent_js
+from backend.chat_parser import (ChatParser, _signature, sync_conversation,
+                                 verify_private)
 from backend.history_repo import HistoryRepo
 
 log = logging.getLogger("chatbot")
@@ -89,6 +91,7 @@ class Collector(QObject):
         self._state = CollectorState.DISCONNECTED
         self._text = ""
         self._nick = ""
+        self._verified = False      # the two-step gate passed for _nick
         self._added = 0
         self._total = 0
         self._error = ""
@@ -233,7 +236,9 @@ class Collector(QObject):
 
     async def _tick(self) -> str:
         state = await self.parser.state()
-        if not int(state.get("agent") or 0):
+        if int(state.get("agent") or 0) < chat_agent_js.AGENT_VERSION:
+            # No agent, or one that predates the pane-scoped parser: an old
+            # agent cannot tell us who wrote what, so it may not be trusted.
             await self.parser.install()
             self._self_heals += 1
             state = await self.parser.state()
@@ -241,25 +246,33 @@ class Collector(QObject):
         self._error = ""
 
         if not state.get("ok", True):
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Not in private tab now")
+            return self._refuse(CollectorState.NOT_PRIVATE,
+                                "Not in private tab now")
         if state.get("tab") != "private":
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Not in private tab now")
+            return self._refuse(CollectorState.NOT_PRIVATE,
+                                "Not in private tab now")
         participants = int(state.get("participants") or 0)
         if self._settings["require_two_participants"] and participants != 2:
-            return self._set(CollectorState.GROUP_TAB,
-                             f"Group tab ({participants} people) — not collected")
+            return self._refuse(
+                CollectorState.GROUP_TAB,
+                f"Group tab ({participants} people) — not collected")
 
         nick = " ".join(str(state.get("partner") or "").split()).strip()
         if not nick:
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Not in private tab now")
+            return self._refuse(CollectorState.NOT_PRIVATE,
+                                "Not in private tab now")
         my_nick = self.my_nick or " ".join(
             str(state.get("me") or "").split()).strip()
         if my_nick and nick.lower() == my_nick.lower():
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Partner is ambiguous (same as My Nick)")
+            return self._refuse(CollectorState.NOT_PRIVATE,
+                                "Partner is ambiguous (same as My Nick)")
+
+        # ── the two-step gate ─────────────────────────────────────
+        check = verify_private(state, nick, self.my_nick)
+        if not check.ok:
+            self._nick = nick
+            return self._refuse(*self._gate_status(check, nick))
+        self._verified = True
 
         self._warning = ("" if self.my_nick else
                          "My Nick is not set — set it in the header so the "
@@ -322,13 +335,54 @@ class Collector(QObject):
                                                **kwargs)
         return await sync_conversation(self.parser, self.repo, nick, **kwargs)
 
+    # ── the gate helpers ─────────────────────────────────────────
+    def _refuse(self, state: str, text: str) -> str:
+        """Refuse to save: the push channel is disarmed with the tick."""
+        self._verified = False
+        return self._set(state, text)
+
+    @staticmethod
+    def _gate_status(check, nick: str) -> tuple:
+        """Turn a failed PrivateCheck into (state, status text)."""
+        if check.reason == "strangers":
+            shown = ", ".join(check.strangers[:3])
+            if len(check.strangers) > 3:
+                shown += "…"
+            return (CollectorState.GROUP_TAB,
+                    f"Not a private chat — {shown} write here too "
+                    f"(nothing saved for {nick})")
+        if check.reason == "title_mismatch":
+            return (CollectorState.NOT_PRIVATE,
+                    f"Tab does not match “{nick}” — nothing saved")
+        if check.reason == "self_chat":
+            return (CollectorState.NOT_PRIVATE,
+                    "Partner is ambiguous (same as My Nick)")
+        if check.reason == "no_author_data":
+            return (CollectorState.NOT_PRIVATE,
+                    "Cannot verify this chat yet — nothing saved")
+        return (CollectorState.NOT_PRIVATE, "Not in private tab now")
+
     # ── the live push channel ────────────────────────────────────
     async def handle_push(self, payload) -> int:
         """Store what the in-page observer pushed. Never raises."""
         if not self._nick or not self.enabled or self._paused:
             return 0
-        items = self._records(payload)
+        data = self._payload(payload)
+        items = self._records(data)
         if not items:
+            return 0
+        if not self._verified:
+            # No tick has verified this conversation (or the last one
+            # refused it): the observer may be describing another pane.
+            return 0
+        check = verify_private(
+            {"tab": data.get("tab") or "private",
+             "partner": data.get("partner") or self._nick,
+             "title": data.get("title") or data.get("partner") or "",
+             "me": data.get("me") or ""},
+            self._nick, self.my_nick, items=items)
+        if not check.ok:
+            self._refuse(*self._gate_status(check, self._nick))
             return 0
         try:
             result = await self.repo.append(self._nick, items,
@@ -349,7 +403,8 @@ class Collector(QObject):
         return result.added
 
     @staticmethod
-    def _records(payload) -> list:
+    def _payload(payload) -> dict:
+        """Normalise whatever the page pushed into a dict."""
         data = payload
         if isinstance(data, (bytes, bytearray)):
             data = data.decode("utf-8", "replace")
@@ -357,12 +412,18 @@ class Collector(QObject):
             try:
                 data = json.loads(data)
             except (TypeError, ValueError):
-                return []
-        if isinstance(data, dict):
-            data = data.get("items")
-        if not isinstance(data, list):
+                return {}
+        if isinstance(data, list):
+            return {"items": data}
+        return data if isinstance(data, dict) else {}
+
+    @classmethod
+    def _records(cls, payload) -> list:
+        data = payload if isinstance(payload, dict) else cls._payload(payload)
+        items = data.get("items")
+        if not isinstance(items, list):
             return []
-        return [item for item in data if isinstance(item, dict)]
+        return [item for item in items if isinstance(item, dict)]
 
     def _notify_appended(self, nick: str, items: list, added: int,
                          total: int) -> None:

@@ -395,6 +395,8 @@ function setupBridgeListeners() {
       CollectorPanel.onAppended(json);
     });
   }
+  if (b.media_ready)
+    b.media_ready.connect((req, json) => HistoryStore.onMediaReady(req, json));
   if (b.my_nick_changed)
     b.my_nick_changed.connect((nick) => HistoryStore.setMyNick(nick));
   if (b.history_error) {

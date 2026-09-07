@@ -47,7 +47,7 @@ DEFAULTS: dict[str, Any] = {
         "media": {
             "enabled": True,
             "download": True,
-            "cache_dir": "media_cache",
+            "cache_dir": "saved_media",
             "max_file_mb": 2,
             "max_cache_mb": 200,
         },

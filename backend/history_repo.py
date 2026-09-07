@@ -210,7 +210,7 @@ class HistoryRepo:
         if prepend:
             return await self._prepend(person_id, recs, my_nick, now,
                                        dom_count, head_sig, tail_sig,
-                                       session_id)
+                                       session_id, nick=nick)
 
         cursor = await self.get_cursor(person_id)
         batch_fps = [r.ensure_fp() for r in recs]
@@ -233,7 +233,7 @@ class HistoryRepo:
         stamp = datetime.now().isoformat(timespec="seconds")
         added = 0
         for rec, day in zip(recs[start:], days[start:]):
-            media_id = await self._media_id(rec)
+            media_id = await self._media_id(rec, nick, day)
             cur = await self.db.execute(
                 "INSERT OR IGNORE INTO messages("
                 "person_id, ord, fp, direction, from_nick, my_nick, kind, "
@@ -263,7 +263,7 @@ class HistoryRepo:
     async def _prepend(self, person_id: int, recs, my_nick: str,
                        now: datetime, dom_count: int,
                        head_sig: Optional[str], tail_sig: Optional[str],
-                       session_id: str) -> AppendResult:
+                       session_id: str, nick: str = "") -> AppendResult:
         """Backfill OLDER lines that appeared above what we already stored.
 
         Their `ord` must come before everything we have, so the existing rows
@@ -288,7 +288,7 @@ class HistoryRepo:
             position = 0
             for rec, day in fresh:
                 position += 1
-                media_id = await self._media_id(rec)
+                media_id = await self._media_id(rec, nick, day)
                 cur = await self.db.execute(
                     "INSERT OR IGNORE INTO messages("
                     "person_id, ord, fp, direction, from_nick, my_nick, kind, "
@@ -318,12 +318,16 @@ class HistoryRepo:
                      else await self.ensure_person(str(nick_or_id)))
         await self._record_gap(person_id, after_ord, reason, detail)
 
-    async def _media_id(self, rec: MessageRecord) -> Optional[int]:
+    async def _media_id(self, rec: MessageRecord, nick: str = "",
+                        day: str = "") -> Optional[int]:
         if not rec.media_url:
             return None
         if self.media is not None:
+            # the conversation, not the author: one folder per person holds
+            # both directions, which is what makes the tree readable
             return await self.media.register(rec.media_url,
-                                             rec.media_kind or rec.kind)
+                                             rec.media_kind or rec.kind,
+                                             nick=nick, day=day)
         stamp = datetime.now().isoformat(timespec="seconds")
         await self.db.execute(
             "INSERT INTO media(url, kind, state, ref_count, created_at, "

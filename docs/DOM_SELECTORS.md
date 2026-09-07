@@ -298,3 +298,41 @@ debounced by 120 ms. `state()` returns head/tail fingerprints only — never
 the whole conversation — which is what keeps a steady-state poll free of any
 node serialisation.
 
+### Several conversations live in the DOM at once (2026-09-07)
+
+The site keeps every open chat mounted: the main room pane **plus** one pane
+per private tab, only one of them visible. A blind
+`document.querySelectorAll('div.message-container')` therefore returns the
+union of all of them — the cause of room messages being archived under a
+private partner.
+
+```
+div.container
+  app-messages            → one pane per open chat
+    div.messages-root     → the message list of that pane
+      div.message-container …
+```
+
+The agent groups message nodes by their `.messages-root` / `app-messages`
+ancestor and keeps only the pane that is on screen (`hidden`,
+`aria-hidden="true"`, or `offsetParent === null` anywhere up the chain marks
+a pane as not visible). Every probe re-checks which pane that is and moves
+the MutationObserver with it.
+
+### Agent contract (VERSION 4)
+
+`window.__cvbAgent` exposes `state()`, `slice(a, b)` and `drain()`.
+`state()` now also reports, for the visible pane only:
+
+```
+title        → the active tab title, trimmed (p.chat-title own text)
+authors      → distinct nicks, inbound first  (cap 12 per direction)
+in_authors   → distinct nicks that wrote TO me
+out_authors  → distinct nicks on my side (normally exactly one: me)
+panes        → how many conversation panes exist in the document
+```
+
+`__cvbPush` payloads carry `tab`, `partner`, `title`, `in_authors`,
+`out_authors` and `authors` next to the items, so Python can re-apply the
+two-step private gate (`backend/chat_parser.verify_private`) to a push
+without trusting the previous tick.

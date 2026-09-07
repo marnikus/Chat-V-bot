@@ -40,6 +40,13 @@ var HistoryView = (function () {
 
   // ── one message row ──────────────────────────────────────────
 
+  /** the saved file when there is one, the remote url only as a fallback */
+  function mediaSrc(media) {
+    const asUrl = (typeof HistoryModel !== 'undefined' && HistoryModel.fileUrl)
+      ? HistoryModel.fileUrl : (p) => String(p || '');
+    return media.src || asUrl(media.path) || media.url || '';
+  }
+
   function mediaNode(row, opts) {
     const media = row.media;
     if (!media) return null;
@@ -55,7 +62,7 @@ var HistoryView = (function () {
     const img = document.createElement('img');
     img.className = 'msg-media' + (media.kind === 'gif' ? ' is-gif' : '');
     img.dataset.mediaId = String(media.id == null ? '' : media.id);
-    img.setAttribute('src', media.path || media.url || '');
+    img.setAttribute('src', mediaSrc(media));
     img.setAttribute('alt', media.kind === 'gif' ? 'GIF' : 'image');
     img.setAttribute('loading', 'lazy');
     img.title = 'Click to copy';
@@ -215,9 +222,28 @@ var HistoryView = (function () {
     return host;
   }
 
+  /**
+   * A file finished caching after the rows were drawn: point the <img> at
+   * it without re-rendering (and without losing the scroll position).
+   */
+  function applyMediaPath(host, mediaId, path) {
+    if (!host || !host.querySelectorAll) return false;
+    const want = String(mediaId == null ? '' : mediaId);
+    const src = mediaSrc({ path: path });
+    if (!want || !src) return false;
+    let changed = false;
+    host.querySelectorAll('.msg-media').forEach((node) => {
+      if (String(node.dataset.mediaId) !== want) return;
+      node.setAttribute('src', src);
+      changed = true;
+    });
+    return changed;
+  }
+
   return {
     renderRows, renderGroups, renderHeader, renderSearchGroups, renderNotice,
-    appendHighlighted, messageNode, gapNode, dayNode, el,
+    appendHighlighted, messageNode, gapNode, dayNode, mediaSrc,
+    applyMediaPath, el,
   };
 })();
 

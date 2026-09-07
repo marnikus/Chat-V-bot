@@ -32,6 +32,58 @@ IMAGE_EXT = {".jpg": "image", ".jpeg": "image", ".png": "image",
 MIME_EXT = {"image/gif": ".gif", "image/png": ".png", "image/jpeg": ".jpg",
             "image/webp": ".webp", "image/bmp": ".bmp"}
 
+#: Cyrillic → Latin, so `Хорошо Все` becomes a folder anybody can type,
+#: open in Explorer and paste into a path. Latin-only was an explicit
+#: requirement of the 2026-09-07 bug report.
+TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "h", "ц": "c", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+    "і": "i", "ї": "yi", "є": "ye", "ґ": "g", "ў": "u",
+}
+SAFE_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+RESERVED = {"con", "prn", "aux", "nul", "clock$"} | {
+    f"{stem}{i}" for stem in ("com", "lpt") for i in range(1, 10)}
+
+
+def slugify_nick(nick: str) -> str:
+    """A Latin, filesystem-safe folder name for a person.
+
+    `Хорошо Все` → `Horosho_Vse`, `Lizalo4ka` → `Lizalo4ka`. A short hash is
+    appended only when the nick cannot be transliterated faithfully (emoji,
+    CJK, punctuation), so the common case stays readable.
+    """
+    raw = " ".join(str(nick or "").split())
+    if not raw:
+        return "unknown"
+    out, lossy = [], False
+    for ch in raw:
+        low = ch.lower()
+        if ch in SAFE_CHARS or ch in "._-":
+            out.append(ch)
+        elif ch.isspace():
+            out.append("_")
+        elif low in TRANSLIT:
+            mapped = TRANSLIT[low]
+            out.append(mapped.capitalize() if (ch != low and mapped)
+                       else mapped)
+        else:
+            lossy = True
+            out.append("_")
+    slug = "".join(out).strip("._ ")
+    if "__" not in raw:
+        while "__" in slug:
+            slug = slug.replace("__", "_")
+    if not slug or set(slug) <= {"_"}:
+        slug, lossy = "user", True
+    if slug.lower() in RESERVED:
+        slug, lossy = slug + "_", True
+    if lossy:
+        slug += "_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:4]
+    return slug[:64]
+
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -52,32 +104,121 @@ def _extension(url: str, mime: str) -> str:
 class MediaStore:
     """URL registry + on-disk byte cache for images and GIFs."""
 
-    def __init__(self, db: HistoryDB, cdp=None, cache_dir: str = "media_cache",
+    def __init__(self, db: HistoryDB, cdp=None, cache_dir: str = "saved_media",
                  max_file_mb: float = 1, max_cache_mb: float = 10,
                  enabled: bool = True):
         self.db = db
         self.cdp = cdp
         self.cache_dir = cache_dir
+        self.now = datetime.now
         self.max_file_bytes = int(float(max_file_mb) * 1024 * 1024)
         self.max_cache_bytes = int(float(max_cache_mb) * 1024 * 1024)
         self.enabled = bool(enabled)
         self.paused = False
+        self._dirs: dict[str, str] = {}      # nick → person folder
+
+    # ── the readable tree on disk ────────────────────────────────
+    NICK_MARKER = "_nick.txt"
+
+    def folder_for(self, nick: str, kind: str = "") -> str:
+        """`<cache_dir>/<Latin nick>[/images|/gifs]`, absolute."""
+        parts = [self._person_dir(nick)]
+        if kind:
+            parts.append("gifs" if kind == "gif" else "images")
+        return os.path.join(*parts)
+
+    def _person_dir(self, nick: str) -> str:
+        """One folder per person, kept stable across restarts.
+
+        Two different nicks can transliterate to the same Latin name
+        (`Ански` and `Anski`); the folder therefore carries a `_nick.txt`
+        marker naming its owner, and a late-comer gets a hashed variant.
+        """
+        key = " ".join(str(nick or "").split())
+        cached = self._dirs.get(key)
+        if cached:
+            return cached
+        root = os.path.abspath(self.cache_dir)
+        slug = slugify_nick(key)
+        folder = os.path.join(root, slug)
+        owner = self._marker(folder)
+        if owner and owner != key:
+            digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:4]
+            folder = os.path.join(root, f"{slug}_{digest}")
+        self._dirs[key] = folder
+        return folder
+
+    def _marker(self, folder: str) -> str:
+        try:
+            with open(os.path.join(folder, self.NICK_MARKER),
+                      encoding="utf-8") as handle:
+                return handle.read().strip()
+        except OSError:
+            return ""
+
+    def _write_marker(self, folder: str, nick: str) -> None:
+        path = os.path.join(folder, self.NICK_MARKER)
+        if os.path.exists(path):
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(" ".join(str(nick or "").split()) or "unknown")
+        except OSError as e:                         # noqa: BLE001
+            log.debug("cannot write the nick marker in %s: %s", folder, e)
+
+    def _free_name(self, folder: str, day: str, ext: str) -> str:
+        """`YYYY-MM-DD_007.gif` — short, dated, sorted, unique."""
+        used = 0
+        try:
+            for name in os.listdir(folder):
+                if not name.startswith(day + "_"):
+                    continue
+                stem = os.path.splitext(name)[0][len(day) + 1:]
+                if stem.isdigit():
+                    used = max(used, int(stem))
+        except OSError:
+            pass
+        return os.path.join(folder, f"{day}_{used + 1:03d}{ext}")
+
+    def _target_path(self, nick: str, kind: str, day: str, ext: str) -> str:
+        person = self._person_dir(nick)
+        folder = os.path.join(person, "gifs" if kind == "gif" else "images")
+        os.makedirs(folder, exist_ok=True)
+        self._write_marker(person, nick)
+        return self._free_name(folder, day, ext)
+
+    def _day(self, value=None) -> str:
+        text = str(value or "")[:10]
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            return text
+        return self.now().strftime("%Y-%m-%d")
 
     # ── registration ─────────────────────────────────────────────
-    async def register(self, url: str, kind: Optional[str] = None) -> Optional[int]:
-        """Remember a media URL. Returns its id (existing rows are reused)."""
+    async def register(self, url: str, kind: Optional[str] = None,
+                       nick: str = "", day: str = "") -> Optional[int]:
+        """Remember a media URL. Returns its id (existing rows are reused).
+
+        `nick` is the conversation the file belongs to — it decides which
+        person folder the bytes land in.
+        """
         clean = str(url or "").strip()
         if not clean:
             return None
         resolved = (kind or "").strip() or infer_kind(clean)
         if resolved not in ("image", "gif"):
             resolved = infer_kind(clean)
+        owner = " ".join(str(nick or "").split())
         await self.db.execute(
-            "INSERT INTO media(url, kind, state, ref_count, created_at, "
-            "last_used) VALUES(?,?,'pending',1,?,?) "
+            "INSERT INTO media(url, kind, state, owner, day, ref_count, "
+            "created_at, last_used) VALUES(?,?,'pending',?,?,1,?,?) "
             "ON CONFLICT(url) DO UPDATE SET ref_count=ref_count+1, "
+            "owner=CASE WHEN media.owner='' THEN excluded.owner "
+            "ELSE media.owner END, "
+            "day=CASE WHEN media.day='' THEN excluded.day "
+            "ELSE media.day END, "
             "last_used=excluded.last_used",
-            (clean, resolved, _now(), _now()))
+            (clean, resolved, owner, self._day(day) if day else "",
+             _now(), _now()))
         await self.db.commit()
         row = await self.db.fetchone("SELECT id FROM media WHERE url=?",
                                      (clean,))
@@ -106,8 +247,8 @@ class MediaStore:
         if not self.enabled or self.paused or self.cdp is None:
             return 0
         rows = await self.db.fetchdicts(
-            "SELECT id, url, kind FROM media WHERE state='pending' "
-            "ORDER BY id LIMIT ?", (max(1, int(limit)),))
+            "SELECT id, url, kind, owner, day FROM media WHERE "
+            "state='pending' ORDER BY id LIMIT ?", (max(1, int(limit)),))
         stored = 0
         for row in rows:
             if not self.enabled or self.paused:
@@ -144,13 +285,16 @@ class MediaStore:
                              % (len(data), self.max_file_bytes))
             return False
         digest = hashlib.sha256(data).hexdigest()
-        path = os.path.join(self.cache_dir,
-                            digest + _extension(url, payload.get("mime", "")))
+        ext = _extension(url, payload.get("mime", ""))
+        kind = row.get("kind") or infer_kind(url)
         try:
-            os.makedirs(self.cache_dir, exist_ok=True)
-            if not os.path.exists(path):
-                with open(path, "wb") as handle:      # identical bytes ⇒
-                    handle.write(data)                # one file, many rows
+            # identical bytes already filed for this person ⇒ reuse the file
+            path = await self._twin(row.get("owner") or "", digest)
+            if not path:
+                path = self._target_path(row.get("owner") or "", kind,
+                                         self._day(row.get("day")), ext)
+                with open(path, "wb") as handle:
+                    handle.write(data)
         except OSError as e:
             await self._fail(row["id"], f"cannot write cache: {e}")
             return False
@@ -160,6 +304,45 @@ class MediaStore:
             (digest, len(data), path, _now(), row["id"]))
         await self.db.commit()
         return True
+
+    async def _twin(self, owner: str, digest: str) -> str:
+        """An already-cached file with the same bytes in the same folder."""
+        rows = await self.db.fetchdicts(
+            "SELECT cache_path FROM media WHERE sha256=? AND owner=? "
+            "AND state='cached' AND cache_path<>''", (digest, owner))
+        for row in rows:
+            if os.path.exists(row["cache_path"]):
+                return row["cache_path"]
+        return ""
+
+    async def migrate_layout(self) -> int:
+        """Move an older flat `<sha256>.<ext>` cache into the person tree."""
+        rows = await self.db.fetchdicts(
+            "SELECT id, url, kind, owner, day, cache_path, created_at "
+            "FROM media WHERE state='cached' AND cache_path<>''")
+        moved = 0
+        root = os.path.abspath(self.cache_dir)
+        for row in rows:
+            old = row["cache_path"]
+            if not old or not os.path.exists(old):
+                continue
+            if os.path.dirname(os.path.abspath(old)) != root:
+                continue                       # already inside the tree
+            ext = os.path.splitext(old)[1] or _extension(row["url"], "")
+            day = self._day(row.get("day") or row.get("created_at"))
+            try:
+                new = self._target_path(row.get("owner") or "",
+                                        row.get("kind") or "image", day, ext)
+                os.replace(old, new)
+            except OSError as e:               # noqa: PERF203
+                log.warning("cannot move %s into the media tree: %s", old, e)
+                continue
+            await self.db.execute(
+                "UPDATE media SET cache_path=? WHERE id=?", (new, row["id"]))
+            moved += 1
+        if moved:
+            await self.db.commit()
+        return moved
 
     async def _fail(self, media_id: int, reason: str) -> None:
         await self.db.execute(

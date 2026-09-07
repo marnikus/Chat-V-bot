@@ -33,6 +33,7 @@ const HistoryStore = {
       search: $('historySearchInput'),
       global: $('historySearchGlobalBtn'),
       images: $('historyImagesToggle'),
+      folder: $('historyFolderBtn'),
       latest: $('historyLatestBtn'),
       myNick: $('myNickInput'),
     };
@@ -63,6 +64,9 @@ const HistoryStore = {
     }
     if (this._els.latest) {
       this._els.latest.addEventListener('click', () => this.jumpToLatest());
+    }
+    if (this._els.folder) {
+      this._els.folder.addEventListener('click', () => this.openFolder());
     }
     this.initMyNick();
     this.renderEmpty('Click a nick in User Memory to read the whole ' +
@@ -192,6 +196,30 @@ const HistoryStore = {
     const added = this.model.appendLive(payload.items || []);
     if (added) this.render({ stickToBottom: true });
     this._updateLatestButton();
+  },
+
+  /** Show this person's saved images and GIFs in the file manager. */
+  openFolder() {
+    if (!this.nick) {
+      if (typeof LogConsole !== 'undefined')
+        LogConsole.log('ℹ Open a conversation first', 'info');
+      return;
+    }
+    if (App.bridge && App.bridge.open_media_folder)
+      App.bridge.open_media_folder(this.nick);
+  },
+
+  /**
+   * A media file finished caching (or we asked where it lives): swap the
+   * <img> over to the saved file so the window never depends on the remote,
+   * percent-encoded URL.
+   */
+  onMediaReady(reqId, json) {
+    let info = null;
+    try { info = JSON.parse(json); } catch (e) { return; }
+    if (!info || !info.path) return;
+    const id = info.id != null ? info.id : reqId;
+    HistoryView.applyMediaPath(this._els.list, id, info.path);
   },
 
   onError(scope, message) {

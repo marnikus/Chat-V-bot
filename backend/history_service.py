@@ -32,7 +32,7 @@ HISTORY_DEFAULTS = {
     "media": {
         "enabled": True,
         "download": True,
-        "cache_dir": "media_cache",
+        "cache_dir": "saved_media",
         "max_file_mb": 2,
         "max_cache_mb": 200,
     },
@@ -145,6 +145,14 @@ class HistoryService:
                 os.makedirs(folder, exist_ok=True)
             except OSError as e:
                 log.warning("media cache folder unavailable: %s", e)
+        try:
+            # older builds wrote a flat <sha256>.<ext> pile — file it away
+            moved = await self.media.migrate_layout()
+            if moved:
+                log.info("moved %d cached file(s) into the per-person "
+                         "media tree", moved)
+        except Exception as e:                        # noqa: BLE001
+            log.warning("media layout migration skipped: %s", e)
         await self._install_push_binding()
         # A reconnect (or a Chrome restart) drops the binding — put it back.
         connected = getattr(self.cdp, "connected", None)
