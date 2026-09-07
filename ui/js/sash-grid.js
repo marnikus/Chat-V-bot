@@ -2,51 +2,43 @@
    sash-grid.js — DOM layer for the flexible grid ("sash layout")
 
    Renders the SashCore split tree into the #sashGrid container:
-     • .sash-split  — flex row/column of children with .sash gaps
+     • .sash-split  — flex row/column container (one node of the tree)
      • .sash-window — frame around ONE persistent panel element
      • .sash        — 6px draggable separator (col-resize / row-resize)
 
-   The panels themselves (#winStats, #blockConfigPanel, …) are moved in the
-   DOM, never re-created, so composer text, table rows and log entries
-   survive every rearrangement.
-
    Interactions
-     • drag a window by its title bar (h3.win-title) —
-         drop on an EDGE of a window  → splits that window in half
-         drop on the CENTER of a window → joins its row/column (insert
-         as sibling, new window takes half of the hovered window's size)
-         drop on a SASH → inserts between the two neighbours
-     • drag a sash → resizes its two neighbours; the rest of the grid
-       adapts proportionally (flex normalisation), structure preserved
-     • double-click a sash → that split resets to even sizes
-     • Escape cancels a drag
-     • 📐 menu in the header → preset layouts (Default / A / B / C)
-     • every change persists to localStorage (validated on restore)
+     • drag a window by its title bar (h3.win-title)
+     • sash resize, double-click reset, Escape cancel
+     • layout menu + windows menu (open/close/minimize/maximize)
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
 const SashGrid = {
   STORAGE_KEY: 'chatbot.sashLayout.v1',
+  STORAGE_CLOSED: 'chatbot.sashWindows.closed.v1',
+  STORAGE_MINIMIZED: 'chatbot.sashWindows.minimized.v1',
+  STORAGE_MAXIMIZED: 'chatbot.sashWindows.maximized.v1',
 
-  THRESHOLD: 4,   // px before a title-bar drag becomes a real drag
-  MIN_PX: 96,     // smallest usable width/height for any grid child
-  SASH_W: 6,      // px occupied by each sash in the layout math
+  THRESHOLD: 4,
+  MIN_PX: 96,
+  SASH_W: 6,
 
   gridEl: null,
-  root: null,     // current split tree (SashCore model)
-  winEls: {},     // window id → persistent panel element
+  root: null,
+  winEls: {},
   _drag: null,
   _resize: null,
 
-  /** window id → title-bar icon (for the drag ghost card) */
+  closedWindows: null,
+  minimizedWindows: null,
+  maximizedWindow: null,
+
   WIN_ICONS: {
     stats: 'bar_chart', filters: 'filter_list', stack: 'view_list',
     config: 'tune', composer: 'chat', people: 'people', log: 'terminal',
     history: 'forum', userdb: 'storage', collector: 'radar',
   },
-
-  // ── bootstrap ────────────────────────────────────────────────
 
   init() {
     this.gridEl = document.getElementById('sashGrid');
@@ -60,35 +52,25 @@ const SashGrid = {
     };
     for (const w of SashCore.WINDOWS) {
       const el = document.getElementById(winElIds[w.id]);
-      if (!el) { console.warn('sash-grid: panel for "' + w.id + '" missing'); continue; }
+      if (!el) { console.warn('sash-grid: panel for \"' + w.id + '\" missing'); continue; }
       this.winEls[w.id] = el;
     }
 
+    this.closedWindows = new Set();
+    this.minimizedWindows = new Set();
+    this.maximizedWindow = null;
+
     this.root = this._loadTree() || SashCore.defaultTree();
+    this._loadWindowStates();
     this.render();
-    // The bridge is asynchronous and may not be ready yet; when it answers,
-    // its (authoritative, backup-able) copy replaces the local one.
     this._loadFromBackend();
 
     this.gridEl.addEventListener('pointerdown', this._onDown = this._pointerDown.bind(this));
     this.gridEl.addEventListener('dblclick', this._onDbl = this._onDblClick.bind(this));
     this._setupLayoutMenu();
+    this._setupWindowsMenu();
     this._setupVisibilityWatch();
   },
-
-  /** Show a previously hidden window (e.g. Block Config, Person History)
-   *  without touching the arrangement; the freed grid space is returned to
-   *  its siblings through `_syncHidden()`. */
-  showWindow(winId) {
-    const panel = this.winEls[winId];
-    if (!panel) return false;
-    panel.classList.remove('hidden');
-    if (panel.style.display === 'none') panel.style.display = '';
-    this._syncHidden();
-    return true;
-  },
-
-  // ── tree persistence ─────────────────────────────────────────
 
   _loadTree() {
     try {
@@ -99,72 +81,123 @@ const SashGrid = {
       console.warn('sash-grid: persisted layout rejected (' + res.error + ') — using default');
       return null;
     } catch (e) {
-      return null; // storage unavailable → default
+      return null;
     }
   },
 
-  /**
-   * Final close-time persistence. Returns true when Python must acknowledge
-   * the QWebChannel save before the desktop window is allowed to close.
-   */
+  _loadWindowStates() {
+    try {
+      const rawClosed = localStorage.getItem(this.STORAGE_CLOSED);
+      if (rawClosed) {
+        const arr = JSON.parse(rawClosed);
+        if (Array.isArray(arr)) {
+          arr.forEach((id) => {
+            if (typeof id === 'string' && SashCore.WINDOW_IDS.includes(id)) this.closedWindows.add(id);
+          });
+        }
+      }
+      const rawMin = localStorage.getItem(this.STORAGE_MINIMIZED);
+      if (rawMin) {
+        const arr = JSON.parse(rawMin);
+        if (Array.isArray(arr)) {
+          arr.forEach((id) => {
+            if (typeof id === 'string' && SashCore.WINDOW_IDS.includes(id) && !this.closedWindows.has(id)) this.minimizedWindows.add(id);
+          });
+        }
+      }
+      const rawMax = localStorage.getItem(this.STORAGE_MAXIMIZED);
+      if (rawMax) {
+        try {
+          const v = JSON.parse(rawMax);
+          if (typeof v === 'string' && SashCore.WINDOW_IDS.includes(v) && !this.closedWindows.has(v)) this.maximizedWindow = v;
+        } catch (e) {
+          const cleaned = rawMax.replace(/"/g, '');
+          if (SashCore.WINDOW_IDS.includes(cleaned) && !this.closedWindows.has(cleaned)) this.maximizedWindow = cleaned;
+        }
+      }
+    } catch (e) {}
+  },
+
+  _saveWindowStates() {
+    try {
+      localStorage.setItem(this.STORAGE_CLOSED, JSON.stringify(Array.from(this.closedWindows)));
+      localStorage.setItem(this.STORAGE_MINIMIZED, JSON.stringify(Array.from(this.minimizedWindows)));
+      localStorage.setItem(this.STORAGE_MAXIMIZED, JSON.stringify(this.maximizedWindow));
+    } catch (e) {}
+    try {
+      if (typeof App !== 'undefined' && App.bridge && App.bridge.save_window_states) {
+        const payload = JSON.stringify({
+          closed: Array.from(this.closedWindows),
+          minimized: Array.from(this.minimizedWindows),
+          maximized: this.maximizedWindow,
+        });
+        App.bridge.save_window_states(payload);
+      }
+    } catch (e) {}
+  },
+
   flushPersistence() {
     if (!this.root) return false;
     const payload = SashCore.serialize(this.root);
-    try { localStorage.setItem(this.STORAGE_KEY, payload); }
-    catch (e) { /* browser storage is only the fallback */ }
+    try { localStorage.setItem(this.STORAGE_KEY, payload); } catch (e) {}
+    try { this._saveWindowStates(); } catch (e) {}
     try {
-      if (typeof App !== 'undefined' && App.bridge &&
-          typeof App.bridge.save_grid_layout === 'function') {
+      if (typeof App !== 'undefined' && App.bridge && typeof App.bridge.save_grid_layout === 'function') {
         App.bridge.save_grid_layout(payload);
         return true;
       }
     } catch (e) {
       console.warn('sash-grid: close-time backend save failed', e);
     }
-    if (typeof App !== 'undefined' && App.recordGlobal) {
-      App.recordGlobal('grid', payload, { localOnly: true });
-    }
+    if (typeof App !== 'undefined' && App.recordGlobal) App.recordGlobal('grid', payload, { localOnly: true });
     return false;
   },
 
   _save() {
-    // Write BOTH: localStorage is synchronous and works with no backend
-    // (plain browser, tests); the bridge is the copy that lives in
-    // config.json and can be backed up. The backend wins on load.
     const payload = SashCore.serialize(this.root);
-    try { localStorage.setItem(this.STORAGE_KEY, payload); }
-    catch (e) { /* private profile without storage — in-memory only */ }
+    try { localStorage.setItem(this.STORAGE_KEY, payload); } catch (e) {}
     let backendAccepted = false;
     try {
       if (typeof App !== 'undefined' && App.bridge && App.bridge.save_grid_layout) {
         backendAccepted = App.bridge.save_grid_layout(payload) !== false;
       }
-    } catch (e) { /* backend absent — localStorage copy still stands */ }
-    // The backend is authoritative when present; standalone mode still gets
-    // an in-memory global timeline for the same keyboard semantics.
-    if (typeof App !== 'undefined' && App.recordGlobal &&
-        (!App.bridge || !App.bridge.save_grid_layout || backendAccepted)) {
+    } catch (e) {}
+    if (typeof App !== 'undefined' && App.recordGlobal && (!App.bridge || !App.bridge.save_grid_layout || backendAccepted)) {
       App.recordGlobal('grid', payload, { localOnly: true });
     }
   },
 
-  /** Pull the authoritative layout from config.json once the bridge exists. */
   _loadFromBackend() {
     try {
-      if (typeof App === 'undefined' || !App.bridge || !App.bridge.get_grid_layout)
-        return;
-      App.bridge.get_grid_layout((raw) => {
-        if (!raw) return;                       // never customised
-        const res = SashCore.deserialize(raw);
-        if (!res.ok) return;                    // rejected → keep what we have
-        if (raw === SashCore.serialize(this.root)) return;  // identical
-        this.root = res.tree;
-        this.render();
-      });
-    } catch (e) { /* ignore — local copy stands */ }
+      if (typeof App === 'undefined' || !App.bridge) return;
+      if (App.bridge.get_grid_layout) {
+        App.bridge.get_grid_layout((raw) => {
+          if (!raw) return;
+          const res = SashCore.deserialize(raw);
+          if (!res.ok) return;
+          if (raw === SashCore.serialize(this.root)) return;
+          this.root = res.tree;
+          this.render();
+        });
+      }
+      if (App.bridge.get_window_states) {
+        App.bridge.get_window_states((raw) => {
+          if (!raw) return;
+          try {
+            const data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') return;
+            if (Array.isArray(data.closed)) this.closedWindows = new Set(data.closed.filter((id) => SashCore.WINDOW_IDS.includes(id)));
+            if (Array.isArray(data.minimized)) this.minimizedWindows = new Set(data.minimized.filter((id) => SashCore.WINDOW_IDS.includes(id) && !this.closedWindows.has(id)));
+            if (data.maximized && SashCore.WINDOW_IDS.includes(data.maximized) && !this.closedWindows.has(data.maximized)) this.maximizedWindow = data.maximized;
+            else if (data.maximized === null) this.maximizedWindow = null;
+            this.render();
+            this._saveWindowStates();
+          } catch (e) {}
+        });
+      }
+    } catch (e) {}
   },
 
-  /** Apply a serialized tree coming back from undo/redo/reset. */
   _applySerialized(raw, showAll) {
     if (!raw || raw === 'null') return false;
     const res = SashCore.deserialize(raw);
@@ -176,23 +209,29 @@ const SashGrid = {
     return true;
   },
 
-  /**
-   * Un-hide every window. "Reset to default" must show ALL windows, but
-   * Block Config ships hidden and a hidden panel releases its grid space,
-   * so restoring the default tree alone would still leave 6 of 7 showing.
-   */
   showAllWindows() {
+    this.closedWindows.clear();
+    this.minimizedWindows.clear();
+    this.maximizedWindow = null;
     Object.values(this.winEls).forEach((panel) => {
       if (!panel) return;
       panel.classList.remove('hidden');
       if (panel.style.display === 'none') panel.style.display = '';
     });
+    this._saveWindowStates();
     this._syncHidden();
+    this._syncMinimized();
+    this._syncMaximized();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    this._checkEmptyGrid();
   },
 
-  /** Restore the default arrangement with every window visible (undoable). */
   resetToDefault() {
     this.root = SashCore.defaultTree();
+    this.closedWindows.clear();
+    this.minimizedWindows.clear();
+    this.maximizedWindow = null;
     this.showAllWindows();
     this.render();
     let saved = false;
@@ -200,20 +239,15 @@ const SashGrid = {
       if (typeof App !== 'undefined' && App.bridge && App.bridge.reset_grid_layout) {
         App.bridge.reset_grid_layout((raw) => { if (raw) this._applySerialized(raw, true); });
         saved = true;
-        if (App.recordGlobal)
-          App.recordGlobal('grid', SashCore.serialize(this.root), { localOnly: true });
+        if (App.recordGlobal) App.recordGlobal('grid', SashCore.serialize(this.root), { localOnly: true });
       }
-    } catch (e) { /* fall through to the local save */ }
+    } catch (e) {}
     if (!saved) this._save();
-    if (typeof LogConsole !== 'undefined')
-      LogConsole.log('↺ Grid layout reset to default — all windows visible', 'info');
+    this._saveWindowStates();
+    if (typeof LogConsole !== 'undefined') LogConsole.log('↺ Grid layout reset to default — all windows visible', 'info');
     return true;
   },
 
-  // Layout edits are recorded by _save() in App's global history. There is
-  // intentionally no grid-specific undo/redo path.
-
-  /** Apply a preset layout (Default / A / B / C). */
   setLayout(name) {
     const fn = SashCore.PRESETS[name];
     if (!fn) return false;
@@ -221,25 +255,149 @@ const SashGrid = {
     this.render();
     this._save();
     if (typeof LogConsole !== 'undefined') {
-      const label = { default: 'Default', a: 'A — stacked rows',
-                      b: 'B — split top row', c: 'C — side column' }[name] || name;
-      LogConsole.log('📐 Layout "' + label + '" applied', 'info');
+      const label = { default: 'Default', a: 'A — stacked rows', b: 'B — split top row', c: 'C — side column' }[name] || name;
+      LogConsole.log('📐 Layout \"' + label + '\" applied', 'info');
     }
     return true;
   },
 
+  isClosed(id) { return this.closedWindows.has(id); },
+  isMinimized(id) { return this.minimizedWindows.has(id); },
+  isMaximized(id) { return this.maximizedWindow === id; },
+
+  closeWindow(id) {
+    if (!SashCore.WINDOW_IDS.includes(id)) return false;
+    if (this.closedWindows.has(id)) return false;
+    this.closedWindows.add(id);
+    this.minimizedWindows.delete(id);
+    if (this.maximizedWindow === id) this.maximizedWindow = null;
+    const panel = this.winEls[id];
+    if (panel) panel.classList.add('hidden');
+    this._saveWindowStates();
+    this._syncHidden();
+    this._syncMinimized();
+    this._syncMaximized();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    this._checkEmptyGrid();
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 Closed ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
+    return true;
+  },
+
+  openWindow(id) {
+    if (!SashCore.WINDOW_IDS.includes(id)) return false;
+    if (!this.closedWindows.has(id)) return false;
+    this.closedWindows.delete(id);
+    const panel = this.winEls[id];
+    if (panel) {
+      panel.classList.remove('hidden');
+      if (panel.style.display === 'none') panel.style.display = '';
+    }
+    this._saveWindowStates();
+    this._syncHidden();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    this._checkEmptyGrid();
+    this._flashLanded(id);
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 Opened ' + (SashCore.WINDOW_TITLES[id] || id), 'success');
+    return true;
+  },
+
+  /** Ensure a window is visible. Used by collectors / history jumpers that
+   *  only need the panel shown, whether or not it was previously closed. */
+  showWindow(winId) {
+    if (!SashCore.WINDOW_IDS.includes(winId)) return false;
+    if (this.closedWindows.has(winId)) return this.openWindow(winId);
+    const panel = this.winEls[winId];
+    if (!panel) return false;
+    panel.classList.remove('hidden');
+    if (panel.style.display === 'none') panel.style.display = '';
+    this._syncHidden();
+    this._syncEmptySplits();
+    this._checkEmptyGrid();
+    return true;
+  },
+
+  toggleWindow(id) {
+    if (this.isClosed(id)) return this.openWindow(id);
+    return this.closeWindow(id);
+  },
+
+  minimizeWindow(id) {
+    if (!SashCore.WINDOW_IDS.includes(id)) return false;
+    if (this.isClosed(id)) return false;
+    if (this.isMinimized(id)) return false;
+    if (this.isMaximized(id)) this.restoreMaximize();
+    this.minimizedWindows.add(id);
+    this._saveWindowStates();
+    this._syncMinimized();
+    this._updateWindowsMenu();
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🗕 Minimized ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
+    return true;
+  },
+
+  restoreMinimized(id) {
+    if (!this.isMinimized(id)) return false;
+    this.minimizedWindows.delete(id);
+    this._saveWindowStates();
+    this._syncMinimized();
+    this._updateWindowsMenu();
+    this._flashLanded(id);
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🗖 Restored ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
+    return true;
+  },
+
+  toggleMinimize(id) {
+    if (this.isMinimized(id)) return this.restoreMinimized(id);
+    return this.minimizeWindow(id);
+  },
+
+  maximizeWindow(id) {
+    if (!SashCore.WINDOW_IDS.includes(id)) return false;
+    if (this.isClosed(id)) this.openWindow(id);
+    if (this.maximizedWindow === id) return false;
+    this.maximizedWindow = id;
+    this.minimizedWindows.delete(id);
+    this._saveWindowStates();
+    this._syncMaximized();
+    this._syncMinimized();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    if (typeof LogConsole !== 'undefined') LogConsole.log('⛶ Maximized ' + (SashCore.WINDOW_TITLES[id] || id) + ' — full area', 'info');
+    return true;
+  },
+
+  restoreMaximize() {
+    if (!this.maximizedWindow) return false;
+    const id = this.maximizedWindow;
+    this.maximizedWindow = null;
+    this._saveWindowStates();
+    this._syncMaximized();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    this._flashLanded(id);
+    if (typeof LogConsole !== 'undefined') LogConsole.log('↩ Restored ' + (SashCore.WINDOW_TITLES[id] || id) + ' from maximized', 'info');
+    return true;
+  },
+
+  toggleMaximize(id) {
+    if (this.isMaximized(id)) return this.restoreMaximize();
+    return this.maximizeWindow(id);
+  },
+
   // ── rendering ───────────────────────────────────────────────
 
-  /** Rebuild the wrapper skeleton, re-parenting the persistent panels. */
   render() {
     const frag = this._buildNode(this.root, []);
-    // The root node must always FILL the grid container. Without an explicit
-    // flex grow the split sizes to its content width and — once a window with
-    // a small natural width (or a hidden window) is the only wide child — a
-    // fixed empty gap appears on the right. (flex-basis 0% + grow 1)
     frag.style.flex = '1 1 0%';
     this.gridEl.replaceChildren(frag);
+    this._ensureWindowControls();
     this._syncHidden();
+    this._syncMinimized();
+    this._syncMaximized();
+    this._syncEmptySplits();
+    this._updateWindowsMenu();
+    this._checkEmptyGrid();
   },
 
   _buildNode(node, path) {
@@ -248,7 +406,7 @@ const SashGrid = {
       win.className = 'sash-window';
       win.dataset.win = node.id;
       const panel = this.winEls[node.id];
-      if (panel) win.appendChild(panel);   // move the persistent panel
+      if (panel) win.appendChild(panel);
       return win;
     }
     const el = document.createElement('div');
@@ -273,26 +431,109 @@ const SashGrid = {
     return String(p == null ? '' : p).split('-').filter((s) => s !== '').map(Number);
   },
 
-  // ── hidden windows (e.g. Block Config before its first open) ─────
-  // A window whose panel is currently hidden must RELEASE its grid space:
-  // the visible siblings expand to fill it, and the sashes touching it
-  // disappear. The size stays in the tree, so showing the window later
-  // restores the arrangement exactly. Managed by class (not :has()) so it
-  // works on every Chromium version.
+  // ── window controls injection — CLEAN ICONS ──────────────────
+
+  _ensureWindowControls() {
+    if (!this.gridEl) return;
+    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const id = winEl.dataset.win;
+      const panel = winEl.querySelector(':scope > .panel');
+      if (!panel) return;
+      const title = panel.querySelector(':scope > .win-title');
+      if (!title) return;
+      let controls = title.querySelector('.win-controls');
+      if (controls) {
+        this._updateWindowControlIcons(title, id);
+        return;
+      }
+      controls = document.createElement('span');
+      controls.className = 'win-controls';
+      // Clean Unicode icons: ─ minimize, □ maximize, ✕ close
+      controls.innerHTML =
+        '<button class="win-btn win-minimize" title="Minimize">─</button>' +
+        '<button class="win-btn win-maximize" title="Maximize">□</button>' +
+        '<button class="win-btn win-close" title="Close">✕</button>';
+      const existingClose = title.querySelector('#closeConfigBtn');
+      if (existingClose) existingClose.style.display = 'none';
+      const spacer = title.querySelector('.spacer');
+      if (spacer) {
+        title.appendChild(controls);
+      } else {
+        const sp = document.createElement('span');
+        sp.className = 'spacer';
+        title.appendChild(sp);
+        title.appendChild(controls);
+      }
+      controls.querySelector('.win-minimize').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleMinimize(id);
+      });
+      controls.querySelector('.win-maximize').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleMaximize(id);
+      });
+      controls.querySelector('.win-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.closeWindow(id);
+      });
+      this._updateWindowControlIcons(title, id);
+    });
+  },
+
+  _updateWindowControlIcons(title, id) {
+    const minBtn = title.querySelector('.win-minimize');
+    const maxBtn = title.querySelector('.win-maximize');
+    const closeBtn = title.querySelector('.win-close');
+    if (!minBtn || !maxBtn || !closeBtn) return;
+    const isMin = this.isMinimized(id);
+    const isMax = this.isMaximized(id);
+    // Clean icons with tooltip
+    if (isMin) {
+      minBtn.textContent = '□';
+      minBtn.title = 'Restore';
+    } else {
+      minBtn.textContent = '─';
+      minBtn.title = 'Minimize';
+    }
+    if (isMax) {
+      maxBtn.textContent = '❐';
+      maxBtn.title = 'Restore';
+    } else {
+      maxBtn.textContent = '□';
+      maxBtn.title = 'Maximize';
+    }
+    closeBtn.textContent = '✕';
+    closeBtn.title = 'Close';
+  },
+
+  _updateAllControlIcons() {
+    if (!this.gridEl) return;
+    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const id = winEl.dataset.win;
+      const title = winEl.querySelector(':scope > .panel > .win-title');
+      if (title) this._updateWindowControlIcons(title, id);
+    });
+  },
+
+  // ── hidden windows ──────────────────────────────────────────
 
   _panelIsHidden(panel) {
     if (!panel) return false;
     if (panel.classList.contains('hidden')) return true;
     if (panel.style.display === 'none') return true;
-    try { return getComputedStyle(panel).display === 'none'; }
-    catch (e) { return false; }
+    try { return getComputedStyle(panel).display === 'none'; } catch (e) { return false; }
   },
 
   _syncHidden() {
     if (!this.gridEl) return;
     this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const id = winEl.dataset.win;
       const panel = winEl.querySelector(':scope > .panel');
-      winEl.classList.toggle('sash-win-hidden', this._panelIsHidden(panel));
+      const isClosed = this.closedWindows.has(id);
+      const isHiddenByPanel = this._panelIsHidden(panel);
+      const shouldHide = isClosed || isHiddenByPanel;
+      winEl.classList.toggle('sash-win-hidden', shouldHide);
+      winEl.classList.toggle('sash-win-closed', isClosed);
     });
     this.gridEl.querySelectorAll('.sash-split').forEach((pEl) => {
       const kids = Array.from(pEl.children);
@@ -306,28 +547,234 @@ const SashGrid = {
     });
   },
 
+  _syncMinimized() {
+    if (!this.gridEl) return;
+    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const id = winEl.dataset.win;
+      const isMin = this.minimizedWindows.has(id) && !this.closedWindows.has(id) && this.maximizedWindow !== id;
+      winEl.classList.toggle('sash-win-minimized', isMin);
+    });
+    this._updateAllControlIcons();
+  },
+
+  _syncMaximized() {
+    if (!this.gridEl) return;
+    const hasMax = !!this.maximizedWindow;
+    this.gridEl.classList.toggle('sash-grid-maximized', hasMax);
+    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+      const id = winEl.dataset.win;
+      const isMax = this.maximizedWindow === id;
+      winEl.classList.toggle('sash-window-maximized', isMax);
+    });
+    this._updateAllControlIcons();
+  },
+
+  // ── FIX FOR BUG #2: empty rows / splits ──────────────────────
+  // If all descendant windows of a split are closed/hidden, hide the split itself
+  // so no blank row remains. Minimized windows count as visible.
+  _syncEmptySplits() {
+    if (!this.gridEl) return;
+    // bottom-up so child splits are evaluated before parents
+    const splits = Array.from(this.gridEl.querySelectorAll('.sash-split')).reverse();
+    splits.forEach((splitEl) => {
+      let hasVisibleDescendant = false;
+      const checkVisible = (el) => {
+        if (hasVisibleDescendant) return;
+        if (!el.classList) return;
+        if (el.classList.contains('sash-window')) {
+          if (!el.classList.contains('sash-win-hidden') && !el.classList.contains('sash-win-closed')) {
+            hasVisibleDescendant = true;
+          }
+        } else if (el.classList.contains('sash-split')) {
+          if (el.classList.contains('sash-split-hidden')) return;
+          Array.from(el.children).forEach(checkVisible);
+        }
+      };
+      Array.from(splitEl.children).forEach(checkVisible);
+      splitEl.classList.toggle('sash-split-hidden', !hasVisibleDescendant);
+    });
+    // also hide sashes that touch hidden splits/windows
+    this.gridEl.querySelectorAll('.sash-split').forEach((pEl) => {
+      if (pEl.classList.contains('sash-split-hidden')) return;
+      const kids = Array.from(pEl.children);
+      kids.forEach((el, i) => {
+        if (!el.classList || !el.classList.contains('sash')) return;
+        const prev = kids[i - 1], next = kids[i + 1];
+        const prevHidden = prev && (prev.classList.contains('sash-win-hidden') || prev.classList.contains('sash-win-closed') || prev.classList.contains('sash-split-hidden'));
+        const nextHidden = next && (next.classList.contains('sash-win-hidden') || next.classList.contains('sash-win-closed') || next.classList.contains('sash-split-hidden'));
+        if (prevHidden || nextHidden) el.classList.add('sash-hidden');
+      });
+    });
+  },
+
+  _checkEmptyGrid() {
+    if (!this.gridEl) return;
+    const existing = this.gridEl.querySelector('.sash-grid-empty');
+    if (existing) existing.remove();
+    const visible = this.gridEl.querySelectorAll('.sash-window:not(.sash-win-hidden):not(.sash-win-closed)');
+    const hasVisible = visible.length > 0 || this.maximizedWindow;
+    if (!hasVisible) {
+      const empty = document.createElement('div');
+      empty.className = 'sash-grid-empty';
+      empty.innerHTML = '<div style="font-size:28px">◫</div><div>All windows are closed</div><div style="font-size:11px;opacity:.8">Open windows from the <b>Windows</b> menu in the top bar</div><button class="btn-small" id="emptyShowAllBtn" style="margin-top:8px">Show all windows</button>';
+      this.gridEl.appendChild(empty);
+      const btn = empty.querySelector('#emptyShowAllBtn');
+      if (btn) btn.addEventListener('click', () => {
+        this.showAllWindows();
+        this.render();
+        this._save();
+      });
+    }
+  },
+
   _setupVisibilityWatch() {
-    // The app shows/hides Block Config by toggling its class/style — keep
-    // the grid in sync whenever that happens (no re-render needed: the
-    // siblings expand purely through flexbox).
     const mo = new MutationObserver(() => {
       let changed = false;
       this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
+        const id = winEl.dataset.win;
+        if (this.closedWindows.has(id)) return;
         const panel = winEl.querySelector(':scope > .panel');
         const hidden = this._panelIsHidden(panel);
-        // note: toggle(cls, force) returns false when REMOVING the class,
-        // so track the transition explicitly
         if (winEl.classList.contains('sash-win-hidden') !== hidden) changed = true;
         winEl.classList.toggle('sash-win-hidden', hidden);
       });
-      if (changed) this._syncHidden();
+      if (changed) {
+        this._syncHidden();
+        this._syncEmptySplits();
+        this._updateWindowsMenu();
+        this._checkEmptyGrid();
+      }
     });
     Object.values(this.winEls).forEach((el) => {
       mo.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
     });
   },
 
-  // ── unified pointerdown (sash resize vs. window drag) ────────
+  // ── windows menu — CLEAN ICONS ───────────────────────────────
+
+  _setupWindowsMenu() {
+    const btn = document.getElementById('windowsMenuBtn');
+    const menu = document.getElementById('windowsMenu');
+    if (!btn || !menu) return;
+    const place = () => {
+      if (menu.classList.contains('hidden')) return;
+      const r = btn.getBoundingClientRect();
+      let left = r.right - 320;
+      left = Math.max(8, Math.min(left, window.innerWidth - 328));
+      menu.style.left = left + 'px';
+      menu.style.top = (r.bottom + 6) + 'px';
+    };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const layoutMenu = document.getElementById('layoutMenu');
+      if (layoutMenu) layoutMenu.classList.add('hidden');
+      const willShow = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden');
+      if (willShow) {
+        this._renderWindowsMenu();
+        place();
+      }
+    });
+    const showAllBtn = document.getElementById('windowsShowAllBtn');
+    if (showAllBtn) showAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.add('hidden');
+      this.showAllWindows();
+      this.render();
+      this._save();
+      if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 All windows shown', 'success');
+    });
+    const hideAllBtn = document.getElementById('windowsHideAllBtn');
+    if (hideAllBtn) hideAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SashCore.WINDOW_IDS.forEach((id) => this.closedWindows.add(id));
+      this.minimizedWindows.clear();
+      this.maximizedWindow = null;
+      Object.values(this.winEls).forEach((panel) => { if (panel) panel.classList.add('hidden'); });
+      this._saveWindowStates();
+      this._syncHidden();
+      this._syncMinimized();
+      this._syncMaximized();
+      this._syncEmptySplits();
+      this._updateWindowsMenu();
+      this._checkEmptyGrid();
+      menu.classList.add('hidden');
+      if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 All windows closed — reopen from Windows menu', 'warn');
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#windowsMenu') && !e.target.closest('#windowsMenuBtn')) menu.classList.add('hidden');
+    });
+  },
+
+  _renderWindowsMenu() {
+    const listEl = document.getElementById('windowsMenuList');
+    if (!listEl) return;
+    const items = SashCore.WINDOWS.map((w) => {
+      const id = w.id;
+      const title = w.title;
+      const isClosed = this.isClosed(id);
+      const isMin = this.isMinimized(id);
+      const isMax = this.isMaximized(id);
+      let stateIcon, stateClass, badge, badgeClass;
+      if (isClosed) {
+        stateIcon = '○';
+        stateClass = 'closed';
+        badge = 'Closed';
+        badgeClass = 'b-closed';
+      } else if (isMax) {
+        stateIcon = '□';
+        stateClass = 'maximized';
+        badge = 'Maximized';
+        badgeClass = 'b-max';
+      } else if (isMin) {
+        stateIcon = '─';
+        stateClass = 'minimized';
+        badge = 'Minimized';
+        badgeClass = 'b-min';
+      } else {
+        stateIcon = '●';
+        stateClass = 'open';
+        badge = 'Open';
+        badgeClass = 'b-open';
+      }
+      return `<div class="wm-item ${isClosed ? 'wm-closed' : ''}" data-win="${id}" title="Click to ${isClosed ? 'open' : 'close'} ${title}">
+        <span class="wm-state-icon ${stateClass}">${stateIcon}</span>
+        <span class="wm-title">${title}</span>
+        <span class="wm-badge ${badgeClass}">${badge}</span>
+        <span class="wm-actions">
+          <button class="wm-mini-btn" data-action="minimize" data-win="${id}" title="${isMin ? 'Restore' : 'Minimize'}">${isMin ? '□' : '─'}</button>
+          <button class="wm-mini-btn" data-action="maximize" data-win="${id}" title="${isMax ? 'Restore' : 'Maximize'}">${isMax ? '❐' : '□'}</button>
+          <button class="wm-mini-btn" data-action="close" data-win="${id}" title="${isClosed ? 'Open' : 'Close'}">${isClosed ? '●' : '✕'}</button>
+        </span>
+      </div>`;
+    }).join('');
+    listEl.innerHTML = items;
+    listEl.querySelectorAll('.wm-item').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.wm-actions')) return;
+        const id = el.dataset.win;
+        this.toggleWindow(id);
+        this._renderWindowsMenu();
+      });
+    });
+    listEl.querySelectorAll('.wm-mini-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.win;
+        const action = btn.dataset.action;
+        if (action === 'minimize') this.toggleMinimize(id);
+        else if (action === 'maximize') this.toggleMaximize(id);
+        else if (action === 'close') this.toggleWindow(id);
+        this._renderWindowsMenu();
+      });
+    });
+  },
+
+  _updateWindowsMenu() {
+    const menu = document.getElementById('windowsMenu');
+    if (!menu) return;
+    if (!menu.classList.contains('hidden')) this._renderWindowsMenu();
+  },
 
   _pointerDown(ev) {
     if (ev.button !== 0) return;
@@ -336,13 +783,12 @@ const SashGrid = {
     if (sashEl) { this._startResize(sashEl, ev); return; }
     const title = ev.target.closest('.win-title');
     if (!title || !this.gridEl.contains(title)) return;
-    if (ev.target.closest('button, input, select, textarea, a, .chip')) return;
+    if (ev.target.closest('button, input, select, textarea, a, .chip, .win-controls, .win-btn')) return;
     const winEl = title.closest('.sash-window');
     if (!winEl) return;
+    if (winEl.classList.contains('sash-window-maximized')) return;
     this._startDrag(winEl, ev);
   },
-
-  // ── window drag & drop ───────────────────────────────────────
 
   _startDrag(winEl, ev) {
     this._drag = {
@@ -365,43 +811,37 @@ const SashGrid = {
   _beginDrag() {
     const d = this._drag;
     d.active = true;
-
-    // cache geometry — the grid never scrolls, so it stays valid
     d.rects = {};
     this.gridEl.querySelectorAll('.sash-window').forEach((w) => {
-      if (!w.offsetWidth || !w.offsetHeight) return; // hidden (Block Config)
+      if (w.classList.contains('sash-win-hidden') || w.classList.contains('sash-win-closed')) return;
+      if (!w.offsetWidth || !w.offsetHeight) return;
       d.rects[w.dataset.win] = w.getBoundingClientRect();
     });
     d.sashes = [];
     this.gridEl.querySelectorAll('.sash').forEach((s) => {
       if (!s.offsetWidth && !s.offsetHeight) return;
+      if (s.classList.contains('sash-hidden')) return;
       d.sashes.push({
         el: s, rect: s.getBoundingClientRect(),
         leftId: this._winIdOf(s.parentElement.children[+s.dataset.idx * 2]),
         rightId: this._winIdOf(s.parentElement.children[+s.dataset.idx * 2 + 2]),
       });
     });
-
     const rect = d.winEl.getBoundingClientRect();
     d.clone = this._buildDragVisual(d.winEl, d.id, rect);
     d.clone.style.transform = 'translate3d(' + rect.left + 'px,' + rect.top + 'px,0)';
-
     d.badge = document.createElement('div');
     d.badge.className = 'sash-drag-badge';
     document.body.appendChild(d.badge);
-
     d.indicator = document.createElement('div');
     d.indicator.className = 'sash-drop-indicator';
     d.indicator.style.display = 'none';
     document.body.appendChild(d.indicator);
-
     d.winEl.classList.add('sash-drag-source');
     document.body.classList.add('sash-dragging');
   },
 
   _buildDragVisual(winEl, id, rect) {
-    // Big windows (full table, long log) get a compact ghost card instead of
-    // a full clone — keeps the drag smooth.
     if (winEl.querySelectorAll('*').length < 350) {
       const c = winEl.cloneNode(true);
       c.classList.add('sash-drag-clone');
@@ -412,8 +852,7 @@ const SashGrid = {
     }
     const g = document.createElement('div');
     g.className = 'sash-drag-ghost';
-    g.innerHTML = '<span class="material-icons">' + (this.WIN_ICONS[id] || 'view_in_carousel') +
-                  '</span><span>' + (SashCore.WINDOW_TITLES[id] || id) + '</span>';
+    g.innerHTML = '<span style=\"font-size:18px\">◫</span><span>' + (SashCore.WINDOW_TITLES[id] || id) + '</span>';
     document.body.appendChild(g);
     return g;
   },
@@ -429,23 +868,19 @@ const SashGrid = {
     const d = this._drag;
     if (!d) return;
     if (!d.active) {
-      if (Math.abs(ev.clientX - d.startX) < this.THRESHOLD &&
-          Math.abs(ev.clientY - d.startY) < this.THRESHOLD) return;
+      if (Math.abs(ev.clientX - d.startX) < this.THRESHOLD && Math.abs(ev.clientY - d.startY) < this.THRESHOLD) return;
       this._beginDrag();
     }
     ev.preventDefault();
     d.lastX = ev.clientX;
     d.lastY = ev.clientY;
-
-    // clone follows the cursor 1:1 (ghost: offset from it)
     if (d.clone.classList.contains('sash-drag-ghost')) {
       d.clone.style.transform = 'translate3d(' + (ev.clientX + 14) + 'px,' + (ev.clientY + 14) + 'px,0)';
     } else {
-      const r = d.winEl.getBoundingClientRect(); // stable: layout unchanged during drag
+      const r = d.winEl.getBoundingClientRect();
       const dx = d.startX - r.left, dy = d.startY - r.top;
       d.clone.style.transform = 'translate3d(' + (ev.clientX - dx) + 'px,' + (ev.clientY - dy) + 'px,0)';
     }
-
     const spec = this._computeSpec(ev.clientX, ev.clientY);
     const key = spec ? JSON.stringify(spec) : '';
     if (key !== d.lastSpecKey) {
@@ -455,11 +890,8 @@ const SashGrid = {
     }
   },
 
-  /** Map the pointer position to a drop spec (see design doc §3.2). */
   _computeSpec(x, y) {
     const d = this._drag;
-
-    // 1) over another window?
     for (const id of Object.keys(d.rects)) {
       if (id === d.id) continue;
       const r = d.rects[id];
@@ -470,35 +902,22 @@ const SashGrid = {
       else if (x > r.right - Z) zone = 'right';
       else if (y < r.top + Z) zone = 'top';
       else if (y > r.bottom - Z) zone = 'bottom';
-
       if (zone !== 'center') {
         const dir = (zone === 'left' || zone === 'right') ? 'row' : 'col';
-        return { kind: 'edge', target: id, zone,
-                 dir, newFirst: (zone === 'left' || zone === 'top') };
+        return { kind: 'edge', target: id, zone, dir, newFirst: (zone === 'left' || zone === 'top') };
       }
-      // center of T → insert as sibling in T's parent split
-      const tEl = this.gridEl.querySelector('.sash-window[data-win="' + id + '"]');
+      const tEl = this.gridEl.querySelector('.sash-window[data-win=\"' + id + '\"]');
       const pEl = tEl && tEl.parentElement;
       if (!pEl || !pEl.classList.contains('sash-split')) {
-        // T is the whole grid: split it along the dominant axis
         const midX = r.left + r.width / 2, midY = r.top + r.height / 2;
-        const dir = Math.abs(x - midX) / (r.width / 2) >= Math.abs(y - midY) / (r.height / 2)
-                    ? 'row' : 'col';
+        const dir = Math.abs(x - midX) / (r.width / 2) >= Math.abs(y - midY) / (r.height / 2) ? 'row' : 'col';
         const newFirst = dir === 'row' ? x < midX : y < midY;
-        return { kind: 'edge', target: id,
-                 zone: dir === 'row' ? (newFirst ? 'left' : 'right')
-                                     : (newFirst ? 'top' : 'bottom'),
-                 dir, newFirst };
+        return { kind: 'edge', target: id, zone: dir === 'row' ? (newFirst ? 'left' : 'right') : (newFirst ? 'top' : 'bottom'), dir, newFirst };
       }
       const isRow = pEl.classList.contains('sash-row');
-      const side = isRow ? (x < r.left + r.width / 2 ? 'before' : 'after')
-                         : (y < r.top + r.height / 2 ? 'before' : 'after');
-      return { kind: 'sibling', target: id, side,
-               zone: side === 'before' ? (isRow ? 'left' : 'top')
-                                       : (isRow ? 'right' : 'bottom') };
+      const side = isRow ? (x < r.left + r.width / 2 ? 'before' : 'after') : (y < r.top + r.height / 2 ? 'before' : 'after');
+      return { kind: 'sibling', target: id, side, zone: side === 'before' ? (isRow ? 'left' : 'top') : (isRow ? 'right' : 'bottom') };
     }
-
-    // 2) over a sash? → insert between its two neighbours
     for (const s of d.sashes) {
       const r = s.rect;
       if (x < r.left || x >= r.right || y < r.top || y >= r.bottom) continue;
@@ -507,12 +926,10 @@ const SashGrid = {
     return null;
   },
 
-  /** Live highlight: target outline + drop line + cursor badge. */
   _showSpec(spec) {
     const d = this._drag;
     if (d.targetEl) d.targetEl.classList.remove('sash-drag-target');
     d.targetEl = null;
-
     if (!spec) {
       d.indicator.style.display = 'none';
       d.badge.style.display = 'none';
@@ -521,28 +938,23 @@ const SashGrid = {
     }
     d.badge.style.display = '';
     const draggedTitle = SashCore.WINDOW_TITLES[d.id] || d.id;
-
     let text, bar = null;
     if (spec.kind === 'edge') {
       const r = d.rects[spec.target];
-      const tEl = this.gridEl.querySelector('.sash-window[data-win="' + spec.target + '"]');
+      const tEl = this.gridEl.querySelector('.sash-window[data-win=\"' + spec.target + '\"]');
       if (tEl) { tEl.classList.add('sash-drag-target'); d.targetEl = tEl; }
       text = draggedTitle + ' → ' + spec.zone + ' of ' + (SashCore.WINDOW_TITLES[spec.target] || spec.target);
-      if (spec.dir === 'row') {
-        bar = { left: r.left + r.width / 2 - 1.5, top: r.top, width: 3, height: r.height };
-      } else {
-        bar = { left: r.left, top: r.top + r.height / 2 - 1.5, width: r.width, height: 3 };
-      }
+      if (spec.dir === 'row') bar = { left: r.left + r.width / 2 - 1.5, top: r.top, width: 3, height: r.height };
+      else bar = { left: r.left, top: r.top + r.height / 2 - 1.5, width: r.width, height: 3 };
     } else if (spec.kind === 'sibling') {
       const r = d.rects[spec.target];
-      const tEl = this.gridEl.querySelector('.sash-window[data-win="' + spec.target + '"]');
+      const tEl = this.gridEl.querySelector('.sash-window[data-win=\"' + spec.target + '\"]');
       const pEl = tEl && tEl.parentElement;
       if (tEl) { tEl.classList.add('sash-drag-target'); d.targetEl = tEl; }
       const pRect = pEl ? pEl.getBoundingClientRect() : r;
       text = draggedTitle + ' → ' + spec.zone + ' of ' + (SashCore.WINDOW_TITLES[spec.target] || spec.target);
-      if (!pEl) {
-        bar = null; // T is the whole grid — handled as an edge spec anyway
-      } else if (pEl.classList.contains('sash-row')) {
+      if (!pEl) bar = null;
+      else if (pEl.classList.contains('sash-row')) {
         const x = spec.zone === 'left' ? r.left : r.right;
         bar = { left: x - 1.5, top: pRect.top, width: 3, height: pRect.height };
       } else {
@@ -557,17 +969,11 @@ const SashGrid = {
         const pEl = sEl.parentElement;
         const sr = hit.rect;
         const pRect = pEl.getBoundingClientRect();
-        if (pEl.classList.contains('sash-row')) {
-          bar = { left: sr.left + sr.width / 2 - 1.5, top: pRect.top, width: 3, height: pRect.height };
-        } else {
-          bar = { left: pRect.left, top: sr.top + sr.height / 2 - 1.5, width: pRect.width, height: 3 };
-        }
+        if (pEl.classList.contains('sash-row')) bar = { left: sr.left + sr.width / 2 - 1.5, top: pRect.top, width: 3, height: pRect.height };
+        else bar = { left: pRect.left, top: sr.top + sr.height / 2 - 1.5, width: pRect.width, height: 3 };
       }
-      text = draggedTitle + ' → between ' +
-             (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' +
-             (SashCore.WINDOW_TITLES[spec.right] || spec.right);
+      text = draggedTitle + ' → between ' + (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' + (SashCore.WINDOW_TITLES[spec.right] || spec.right);
     }
-
     d.badge.textContent = text;
     d.badge.style.transform = 'translate3d(' + (d.lastX + 16) + 'px,' + (d.lastY + 18) + 'px,0)';
     if (bar) {
@@ -576,9 +982,7 @@ const SashGrid = {
       d.indicator.style.top = bar.top + 'px';
       d.indicator.style.width = bar.width + 'px';
       d.indicator.style.height = bar.height + 'px';
-    } else {
-      d.indicator.style.display = 'none';
-    }
+    } else d.indicator.style.display = 'none';
   },
 
   _dragUp() {
@@ -591,12 +995,9 @@ const SashGrid = {
       this.render();
       this._save();
       this._flashLanded(d.id);
-      if (typeof LogConsole !== 'undefined')
-        LogConsole.log('🧩 ' + (SashCore.WINDOW_TITLES[d.id] || d.id) + ' → ' +
-                       this._specText(spec) + ' (grid updated)', 'info');
+      if (typeof LogConsole !== 'undefined') LogConsole.log('🧩 ' + (SashCore.WINDOW_TITLES[d.id] || d.id) + ' → ' + this._specText(spec) + ' (grid updated)', 'info');
     } else if (d.active) {
-      if (typeof LogConsole !== 'undefined')
-        LogConsole.log('↩ Window drag cancelled — layout unchanged', 'warn');
+      if (typeof LogConsole !== 'undefined') LogConsole.log('↩ Window drag cancelled — layout unchanged', 'warn');
     }
   },
 
@@ -604,8 +1005,7 @@ const SashGrid = {
     const d = this._drag;
     if (!d) return;
     this._cleanupDrag();
-    if (d.active && typeof LogConsole !== 'undefined')
-      LogConsole.log('↩ Window drag cancelled — layout unchanged', 'warn');
+    if (d.active && typeof LogConsole !== 'undefined') LogConsole.log('↩ Window drag cancelled — layout unchanged', 'warn');
   },
 
   _cleanupDrag() {
@@ -626,73 +1026,41 @@ const SashGrid = {
   },
 
   _specText(spec) {
-    if (spec.kind === 'sash')
-      return 'between ' + (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' +
-             (SashCore.WINDOW_TITLES[spec.right] || spec.right);
+    if (spec.kind === 'sash') return 'between ' + (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' + (SashCore.WINDOW_TITLES[spec.right] || spec.right);
     return spec.zone + ' of ' + (SashCore.WINDOW_TITLES[spec.target] || spec.target);
   },
 
   _flashLanded(winId) {
-    const el = this.gridEl.querySelector('.sash-window[data-win="' + winId + '"]');
+    const el = this.gridEl.querySelector('.sash-window[data-win=\"' + winId + '\"]');
     if (!el) return;
     el.classList.remove('sash-landed');
-    void el.offsetWidth; // restart the animation
+    void el.offsetWidth;
     el.classList.add('sash-landed');
     setTimeout(() => el.classList.remove('sash-landed'), 700);
   },
 
-  /** Apply a drop spec to the tree (atomic move). Returns the new root. */
   _applyDrop(draggedId, spec) {
     this.root = SashCore.moveWindow(this.root, draggedId, {
-      kind: spec.kind,
-      target: spec.target,
-      dir: spec.dir,
-      newFirst: spec.newFirst,
-      side: spec.side,
-      left: spec.left,
-      right: spec.right,
+      kind: spec.kind, target: spec.target, dir: spec.dir, newFirst: spec.newFirst, side: spec.side, left: spec.left, right: spec.right,
     });
     return this.root;
   },
-
-  // ── sash resize ──────────────────────────────────────────────
 
   _startResize(sashEl, ev) {
     const pEl = sashEl.parentElement;
     if (!pEl || !pEl.classList.contains('sash-split')) return;
     const sIdx = parseInt(sashEl.dataset.idx, 10);
     const isRow = pEl.classList.contains('sash-row');
-
     const childEls = [];
     for (let i = 0; i * 2 < pEl.children.length; i++) childEls.push(pEl.children[i * 2]);
-
-    const axisSize = (el) => {
-      const r = el.getBoundingClientRect();
-      return isRow ? r.width : r.height;
-    };
+    const axisSize = (el) => { const r = el.getBoundingClientRect(); return isRow ? r.width : r.height; };
     const childSizes = childEls.map(axisSize);
-    const sashSizes = Array.from(pEl.children)
-      .filter((el) => el.classList.contains('sash'))
-      .map(axisSize);
-    const z = {
-      pEl, sashEl, sIdx, isRow, childEls, pointerId: ev.pointerId,
-      childSizes, sashSizes, otherWidths: {},
-      originalFlex: childEls.map((child) => child.style.flex),
-      pointerCaptured: false,
-    };
-    // Unchanged children keep their measured pixel extent throughout the
-    // gesture. Do not mix these pixels with the percentage-like flex-grow
-    // values used by the normal render path.
-    for (let i = 0; i < childSizes.length; i++) {
-      if (i === sIdx || i === sIdx + 1) continue;
-      z.otherWidths[i] = childSizes[i];
-    }
+    const sashSizes = Array.from(pEl.children).filter((el) => el.classList.contains('sash')).map(axisSize);
+    const z = { pEl, sashEl, sIdx, isRow, childEls, pointerId: ev.pointerId, childSizes, sashSizes, otherWidths: {}, originalFlex: childEls.map((child) => child.style.flex), pointerCaptured: false };
+    for (let i = 0; i < childSizes.length; i++) { if (i === sIdx || i === sIdx + 1) continue; z.otherWidths[i] = childSizes[i]; }
     this._resize = z;
     if (ev.pointerId != null && typeof sashEl.setPointerCapture === 'function') {
-      try {
-        sashEl.setPointerCapture(ev.pointerId);
-        z.pointerCaptured = true;
-      } catch (e) { /* document listeners remain the fallback */ }
+      try { sashEl.setPointerCapture(ev.pointerId); z.pointerCaptured = true; } catch (e) {}
     }
     sashEl.classList.add('sash-active');
     document.body.classList.add(isRow ? 'sash-resizing-row' : 'sash-resizing-col');
@@ -702,19 +1070,11 @@ const SashGrid = {
     document.addEventListener('pointerup', this._onResizeUp);
     document.addEventListener('pointercancel', this._onResizeCancel = () => this._cancelResize(true));
     document.addEventListener('keydown', this._onResizeKey = (keyEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        this._cancelResize(true);
-      }
+      if (keyEvent.key === 'Escape') { keyEvent.preventDefault(); this._cancelResize(true); }
     }, true);
     ev.preventDefault();
   },
 
-  /**
-   * Calculate a complete pixel allocation for an active sash gesture.
-   * Every child uses the same pixel unit so unrelated rows cannot lose flex
-   * space just because the active pair is being resized.
-   */
   _resizePixelAllocation(z, pointer, rect) {
     const axis = z.isRow ? rect.width : rect.height;
     const sashTotal = z.sashSizes.reduce((sum, size) => sum + Math.max(0, size), 0);
@@ -722,12 +1082,8 @@ const SashGrid = {
     for (const k of Object.keys(z.otherWidths)) others += Math.max(0, z.otherWidths[k]);
     const span = axis - others - sashTotal;
     if (span < this.MIN_PX * 2) return null;
-
     let prefix = 0;
-    for (let i = 0; i < z.sIdx; i++) {
-      prefix += Math.max(0, z.childSizes[i]);
-      prefix += Math.max(0, z.sashSizes[i] || 0);
-    }
+    for (let i = 0; i < z.sIdx; i++) { prefix += Math.max(0, z.childSizes[i]); prefix += Math.max(0, z.sashSizes[i] || 0); }
     const start = (z.isRow ? rect.left : rect.top) + prefix;
     const requested = pointer - start;
     const first = Math.min(Math.max(requested, this.MIN_PX), span - this.MIN_PX);
@@ -742,25 +1098,15 @@ const SashGrid = {
     if (!z) return;
     ev.preventDefault();
     const rect = z.pEl.getBoundingClientRect();
-    const allocation = this._resizePixelAllocation(
-      z, z.isRow ? ev.clientX : ev.clientY, rect);
+    const allocation = this._resizePixelAllocation(z, z.isRow ? ev.clientX : ev.clientY, rect);
     if (!allocation) return;
-
-    // Use fixed pixel flex values for ALL children during the gesture. The
-    // old implementation assigned pixel measurements only to the active pair
-    // while leaving the other children with percentage-like flex-grow values;
-    // that made an unrelated row collapse to a sliver.
-    z.childEls.forEach((child, i) => {
-      const px = allocation[i];
-      child.style.flex = px > 0 ? `0 0 ${px}px` : '0 0 0px';
-    });
+    z.childEls.forEach((child, i) => { const px = allocation[i]; child.style.flex = px > 0 ? `0 0 ${px}px` : '0 0 0px'; });
   },
 
   _resizeUp() {
     const z = this._resize;
     if (!z) return;
     this._cancelResize(false);
-    // commit: convert measured px to percents (hidden child keeps its share)
     const rect = z.pEl.getBoundingClientRect();
     const total = z.isRow ? rect.width : rect.height;
     const sashTotal = z.sashSizes.reduce((sum, size) => sum + Math.max(0, size), 0);
@@ -772,13 +1118,12 @@ const SashGrid = {
       const r = el.getBoundingClientRect();
       const w = z.isRow ? r.width : r.height;
       if (w > 1) return (Math.max(w, this.MIN_PX) / denom) * 100;
-      return prev ? prev[i] : 100 / z.childEls.length; // hidden (display:none)
+      return prev ? prev[i] : 100 / z.childEls.length;
     });
     this.root = SashCore.setSplitSizesByPath(this.root, path, sizes);
     this.render();
     this._save();
-    if (typeof LogConsole !== 'undefined')
-      LogConsole.log('📏 Grid resized', 'info');
+    if (typeof LogConsole !== 'undefined') LogConsole.log('📏 Grid resized', 'info');
   },
 
   _cancelResize(restore = true) {
@@ -788,35 +1133,27 @@ const SashGrid = {
     document.removeEventListener('pointerup', this._onResizeUp);
     document.removeEventListener('pointercancel', this._onResizeCancel);
     document.removeEventListener('keydown', this._onResizeKey, true);
-    if (restore) {
-      z.childEls.forEach((child, i) => { child.style.flex = z.originalFlex[i]; });
-    }
+    if (restore) z.childEls.forEach((child, i) => { child.style.flex = z.originalFlex[i]; });
     if (z.pointerCaptured && typeof z.sashEl.releasePointerCapture === 'function') {
-      try { z.sashEl.releasePointerCapture(z.pointerId); }
-      catch (e) { /* pointer may already have been released */ }
+      try { z.sashEl.releasePointerCapture(z.pointerId); } catch (e) {}
     }
     z.sashEl.classList.remove('sash-active');
     document.body.classList.remove('sash-resizing-row', 'sash-resizing-col');
     this._resize = null;
   },
 
-  /** Double-click a sash → reset that split to even sizes. */
   _onDblClick(ev) {
     const sashEl = ev.target.closest('.sash');
     if (!sashEl) return;
     const pEl = sashEl.parentElement;
     if (!pEl || !pEl.classList.contains('sash-split')) return;
-    const n = (pEl.children.length + 1) / 2; // children interleaved with sashes
+    const n = (pEl.children.length + 1) / 2;
     const path = this._parsePath(pEl.dataset.path);
-    this.root = SashCore.setSplitSizesByPath(this.root, path,
-      new Array(n).fill(100 / n));
+    this.root = SashCore.setSplitSizesByPath(this.root, path, new Array(n).fill(100 / n));
     this.render();
     this._save();
-    if (typeof LogConsole !== 'undefined')
-      LogConsole.log('📏 Split reset to even sizes', 'info');
+    if (typeof LogConsole !== 'undefined') LogConsole.log('📏 Split reset to even sizes', 'info');
   },
-
-  // ──  layout menu (pinned header) ───────────────────────────
 
   _setupLayoutMenu() {
     const btn = document.getElementById('layoutMenuBtn');
@@ -832,31 +1169,26 @@ const SashGrid = {
     };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      const winMenu = document.getElementById('windowsMenu');
+      if (winMenu) winMenu.classList.add('hidden');
       menu.classList.toggle('hidden');
       place();
     });
     menu.querySelectorAll('button[data-layout]').forEach((b) => {
-      b.addEventListener('click', () => {
-        menu.classList.add('hidden');
-        this.setLayout(b.dataset.layout);
-      });
+      b.addEventListener('click', () => { menu.classList.add('hidden'); this.setLayout(b.dataset.layout); });
     });
     const resetBtn = document.getElementById('resetLayoutBtn');
-    if (resetBtn) resetBtn.addEventListener('click', () => {
-      menu.classList.add('hidden');
-      this.resetToDefault();
-    });
+    if (resetBtn) resetBtn.addEventListener('click', () => { menu.classList.add('hidden'); this.resetToDefault(); });
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('#layoutMenu') && !e.target.closest('#layoutMenuBtn'))
-        menu.classList.add('hidden');
+      if (!e.target.closest('#layoutMenu') && !e.target.closest('#layoutMenuBtn')) menu.classList.add('hidden');
     });
   },
 
-  // ── test / programmatic API (also used by the WebEngine tests) ─
-
   getTree() { return SashCore.clone(this.root); },
+  getWindowStates() {
+    return { closed: Array.from(this.closedWindows), minimized: Array.from(this.minimizedWindows), maximized: this.maximizedWindow };
+  },
 
-  /** Apply a drop without pointer simulation. zone: left|right|top|bottom|before|after */
   simulateDrop(draggedId, targetId, zone) {
     const drop =
       zone === 'before' ? { kind: 'sibling', target: targetId, side: 'before' } :
@@ -872,8 +1204,6 @@ const SashGrid = {
     return this.getTree();
   },
 
-  /** Simulate a sash drag commit: resize the two neighbours of the given
-   *  sash so the first child takes `firstPct` percent of the split. */
   simulateResize(pathStr, firstPct) {
     const path = this._parsePath(pathStr);
     const p = SashCore.nodeAtPath(this.root, path);
@@ -882,7 +1212,6 @@ const SashGrid = {
     const min = SashCore.MIN_SIZE || 4;
     const maxFirst = 100 - min * (sizes.length - 1);
     sizes[0] = Math.max(min, Math.min(Number(firstPct) || min, maxFirst));
-    // redistribute the rest of the space to the other children proportionally
     const rest = 100 - sizes[0];
     const restSum = sizes.slice(1).reduce((a, b) => a + b, 0) || 1;
     for (let i = 1; i < sizes.length; i++) sizes[i] = rest * (sizes[i] / restSum);
