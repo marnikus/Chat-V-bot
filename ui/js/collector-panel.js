@@ -248,6 +248,11 @@ const CollectorPanel = {
         sync += ' · added ' + payload.sync_added;
       this._row(host, 'Sync', sync);
     }
+    if (payload.media_repaired || payload.media_requeued) {
+      this._row(host, 'Media recovery',
+        'repaired ' + (payload.media_repaired || 0) +
+        ' · re-queued ' + (payload.media_requeued || 0));
+    }
     if (payload.backfill_pending)
       this._row(host, 'Backfill', 'full scan pending retry');
     if (payload.warning) this._row(host, 'Warning', payload.warning);

@@ -173,6 +173,11 @@ class SyncResult:
     my_nick: str = ""
     backfilled: bool = False
     backfill_pending: bool = False
+    #: media recovery outcome of this sync (Bug #2, 2026-09-07): how many
+    #: message rows got a media link they never had, and how many known-bad
+    #: downloads were re-queued for the downloader.
+    media_repaired: int = 0
+    media_requeued: int = 0
     chunks: list = field(default_factory=list)
     records: list = field(default_factory=list)
 

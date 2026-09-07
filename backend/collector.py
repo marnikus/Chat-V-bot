@@ -118,6 +118,8 @@ class Collector(QObject):
         self._last_sync_reason = ""
         self._last_sync_added = 0
         self._last_sync_count = 0
+        self._last_media_repaired = 0
+        self._last_media_requeued = 0
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -356,6 +358,16 @@ class Collector(QObject):
             self._last_sync_reason = "unchanged_cursor"
             self._last_sync_added = 0
             self._last_sync_count = count
+            # An idle conversation must not stall the media downloader: a
+            # backfill can re-queue dozens of rows and `process_pending`
+            # only takes 25 per pass, so the rest need the next tick even
+            # when nothing in the chat changed (Bug #2, 2026-09-07).
+            if self.media is not None and self._settings["download_media"]:
+                try:
+                    await self.media.process_pending()
+                    await self.media.evict_if_needed()
+                except Exception as e:                    # noqa: BLE001
+                    log.debug("media caching skipped: %s", e)
             return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
@@ -377,6 +389,12 @@ class Collector(QObject):
         self._last_sync_count = int(result.count or 0)
         self._added = result.added
         self._total = result.total
+        if result.media_repaired or result.media_requeued:
+            self._last_media_repaired = int(result.media_repaired or 0)
+            self._last_media_requeued = int(result.media_requeued or 0)
+            self._log(f"Media recovery: repaired {result.media_repaired} "
+                      f"message(s), re-queued {result.media_requeued} "
+                      f"download(s)", "success", nick)
         if self.media is not None and self._settings["download_media"]:
             try:
                 await self.media.process_pending()
@@ -485,6 +503,8 @@ class Collector(QObject):
     async def backfill_older(self) -> str:
         """Force one scroll-to-top full-history pass for the current person."""
         if not self._nick:
+            self._log("Backfill needs a partner: open the private chat "
+                      "first, then click Backfill older", "warn")
             return self._state
         try:
             await self.repo.reset_cursor(self._nick)
@@ -634,6 +654,8 @@ class Collector(QObject):
             "sync_reason": self._last_sync_reason,
             "sync_added": self._last_sync_added,
             "sync_count": self._last_sync_count,
+            "media_repaired": self._last_media_repaired,
+            "media_requeued": self._last_media_requeued,
             "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
@@ -661,6 +683,7 @@ class Collector(QObject):
                      payload["added"], payload["total"], payload["throttled"],
                      payload["backfill_pending"], payload["sync_reason"],
                      payload["sync_added"], payload["sync_count"],
+                     payload["media_repaired"], payload["media_requeued"],
                      payload["error"], payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI

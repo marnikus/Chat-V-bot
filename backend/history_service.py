@@ -25,6 +25,13 @@ from backend.media_store import MediaStore
 
 log = logging.getLogger("chatbot")
 
+#: The per-file cap before 2026-09-07 was 2 MB, which silently `skipped`
+#: every ordinary chat GIF (2–15 MB) and is the root cause of Bug #2's
+#: "received GIFs never save". The new default matches the in-page transfer
+#: limit; stored configs carrying the old default are migrated up.
+OLD_MAX_FILE_MB = 2
+MAX_FILE_MB_DEFAULT = 25
+
 HISTORY_DEFAULTS = {
     "enabled": True,
     "db_path": "history.db",
@@ -33,7 +40,7 @@ HISTORY_DEFAULTS = {
         "enabled": True,
         "download": True,
         "cache_dir": "saved_media",
-        "max_file_mb": 2,
+        "max_file_mb": MAX_FILE_MB_DEFAULT,
         "max_cache_mb": 200,
     },
     "preview": {
@@ -68,6 +75,7 @@ class HistoryService:
         self._settings = _merge(HISTORY_DEFAULTS, self._stored("history"))
         if db_path:
             self._settings["db_path"] = db_path
+        self._migrate_media_cap()
         self.db = HistoryDB(self._settings["db_path"],
                             use_fts=bool(self._settings["use_fts"]))
         media_cfg = self._settings["media"]
@@ -97,6 +105,24 @@ class HistoryService:
         value = self.config.get(section, default={})
         return value if isinstance(value, dict) else {}
 
+    def _migrate_media_cap(self) -> None:
+        """Raise the per-file cap out of the 2 MB era (Bug #2, 2026-09-07).
+
+        A cap of 2 MB made every ordinary chat GIF a permanent `skipped`
+        row that no backfill could ever recover, so anything at or below
+        the old default is bumped to the new 25 MB default. Deliberately
+        larger configured values are kept.
+        """
+        media_cfg = self._settings.get("media") or {}
+        try:
+            cap = float(media_cfg.get("max_file_mb",
+                                      MAX_FILE_MB_DEFAULT))
+        except (TypeError, ValueError):
+            cap = MAX_FILE_MB_DEFAULT
+        if cap <= OLD_MAX_FILE_MB:
+            media_cfg["max_file_mb"] = MAX_FILE_MB_DEFAULT
+            self._settings["media"] = media_cfg
+
     @property
     def enabled(self) -> bool:
         return bool(self._settings.get("enabled", True))
@@ -121,7 +147,7 @@ class HistoryService:
         self.media.enabled = bool(media_cfg.get("enabled", True))
         self.media.cache_dir = media_cfg.get("cache_dir", self.media.cache_dir)
         self.media.max_file_bytes = int(float(
-            media_cfg.get("max_file_mb", 2)) * 1024 * 1024)
+            media_cfg.get("max_file_mb", MAX_FILE_MB_DEFAULT)) * 1024 * 1024)
         self.media.max_cache_bytes = int(float(
             media_cfg.get("max_cache_mb", 200)) * 1024 * 1024)
         if collector_patch:

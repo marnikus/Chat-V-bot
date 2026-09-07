@@ -374,13 +374,18 @@ and *fail if empty*. It reports progress as `done/total` and honours Stop.
 
 ```jsonc
 "history":   { "enabled": true, "db_path": "history.db",
-               "media":   { "enabled": true, "max_file_mb": 2,
+               "media":   { "enabled": true, "max_file_mb": 25,
                             "max_cache_mb": 200, "cache_dir": "saved_media" },
                "preview": { "preload_rows": 40, "page_size": 50,
                             "show_images": true } },
 "collector": { "enabled": true, "my_nick": "", "heartbeat_ms": 1500,
                "require_private": true, "download_media": true }
 ```
+
+`max_file_mb` is the per-file cap of the media cache. Before 2026-09-07 it
+defaulted to 2 MB, which silently `skipped` every ordinary chat GIF — stored
+configs carrying a value ≤ 2 are migrated up to 25 on startup
+(`docs/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md`).
 
 Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 `docs/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md`,

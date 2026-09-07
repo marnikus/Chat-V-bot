@@ -22,7 +22,7 @@ from typing import Iterable, Optional, Sequence
 from backend.history_db import HistoryDB
 from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
-                                    MessageRecord, fingerprint)
+                                    MessageRecord, fingerprint)  # noqa: F401
 
 log = logging.getLogger("chatbot")
 
@@ -97,6 +97,7 @@ class HistoryRepo:
         self.db = db
         self.media = media
         self.session_id = session_id or ""
+        self._scan_seq = 0       # unique scan marker per recovery pass
 
     # ── persons ──────────────────────────────────────────────────
     @staticmethod
@@ -269,9 +270,28 @@ class HistoryRepo:
 
         stamp = datetime.now().isoformat(timespec="seconds")
         added = 0
+        slots: dict = {}
+        slot_rows: Optional[list] = None
         for rec, day in zip(pending, days[start:]):
             dup_key = rec.dup_key
             if dup_key in known:
+                continue
+            # a media line that was parsed before its <img> rendered left an
+            # EMPTY slot behind; the real payload fills that slot in place
+            # instead of archiving the message twice (Bug #2, 2026-09-07)
+            if slot_rows is None:
+                slot_rows = await self._empty_slot_rows(person_id)
+            slot_id = await self._take_empty_slot(person_id, rec, slots,
+                                                  day=day, rows=slot_rows)
+            if slot_id is not None:
+                media_id = await self._media_id(rec, nick, day)
+                await self._fill_slot(slot_id, rec, media_id)
+                known.add(dup_key)
+                added += 1
+                if len(result.records) < MAX_LIVE_ITEMS:
+                    result.records.append(await self._ui_record(
+                        rec, await self._ord_of(slot_id), day, my_nick,
+                        media_id))
                 continue
             known.add(dup_key)
             media_id = await self._media_id(rec, nick, day)
@@ -327,13 +347,30 @@ class HistoryRepo:
             fresh.append((rec, day))
         result.skipped = len(recs) - len(fresh)
         if fresh:
-            shift = len(fresh)
-            await self.db.execute(
-                "UPDATE messages SET ord = ord + ? WHERE person_id=?",
-                (shift, person_id))
+            # A media line whose first parse predated its <img> left an empty
+            # slot somewhere in the stored range: fill it where it is instead
+            # of inserting a duplicate row (Bug #2, 2026-09-07).
+            slots: dict = {}
+            slot_rows = await self._empty_slot_rows(person_id)
+            fills: list = []          # (rec, day, slot_id, media_id)
+            inserts: list = []        # (rec, day)
+            for rec, day in fresh:
+                slot_id = await self._take_empty_slot(person_id, rec, slots,
+                                                      day=day,
+                                                      rows=slot_rows)
+                if slot_id is not None:
+                    fills.append((rec, day, slot_id,
+                                  await self._media_id(rec, nick, day)))
+                else:
+                    inserts.append((rec, day))
+            if inserts:
+                shift = len(inserts)
+                await self.db.execute(
+                    "UPDATE messages SET ord = ord + ? WHERE person_id=?",
+                    (shift, person_id))
             stamp = datetime.now().isoformat(timespec="seconds")
             position = 0
-            for rec, day in fresh:
+            for rec, day in inserts:
                 position += 1
                 media_id = await self._media_id(rec, nick, day)
                 cur = await self.db.execute(
@@ -353,6 +390,13 @@ class HistoryRepo:
                     if len(result.records) < MAX_LIVE_ITEMS:
                         result.records.append(await self._ui_record(
                             rec, position, day, my_nick, media_id))
+            for rec, day, slot_id, media_id in fills:
+                await self._fill_slot(slot_id, rec, media_id)
+                result.added += 1
+                if len(result.records) < MAX_LIVE_ITEMS:
+                    result.records.append(await self._ui_record(
+                        rec, await self._ord_of(slot_id), day, my_nick,
+                        media_id))
             await self.db.commit()
         await self._after_write(person_id, my_nick, dom_count, head_sig,
                                 tail_sig, bootstrapped=True)
@@ -393,6 +437,83 @@ class HistoryRepo:
             f"AND dup_key IN ({placeholders})",
             [person_id] + keys)
         return {r[0] for r in rows if r[0]}
+
+    # ── empty slots left by a media line parsed too early ────────
+    #
+    # The in-page observer can fire before Angular renders `app-chat-image`,
+    # so the row is stored with neither text nor media (`kind='text'`,
+    # `text=''`, `media_id NULL`). When the real payload arrives — on the
+    # next push, the next full read or a backfill — the empty slot must be
+    # FILLED, not duplicated (Bug #2, 2026-09-07).
+
+    @staticmethod
+    def _slot_key(rec: MessageRecord) -> tuple:
+        return (str(rec.direction or "").strip().lower(),
+                " ".join(str(rec.from_nick or "").split()).strip().lower(),
+                " ".join(str(rec.ts_display or "").split()).strip())
+
+    async def _empty_slot_rows(self, person_id: int) -> list:
+        """Every payload-less row of this person, in conversation order.
+
+        Matching happens in Python: SQLite's `lower()` folds ASCII only, so
+        a Cyrillic nick like `Хорошо Все` would never equal its own
+        lower-cased record key inside a WHERE clause.
+        """
+        return await self.db.fetchdicts(
+            "SELECT id, direction, from_nick, ts_display, day FROM messages "
+            "WHERE person_id=? AND media_id IS NULL AND text='' "
+            "ORDER BY ord", (person_id,))
+
+    @staticmethod
+    def _slot_row_key(row) -> tuple:
+        return (str(row.get("direction") or "").strip().lower(),
+                " ".join(str(row.get("from_nick") or "").split())
+                .strip().lower(),
+                " ".join(str(row.get("ts_display") or "").split()).strip(),
+                str(row.get("day") or "")[:10])
+
+    async def _take_empty_slot(self, person_id: int, rec: MessageRecord,
+                               used: dict, day: str = "",
+                               rows: Optional[list] = None) -> Optional[int]:
+        """The id of the next payload-less row matching this media line.
+
+        Only media-bearing records may fill a slot: an empty row exists
+        precisely because an `app-chat-image` had not rendered when the line
+        was first parsed — text never renders late, so a same-minute text
+        record must never steal a media slot. Several media lines can share
+        one HH:MM stamp from the same author; slots are consumed in `ord`
+        order so the Nth payload-bearing record fills the Nth empty slot.
+        The resolved calendar day is part of the key so a NEW message at
+        16:24 cannot fill a slot left by yesterday's 16:24.
+        """
+        if not rec.media_url:
+            return None
+        if rows is None:
+            rows = await self._empty_slot_rows(person_id)
+        want = self._slot_key(rec) + ((day or "")[:10],)
+        for row in rows:
+            rid = int(row.get("id") or 0)
+            if rid in used:
+                continue
+            if self._slot_row_key(row) == want:
+                used[rid] = True
+                return rid
+        return None
+
+    async def _fill_slot(self, slot_id: int, rec: MessageRecord,
+                         media_id: Optional[int]) -> None:
+        """Upgrade one empty row in place: same line, real payload."""
+        await self.db.execute(
+            "UPDATE messages SET kind=?, text=?, text_lc=?, media_id=?, "
+            "dup_key=?, fp=?, media_recovered_at=? WHERE id=?",
+            (rec.kind, rec.text, (rec.text or "").lower(), media_id,
+             rec.dup_key, rec.ensure_fp(),
+             datetime.now().isoformat(timespec="seconds"), slot_id))
+
+    async def _ord_of(self, row_id: int) -> int:
+        return int(await self.db.scalar("SELECT ord FROM messages WHERE id=?",
+                                        (row_id,), 0))
+
 
     async def _media_id(self, rec: MessageRecord, nick: str = "",
                         day: str = "") -> Optional[int]:
@@ -477,53 +598,80 @@ class HistoryRepo:
         ])
 
     async def recover_media(self, person_id: int, records, media=None,
-                            nick: str = "", now=None) -> int:
+                            nick: str = "", now=None,
+                            requeue_failed: bool = True) -> dict:
         """Repair images/GIFs whose URL was missing or whose download failed.
 
-        Called while a backfill is re-reading the DOM. It scans the saved
-        archive for messages that *should* have media (kind image/gif) but
-        either have no `media_id` or point at a failed/skipped row, matches
-        them to the freshly parsed DOM record (direction + author + the
-        on-screen clock), registers the real URL in the right person folder
-        and marks the row so a later pass does not retry it endlessly.
+        Called while a sync re-reads the DOM. It scans the saved archive for
+        messages that *should* have media but are broken, matches them to the
+        freshly parsed DOM record (direction + author + the on-screen clock),
+        registers the real URL in the right person folder
+        (`saved_media/<Latin-nick>/images|gifs/`) and re-queues failed rows so
+        the normal downloader retries them.
 
-        Returns the number of messages whose media got a fresh life (a new
-        link, a re-queue or a confirmed URL).
+        Broken shapes (Bug #2 audit, 2026-09-07):
+
+        * ``media_id IS NULL`` and the row is an *empty slot* — kind
+          ``image``/``gif`` with no URL, or a ``text`` row with no text
+          (a media line parsed before ``app-chat-image`` rendered);
+        * ``media_id`` points at a ``failed``/``skipped`` media row.
+
+        With ``requeue_failed=False`` (the cheap automatic pass on ordinary
+        ticks) only never-registered rows are repaired — known-bad downloads
+        are left for the manual backfill or the "click to restore" marker, so
+        a dead URL cannot trigger a download attempt every heartbeat.
+
+        Returns ``{"repaired": n, "requeued": n, "scanned": n}``.
         """
+        empty: dict = {"repaired": 0, "requeued": 0, "scanned": 0}
         if media is None or not person_id:
-            return 0
+            return empty
         person_id = int(person_id)
         stamp = (now or datetime.now()).isoformat(timespec="seconds")
+        # Every recovery pass gets a unique marker: the chunked top pass and
+        # the newest-window pass of one backfill can run inside the same
+        # second, and a shared stamp would make the second pass believe the
+        # rows the first pass scanned were its own work.
+        self._scan_seq += 1
+        marker = f"{stamp}.{self._scan_seq}"
 
-        # The DOM records from this backfill pass, keyed by the same three
-        # visible fields that make a chat line recognisable to a human.
+        # The DOM records from this pass, keyed by the same three visible
+        # fields that make a chat line recognisable to a human.
         by_key: dict[str, list[MessageRecord]] = {}
         for item in (records or []):
             rec = _as_record(item)
-            if rec.kind not in ("image", "gif") or not rec.media_url:
+            if not rec.media_url:
                 continue
             key = self._media_key(rec.direction, rec.from_nick, rec.ts_display)
             by_key.setdefault(key, []).append(rec)
 
+        failed_filter = (" OR (m.media_id IS NOT NULL AND "
+                         "md.state IN ('failed','skipped'))"
+                         if requeue_failed else "")
         rows = await self.db.fetchdicts(
             "SELECT m.id, m.ord, m.direction, m.from_nick, m.kind, m.text, "
             "m.ts_display, m.day, m.media_id, m.media_scan_at, "
-            "m.media_recovered_at, md.url AS media_url, md.kind AS media_kind, "
-            "md.state AS media_state "
+            "m.media_recovered_at, m.dup_key, md.url AS media_url, "
+            "md.kind AS media_kind, md.state AS media_state "
             "FROM messages m LEFT JOIN media md ON md.id = m.media_id "
-            "WHERE m.person_id=? AND m.kind IN ('image','gif') "
+            "WHERE m.person_id=? "
             "AND (m.media_scan_at='' OR m.media_scan_at<>?) "
             "AND ("
-            "  (m.media_id IS NULL AND m.media_scan_at='') "
-            "  OR (m.media_id IS NOT NULL AND "
-            "      md.state IN ('failed','skipped'))"
+            "  (m.media_id IS NULL AND (m.kind IN ('image','gif') "
+            "                           OR m.text=''))"
+            + failed_filter +
             ") ORDER BY m.ord",
-            (person_id, stamp))
+            (person_id, marker))
         if not rows:
-            return 0
+            return empty
+
+        # dup_keys already archived for this person — used to recognise a
+        # payload row that already exists next to an empty pre-fix slot.
+        # Loaded lazily: only needed when an empty slot finds a DOM match.
+        known_keys: Optional[set] = None
 
         used: dict[str, int] = {}
-        changed = 0
+        repaired = requeued = 0
         touched = []
         for row in rows:
             mid = row.get("media_id")
@@ -544,55 +692,118 @@ class HistoryRepo:
                     existing = await media.get(mid) if mid else None
                     if existing and existing.get("url") == url:
                         if await media.requeue(mid, "backfill_recovery"):
-                            changed += 1
+                            requeued += 1
                         await self.db.execute(
                             "UPDATE messages SET media_scan_at=?, "
                             "media_recovered_at=? WHERE id=?",
-                            (stamp, stamp, int(row["id"])))
+                            (marker, stamp, int(row["id"])))
                     else:
                         new_mid = await media.register(url, kind, nick=nick,
                                                        day=day)
                         if new_mid:
+                            if await media.requeue(new_mid,
+                                                   "backfill_recovery"):
+                                requeued += 1
                             await self.db.execute(
-                                "UPDATE messages SET media_id=?, "
+                                "UPDATE messages SET media_id=?, kind=?, "
                                 "media_scan_at=?, media_recovered_at=? "
-                                "WHERE id=?", (new_mid, stamp, stamp,
+                                "WHERE id=?", (new_mid, kind, marker, stamp,
                                                int(row["id"])))
-                            changed += 1
+                            repaired += 1
                 else:
-                    new_mid = await media.register(url, kind, nick=nick,
-                                                   day=day)
-                    if new_mid:
+                    # an empty slot (or a row that never got its URL): if the
+                    # payload-bearing line is already archived elsewhere, the
+                    # slot is a pre-fix duplicate artefact — remove it.
+                    if known_keys is None:
+                        known_keys = await self._all_person_keys(person_id)
+                    if match.dup_key in known_keys:
                         await self.db.execute(
-                            "UPDATE messages SET media_id=?, "
-                            "media_scan_at=?, media_recovered_at=? "
-                            "WHERE id=?", (new_mid, stamp, stamp,
-                                           int(row["id"])))
-                        changed += 1
+                            "DELETE FROM messages WHERE id=? AND text='' "
+                            "AND media_id IS NULL", (int(row["id"]),))
+                    else:
+                        new_mid = await media.register(url, kind, nick=nick,
+                                                       day=day)
+                        if new_mid:
+                            if await media.requeue(new_mid,
+                                                   "backfill_recovery"):
+                                requeued += 1
+                            # rewrite the identity too: the row's old
+                            # dup_key has an empty payload, which would let
+                            # a later append archive the same line twice
+                            await self.db.execute(
+                                "UPDATE messages SET media_id=?, kind=?, "
+                                "text=?, text_lc=?, dup_key=?, fp=?, "
+                                "media_scan_at=?, media_recovered_at=? "
+                                "WHERE id=?",
+                                (new_mid, kind, match.text,
+                                 (match.text or "").lower(), match.dup_key,
+                                 match.ensure_fp(), marker, stamp,
+                                 int(row["id"])))
+                            repaired += 1
             elif mid:
                 # We already know the URL (the download failed earlier); the
                 # page does not have to be re-read to give it another chance.
                 existing = await media.get(mid) if mid else None
                 if existing and existing.get("url"):
-                    if await media.requeue(mid, "backfill_recovery"):
-                        changed += 1
+                    if requeue_failed and \
+                            await media.requeue(mid, "backfill_recovery"):
+                        requeued += 1
                 if existing:
                     await self.db.execute(
                         "UPDATE messages SET media_scan_at=? WHERE id=?",
-                        (stamp, int(row["id"])))
+                        (marker, int(row["id"])))
             else:
                 # The DOM pass did not show a URL for this already-saved
                 # image/GIF. Remember the scan so we do not search for it
                 # endlessly on every backfill.
                 await self.db.execute(
                     "UPDATE messages SET media_scan_at=? WHERE id=?",
-                    (stamp, int(row["id"])))
+                    (marker, int(row["id"])))
             touched.append(int(row["id"]))
 
         if touched:
             await self.db.commit()
             await self._recount(person_id)
-        return changed
+        return {"repaired": repaired, "requeued": requeued,
+                "scanned": len(touched)}
+
+    async def _all_person_keys(self, person_id: int) -> set:
+        rows = await self.db.fetchall(
+            "SELECT dup_key FROM messages WHERE person_id=? AND dup_key<>''",
+            (person_id,))
+        return {r[0] for r in rows}
+
+    async def has_repairable_media(self, person_id: int,
+                                   include_failed: bool = False,
+                                   rescan_after_s: int = 600) -> bool:
+        """Cheap heartbeat check: is there any media row worth a repair pass?
+
+        ``include_failed`` is True only for the manual backfill (a known-bad
+        download gets another chance there, not on every tick). A row the DOM
+        could not supply a URL for is skipped for `rescan_after_s` seconds so
+        a permanently unrepairable line (e.g. a deleted message) cannot make
+        every heartbeat re-read the newest window. The manual backfill
+        deliberately ignores that grace period: the top pass of the very
+        same sync may have marked a row "scanned, not found" while the row's
+        DOM record only returns after the viewport is restored.
+        """
+        if include_failed:
+            clause = ("(media_id IS NULL AND (kind IN ('image','gif') "
+                      "OR text='')) OR media_id IN "
+                      "(SELECT id FROM media WHERE state IN "
+                      "('failed','skipped'))")
+            return bool(await self.db.scalar(
+                f"SELECT COUNT(*) FROM messages WHERE person_id=? "
+                f"AND ({clause})", (person_id,), 0))
+        cutoff = (datetime.now() -
+                  timedelta(seconds=max(60, int(rescan_after_s)))
+                  ).isoformat(timespec="seconds")
+        clause = ("(media_id IS NULL AND (kind IN ('image','gif') "
+                  "OR text='') AND (media_scan_at='' OR media_scan_at<?))")
+        return bool(await self.db.scalar(
+            f"SELECT COUNT(*) FROM messages WHERE person_id=? AND ({clause})",
+            (person_id, cutoff), 0))
+
 
     async def _touch_cursor(self, person_id: int, dom_count: int,
                             head_sig: Optional[str],

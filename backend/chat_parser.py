@@ -531,8 +531,11 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                               "added": result.added})
         if backfill_older and media is not None and records:
             try:
-                await repo.recover_media(person_id, records, media=media,
-                                         nick=nick, now=now)
+                stats = await repo.recover_media(
+                    person_id, records, media=media, nick=nick, now=now,
+                    requeue_failed=True)
+                result.media_repaired += int(stats.get("repaired") or 0)
+                result.media_requeued += int(stats.get("requeued") or 0)
             except Exception as e:                    # noqa: BLE001
                 log.debug("media recovery for %s failed: %s", nick, e)
         position = end
@@ -562,8 +565,11 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             _merge_live(result, backfill, live_baseline)
         if backfill_older and media is not None and collected:
             try:
-                await repo.recover_media(person_id, collected, media=media,
-                                         nick=nick, now=now)
+                stats = await repo.recover_media(
+                    person_id, collected, media=media, nick=nick, now=now,
+                    requeue_failed=True)
+                result.media_repaired += int(stats.get("repaired") or 0)
+                result.media_requeued += int(stats.get("requeued") or 0)
             except Exception as e:                    # noqa: BLE001
                 log.debug("media recovery for %s failed: %s", nick, e)
 
@@ -572,6 +578,36 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             await parser.restore_scroll(restored_top)
         except Exception:                            # noqa: BLE001
             log.debug("could not restore scroll position for %s", nick)
+
+    # ── the newest messages' media (Bug #2, 2026-09-07) ───────────
+    # A scroll-to-top pass (and any virtualised pane) drops the newest nodes
+    # from the DOM, so a broken media line at the BOTTOM of the chat never
+    # met its DOM record during the reads above. If anything is still
+    # repairable, read the newest window — after the viewport was put back —
+    # and run one more recovery pass over it. This also runs on ordinary
+    # ticks, which is how a media line that rendered after its first parse
+    # is repaired within one heartbeat instead of never.
+    if media is not None and not (should_stop and should_stop()):
+        try:
+            if await repo.has_repairable_media(
+                    person_id, include_failed=bool(backfill_older)):
+                tail_state = await parser.state()
+                tail_count = int(tail_state.get("count") or 0)
+                if tail_count > 0:
+                    window = max(parser.chunk_size, 80)
+                    tail_records = await parser.slice(
+                        max(0, tail_count - window), tail_count)
+                    if tail_records:
+                        stats = await repo.recover_media(
+                            person_id, tail_records, media=media, nick=nick,
+                            now=now, requeue_failed=bool(backfill_older))
+                        result.media_repaired += int(stats.get("repaired")
+                                                     or 0)
+                        result.media_requeued += int(stats.get("requeued")
+                                                     or 0)
+        except Exception as e:                        # noqa: BLE001
+            log.debug("tail media recovery for %s failed: %s", nick, e)
+
     if result.backfilled and not result.stopped and not result.backfill_pending:
         try:
             await repo.mark_backfilled(person_id)

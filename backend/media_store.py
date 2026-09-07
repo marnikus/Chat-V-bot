@@ -110,7 +110,7 @@ class MediaStore:
     """URL registry + on-disk byte cache for images and GIFs."""
 
     def __init__(self, db: HistoryDB, cdp=None, cache_dir: str = "saved_media",
-                 max_file_mb: float = 1, max_cache_mb: float = 10,
+                 max_file_mb: float = 25, max_cache_mb: float = 10,
                  enabled: bool = True):
         self.db = db
         self.cdp = cdp

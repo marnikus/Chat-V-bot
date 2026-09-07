@@ -90,7 +90,8 @@ class TestMissingUrlRecovery(RecoveryCase):
             kind="image", media_url=PNG_URL, media_kind="image")]
         changed = await self.repo.recover_media(
             pid, dom, media=self.store, nick=PARTNER, now=DAY)
-        self.assertEqual(changed, 1)
+        self.assertEqual(changed, {"repaired": 1, "requeued": 0,
+                                   "scanned": 1})
 
         row = await self.db.fetchone(
             "SELECT media_id, media_scan_at, media_recovered_at "
@@ -108,13 +109,13 @@ class TestMissingUrlRecovery(RecoveryCase):
         # the row is no longer a candidate, so the next backfill does nothing
         again = await self.repo.recover_media(
             pid, dom, media=self.store, nick=PARTNER, now=DAY)
-        self.assertEqual(again, 0)
+        self.assertEqual(again["repaired"] + again["requeued"], 0)
 
     async def test_a_missing_url_that_is_not_in_the_dom_is_scanned_once(self):
         pid = await self._save_missing(ts="12:00")
         changed = await self.repo.recover_media(
             pid, [], media=self.store, nick=PARTNER, now=DAY)
-        self.assertEqual(changed, 0)
+        self.assertEqual(changed["repaired"] + changed["requeued"], 0)
 
         row = await self.db.fetchone(
             "SELECT media_id, media_scan_at FROM messages WHERE person_id=?",
@@ -124,7 +125,7 @@ class TestMissingUrlRecovery(RecoveryCase):
 
         second = await self.repo.recover_media(
             pid, [], media=self.store, nick=PARTNER, now=DAY)
-        self.assertEqual(second, 0)
+        self.assertEqual(second["repaired"] + second["requeued"], 0)
 
 
 class TestFailedRowRecovery(RecoveryCase):
@@ -148,7 +149,8 @@ class TestFailedRowRecovery(RecoveryCase):
 
         changed = await self.repo.recover_media(
             pid, [], media=self.store, nick=PARTNER, now=DAY)
-        self.assertEqual(changed, 1)
+        self.assertEqual(changed, {"repaired": 0, "requeued": 1,
+                                   "scanned": 1})
 
         row = await self.store.get(mid)
         self.assertEqual(row["state"], "pending")
