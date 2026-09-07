@@ -424,10 +424,32 @@ class MediaStore:
     async def retry_failed(self) -> int:
         """Explicitly give up-front failures another chance (user action)."""
         cur = await self.db.execute(
-            "UPDATE media SET state='pending', fail_reason='' "
-            "WHERE state IN ('failed','skipped')")
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1 "
+            "WHERE state IN ('failed','skipped')",
+            (_now(),))
         await self.db.commit()
         return int(cur.rowcount or 0)
+
+    async def requeue(self, media_id, reason: str = "retry") -> bool:
+        """Re-queue one failed/skipped media row for another download.
+
+        Used by backfill recovery. The row is stamped so the UI/DB can prove
+        it was recovered (or tried again) and so a single backfill never
+        loops over the same URL endlessly.
+        """
+        row = await self.get(media_id)
+        if not row or not row.get("url"):
+            return False
+        if row.get("state") not in ("failed", "skipped"):
+            return False
+        await self.db.execute(
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1, "
+            "last_used=? WHERE id=?",
+            (_now(), _now(), self._as_id(media_id)))
+        await self.db.commit()
+        return True
 
     async def retry_failed_uncached(self) -> int:
         """Re-queue failed rows that have no local file.
@@ -437,8 +459,10 @@ class MediaStore:
         with the Python/cookie downloader.
         """
         cur = await self.db.execute(
-            "UPDATE media SET state='pending', fail_reason='' "
-            "WHERE state='failed' AND (cache_path='' OR cache_path IS NULL)")
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1 "
+            "WHERE state='failed' AND (cache_path='' OR cache_path IS NULL)",
+            (_now(),))
         await self.db.commit()
         return int(cur.rowcount or 0)
 

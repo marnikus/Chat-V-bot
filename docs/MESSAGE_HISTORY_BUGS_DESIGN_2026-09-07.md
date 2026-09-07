@@ -404,3 +404,64 @@ contains `/*ARGS:` and never the broken `/*ARGS*/.../*END*/` shape.
 | `backend/chat_parser.py` | retry slice ranges 4×; `SyncResult.count`; slice-empty viewport restore |
 | `backend/collector.py` | `sync_count` / `sync_added` diagnostics in the Collector window |
 | `ui/js/collector-panel.js` | show `Sync: reason · count N · added M` |
+
+---
+
+## 10. Follow-up (seventh pass): live updates + backfill media recovery
+
+Current report: "REAL-TIME UPDATES & MEDIA BACKFILL".
+
+### 10.1 Bug 1 — the Person History pane does not move for new messages
+
+* **Root cause A.** The heartbeat sync saved the new rows but emitted
+  `history_appended` with `items=[]`, so the open pane never merged them.
+* **Root cause B.** When it did emit (the observer push), it emitted the raw
+  DOM records, which lack `ord`, `day` and the joined `media` fields — the UI
+  either swallowed or mis-rendered them.
+* **Root cause C.** The header count only came from the initial page's
+  `person_stats`; a live append never refreshed it.
+* **Root cause D.** When the user had scrolled up, `appendLive()` buffered
+  rows but duplicated the same latest page on repeated pushes.
+
+Fix:
+
+* `AppendResult.records` now carries **UI-shaped rows** built at write time
+  (`ord`, `day`, `time`, `media{id,url,kind,state,path}`), capped at 200.
+* `sync_conversation` merges only rows with `ord > previous last_ord` into
+  `SyncResult.records`, so a backfill that inserts *older* rows never pushes
+  them through the live channel.
+* `Collector._notify_appended` emits those shaped rows; only if no shaped
+  rows exist does it fall back to re-reading the newest page.
+* `HistoryStore.onLiveAppend` re-renders immediately, bumps the header count
+  from the payload and asks Python for the authoritative `person_stats`.
+* `HistoryModel.appendLive()` now dedupes the held-back buffer, so a
+  collector that resends the latest page does not inflate "N new".
+
+### 10.2 Bug 2 — failed / missing media is permanently lost
+
+* **Root cause A.** A row whose media URL was empty at parse time has
+  `media_id IS NULL`; nothing ever re-reads the DOM to recover it.
+* **Root cause B.** A row whose download failed is `state='failed'/'skipped'`;
+  `process_pending()` only works on `pending`, and backfill never re-queued
+  it.
+* **Root cause C.** Recovery was not connected to the scroll-to-top pass, so
+  the DOM pass that could supply the URL never repaired the archive.
+
+Fix (runs on every `backfill_older` pass):
+
+* `HistoryRepo.recover_media(person_id, records, media, nick)` scans saved
+  image/GIF rows that have no `media_id` (never scanned) or point at a
+  failed/skipped media row.
+* It matches each saved row to a freshly parsed DOM record by
+  `direction + from_nick + HH:MM`, registers the real URL in the correct
+  person folder (`saved_media/<Latin-nick>/images|gifs/`), and re-queues
+  failed rows so the normal downloader retries them.
+* New schema markers: `messages.media_scan_at` and
+  `messages.media_recovered_at`, plus `media.recovered_at` /
+  `media.recovery_attempts`, so a message that cannot be found is scanned
+  once instead of infinitely and a recovered URL is visibly marked.
+* `MediaStore.requeue()` is the single re-queue primitive used by startup
+  repair and by backfill recovery.
+
+`status`: schema `3`. Tests: `tests/test_media_recovery.py`,
+`tests/test_history_lazy_paging.js`, `tests/test_history_panels_boot.js`.

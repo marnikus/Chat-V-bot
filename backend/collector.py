@@ -29,6 +29,7 @@ from PySide6.QtCore import QObject, Signal
 from backend import chat_agent_js
 from backend.chat_parser import (ChatParser, _signature, sync_conversation,
                                  verify_private)
+from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.user_memory import UserMemory, UserRecord
 
@@ -385,7 +386,8 @@ class Collector(QObject):
 
         suffix = " (throttled — a run is active)" if self._throttled else ""
         if result.added:
-            self._notify_appended(nick, [], result.added, result.total)
+            await self._notify_appended(nick, list(result.records[:200]),
+                                        result.added, result.total)
             self._log(f"Archived {result.added} new message(s) "
                       f"(total {result.total})", "success", nick)
             return self._set(CollectorState.COLLECTED,
@@ -410,7 +412,8 @@ class Collector(QObject):
                       max_messages=cap or None,
                       backfill_older=backfill_older,
                       backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
-                      now=self.now())
+                      now=self.now(),
+                      media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
             async with self.lease.low():
                 return await sync_conversation(self.parser, self.repo, nick,
@@ -555,8 +558,9 @@ class Collector(QObject):
         if result.added:
             self._added = result.added
             self._total = result.total
-            self._notify_appended(self._nick, items, result.added,
-                                  result.total)
+            await self._notify_appended(self._nick,
+                                        list(result.records[:200]),
+                                        result.added, result.total)
             self._set(CollectorState.COLLECTED,
                       f"Collected {result.added} new "
                       f"message{'s' if result.added != 1 else ''} "
@@ -586,11 +590,27 @@ class Collector(QObject):
             return []
         return [item for item in items if isinstance(item, dict)]
 
-    def _notify_appended(self, nick: str, items: list, added: int,
-                         total: int) -> None:
+    async def _notify_appended(self, nick: str, items: list, added: int,
+                               total: int) -> None:
+        """Emit UI-shaped rows, never the raw parser records.
+
+        The UI rows need `ord`, `day`, `time` and the joined media fields;
+        `AppendResult.records` now carries that shape from the write.  If it
+        is somehow empty, re-read the newest page from SQLite as a fallback.
+        """
+        live = list(items or [])[:200]
+        if not live:
+            try:
+                page = await HistoryQuery(self.repo.db).page(
+                    nick, limit=min(200, max(50, added or 50)))
+                live = page.get("items") or []
+                if page.get("total") is not None:
+                    total = int(page.get("total") or 0)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("live history page for %s failed: %s", nick, e)
         try:
             self.history_appended.emit(json.dumps(
-                {"nick": nick, "my_nick": self.my_nick, "items": items,
+                {"nick": nick, "my_nick": self.my_nick, "items": live,
                  "added": added, "total": total}, ensure_ascii=False))
         except Exception as e:                        # noqa: BLE001
             log.debug("history_appended emit failed: %s", e)

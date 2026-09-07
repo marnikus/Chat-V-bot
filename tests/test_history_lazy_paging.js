@@ -172,6 +172,17 @@ t('live rows are held back while older history is on screen', () => {
   ok(m.hasNewer, 'the view can offer a jump-to-latest');
 });
 
+t('repeated live pushes do not double the held-back buffer', () => {
+  const m = model();
+  m.requestInitial(); m.applyPage(page(500, 549));
+  eq(m.appendLive(rows(1001, 1002)), 0, 'held back while older is shown');
+  eq(m.pendingLive, 2);
+  eq(m.appendLive(rows(1001, 1002)), 0, 'same latest page resend');
+  eq(m.pendingLive, 2, 'the buffer keeps a row once');
+  m.appendLive(rows(1003, 1003));
+  eq(m.pendingLive, 3, 'a genuinely new row is still counted');
+});
+
 t('jumping to the latest clears the buffer and reloads', () => {
   const m = model();
   m.requestInitial(); m.applyPage(page(500, 549));

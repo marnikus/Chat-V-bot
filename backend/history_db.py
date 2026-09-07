@@ -18,7 +18,7 @@ import aiosqlite
 
 log = logging.getLogger("chatbot")
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS media (
     ref_count   INTEGER NOT NULL DEFAULT 0,
     fail_reason TEXT NOT NULL DEFAULT '',
     created_at  TEXT,
-    last_used   TEXT
+    last_used   TEXT,
+    recovered_at   TEXT NOT NULL DEFAULT '',
+    recovery_attempts INTEGER NOT NULL DEFAULT 0
 );
 -- NOT unique: two urls may legitimately carry identical bytes; they share
 -- one file on disk but keep one row each.
@@ -85,6 +87,8 @@ CREATE TABLE IF NOT EXISTS messages (
     session_id  TEXT NOT NULL DEFAULT '',
     created_at  TEXT,
     dup_key     TEXT NOT NULL DEFAULT '',
+    media_scan_at      TEXT NOT NULL DEFAULT '',
+    media_recovered_at TEXT NOT NULL DEFAULT '',
     UNIQUE(person_id, fp, day)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_person_ord ON messages(person_id, ord);
@@ -176,8 +180,12 @@ class HistoryDB:
     #: columns added after the first release — old files are upgraded in place
     LATE_COLUMNS = {
         "media": [("owner", "TEXT NOT NULL DEFAULT ''"),
-                  ("day", "TEXT NOT NULL DEFAULT ''")],
-        "messages": [("dup_key", "TEXT NOT NULL DEFAULT ''")],
+                  ("day", "TEXT NOT NULL DEFAULT ''"),
+                  ("recovered_at", "TEXT NOT NULL DEFAULT ''"),
+                  ("recovery_attempts", "INTEGER NOT NULL DEFAULT 0")],
+        "messages": [("dup_key", "TEXT NOT NULL DEFAULT ''"),
+                     ("media_scan_at", "TEXT NOT NULL DEFAULT ''"),
+                     ("media_recovered_at", "TEXT NOT NULL DEFAULT ''")],
         "cursors": [("tail_keys", "TEXT NOT NULL DEFAULT '[]'"),
                     ("full_scan_complete", "INTEGER NOT NULL DEFAULT 0"),
                     ("full_scan_at", "TEXT NOT NULL DEFAULT ''")],

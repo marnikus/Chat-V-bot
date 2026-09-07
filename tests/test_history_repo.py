@@ -84,7 +84,7 @@ class TestSchema(ArchiveCase):
         for t in ("persons", "messages", "media", "cursors", "gaps",
                   "schema_meta"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), "2")
+        self.assertEqual(await self.db.get_meta("schema_version"), "3")
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)
@@ -187,6 +187,19 @@ class TestAppendAndDedupe(ArchiveCase):
         ords = [r[0] for r in await self.db.fetchall(
             "SELECT ord FROM messages ORDER BY id")]
         self.assertEqual(ords, [1, 2, 3, 4, 5])
+
+    async def test_appended_live_records_are_ui_shaped(self):
+        res = await self.repo.append(
+            "Nick", [rec("live", time="17:35", idx=0)], my_nick="Me",
+            now=NOW)
+        self.assertEqual(len(res.records), 1)
+        item = res.records[0]
+        self.assertEqual(item["ord"], 1)
+        self.assertEqual(item["day"], "2026-09-06")
+        self.assertEqual(item["time"], "17:35")
+        self.assertEqual(item["dir"], "in")
+        self.assertEqual(item["from"], "Nick")
+        self.assertEqual(item["media"], None)
 
     async def test_replaying_the_same_batch_adds_nothing(self):
         batch = convo(5)

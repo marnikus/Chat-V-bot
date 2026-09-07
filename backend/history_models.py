@@ -129,9 +129,18 @@ class AppendResult:
     total: int = 0
     person_id: int = 0
     reason: str = ""
+    #: The records actually inserted (capped at MAX_LIVE_ITEMS), used for the
+    #: Person History live update without re-reading the whole conversation.
+    records: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+#: Keep one heartbeat's live update bounded; anything larger gets a `refresh`
+#: event and the panel reloads its newest page instead of shipping thousands
+#: of records to the UI.
+MAX_LIVE_ITEMS = 200
 
 
 @dataclass
@@ -165,6 +174,7 @@ class SyncResult:
     backfilled: bool = False
     backfill_pending: bool = False
     chunks: list = field(default_factory=list)
+    records: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)

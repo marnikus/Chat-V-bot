@@ -256,6 +256,34 @@ t('the answer is rendered, newest last, with both nicks in the header', () => {
   ok(header.includes('Nick') && header.includes('Me'), header);
 });
 
+t('a live append appears immediately and bumps the header count', () => {
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', items: rows(1, 3), total: 3, has_more: false,
+    has_newer: false, gaps: [], missing: false,
+    stats: { messages: 3, first_day: '2026-09-06', last_day: '2026-09-06' },
+  }));
+  const list = document.getElementById('historyList');
+  ok(document.getElementById('historyHeader').textContent
+    .includes('3 messages'), 'header shows the count before the append');
+  HistoryStore.onLiveAppend(JSON.stringify({
+    nick: 'Nick', added: 1, total: 4,
+    items: [{ ord: 4, fp: 'fp4', dir: 'in', from: 'Nick', kind: 'text',
+              text: 'fresh', media: null, time: '17:34', day: '2026-09-06' }],
+  }));
+  eq(list.querySelectorAll('.msg').length, 4, 'the new row is rendered');
+  ok(document.getElementById('historyHeader').textContent
+    .includes('4 messages'), 'the header count is updated');
+
+  // restore the state the following tests assume
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', items: rows(1, 20), total: 20, has_more: false,
+    has_newer: false, gaps: [], missing: false,
+    stats: { messages: 20, first_day: '2026-09-01', last_day: '2026-09-06' },
+  }));
+});
+
 t('an answer for another person is ignored', () => {
   HistoryStore.onPage('stale', JSON.stringify({
     nick: 'Someone Else', items: rows(1, 5), total: 5, has_more: false,

@@ -194,8 +194,34 @@ const HistoryStore = {
     if (!payload || !this.model) return;
     if (payload.nick !== this.nick) return;
     const added = this.model.appendLive(payload.items || []);
+    if (payload.total != null) {
+      const total = Number(payload.total);
+      this.stats = Object.assign({}, this.stats || {}, {
+        messages: total, message_count: total,
+      });
+    }
+    if (this.model && payload.total != null)
+      this.model.total = Number(payload.total);
     if (added) this.render({ stickToBottom: true });
-    this._updateLatestButton();
+    else this._updateLatestButton();
+    this.renderHeader();
+    this.refreshStats();
+  },
+
+  /** Ask Python for the authoritative person stats after a live append. */
+  refreshStats() {
+    if (!this.nick || !App.bridge || !App.bridge.history_stats) return;
+    App.bridge.history_stats('s' + (++this._seq), this.nick);
+  },
+
+  onStats(reqId, json) {
+    let stats = null;
+    try { stats = JSON.parse(json); } catch (e) { return; }
+    if (!stats || stats.nick !== this.nick) return;
+    this.stats = stats;
+    if (this.model && stats.message_count != null)
+      this.model.total = Number(stats.message_count);
+    this.renderHeader();
   },
 
   /** Show this person's saved images and GIFs in the file manager. */

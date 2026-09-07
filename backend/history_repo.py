@@ -20,7 +20,8 @@ from datetime import datetime, timedelta
 from typing import Iterable, Optional, Sequence
 
 from backend.history_db import HistoryDB
-from backend.history_models import (Alignment, AppendResult,  # noqa: F401
+from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+                                    AppendResult,  # noqa: F401
                                     MessageRecord, fingerprint)
 
 log = logging.getLogger("chatbot")
@@ -274,20 +275,24 @@ class HistoryRepo:
                 continue
             known.add(dup_key)
             media_id = await self._media_id(rec, nick, day)
+            assigned = last_ord + 1
             cur = await self.db.execute(
                 "INSERT OR IGNORE INTO messages("
                 "person_id, ord, fp, direction, from_nick, my_nick, kind, "
                 "text, text_lc, media_id, ts_display, ts_resolved, day, "
                 "ts_exact, occ, dom_idx, session_id, created_at, dup_key) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
-                (person_id, last_ord + 1, rec.fp, rec.direction, rec.from_nick,
+                (person_id, assigned, rec.fp, rec.direction, rec.from_nick,
                  my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
                  media_id, rec.ts_display, f"{day} {rec.ts_display or '00:00'}",
                  day, rec.occ, rec.idx, session_id or self.session_id, stamp,
                  dup_key))
             if cur.rowcount:
                 added += 1
-                last_ord += 1
+                last_ord = assigned
+                if len(result.records) < MAX_LIVE_ITEMS:
+                    result.records.append(await self._ui_record(
+                        rec, assigned, day, my_nick, media_id))
         await self.db.commit()
 
         await self._after_write(person_id, my_nick, dom_count, head_sig,
@@ -345,6 +350,9 @@ class HistoryRepo:
                      rec.dup_key))
                 if cur.rowcount:
                     result.added += 1
+                    if len(result.records) < MAX_LIVE_ITEMS:
+                        result.records.append(await self._ui_record(
+                            rec, position, day, my_nick, media_id))
             await self.db.commit()
         await self._after_write(person_id, my_nick, dom_count, head_sig,
                                 tail_sig, bootstrapped=True)
@@ -408,6 +416,48 @@ class HistoryRepo:
                                      (rec.media_url,))
         return int(row[0]) if row else None
 
+    async def _ui_record(self, rec: MessageRecord, ord_value: int, day: str,
+                         my_nick: str, media_id) -> dict:
+        """The row shape the History window expects, straight from the write.
+
+        The page parser ships `rec` only; the UI needs `ord`, `day`, `time`
+        and the joined media fields.  We build those here so the
+        `history_appended` signal can deliver only the rows that changed
+        instead of re-reading an entire page.
+        """
+        media = None
+        if media_id:
+            if self.media is not None:
+                row = await self.media.get(media_id)
+            else:
+                row = await self.db.fetchone("SELECT * FROM media WHERE id=?",
+                                             (media_id,))
+                row = dict(row) if row else None
+            if row:
+                media = {
+                    "id": int(row.get("id") or media_id),
+                    "url": row.get("url") or rec.media_url or "",
+                    "kind": row.get("kind") or rec.media_kind or rec.kind,
+                    "state": row.get("state") or "pending",
+                    "path": row.get("cache_path") or "",
+                }
+        return {
+            "ord": int(ord_value or 0),
+            "fp": rec.fp or "",
+            "dir": rec.direction or "in",
+            "direction": rec.direction or "in",
+            "from": rec.from_nick or "",
+            "from_nick": rec.from_nick or "",
+            "my_nick": my_nick or "",
+            "kind": rec.kind or "text",
+            "text": rec.text or "",
+            "media": media,
+            "time": rec.ts_display or "",
+            "ts_display": rec.ts_display or "",
+            "day": day or "",
+            "occ": int(rec.occ or 0),
+        }
+
     async def _record_gap(self, person_id: int, after_ord: int, reason: str,
                           detail: str = "") -> None:
         await self.db.execute(
@@ -416,6 +466,133 @@ class HistoryRepo:
             (person_id, after_ord, reason or "unknown", detail,
              datetime.now().isoformat(timespec="seconds")))
         await self.db.commit()
+
+    # ── media recovery during a backfill ────────────────────────
+    @staticmethod
+    def _media_key(direction: str, from_nick: str, ts_display: str) -> str:
+        return " ".join([
+            " ".join(str(direction or "").split()).strip().lower(),
+            " ".join(str(from_nick or "").split()).strip().lower(),
+            " ".join(str(ts_display or "").split()).strip().lower(),
+        ])
+
+    async def recover_media(self, person_id: int, records, media=None,
+                            nick: str = "", now=None) -> int:
+        """Repair images/GIFs whose URL was missing or whose download failed.
+
+        Called while a backfill is re-reading the DOM. It scans the saved
+        archive for messages that *should* have media (kind image/gif) but
+        either have no `media_id` or point at a failed/skipped row, matches
+        them to the freshly parsed DOM record (direction + author + the
+        on-screen clock), registers the real URL in the right person folder
+        and marks the row so a later pass does not retry it endlessly.
+
+        Returns the number of messages whose media got a fresh life (a new
+        link, a re-queue or a confirmed URL).
+        """
+        if media is None or not person_id:
+            return 0
+        person_id = int(person_id)
+        stamp = (now or datetime.now()).isoformat(timespec="seconds")
+
+        # The DOM records from this backfill pass, keyed by the same three
+        # visible fields that make a chat line recognisable to a human.
+        by_key: dict[str, list[MessageRecord]] = {}
+        for item in (records or []):
+            rec = _as_record(item)
+            if rec.kind not in ("image", "gif") or not rec.media_url:
+                continue
+            key = self._media_key(rec.direction, rec.from_nick, rec.ts_display)
+            by_key.setdefault(key, []).append(rec)
+
+        rows = await self.db.fetchdicts(
+            "SELECT m.id, m.ord, m.direction, m.from_nick, m.kind, m.text, "
+            "m.ts_display, m.day, m.media_id, m.media_scan_at, "
+            "m.media_recovered_at, md.url AS media_url, md.kind AS media_kind, "
+            "md.state AS media_state "
+            "FROM messages m LEFT JOIN media md ON md.id = m.media_id "
+            "WHERE m.person_id=? AND m.kind IN ('image','gif') "
+            "AND (m.media_scan_at='' OR m.media_scan_at<>?) "
+            "AND ("
+            "  (m.media_id IS NULL AND m.media_scan_at='') "
+            "  OR (m.media_id IS NOT NULL AND "
+            "      md.state IN ('failed','skipped'))"
+            ") ORDER BY m.ord",
+            (person_id, stamp))
+        if not rows:
+            return 0
+
+        used: dict[str, int] = {}
+        changed = 0
+        touched = []
+        for row in rows:
+            mid = row.get("media_id")
+            key = self._media_key(row.get("direction"), row.get("from_nick"),
+                                  row.get("ts_display"))
+            matches = by_key.get(key, [])
+            at = used.get(key, 0)
+            match: Optional[MessageRecord] = None
+            if at < len(matches):
+                match = matches[at]
+                used[key] = at + 1
+
+            if match:
+                url = match.media_url
+                kind = match.media_kind or match.kind
+                day = str(row.get("day") or "")[:10]
+                if mid:
+                    existing = await media.get(mid) if mid else None
+                    if existing and existing.get("url") == url:
+                        if await media.requeue(mid, "backfill_recovery"):
+                            changed += 1
+                        await self.db.execute(
+                            "UPDATE messages SET media_scan_at=?, "
+                            "media_recovered_at=? WHERE id=?",
+                            (stamp, stamp, int(row["id"])))
+                    else:
+                        new_mid = await media.register(url, kind, nick=nick,
+                                                       day=day)
+                        if new_mid:
+                            await self.db.execute(
+                                "UPDATE messages SET media_id=?, "
+                                "media_scan_at=?, media_recovered_at=? "
+                                "WHERE id=?", (new_mid, stamp, stamp,
+                                               int(row["id"])))
+                            changed += 1
+                else:
+                    new_mid = await media.register(url, kind, nick=nick,
+                                                   day=day)
+                    if new_mid:
+                        await self.db.execute(
+                            "UPDATE messages SET media_id=?, "
+                            "media_scan_at=?, media_recovered_at=? "
+                            "WHERE id=?", (new_mid, stamp, stamp,
+                                           int(row["id"])))
+                        changed += 1
+            elif mid:
+                # We already know the URL (the download failed earlier); the
+                # page does not have to be re-read to give it another chance.
+                existing = await media.get(mid) if mid else None
+                if existing and existing.get("url"):
+                    if await media.requeue(mid, "backfill_recovery"):
+                        changed += 1
+                if existing:
+                    await self.db.execute(
+                        "UPDATE messages SET media_scan_at=? WHERE id=?",
+                        (stamp, int(row["id"])))
+            else:
+                # The DOM pass did not show a URL for this already-saved
+                # image/GIF. Remember the scan so we do not search for it
+                # endlessly on every backfill.
+                await self.db.execute(
+                    "UPDATE messages SET media_scan_at=? WHERE id=?",
+                    (stamp, int(row["id"])))
+            touched.append(int(row["id"]))
+
+        if touched:
+            await self.db.commit()
+            await self._recount(person_id)
+        return changed
 
     async def _touch_cursor(self, person_id: int, dom_count: int,
                             head_sig: Optional[str],

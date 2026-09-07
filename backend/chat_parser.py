@@ -25,7 +25,8 @@ from datetime import datetime
 from typing import Callable, Iterable, Optional
 
 from backend import chat_agent_js
-from backend.history_models import (Alignment, MessageRecord,  # noqa: F401
+from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+                                    MessageRecord,  # noqa: F401
                                     SyncResult)
 from backend.history_repo import HistoryRepo, align_batch
 
@@ -65,6 +66,27 @@ def _signature(value) -> str:
 
 def _norm(nick: str) -> str:
     return " ".join(str(nick or "").split()).strip().lower()
+
+
+def _merge_live(result: SyncResult, appended: AppendResult,
+                baseline: int = 0) -> None:
+    """Keep only the newest records actually inserted for a live UI update.
+
+    `baseline` is the previous archive `last_ord`: rows a backfill prepends
+    (they are *older* than everything the user already had) must not be
+    pushed through the live-append channel; only rows appended after the
+    previous tail belong there.
+    """
+    for record in (getattr(appended, "records", None) or []):
+        if len(result.records) >= MAX_LIVE_ITEMS:
+            break
+        try:
+            ord_value = int(record.get("ord") or 0)
+        except (TypeError, ValueError):
+            ord_value = 0
+        if ord_value <= baseline:
+            continue
+        result.records.append(record)
 
 
 # ── the two-step private-chat gate (bug report of 2026-09-07) ─────
@@ -326,7 +348,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             on_progress: Optional[Callable[[int, int], None]] = None,
                             now: Optional[datetime] = None,
                             backfill_older: bool = False,
-                            backfill_wait_s: float = 2.0) -> SyncResult:
+                            backfill_wait_s: float = 2.0,
+                            media=None) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 
     With `backfill_older=True` the pane is first scrolled to its first message
@@ -410,6 +433,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
 
     person_id = await repo.ensure_person(nick)
     cursor = await repo.get_cursor(person_id)
+    live_baseline = int(cursor.get("last_ord") or 0)
     person = await repo.get_person_by_id(person_id) or {}
     result.total = int(person.get("message_count") or 0)
 
@@ -500,10 +524,17 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 now=now)
             result.added += appended.added
             result.gap = result.gap or appended.gap
+            _merge_live(result, appended, live_baseline)
         else:
             collected.extend(records)
         result.chunks.append({"from": position, "to": end,
                               "added": result.added})
+        if backfill_older and media is not None and records:
+            try:
+                await repo.recover_media(person_id, records, media=media,
+                                         nick=nick, now=now)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("media recovery for %s failed: %s", nick, e)
         position = end
         first = False
         if on_progress:
@@ -519,6 +550,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                                      align=True, now=now)
         result.added += appended.added
         result.gap = result.gap or appended.gap
+        _merge_live(result, appended, live_baseline)
         # anything that appeared ABOVE the part we already knew
         tail = cursor.get("tail_keys") or cursor.get("tail_fps") or []
         alignment = align([r.dup_key for r in collected], tail)
@@ -527,6 +559,13 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                                          my_nick=my_nick, prepend=True,
                                          now=now)
             result.added += backfill.added
+            _merge_live(result, backfill, live_baseline)
+        if backfill_older and media is not None and collected:
+            try:
+                await repo.recover_media(person_id, collected, media=media,
+                                         nick=nick, now=now)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("media recovery for %s failed: %s", nick, e)
 
     if restored_top is not None:
         try:

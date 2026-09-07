@@ -381,6 +381,8 @@ function setupBridgeListeners() {
   // ── message archive ───────────────────────────────────────
   if (b.history_page_ready)
     b.history_page_ready.connect((req, json) => HistoryStore.onPage(req, json));
+  if (b.history_stats_ready)
+    b.history_stats_ready.connect((req, json) => HistoryStore.onStats(req, json));
   if (b.history_search_ready)
     b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
   if (b.userdb_page_ready)
