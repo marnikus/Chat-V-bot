@@ -201,6 +201,31 @@ t('images and gifs become media records with no text', () => {
   eq(items[1].media.url, 'https://cdn.example/anim.gif?x=1');
 });
 
+t('a lazy image with an empty src falls back to data-src/currentSrc', () => {
+  const env = load({ messages: [
+    { dir: 'in', from: 'Nick', media: 'https://cdn.example/pic.jpg' },
+  ] });
+  const img = env.messagesRoot.querySelector('.message-content img');
+  ok(img, 'the page has a chat image');
+  img.setAttribute('src', '');
+  img.setAttribute('data-src', 'https://cdn.example/lazy.jpg?token=1');
+  const item = env.agent.slice(0, 1).items[0];
+  eq(item.media.url, 'https://cdn.example/lazy.jpg?token=1',
+     'the real lazy URL must replace the cached empty src');
+  eq(item.kind, 'image');
+});
+
+t('currentSrc wins when the site resolves a relative src', () => {
+  const env = load({ messages: [
+    { dir: 'in', from: 'Nick', media: 'm_Питер2к7_7a861cc.jpg' },
+  ] });
+  const img = env.messagesRoot.querySelector('.message-content img');
+  img.currentSrc = 'https://cdn.virt-chat.com/m_Питер2к7_7a861cc.jpg';
+  const item = env.agent.slice(0, 1).items[0];
+  eq(item.media.url, 'https://cdn.virt-chat.com/m_Питер2к7_7a861cc.jpg',
+     'the resolved absolute URL must replace the relative src from the DOM');
+});
+
 t('identical neighbours get increasing occurrence numbers', () => {
   const env = load({ messages: [
     { dir: 'in', from: 'Nick', text: 'ok', time: '17:31' },

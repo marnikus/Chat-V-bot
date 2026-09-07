@@ -52,6 +52,54 @@ class FakeCDP:
                            "bytes": len(data)})
 
 
+class NetworkCDP:
+    """A CDP stub whose page fetch is CORS-blocked but whose real browser
+    `<img>` request still returns the bytes through the Network domain."""
+
+    def __init__(self, url, data, mime, base_url="https://ru.virt-chat.com/x/chat"):
+        self.url, self.data, self.mime = url, data, mime
+        self.base_url = base_url
+        self._handlers = {}
+
+    async def evaluate(self, expression):
+        if "/*CVB_FETCH_MEDIA*/" in expression:
+            return json.dumps({"ok": False, "error": "CORS blocked"})
+        if str(expression).strip() in ("location.href", "document.baseURI"):
+            return self.base_url
+        # the new Image() load: emit the CDP network events the store listens to
+        self._fire("Network.requestWillBeSent", {
+            "requestId": "r1",
+            "request": {"url": self.url},
+        })
+        self._fire("Network.responseReceived", {
+            "requestId": "r1",
+            "response": {"url": self.url, "mimeType": self.mime,
+                         "headers": {"Content-Type": self.mime}},
+        })
+        self._fire("Network.loadingFinished", {
+            "requestId": "r1", "encodedDataLength": len(self.data),
+        })
+        return None
+
+    async def send(self, method, params=None):
+        if method == "Network.getResponseBody":
+            return {"result": {"body": base64.b64encode(self.data).decode(),
+                               "base64Encoded": True}}
+        return {"result": {}}
+
+    def on_event(self, method, callback):
+        self._handlers.setdefault(method, []).append(callback)
+        return callback
+
+    def off_event(self, method, callback):
+        if callback in self._handlers.get(method, []):
+            self._handlers[method].remove(callback)
+
+    def _fire(self, method, params):
+        for cb in list(self._handlers.get(method, [])):
+            cb(params)
+
+
 class MediaCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = tempfile.mkdtemp()
@@ -130,6 +178,38 @@ class TestDownloading(MediaCase):
         self.assertIn("network", row["fail_reason"])
         await self.store.process_pending()
         self.assertEqual(len(self.cdp.fetched), 1, "a failed row is not retried")
+
+    async def test_relative_media_url_is_resolved_and_saved_sanely(self):
+        """The site can hand the page a path, not a URL. The cache must
+        resolve it against the live page before download and must pick the
+        extension from the response MIME — not from the mangled key name."""
+        remote = "https://ru.virt-chat.com/m_Питер2к7_7a861cc"
+        net = NetworkCDP(remote, GIF, "image/jpeg")
+        store = MediaStore(self.db, cdp=net,
+                           cache_dir=os.path.join(self.dir, "media3"),
+                           max_file_mb=1, max_cache_mb=10)
+        mid = await store.register("/m_Питер2к7_7a861cc", "image")
+        self.assertEqual(await store.process_pending(), 1)
+        row = await store.get(mid)
+        self.assertEqual(row["state"], "cached")
+        self.assertTrue(row["cache_path"].endswith(".jpg"))
+        self.assertNotIn("Питер", row["cache_path"])
+        self.assertTrue(os.path.exists(row["cache_path"]))
+
+    async def test_network_capture_recovers_when_fetch_is_cors_blocked(self):
+        """The viewport can show an image even when fetch() is CORS-blocked
+        and a plain Python download is rejected; the CDP Network body is the
+        third, browser-native path."""
+        net = NetworkCDP("https://x/a.gif", GIF, "image/gif")
+        store = MediaStore(self.db, cdp=net,
+                           cache_dir=os.path.join(self.dir, "media2"),
+                           max_file_mb=1, max_cache_mb=10)
+        mid = await store.register("https://x/a.gif", "gif")
+        self.assertEqual(await store.process_pending(), 1)
+        row = await store.get(mid)
+        self.assertEqual(row["state"], "cached")
+        self.assertTrue(os.path.exists(row["cache_path"]))
+        self.assertEqual(row["bytes"], len(GIF))
 
     async def test_caching_disabled_leaves_rows_pending(self):
         self.store.enabled = False

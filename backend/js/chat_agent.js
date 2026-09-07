@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 8;
+  var VERSION = 9;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -288,6 +288,17 @@
   var cache = new Map();     // node → parsed fields
   var stats = { parsed: 0, cached: 0, walks: 0 };
 
+  /** The media URL the browser is actually rendering right now.
+   *
+   * Lazy-loaded images start with an empty `src` and put the real address in
+   * `data-src` (or set `currentSrc` only after the browser has fetched). The
+   * first parse must not burn an empty URL into the archive. */
+  function liveMediaUrl(img) {
+    if (!img) return '';
+    return clean(img.currentSrc || img.getAttribute('src') ||
+                 img.getAttribute('data-src') || '');
+  }
+
   function parseNode(node) {
     stats.parsed++;
     var dir = node.classList && node.classList.contains('my-message-background')
@@ -299,7 +310,7 @@
                    (qs(body, 'span.from') || {}).textContent);
       var img = qs(body, 'app-chat-image img') || qs(body, 'img');
       if (img) {
-        var url = img.getAttribute('src') || '';
+        var url = liveMediaUrl(img);
         kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
         media = { url: url, kind: kind };
       } else {
@@ -327,6 +338,15 @@
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       var fields = cache.get(node);
+      if (fields) {
+        // a lazy <img> may have gained its real src after the first parse;
+        // do not keep the empty-url record in the cache forever
+        var img = qs(node, 'p.message app-chat-image img') ||
+                  qs(node, 'p.message img');
+        var liveUrl = liveMediaUrl(img);
+        var cachedUrl = fields.media ? fields.media.url : '';
+        if (liveUrl !== cachedUrl) fields = null;
+      }
       if (!fields) fields = parseNode(node);
       next.set(node, fields);
       var key = keyOf(fields);
