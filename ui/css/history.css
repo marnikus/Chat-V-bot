@@ -320,6 +320,18 @@
 .collector-key { color: var(--text-muted); }
 .collector-val { color: var(--text-primary); user-select: text; }
 
+.collector-nick-link {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.collector-nick-link:hover {
+  filter: brightness(1.15);
+  text-decoration: underline;
+}
+
 /* ── the pinned "My Nick" field in the header ──────────────────── */
 
 .my-nick-wrap {

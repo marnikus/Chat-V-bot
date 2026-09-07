@@ -395,6 +395,46 @@ t('the window names the partner and my nick', () => {
   ok(text.includes('HiHoney') || text.includes('Другой'), text);
 });
 
+t('the partner name is a clickable link to its history', () => {
+  CollectorPanel.onStatus(JSON.stringify(
+    { state: 'collected', text: 'Collected', nick: 'Ангелина', total: 120,
+      settings: {} }));
+  const link = document.getElementById('collectorRows')
+    .querySelector('.collector-nick-link');
+  ok(link, 'the partner row must expose a clickable nick');
+  eq(link.dataset.nick, 'Ангелина');
+  const shown = [];
+  global.SashGrid = { showWindow: (id) => shown.push(id) };
+  try {
+    // Real clicks bubble through the rows host, so simulate that exactly
+    // (the stub's .fire() only invokes listeners on the target itself).
+    document.getElementById('collectorRows').fire('click', { target: link });
+    ok(shown.includes('history') && shown.includes('userdb'),
+       'both archive windows are brought into view');
+    const open = named('history_open').pop();
+    ok(open && open.args[1] === 'Ангелина',
+       'the person is opened in Person History');
+    const db = named('userdb_page').pop();
+    eq(JSON.parse(db.args[1]).q, 'Ангелина',
+       'the database is filtered to that nick');
+  } finally {
+    global.SashGrid = undefined;
+  }
+});
+
+t('the highlighted person is flashed in the database row', () => {
+  const req = named('userdb_page').pop().args[0];
+  HistoryDb.onPage(req, JSON.stringify({
+    items: [{ nick: 'Ангелина', message_count: 120, media_count: 2,
+              first_seen: '2026-09-01 10:00:00',
+              last_seen: '2026-09-07 12:00:00', my_nicks: ['Хорошо Все'] }],
+    total: 1, has_more: false, offset: 0 }));
+  const row = document.getElementById('userdbBody').querySelector('.userdb-row');
+  ok(row, 'the filter result is rendered');
+  ok(row.classList.contains('row-flash'),
+     'the clicked partner is highlighted in the database');
+});
+
 t('pause / resume and collect-now reach the backend', () => {
   const pause = document.getElementById('collectorPauseBtn');
   pause.fire('click');

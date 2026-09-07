@@ -41,6 +41,15 @@ const CollectorPanel = {
       heartbeat: $('collectorHeartbeat'),
     };
     if (!this._els.status) return;
+    if (this._els.rows) {
+      this._els.rows.addEventListener('click', (event) => {
+        const target = event && event.target;
+        const link = target && target.closest
+          ? target.closest('.collector-nick-link') : null;
+        if (link && link.dataset && link.dataset.nick)
+          this.openPartner(link.dataset.nick);
+      });
+    }
     if (this._els.pause) {
       this._els.pause.addEventListener('click', () => {
         this.command(this.paused ? 'resume' : 'pause');
@@ -81,6 +90,22 @@ const CollectorPanel = {
   configure(patch) {
     if (App.bridge && App.bridge.collector_set)
       App.bridge.collector_set(JSON.stringify(patch));
+  },
+
+  /** Open Person History for the partner and highlight that row in the DB. */
+  openPartner(nick) {
+    nick = String(nick || '').trim();
+    if (!nick) return;
+    if (typeof SashGrid !== 'undefined' && SashGrid.showWindow) {
+      SashGrid.showWindow('history');
+      SashGrid.showWindow('userdb');
+    }
+    if (typeof HistoryStore !== 'undefined' && HistoryStore.openPerson)
+      HistoryStore.openPerson(nick);
+    if (typeof HistoryDb !== 'undefined' && HistoryDb.highlightNick)
+      HistoryDb.highlightNick(nick);
+    if (typeof LogConsole !== 'undefined')
+      LogConsole.log(`👤 Open history for “${nick}”`, 'info');
   },
 
   setMyNick(nick) {
@@ -138,11 +163,29 @@ const CollectorPanel = {
     host.appendChild(v);
   },
 
+  _rowLink(host, key, nick) {
+    const k = document.createElement('span');
+    k.className = 'collector-key';
+    k.appendChild(document.createTextNode(key));
+    const v = document.createElement('span');
+    v.className = 'collector-val';
+    const link = document.createElement('span');
+    link.className = 'collector-nick-link';
+    link.dataset.nick = nick || '';
+    link.title = 'Open Person History and highlight “' + (nick || '') + '” in the database';
+    link.appendChild(document.createTextNode(nick || ''));
+    v.appendChild(link);
+    host.appendChild(k);
+    host.appendChild(v);
+  },
+
   renderRows(payload) {
     const host = this._els.rows;
     if (!host) return;
     host.replaceChildren();
-    this._row(host, 'Partner', payload.nick || payload.partner);
+    const partner = String(payload.nick || payload.partner || '').trim();
+    if (partner) this._rowLink(host, 'Partner', partner);
+    else this._row(host, 'Partner', '');
     this._row(host, 'My nick', this.myNick || (payload.settings || {}).my_nick);
     this._row(host, 'In archive', payload.total);
     this._row(host, 'Added this session', this._appended || payload.added || 0);

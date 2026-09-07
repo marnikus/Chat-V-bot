@@ -76,6 +76,18 @@ const SashGrid = {
     this._setupVisibilityWatch();
   },
 
+  /** Show a previously hidden window (e.g. Block Config, Person History)
+   *  without touching the arrangement; the freed grid space is returned to
+   *  its siblings through `_syncHidden()`. */
+  showWindow(winId) {
+    const panel = this.winEls[winId];
+    if (!panel) return false;
+    panel.classList.remove('hidden');
+    if (panel.style.display === 'none') panel.style.display = '';
+    this._syncHidden();
+    return true;
+  },
+
   // ── tree persistence ─────────────────────────────────────────
 
   _loadTree() {

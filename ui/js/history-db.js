@@ -30,6 +30,7 @@ const HistoryDb = {
       preload: $('userdbPreload'),
       refresh: $('userdbRefreshBtn'),
     };
+    this._flashNick = '';
     if (!this._els.body) return;
     this._els.list.addEventListener('scroll', () => this._onScroll());
     this._els.body.addEventListener('click', (event) => {
@@ -150,7 +151,41 @@ const HistoryDb = {
     App.bridge.history_delete_person(nick, false);
   },
 
+  /** Show one person in the database: filter to that nick, flash the row. */
+  highlightNick(nick) {
+    this._flashNick = String(nick || '').trim();
+    if (!this._flashNick) return;
+    this.query = this._flashNick;
+    if (this._els.search) this._els.search.value = this._flashNick;
+    this._flashIfPresent();
+    this.reload();
+  },
+
   // ── rendering (createElement only) ───────────────────────────
+
+  /** Flash the row the collector just asked us to highlight, when loaded. */
+  _flashIfPresent() {
+    if (!this._flashNick || !this._els.body) return;
+    const nick = this._flashNick;
+    const rows = Array.from(this._els.body.querySelectorAll('.userdb-row') || []);
+    const row = rows.find((r) => (r.dataset && r.dataset.nick) === nick);
+    if (!row) {
+      // The row may be on a later page; the query is already set to the nick,
+      // so the next page load will bring it to the top.
+      if (typeof HistoryStore !== 'undefined' && this.query === nick) this.reload();
+      return;
+    }
+    row.classList.remove('row-flash');
+    void (row.offsetWidth || 0);                    // restart the animation
+    row.classList.add('row-flash');
+    if (typeof row.scrollIntoView === 'function')
+      row.scrollIntoView({ block: 'nearest' });
+    clearTimeout(this._flashTimer);
+    this._flashTimer = setTimeout(() => {
+      row.classList.remove('row-flash');
+      if (this._flashNick === nick) this._flashNick = '';
+    }, 1800);
+  },
 
   /** 'YYYY-MM-DD HH:MM:SS' → 'YYYY-MM-DD' (the table only has room for a day). */
   _day(value) {
@@ -197,6 +232,7 @@ const HistoryDb = {
       nodes.push(row);
     });
     body.replaceChildren.apply(body, nodes);
+    this._flashIfPresent();
     if (this._els.foot && this.total)
       this._els.foot.title = this.rows.length + ' of ' + this.total + ' loaded';
   },
