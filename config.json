@@ -31491,6 +31491,11 @@
     "download_media": true,
     "chunk_size": 80,
     "chunk_pause_ms": 40,
-    "bootstrap_max": 2000
+    "bootstrap_max": 2000,
+    "idle_heartbeat_ms": 5000,
+    "require_two_participants": true,
+    "max_bootstrap": 0,
+    "auto_backfill": true,
+    "backfill_wait_s": "2.0"
   }
 }
