@@ -465,3 +465,38 @@ Fix (runs on every `backfill_older` pass):
 
 `status`: schema `3`. Tests: `tests/test_media_recovery.py`,
 `tests/test_history_lazy_paging.js`, `tests/test_history_panels_boot.js`.
+
+---
+
+## 11. Follow-up (eighth pass): do not render broken GIFs — mark to restore
+
+Live report after the media backfill landed: an earlier image/GIF still
+shows as the classic broken `GIF` placeholder, with the copied URL being a
+long percent-encoded `images.virt-chat.com/...gif` address.
+
+* **Root cause A.** A row marked `cached` whose local file has been deleted
+  still sent `cache_path` to the UI; the UI pointed `<img>` at a `file://`
+  path that no longer exists and rendered the broken-image icon.
+* **Root cause B.** Any non-cached media (pending/failed/skipped/missing)
+  used the remote URL as the `<img>` fallback; once that remote URL is
+  invalid/expired the History window shows a broken placeholder with no way
+  to retry.
+
+Fix:
+
+* `HistoryQuery._item` now ignores a `cache_path` whose file does not exist
+  and reports `state='missing'` instead, so the UI never points at a dead
+  local path.
+* `HistoryView` no longer renders the remote, likely-broken `<img>` for
+  non-local media. It draws a `.msg-media-restore` marker ("GIF — click to
+  restore") instead.
+* Clicking the marker calls the new `media_restore` bridge slot ->
+  `MediaStore.download_one(media_id)`, which re-queues that one row and
+  downloads it immediately; `media_ready` feeds the result back into the
+  model and re-renders the row.
+* A cached image whose `<img>` still fails to load falls back to the same
+  restore marker via the `error` handler.
+
+`status`: same schema `3`. Tests:
+`tests/test_history_render.js`, `tests/test_media_paths_js.js`,
+`tests/test_history_panels_boot.js`, `tests/test_history_bridge.py`.

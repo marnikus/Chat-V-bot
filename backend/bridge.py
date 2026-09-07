@@ -1476,6 +1476,20 @@ class Bridge(QObject):
                                                      ensure_ascii=False))
         self._run_async("media_path", work())
 
+    @Slot(str, str)
+    def media_restore(self, req_id, media_ref):
+        """Re-download one failed/missing image or GIF on the user's request."""
+        if not self._need_archive("media_restore", req_id):
+            return
+
+        async def work():
+            payload = await self._archive.media.download_one(media_ref)
+            payload["req_id"] = req_id
+            payload["id"] = media_ref
+            self.media_ready.emit(req_id, json.dumps(payload,
+                                                     ensure_ascii=False))
+        self._run_async("media_restore", work())
+
     @Slot(str, result=str)
     def media_folder(self, nick):
         """Where this person's saved images and GIFs live on disk."""

@@ -159,6 +159,41 @@
   border-radius: 4px;
 }
 
+.msg-media-box { margin-top: 4px; }
+
+.msg-media-restore {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+}
+
+.msg-media-restore:hover {
+  color: var(--accent);
+  border-style: solid;
+}
+
+.msg-media-restore-kind {
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.msg-media-restore-label {
+  color: var(--text-muted);
+}
+
+.msg-media-restore:hover .msg-media-restore-label {
+  color: var(--accent);
+}
+
 /* ── separators and archive gaps ───────────────────────────────── */
 
 .day-sep {

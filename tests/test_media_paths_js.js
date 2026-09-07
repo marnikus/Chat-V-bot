@@ -40,6 +40,17 @@ function mkEl(tag) {
     append(...cs) { cs.forEach((c) => el.appendChild(
       typeof c === 'string' ? mkText(c) : c)); },
     replaceChildren(...cs) { el.children = []; el.append(...cs); },
+    replaceWith(c) {
+      const at = el.parentNode ? el.parentNode.children.indexOf(el) : -1;
+      if (el.parentNode && at >= 0) {
+        el.parentNode.children.splice(at, 1, c);
+        c.parentNode = el.parentNode;
+      }
+    },
+    replaceChild(c, old) {
+      const at = el.children.indexOf(old);
+      if (at >= 0) { el.children.splice(at, 1, c); c.parentNode = el; }
+    },
     setAttribute(k, v) { el.attrs[k] = String(v); if (k === 'src') el.src = v; },
     getAttribute(k) { return k in el.attrs ? el.attrs[k] : null; },
     addEventListener(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
@@ -156,12 +167,16 @@ t('the rendered img points at the saved file', () => {
   ok(String(img.title || '').length > 0, 'the tooltip explains the click');
 });
 
-t('the img falls back to the remote url when nothing is cached yet', () => {
+t('a not-yet-cached image shows a restore marker instead of a broken img', () => {
   const host = mkEl('div');
   V.renderRows(host, HistoryModel.toRows(
     [item({ media: { id: 4, url: REMOTE, kind: 'gif', state: 'pending',
                      path: '' } })], { nick: 'Ански' }), {});
-  eq(host.querySelectorAll('.msg-media')[0].getAttribute('src'), REMOTE);
+  const marker = host.querySelectorAll('.msg-media-restore')[0];
+  ok(marker, 'a restore marker is drawn');
+  ok(marker.textContent.toLowerCase().includes('restore'), marker.textContent);
+  eq(host.querySelectorAll('.msg-media').length, 0,
+     'no broken remote <img> is shown');
 });
 
 t('a cached file that arrives later can be swapped in place', () => {

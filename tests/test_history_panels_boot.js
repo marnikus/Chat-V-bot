@@ -156,6 +156,8 @@ global.App = {
     userdb_stats: slot('userdb_stats'),
     history_delete_person: slot('history_delete_person'),
     copy_media: slot('copy_media'),
+    media_restore: slot('media_restore'),
+    media_path: slot('media_path'),
     copy_text: slot('copy_text'),
     collector_command: slot('collector_command'),
     collector_set: slot('collector_set'),
@@ -309,11 +311,32 @@ t('a left click on media asks the bridge to copy it', () => {
     missing: false,
     items: [{ ord: 30, fp: 'g', dir: 'in', from: 'Nick', kind: 'gif',
               text: '', time: '18:00', day: '2026-09-06',
-              media: { id: 7, url: 'https://x/y.gif', kind: 'gif' } }],
+              media: { id: 7, url: 'https://x/y.gif', kind: 'gif',
+                       state: 'cached',
+                       path: '/home/user/saved_media/Nick/gifs/x.gif' } }],
   }));
   document.getElementById('historyList').querySelector('.msg-media')
     .fire('click', { button: 0 });
   eq(named('copy_media').pop().args, ['7']);
+});
+
+t('a failed media row offers a restore marker and asks the bridge', () => {
+  HistoryStore.openPerson('Nick');
+  HistoryStore.onPage(named('history_open').pop().args[0], JSON.stringify({
+    nick: 'Nick', total: 1, has_more: false, has_newer: false, gaps: [],
+    missing: false,
+    items: [{ ord: 31, fp: 'g2', dir: 'in', from: 'Nick', kind: 'gif',
+              text: '', time: '18:01', day: '2026-09-06',
+              media: { id: 8, url: 'https://x/y.gif', kind: 'gif',
+                       state: 'failed', path: '' } }],
+  }));
+  const marker =
+    document.getElementById('historyList').querySelector('.msg-media-restore');
+  ok(marker, 'the marker is drawn instead of a broken img');
+  marker.fire('click', { button: 0 });
+  const call = named('media_restore').pop();
+  ok(call.args[0].indexOf('r') === 0, 'a request id is sent');
+  eq(call.args[1], '8', 'the media id travels as the second argument');
 });
 
 t('typing in the search box searches this conversation', () => {

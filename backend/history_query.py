@@ -13,6 +13,7 @@ ASCII only.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Optional
 
@@ -80,10 +81,18 @@ class HistoryQuery:
         data = dict(row)
         media = None
         if data.get("media_id"):
+            path = data.get("cache_path") or ""
+            state = data.get("media_state") or "pending"
+            # A cached row whose file vanished must not render as a broken
+            # <img> from a dead local path: report it as missing so the UI
+            # shows a "click to restore" marker instead.
+            if path and not os.path.exists(path):
+                state = "missing"
+                path = ""
             media = {"id": data.get("media_id"), "url": data.get("media_url"),
                      "kind": data.get("media_kind") or data.get("kind"),
-                     "state": data.get("media_state") or "pending",
-                     "path": data.get("cache_path") or ""}
+                     "state": state,
+                     "path": path}
         return {
             "ord": int(data.get("ord") or 0),
             "fp": data.get("fp") or "",

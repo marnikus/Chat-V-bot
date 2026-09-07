@@ -451,6 +451,33 @@ class MediaStore:
         await self.db.commit()
         return True
 
+    async def download_one(self, media_id) -> dict:
+        """Force a single media row through the downloader and return its state.
+
+        Used by the "click to restore" marker in the History window.  A row
+        that is already cached and whose file still exists is returned as-is;
+        anything failed, skipped, pending or whose saved file is gone is
+        re-queued and downloaded once right here.
+        """
+        row = await self.get(media_id)
+        if not row:
+            return {"state": "missing", "id": media_id, "path": "", "url": ""}
+        if not self.enabled or self.paused or self.cdp is None:
+            return await self.path_for(media_id)
+        path = row.get("cache_path") or ""
+        if row.get("state") == "cached" and path and os.path.exists(path):
+            return await self.path_for(media_id)
+        await self.db.execute(
+            "UPDATE media SET state='pending', fail_reason='', "
+            "recovered_at=?, recovery_attempts=recovery_attempts+1, "
+            "last_used=? WHERE id=?",
+            (_now(), _now(), self._as_id(media_id)))
+        await self.db.commit()
+        row = await self.get(media_id)
+        if row:
+            await self._fetch_one(row)
+        return await self.path_for(media_id)
+
     async def retry_failed_uncached(self) -> int:
         """Re-queue failed rows that have no local file.
 

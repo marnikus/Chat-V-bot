@@ -55,6 +55,17 @@ function mkEl(tag) {
       if (i >= 0) el.children.splice(i, 1);
       return c;
     },
+    replaceChild(c, old) {
+      const i = el.children.indexOf(old);
+      if (i >= 0) { el.children.splice(i, 1, c); c.parentNode = el; }
+    },
+    replaceWith(c) {
+      const at = el.parentNode ? el.parentNode.children.indexOf(el) : -1;
+      if (el.parentNode && at >= 0) {
+        el.parentNode.children.splice(at, 1, c);
+        c.parentNode = el.parentNode;
+      }
+    },
     replaceChildren(...cs) { el.children = []; el.append(...cs); },
     setAttribute(k, v) { el.attrs[k] = String(v); if (k === 'src') el.src = v; },
     getAttribute(k) { return k in el.attrs ? el.attrs[k] : null; },
@@ -213,13 +224,29 @@ t('a gap marker is rendered and explains itself', () => {
 
 // ── media ────────────────────────────────────────────────────────
 
-t('an image row renders an img with the archived url', () => {
+t('a cached image row renders an img pointing at the saved file', () => {
   const host = renderInto([row({ kind: 'image', text: '',
-                                 media: { id: 3, url: 'https://x/y.jpg',
-                                          kind: 'image' } })]);
+                                 media: { id: 3,
+                                          url: 'https://x/y.jpg',
+                                          kind: 'image', state: 'cached',
+                                          path: '/home/user/saved_media/Nick/'
+                                                + 'images/2026-09-07_001.jpg' } })]);
   const img = host.querySelector('.msg-media');
   ok(img, 'a media element is drawn');
   eq(String(img.dataset.mediaId), '3');
+  eq(img.getAttribute('src'), HistoryModel.fileUrl(
+    '/home/user/saved_media/Nick/images/2026-09-07_001.jpg'));
+});
+
+t('a missing image draws a restore marker instead of a broken img', () => {
+  const host = renderInto([row({ kind: 'gif', text: '',
+                                 media: { id: 4, url: 'https://x/y.gif',
+                                          kind: 'gif', state: 'failed',
+                                          path: '' } })]);
+  const marker = host.querySelector('.msg-media-restore');
+  ok(marker, 'the restore marker is drawn');
+  ok(marker.textContent.toLowerCase().includes('restore'), marker.textContent);
+  eq(host.querySelectorAll('.msg-media').length, 0, 'no broken img');
 });
 
 t('with images turned off only a placeholder is drawn', () => {
@@ -236,11 +263,25 @@ t('a left click on media asks the bridge to copy it', () => {
   const copied = [];
   const host = mkEl('div');
   V.renderRows(host, [HistoryModel.toRow(
-    row({ kind: 'gif', text: '', media: { id: 9, url: 'https://x/y.gif',
-                                          kind: 'gif' } }), ctx())],
+    row({ kind: 'gif', text: '',
+          media: { id: 9, url: 'https://x/y.gif', kind: 'gif',
+                   state: 'cached', path: '/home/user/saved_media/Nick/gifs/'
+                                        + '2026-09-07_001.gif' } }), ctx())],
     Object.assign(ctx(), { onCopyMedia: (id) => copied.push(id) }));
   host.querySelector('.msg-media').click({ button: 0 });
   eq(copied, [9], 'a plain left click copies');
+});
+
+t('a left click on the restore marker asks the bridge to restore it', () => {
+  const restored = [];
+  const host = mkEl('div');
+  V.renderRows(host, [HistoryModel.toRow(
+    row({ kind: 'gif', text: '',
+          media: { id: 10, url: 'https://x/y.gif', kind: 'gif',
+                   state: 'failed', path: '' } }), ctx())],
+    Object.assign(ctx(), { onRestoreMedia: (id) => restored.push(id) }));
+  host.querySelector('.msg-media-restore').click({ button: 0 });
+  eq(restored, [10], 'a click requests a restore');
 });
 
 t('a click elsewhere in the row copies nothing', () => {
