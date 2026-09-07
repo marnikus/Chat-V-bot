@@ -145,7 +145,57 @@ the Python CORS-free downloader.
 
 ---
 
-## 5. Files that change
+## 5. Follow-up (third pass): wrong-pane regression — messages exist but not collected
+
+### Symptoms from the live report
+
+1. Active private tab `AlisskaBi`, visible messages exist, but the collector
+   says `NO NEW MESSAGES` / `0` in archive.
+2. After a subsequent tick the gate reports:
+   `NOT A PRIVATE CHAT — АУРЕЛИЯ, SSSSA777, ПИРАНЖУЛЯЯ... WRITE HERE TOO`,
+   i.e. authors from the **main room** were treated as author evidence for the
+   private conversation.
+
+### Root cause
+
+`visiblePane()` in agent **v5** preferred the pane with the most message nodes
+when more than one pane existed. The site keeps every open chat alive; the
+main-room pane is typically much longer than a private chat and can still
+report a measurable `offsetParent` even when the private tab is active. The
+agent therefore handed Python the room pane, which had (a) the wrong messages
+(→ 0, “no new messages”) and (b) room authors (→ the “not a private chat”
+strangers error).
+
+### Fix (agent v6)
+
+Pane selection is now **identity-first**, not “biggest pane wins”:
+
+* For each pane it first computes the cheap author evidence (distinct inbound /
+  outbound nicks from the node cache), then scores it:
+  * inbound authors are exactly the active partner → strong positive;
+  * every inbound author that is *not* the partner → strong negative;
+  * a single outbound author (or one matching My Nick) → small positive;
+  * measurably visible (`offsetParent` etc.) remains a small tie-breaker.
+* A room pane containing `АУРЕЛИЯ / SSSSA777 / ПИРАНЖУЛЯЯ` scores deeply
+  negative against the active partner `AlisskaBi` and can never beat the real
+  private pane, even when the room is longer and not `display:none`.
+* If the active tab is a room, the tab is still reported as `room`, Gate step
+  1 rejects it (`not_private`), and nothing is saved — the previous behaviour
+  is preserved.
+
+`AGENT_VERSION = 6`.
+
+### Tests locked
+
+`tests/test_private_scope_js.js`
+
+* a visible, longer room pane never wins over the active private pane;
+* among two private panes, the one matching the active partner wins;
+* pane-switch test now also switches the active tab before asserting the room.
+
+---
+
+## 6. Files that change
 
 | File | Change |
 |---|---|

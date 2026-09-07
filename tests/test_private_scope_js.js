@@ -62,7 +62,7 @@ const room = [
 
 t('the agent version was bumped for the scoped parser', () => {
   const env = load({ messages: [] });
-  ok(env.agent.version >= 4,
+  ok(env.agent.version >= 6,
      'a page still running the old agent must be re-installed');
 });
 
@@ -77,6 +77,39 @@ t('only the visible pane is parsed when the room pane is still in the DOM', () =
   eq(st.in_authors, [PARTNER], 'only the partner wrote inbound lines');
   eq(st.out_authors, [ME], 'my nick is the only outbound author');
   eq(st.authors, [PARTNER, ME], 'exactly two nicks in this conversation');
+});
+
+t('a visible room pane never wins over the active private pane', () => {
+  // The live regression: the room pane is still "measurably visible" (not
+  // display:none) and is much longer, but the active tab is the private chat.
+  const env = load({ partner: PARTNER, me: ME, messages: priv });
+  const bigRoom = [];
+  for (let i = 0; i < 40; i++) {
+    bigRoom.push({ dir: 'in', from: i % 2 ? 'Макс__Б' : 'Lizalo4ka',
+                   text: 'room ' + i, time: '12:0' + (i % 10) });
+  }
+  // The room pane is NOT hidden (the bug report shows it being picked).
+  env.addPane(bigRoom, { hidden: false });
+  const st = env.agent.state();
+  eq(st.tab, 'private', 'the active tab stays private');
+  eq(st.count, 2, 'the active private pane is parsed');
+  eq(st.in_authors, [PARTNER], 'room authors are not reported as partners');
+  eq(st.out_authors, [ME], 'only my nick writes outbound lines');
+  eq(st.authors, [PARTNER, ME], 'exactly two nicks in this conversation');
+});
+
+t('among private panes, the one matching the active partner wins', () => {
+  const env = load({ partner: PARTNER, me: ME, messages: priv });
+  const other = [
+    { dir: 'in', from: 'Аня', text: 'привет', time: '12:00' },
+    { dir: 'out', from: ME, text: 'привет)', time: '12:01' },
+  ];
+  // Another open private chat, visible by the site's own measurement.
+  env.addPane(other, { hidden: false });
+  const st = env.agent.state();
+  eq(st.count, 2, 'the AlisskaBi pane is parsed');
+  eq(st.in_authors, [PARTNER], 'Аня is not mixed into the active chat');
+  eq(st.out_authors, [ME]);
 });
 
 t('slice() ships the visible pane too', () => {
@@ -159,6 +192,7 @@ t('switching panes re-attaches the observer and drops the old buffer', () => {
   // the user switches to the room: the private pane goes away, the room shows
   env.hideMainPane();
   other.show();
+  env.setTab('room');
   const st = env.agent.state();             // probing re-attaches the observer
   eq(st.count, 2, 'the room pane is what we see now');
   eq(st.in_authors, ['Макс__Б', 'Lizalo4ka'], 'and its authors are the room’s');
