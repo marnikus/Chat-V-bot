@@ -94,6 +94,7 @@ DEFAULTS: dict[str, Any] = {
         "undo_history_index": -1,
         "grid_layout": None,
         "block_config_pinned": False,
+        "window_states": {"closed": [], "minimized": [], "maximized": None},
         "window_geometry": None,
         # Legacy read-only migration keys. They are never updated by the
         # global history implementation, but keeping defaults lets old config
