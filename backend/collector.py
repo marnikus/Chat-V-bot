@@ -30,6 +30,7 @@ from backend import chat_agent_js
 from backend.chat_parser import (ChatParser, _signature, sync_conversation,
                                  verify_private)
 from backend.history_repo import HistoryRepo
+from backend.user_memory import UserMemory, UserRecord
 
 log = logging.getLogger("chatbot")
 
@@ -76,16 +77,18 @@ class Collector(QObject):
 
     status_changed = Signal(str)        # json state payload
     history_appended = Signal(str)      # json {nick, items, added, total}
+    people_changed = Signal(str)        # json {nick, kind, source}
 
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
-                 lease=None, parent=None):
+                 lease=None, memory=None, parent=None):
         super().__init__(parent)
         self.cdp = cdp
         self.repo = repo
         self.parser = parser
         self.media = media
         self.lease = lease
+        self.memory = memory
         self._settings = dict(DEFAULTS)
         self.configure(**(settings or {}))
         self.now = datetime.now
@@ -108,6 +111,7 @@ class Collector(QObject):
         self._stop_event: Optional[asyncio.Event] = None
         self._busy = False
         self._force_backfill = False
+        self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
     def configure(self, **kwargs) -> dict:
@@ -264,11 +268,32 @@ class Collector(QObject):
         if not nick:
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
-        my_nick = self.my_nick or " ".join(
-            str(state.get("me") or "").split()).strip()
+
+        # My Nick is optional for the archive: in a verified two-person chat
+        # the single outbound author IS me, so we adopt it for this session
+        # (it is not persisted to config.json unless the user saves it).
+        detected_me = " ".join(str(state.get("me") or "").split()).strip()
+        if not detected_me:
+            outs = [str(o or "").strip() for o in
+                    (state.get("out_authors") or [])]
+            singles = [o for o in outs if o]
+            if len(singles) == 1 and singles[0].lower() != nick.lower():
+                detected_me = singles[0]
+        if not self.my_nick and detected_me:
+            self.configure(my_nick=detected_me)
+            self._detected_my_nick = detected_me
+
+        my_nick = self.my_nick or detected_me
         if my_nick and nick.lower() == my_nick.lower():
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Partner is ambiguous (same as My Nick)")
+
+        # A verified private tab (active tab = private, 2 participants, title
+        # names the partner) is enough to create the person in BOTH stores.
+        # The author gate below protects the message rows from a mixed pane;
+        # the People row itself is safe even before that check passes.
+        person_id = await self.repo.ensure_person(nick)
+        await self._remember_partner(nick, state)
 
         # ── the two-step gate ─────────────────────────────────────
         check = verify_private(state, nick, self.my_nick)
@@ -276,15 +301,16 @@ class Collector(QObject):
             self._nick = nick
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
+        if check.me and not self._detected_my_nick:
+            self._detected_my_nick = check.me
 
         self._warning = ("" if self.my_nick else
-                         "My Nick is not set — set it in the header so the "
-                         "archive knows who 'me' is")
+                         "My Nick is not known yet — the archive will use "
+                         "the single outbound author as 'me'")
         if nick != self._nick:
             self._nick = nick
             self._added = 0
 
-        person_id = await self.repo.ensure_person(nick)
         cursor = await self.repo.get_cursor(person_id)
         head_sig = _signature(state.get("head"))
         tail_sig = _signature(state.get("tail"))
@@ -345,6 +371,50 @@ class Collector(QObject):
                 return await sync_conversation(self.parser, self.repo, nick,
                                                **kwargs)
         return await sync_conversation(self.parser, self.repo, nick, **kwargs)
+
+    async def _remember_partner(self, nick: str, state: Optional[dict] = None) -> str:
+        """Make sure the partner exists in BOTH the archive and the People list.
+
+        The archive person is created by `HistoryRepo.ensure_person` regardless
+        of whether any message lines were written yet; the People Memory row is
+        only added when this app owns a UserMemory (production does, tests may
+        not). Nothing is marked messaged — appearing in a private chat is not
+        the same as having been messaged by an action run.
+        """
+        clean = self.repo.normalise_nick(nick)
+        await self.repo.ensure_person(clean)
+        if self.memory is None:
+            return "archive_only"
+        try:
+            existing = await self.memory.get_user(clean)
+            if existing:
+                # refresh last_seen without touching the messaged flag
+                await self.memory.upsert_user(
+                    UserRecord(nick=clean,
+                               gender=existing.gender,
+                               registered=existing.registered,
+                               anonymous=existing.anonymous,
+                               guest=existing.guest,
+                               messaged=existing.messaged,
+                               message_count=existing.message_count,
+                               last_messaged=existing.last_messaged,
+                               notes=existing.notes))
+                return "known"
+            result = await self.memory.upsert_user(UserRecord(nick=clean))
+            if result == "new":
+                self._notify_people(clean, "new")
+            return result
+        except Exception as e:                       # noqa: BLE001
+            log.warning("cannot add %s to the People list: %s", clean, e)
+            return "error"
+
+    def _notify_people(self, nick: str, kind: str) -> None:
+        try:
+            self.people_changed.emit(json.dumps(
+                {"nick": nick, "kind": kind, "source": "collector"},
+                ensure_ascii=False))
+        except Exception as e:                       # noqa: BLE001
+            log.debug("people_changed emit failed: %s", e)
 
     async def backfill_older(self) -> str:
         """Force one scroll-to-top full-history pass for the current person."""
@@ -466,6 +536,7 @@ class Collector(QObject):
             "text": self._text,
             "nick": self._nick,
             "my_nick": self.my_nick,
+            "detected_my_nick": self._detected_my_nick,
             "added": self._added,
             "total": self._total,
             "throttled": self._throttled,

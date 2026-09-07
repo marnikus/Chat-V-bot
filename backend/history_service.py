@@ -60,10 +60,11 @@ class HistoryService:
     """Database + repository + query + media + parser + collector."""
 
     def __init__(self, cdp, config=None, db_path: Optional[str] = None,
-                 session_id: str = ""):
+                 session_id: str = "", memory=None):
         self.cdp = cdp
         self.config = config
         self.session_id = session_id or ""
+        self.memory = memory
         self._settings = _merge(HISTORY_DEFAULTS, self._stored("history"))
         if db_path:
             self._settings["db_path"] = db_path
@@ -84,7 +85,8 @@ class HistoryService:
             chunk_pause_ms=int(collector_cfg.get("chunk_pause_ms", 40)))
         self.collector = Collector(cdp=cdp, repo=self.repo, parser=self.parser,
                                    media=self.media, settings=collector_cfg,
-                                   lease=getattr(cdp, "lease", None))
+                                   lease=getattr(cdp, "lease", None),
+                                   memory=self.memory)
         self._task: Optional[asyncio.Task] = None
         self._binding = False
 

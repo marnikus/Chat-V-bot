@@ -3,6 +3,13 @@
 Date: 2026-09-07
 Status: **DESIGN — then implemented in the same turn**
 
+> Update 2026-09-07 (second pass): new follow-up request — when a verified
+> private chat opens with a partner who is **not yet** in the archive DB
+> (`history.db`) **or** the People list (`chatbot.db.users`), the collector
+> must add the person to **both** stores and collect the full history. This is
+> the current live report (screenshot): Partner `_Насnоха`, My nick `—`,
+> In archive `0`, Added `0`, warning “My Nick is not set”.
+
 This document is the research/design step for the three remaining bugs in the
 message-history feature. Private-chat detection already landed
 (`PRIVATE_GATE_AND_MEDIA_TREE_2026-09-07.md`); this document only addresses:
@@ -126,7 +133,19 @@ the Python CORS-free downloader.
 
 ---
 
-## 4. Files that change
+## 4. Follow-up: unknown private partner must enter both stores
+
+| # | Decision |
+|---|---|
+| U-1 | A verified private chat creates the partner in **both** stores: `history.persons` (archive) *and* `chatbot.db.users` (People list). The archive row is created before the sync so it exists even if the conversation is empty. |
+| U-2 | People discovery is **passive**: it refreshes `first_seen`/`last_seen`, never sets `messaged=1` and never bumps `message_count`. Appearing in a chat is not the same as being messaged by a run. |
+| U-3 | `Collector` receives the shared `UserMemory` (wired in `main.py` through `HistoryService(memory=…)`). It exposes `people_changed`, which `Bridge.attach_history()` connects to `refresh_users()` so the People window updates immediately. |
+| U-4 | My Nick is **detected automatically** in a verified two-person chat when it is not configured: the page’s `me` is used first, otherwise the single outbound author is adopted. It is session-only (not written to `config.json`), but shown in the panel; the “My Nick is not set” warning disappears when detection succeeds. The part `my_nick` is used for both the private-chat gate and the message rows. |
+| U-5 | Full-history collection for a new person is already triggered by the existing `auto_backfill` cursor flag; creating the person in both stores does not change that. |
+
+---
+
+## 5. Files that change
 
 | File | Change |
 |---|---|

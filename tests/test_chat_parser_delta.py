@@ -355,6 +355,28 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
         person = await self.repo.get_person("Nick")
         self.assertEqual(person["message_count"], 10)
 
+    async def test_an_empty_but_scrollable_pane_is_not_marked_complete(self):
+        # The live report: a private tab is open but the probe found no message
+        # nodes while the pane still has a scroll height. Marking it "fully
+        # checked" would leave In archive at 0 forever.
+        page = FakePage([])
+        page.scroll_height = 400
+        parser = ChatParser(page, chunk_size=10, chunk_pause_ms=0)
+        result = await self.sync(parser, backfill_older=True)
+        self.assertEqual(result.added, 0)
+        pid = await self.repo.ensure_person("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertFalse(cur["full_scan_complete"],
+                         "a scrollable-but-unread pane must be retried")
+        page.scroll_height = 0
+        await self.repo.reset_cursor("Nick")
+        result = await self.sync(parser, backfill_older=True)
+        self.assertEqual(result.added, 0)
+        pid = await self.repo.ensure_person("Nick")
+        cur = await self.repo.get_cursor(pid)
+        self.assertTrue(cur["full_scan_complete"],
+                        "a truly empty pane is safe to mark complete")
+
     async def test_shifted_occurrence_does_not_create_a_gap_or_a_duplicate(self):
         # Bug #2: older identical lines are prepended, so the same stored line
         # is re-read with a different occurrence number. The archive must keep

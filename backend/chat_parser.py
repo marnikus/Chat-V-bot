@@ -374,7 +374,13 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     if count == 0:
         await repo.append(nick, [], my_nick=my_nick, dom_count=0,
                           head_sig=head_sig, tail_sig=tail_sig, now=now)
-        if result.backfilled:
+        scroll = state.get("scroll") or {}
+        # A truly empty conversation has no scrollable body. If the pane still
+        # reports height there were (or could be) messages that the current
+        # probe did not see — do NOT mark the full scan complete, so a later
+        # tick tries again instead of silently keeping the archive at zero.
+        truly_empty = int(scroll.get("height") or 0) <= 0
+        if result.backfilled and truly_empty and not result.stopped:
             try:
                 await repo.mark_backfilled(person_id)
             except Exception as e:                   # noqa: BLE001

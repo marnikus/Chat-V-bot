@@ -145,14 +145,17 @@ class TestCollectionFlow(CollectorCase):
         self.assertEqual((await self.repo.get_person("Nick"))["message_count"], 4)
         self.assertEqual((await self.repo.get_person("Other"))["message_count"], 1)
 
-    async def test_my_nick_is_recorded_and_a_missing_one_warns(self):
+    async def test_my_nick_is_recorded_and_auto_detected_when_missing(self):
         await self.col.tick()
         rows = await self.db.fetchall("SELECT DISTINCT my_nick FROM messages")
         self.assertEqual([r[0] for r in rows], ["Me"])
         self.col.configure(my_nick="")
         self.page.append(raw("later", idx=4))
         await self.col.tick()
-        self.assertIn("My Nick", self.col.state_payload()["warning"])
+        self.assertEqual(self.col.my_nick, "Me",
+                         "the single outbound author is adopted for the session")
+        self.assertEqual(self.col.state_payload()["warning"], "",
+                         "a detected My Nick is not a warning")
 
     async def test_status_is_only_emitted_when_it_changes(self):
         await self.col.tick()

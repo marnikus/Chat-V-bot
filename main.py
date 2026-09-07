@@ -197,7 +197,8 @@ def main() -> int:
     # shared by the COLLECT_HISTORY block, the history windows and the
     # Chat Message Collector panel.
     history = HistoryService(cdp=cdp, config=config,
-                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"))
+                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
+                             memory=memory)
     engine.history = history
 
     # Window + bridge

@@ -33,6 +33,7 @@ from backend.chat_parser import (  # noqa: E402
 from backend.collector import Collector, CollectorState  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
+from backend.user_memory import UserMemory  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
@@ -249,6 +250,44 @@ class TestCollectorGate(GateCase):
                          CollectorState.COLLECTED)
         self.assertEqual(self.page.scroll_top_calls, 1)
         self.assertEqual(await self.stored(), 4)
+
+    async def test_an_unknown_partner_is_added_to_both_the_archive_and_people(self):
+        memory = UserMemory(os.path.join(self.dir, "people.db"))
+        await memory.init()
+        self.col.memory = memory
+        seen = []
+        self.col.people_changed.connect(lambda j: seen.append(j))
+        try:
+            self.page.messages = [
+                raw("ты тут?", from_nick=PARTNER, time="11:55", idx=0),
+                raw("да", direction="out", from_nick=ME, time="11:58", idx=1)]
+            self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+            person = await self.repo.get_person(PARTNER)
+            self.assertEqual(person["message_count"], 2)
+            user = await memory.get_user(PARTNER)
+            self.assertIsNotNone(user)
+            self.assertFalse(user.messaged,
+                             "discovery must not mark the person messaged")
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(json.loads(seen[0])["nick"], PARTNER)
+            # a second tick must not emit another people_changed
+            self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
+            self.assertEqual(len(seen), 1)
+        finally:
+            await memory.close()
+
+    async def test_my_nick_is_adopted_from_the_single_outbound_author(self):
+        self.col.configure(my_nick="")
+        self.page.me = ""
+        self.page.messages = [
+            raw("ты тут?", from_nick=PARTNER, time="11:55", idx=0),
+            raw("да", direction="out", from_nick=ME, time="11:58", idx=1)]
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        self.assertEqual(self.col.my_nick, ME,
+                         "the single outbound author is adopted as me")
+        payload = self.col.state_payload()
+        self.assertEqual(payload["warning"], "")
+        self.assertEqual(await self.stored(), 2)
 
     async def test_first_tick_backfills_older_and_marks_the_full_scan(self):
         self.page.messages = [

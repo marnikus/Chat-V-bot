@@ -1264,6 +1264,10 @@ class Bridge(QObject):
         try:
             service.collector.status_changed.connect(self.collector_status.emit)
             service.collector.history_appended.connect(self._on_history_appended)
+            # a private chat with an unknown partner creates a People row:
+            # refresh the list as soon as the collector discovers it.
+            service.collector.people_changed.connect(
+                lambda *_a: self.refresh_users())
         except Exception as exc:                      # noqa: BLE001
             log.warning("collector signals not connected: %s", exc)
         engine = getattr(self, "_engine", None)
