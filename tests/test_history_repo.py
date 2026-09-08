@@ -84,7 +84,7 @@ class TestSchema(ArchiveCase):
         for t in ("persons", "messages", "media", "cursors", "gaps",
                   "schema_meta"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), "3")
+        self.assertEqual(await self.db.get_meta("schema_version"), "4")
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)

@@ -1,9 +1,11 @@
-/* Tests for the grid's v2 window set and the v1 → v2 layout migration.
+/* Tests for the grid's window set and the layout migrations.
 
-   The archive adds three windows (Person History, User Database, Chat
-   Message Collector). The saved layout is validated against the window
-   set and REJECTED on mismatch, so every user upgrading the app would
-   lose their arrangement unless the stored v1 tree is migrated.
+   v2 added the three archive windows (Person History, User Database,
+   Chat Message Collector); v3 adds the two management windows (Label
+   Manager, DB Connection). A saved layout is validated against the
+   window set and REJECTED on mismatch, so every user upgrading the app
+   would lose their arrangement unless the stored older tree is
+   migrated — from ANY earlier version, not just the last one.
 
    Run:  node tests/test_sash_core_v2.js
 */
@@ -29,8 +31,10 @@ function eq(a, b, msg) {
 function ok(cond, msg) { if (!cond) throw new Error(msg || 'ok'); }
 
 const LEGACY = ['stats', 'filters', 'stack', 'config', 'composer', 'people', 'log'];
-const NEW = ['history', 'userdb', 'collector'];
-const ALL = LEGACY.concat(NEW).slice().sort();
+const ARCHIVE = ['history', 'userdb', 'collector'];
+const NEW = ['labels', 'dbconn'];
+const V2 = LEGACY.concat(ARCHIVE);
+const ALL = V2.concat(NEW).slice().sort();
 const sorted = (tree) => S.leafIds(tree).slice().sort();
 
 const v1Tree = () => S.split('col', LEGACY.map(S.leaf),
@@ -45,18 +49,21 @@ const v1Nested = () => S.split('row', [
 
 // ── the window set ───────────────────────────────────────────────
 
-t('the window set has the three archive windows', () => {
+t('the window set has the archive AND the management windows', () => {
   eq(S.WINDOW_IDS.slice().sort(), ALL);
-  for (const id of NEW) ok(S.WINDOW_TITLES[id], 'a title for ' + id);
+  for (const id of ARCHIVE.concat(NEW))
+    ok(S.WINDOW_TITLES[id], 'a title for ' + id);
 });
 
 t('window titles say what the windows are', () => {
   ok(/history/i.test(S.WINDOW_TITLES.history), 'history title');
   ok(/(database|users?)/i.test(S.WINDOW_TITLES.userdb), 'userdb title');
   ok(/collector/i.test(S.WINDOW_TITLES.collector), 'collector title');
+  ok(/label/i.test(S.WINDOW_TITLES.labels), 'label manager title');
+  ok(/(db|database)/i.test(S.WINDOW_TITLES.dbconn), 'db connection title');
 });
 
-t('the default tree and every preset show all ten windows', () => {
+t('the default tree and every preset show every window', () => {
   eq(sorted(S.defaultTree()), ALL);
   ok(S.validate(S.defaultTree()) === null, S.validate(S.defaultTree()));
   for (const key of Object.keys(S.PRESETS)) {
@@ -65,9 +72,9 @@ t('the default tree and every preset show all ten windows', () => {
   }
 });
 
-t('the serialised version is 2', () => {
-  eq(S.VERSION, 2);
-  eq(JSON.parse(S.serialize(S.defaultTree())).v, 2);
+t('the serialised version is 3', () => {
+  eq(S.VERSION, 3);
+  eq(JSON.parse(S.serialize(S.defaultTree())).v, 3);
 });
 
 // ── migration ────────────────────────────────────────────────────
@@ -118,14 +125,31 @@ t('migrating rubbish falls back to the default tree', () => {
 
 // ── deserialize ──────────────────────────────────────────────────
 
-t('a stored v1 layout deserialises into a valid v2 tree', () => {
+t('a stored v1 layout deserialises into a valid current tree', () => {
   const res = S.deserialize(JSON.stringify({ v: 1, tree: v1Nested() }));
   ok(res.ok, 'v1 must be accepted: ' + res.error);
   eq(sorted(res.tree), ALL);
   ok(res.migrated === true, 'the caller must be told it was migrated');
 });
 
-t('a v2 layout round-trips untouched', () => {
+t('a stored v2 layout keeps its arrangement and gains the new windows', () => {
+  const v2Tree = S.split('col', [
+    S.split('row', [S.leaf('stats'), S.leaf('filters')], [40, 60]),
+    S.split('row', [S.leaf('stack'), S.leaf('config'), S.leaf('composer')],
+            [40, 30, 30]),
+    S.split('row', [S.leaf('people'), S.leaf('log')], [70, 30]),
+    S.split('row', [S.leaf('history'), S.leaf('userdb'), S.leaf('collector')],
+            [40, 35, 25]),
+  ], [25, 25, 25, 25]);
+  const res = S.deserialize(JSON.stringify({ v: 2, tree: v2Tree }));
+  ok(res.ok, 'v2 must be accepted: ' + res.error);
+  ok(res.migrated === true, 'the caller must be told it was migrated');
+  eq(sorted(res.tree), ALL);
+  // the old windows keep their exact order — nobody loses their layout
+  eq(S.leafIds(res.tree).filter((i) => V2.includes(i)), S.leafIds(v2Tree));
+});
+
+t('the current layout round-trips untouched', () => {
   const res = S.deserialize(S.serialize(S.defaultTree()));
   ok(res.ok, res.error);
   eq(res.tree, S.defaultTree());
@@ -133,8 +157,9 @@ t('a v2 layout round-trips untouched', () => {
 });
 
 t('a future version is refused', () => {
-  const res = S.deserialize(JSON.stringify({ v: 3, tree: S.defaultTree() }));
-  ok(!res.ok, 'v3 must not be accepted');
+  const res = S.deserialize(JSON.stringify({ v: S.VERSION + 1,
+                                             tree: S.defaultTree() }));
+  ok(!res.ok, 'a newer version must not be accepted');
   ok(/version/i.test(res.error), 'the error must mention the version');
 });
 

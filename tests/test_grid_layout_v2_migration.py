@@ -1,16 +1,17 @@
-"""Upgrading a saved v1 grid layout to the v2 window set.
+"""Upgrading a saved grid layout to the CURRENT window set.
 
-The archive adds three windows (Person History, User Database, Chat Message
-Collector). A stored layout is validated against the window set and rejected
-on mismatch, so without a migration every existing user would silently lose
-their arrangement on first start after the update.
+v2 added three windows (Person History, User Database, Chat Message
+Collector); v3 adds two more (Label Manager, DB Connection). A stored layout
+is validated against the window set and rejected on mismatch, so without a
+migration every existing user would silently lose their arrangement on first
+start after the update.
 
 Rules proven here:
-  * a v1 payload holding exactly the seven legacy windows is ACCEPTED and
+  * an older payload holding exactly that version's windows is ACCEPTED and
     upgraded — the old arrangement is preserved and the new windows are added;
-  * a v1 payload that was never legal (missing/duplicated windows) is still
+  * a payload that was never legal (missing/duplicated windows) is still
     rejected, so migration cannot be used to smuggle a broken tree in;
-  * what gets stored afterwards is canonical v2.
+  * what gets stored afterwards is canonical, at the current version.
 
 Run with:  python3 tests/test_grid_layout_v2_migration.py
 """
@@ -31,8 +32,12 @@ from backend.config_manager import ConfigManager  # noqa: E402
 
 LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer", "people",
                   "log"]
-NEW_WINDOWS = ["history", "userdb", "collector"]
-ALL_WINDOWS = LEGACY_WINDOWS + NEW_WINDOWS
+ARCHIVE_WINDOWS = ["history", "userdb", "collector"]
+MANAGEMENT_WINDOWS = ["labels", "dbconn"]
+NEW_WINDOWS = ARCHIVE_WINDOWS + MANAGEMENT_WINDOWS
+V2_WINDOWS = LEGACY_WINDOWS + ARCHIVE_WINDOWS
+ALL_WINDOWS = V2_WINDOWS + MANAGEMENT_WINDOWS
+CURRENT = Bridge.GRID_VERSION
 
 
 def leaf(i):
@@ -49,6 +54,15 @@ def v1(tree):
 
 def v2(tree):
     return json.dumps({"v": 2, "tree": tree}, ensure_ascii=False)
+
+
+def current(tree):
+    return json.dumps({"v": CURRENT, "tree": tree}, ensure_ascii=False)
+
+
+def flat_v2():
+    """A layout saved by the previous version: the ten v2 windows."""
+    return split("col", [leaf(i) for i in V2_WINDOWS], [10] * 10)
 
 
 def flat_v1():
@@ -88,7 +102,7 @@ def sizes_of(node):
 
 
 class TestWindowSet(unittest.TestCase):
-    def test_the_three_new_windows_exist(self):
+    def test_the_new_windows_exist(self):
         for wid in NEW_WINDOWS:
             self.assertIn(wid, Bridge.WINDOW_IDS)
 
@@ -114,6 +128,14 @@ class TestMigration(unittest.TestCase):
     def test_the_new_windows_are_added(self):
         tree = self.parse(v1(flat_v1()))
         self.assertEqual(sorted(Bridge._leaf_ids(tree)), sorted(ALL_WINDOWS))
+
+    def test_a_v2_layout_is_upgraded_too(self):
+        """An update must migrate from ANY older version, not just v1."""
+        tree = self.parse(v2(flat_v2()))
+        self.assertEqual(sorted(Bridge._leaf_ids(tree)), sorted(ALL_WINDOWS))
+        self.assertIsNone(Bridge._validate_grid_tree(tree))
+        kept = [i for i in Bridge._leaf_ids(tree) if i in V2_WINDOWS]
+        self.assertEqual(kept, V2_WINDOWS, "the v2 arrangement is preserved")
 
     def test_the_old_windows_keep_their_relative_order(self):
         tree = self.parse(v1(nested_v1()))
@@ -170,17 +192,22 @@ class TestMigrationRefusals(unittest.TestCase):
         self.assertIn("children", self._err(
             v1(split("row", [leaf("stats")], [100]))))
 
-    def test_an_unknown_version_is_rejected(self):
+    def test_a_future_version_is_rejected(self):
         self.assertIn("version", self._err(
-            json.dumps({"v": 3, "tree": Bridge._default_grid_tree()})))
+            json.dumps({"v": CURRENT + 1, "tree": Bridge._default_grid_tree()})))
+
+    def test_a_v2_tree_with_a_duplicate_is_still_rejected(self):
+        ids = V2_WINDOWS + ["log"]
+        tree = split("col", [leaf(i) for i in ids], [100 / 11] * 11)
+        self.assertIn("window set", self._err(v2(tree)))
 
 
 class TestPersistedUpgrade(unittest.TestCase):
-    def test_saving_a_v1_layout_stores_v2(self):
+    def test_saving_an_old_layout_stores_the_current_version(self):
         br, cfg = make_bridge()
         self.assertTrue(br.save_grid_layout(v1(nested_v1())))
         stored = json.loads(cfg.get_state("grid_layout"))
-        self.assertEqual(stored["v"], 2)
+        self.assertEqual(stored["v"], CURRENT)
         self.assertEqual(sorted(Bridge._leaf_ids(stored["tree"])),
                          sorted(ALL_WINDOWS))
 
@@ -188,7 +215,7 @@ class TestPersistedUpgrade(unittest.TestCase):
         br, cfg = make_bridge()
         cfg.set_state(grid_layout=v1(nested_v1()))
         got = json.loads(br.get_grid_layout())
-        self.assertEqual(got["v"], 2)
+        self.assertEqual(got["v"], CURRENT)
         self.assertEqual(sorted(Bridge._leaf_ids(got["tree"])),
                          sorted(ALL_WINDOWS))
 
@@ -204,10 +231,10 @@ class TestPersistedUpgrade(unittest.TestCase):
     def test_the_upgrade_is_a_normal_undo_step(self):
         br, _cfg = make_bridge()
         br.save_grid_layout(v1(flat_v1()))
-        br.save_grid_layout(v2(Bridge._default_grid_tree()))
+        br.save_grid_layout(current(Bridge._default_grid_tree()))
         result = json.loads(br.undo())
         self.assertEqual(result["kind"], "grid")
-        self.assertEqual(json.loads(result["value"])["v"], 2)
+        self.assertEqual(json.loads(result["value"])["v"], CURRENT)
         self.assertEqual(
             sorted(Bridge._leaf_ids(json.loads(result["value"])["tree"])),
             sorted(ALL_WINDOWS))
@@ -237,9 +264,11 @@ class TestUiKnowsTheNewWindows(unittest.TestCase):
 
     def test_the_new_scripts_are_loaded(self):
         for src in ("history-model.js", "history-view.js", "history-store.js",
-                    "history-db.js", "collector-panel.js"):
+                    "history-db.js", "collector-panel.js", "labels.js",
+                    "color-picker.js", "db-panel.js"):
             self.assertIn(src, self.html)
         self.assertIn("history.css", self.html)
+        self.assertIn("labels.css", self.html)
 
 
 if __name__ == "__main__":

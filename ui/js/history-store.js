@@ -34,6 +34,8 @@ const HistoryStore = {
       global: $('historySearchGlobalBtn'),
       images: $('historyImagesToggle'),
       folder: $('historyFolderBtn'),
+      clear: $('historyClearBtn'),
+      removePerson: $('historyDeletePersonBtn'),
       latest: $('historyLatestBtn'),
       myNick: $('myNickInput'),
     };
@@ -67,6 +69,12 @@ const HistoryStore = {
     }
     if (this._els.folder) {
       this._els.folder.addEventListener('click', () => this.openFolder());
+    }
+    if (this._els.clear)
+      this._els.clear.addEventListener('click', () => this.clearHistory());
+    if (this._els.removePerson) {
+      this._els.removePerson.addEventListener('click',
+                                              () => this.deletePerson());
     }
     this.initMyNick();
     this.renderEmpty('Click a nick in User Memory to read the whole ' +
@@ -143,6 +151,12 @@ const HistoryStore = {
     this._open = this._send('history_open', request);
     if (this._els.panel && this._els.panel.scrollIntoView)
       this._els.panel.scrollIntoView({ block: 'nearest' });
+  },
+
+  /** Re-read the open conversation (after a delete, an undo, a DB switch). */
+  reloadCurrent() {
+    if (!this.nick || !this.model) return;
+    this.openPerson(this.nick, { keepScroll: true });
   },
 
   _send(slot, request) {
@@ -333,13 +347,53 @@ const HistoryStore = {
              showImages: this.showImages,
              today: new Date().toISOString().slice(0, 10),
              onCopyMedia: (id) => this.copyMedia(id),
-             onRestoreMedia: (id) => this.restoreMedia(id) };
+             onRestoreMedia: (id) => this.restoreMedia(id),
+             onDeleteMessage: (id) => this.deleteMessage(id) };
+  },
+
+  /** Remove ONE message from this conversation (undoable). */
+  deleteMessage(id) {
+    if (!this.nick || id == null) return;
+    if (!App.bridge || !App.bridge.history_delete_message) {
+      if (typeof LogConsole !== 'undefined')
+        LogConsole.log('⚠ Not connected to backend — message kept', 'warn');
+      return;
+    }
+    App.bridge.history_delete_message(this.nick, String(id));
+  },
+
+  /** Wipe the whole conversation but keep the person (undoable). */
+  clearHistory() {
+    if (!this.nick) return;
+    if (!App.bridge || !App.bridge.history_clear_person) return;
+    PresetsUI.confirm(
+      'Clear this conversation?',
+      'Every archived message with “' + this.nick + '” is removed. ' +
+      'The person stays in the database and Ctrl+Z restores the messages.',
+      'Clear', () => App.bridge.history_clear_person(this.nick));
+  },
+
+  /** Remove the person together with their whole history (undoable). */
+  deletePerson() {
+    if (!this.nick) return;
+    if (!App.bridge || !App.bridge.history_delete_person) return;
+    PresetsUI.confirm(
+      'Remove this person?',
+      '“' + this.nick + '” and their entire history are removed from the ' +
+      'database. Ctrl+Z restores both.',
+      'Remove', () => App.bridge.history_delete_person(this.nick, false));
   },
 
   renderHeader() {
     if (!this._els.header) return;
     HistoryView.renderHeader(this._els.header, {
       nick: this.nick, myNick: this.myNick, stats: this.stats || null,
+      labels: (typeof Labels !== 'undefined' && this.nick)
+        ? Labels.forNick(this.nick) : [],
+      pill: (typeof Labels !== 'undefined')
+        ? (label) => Labels.pill(label, this.nick, {
+            onRemove: (id, nick) => Labels.unassign(nick, id) })
+        : null,
     });
   },
 

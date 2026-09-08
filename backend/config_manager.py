@@ -71,6 +71,15 @@ DEFAULTS: dict[str, Any] = {
         "chunk_pause_ms": 40,
         "bootstrap_max": 2000,
     },
+    # person labels: custom coloured tags shown next to a nick in the People
+    # and Full User Database tables. Kept here (not in either database) so
+    # they survive a DB swap and are joined to a row by nick at read time.
+    #   defs   -> [{id, name, color, created_at}]
+    #   assign -> {nick: [label id, ...]}
+    #   filter -> {"include": [ids], "exclude": [ids]}
+    "labels": {"defs": [], "assign": {}, "filter": {"include": [],
+                                                    "exclude": []},
+               "next_id": 0},
     # named action-stack presets: name -> {"blocks": [...], "updated_at": ...}
     "stack_presets": {},
     # named message templates: name -> {"body": "...", "updated_at": ...}
@@ -89,6 +98,8 @@ DEFAULTS: dict[str, Any] = {
     #   window_geometry    -> {x, y, width, height} for the desktop window
     "state": {
         "undo_history": [],
+        # recently used archive databases (DB Connection window)
+        "db_recent": [],
         # recently used "My Nick" values, most recent first
         "my_nick_recent": [],
         "undo_history_index": -1,

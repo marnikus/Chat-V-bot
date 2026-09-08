@@ -60,9 +60,15 @@ const UserTable = {
     if (tbody) {
       tbody.addEventListener('click', (e) => {
         // Clicking the nick opens that person's archived conversation.
+        // A ✕ inside a label pill is handled by the pill itself.
+        if (e.target.closest('.label-pill-x')) return;
         const nickCell = e.target.closest('.col-nick[data-nick]');
-        if (nickCell && typeof HistoryStore !== 'undefined') {
-          HistoryStore.openPerson(nickCell.dataset.nick);
+        if (nickCell) {
+          // One click: open the conversation AND point the Label Manager at
+          // this person, so "Assign To Person" always follows the selection.
+          if (typeof Labels !== 'undefined') Labels.setPerson(nickCell.dataset.nick);
+          if (typeof HistoryStore !== 'undefined')
+            HistoryStore.openPerson(nickCell.dataset.nick);
           return;
         }
         const btn = e.target.closest('button[data-act]');
@@ -72,6 +78,7 @@ const UserTable = {
         if (act === 'delete') this.deleteNick(nick);
         else if (act === 'toggle-messaged') this.toggleMessaged(nick);
         else if (act === 'message') this.manualMessage(nick);
+        else if (act === 'label') this.labelNick(nick);
       });
       tbody.addEventListener('change', (e) => {
         const cb = e.target.closest('input[type="checkbox"][data-nick]');
@@ -100,10 +107,17 @@ const UserTable = {
       tbody.innerHTML = '<tr><td colspan="9" class="table-placeholder">' +
         'No users discovered yet. Connect and run the parser.</td></tr>';
     } else if (!rows.length) {
+      const labelled = typeof Labels !== 'undefined' && Labels.filterActive;
       tbody.innerHTML = '<tr><td colspan="9" class="table-placeholder">' +
-        `No nick matches “${this._esc(this.filter)}”.</td></tr>`;
+        (this.filter
+          ? `No nick matches “${this._esc(this.filter)}”.`
+          : labelled
+            ? 'Every person is hidden by the label filter — clear it in the ' +
+              'Label Manager to see them again.'
+            : 'No users to show.') + '</td></tr>';
     } else {
       tbody.innerHTML = rows.map((u) => this._row(u)).join('');
+      this._paintLabels(tbody);
     }
     this._syncSelectionUI();
   },
@@ -167,9 +181,16 @@ const UserTable = {
   },
 
   _visible() {
-    if (!this.filter) return this.users;
-    return this.users.filter(
-      (u) => (u.nick || '').toLowerCase().includes(this.filter));
+    let rows = this.users;
+    if (this.filter) {
+      rows = rows.filter(
+        (u) => (u.nick || '').toLowerCase().includes(this.filter));
+    }
+    // The Label Manager's include/exclude rule hides people here exactly as
+    // it skips them during auto-messaging — one rule, one behaviour.
+    if (typeof Labels !== 'undefined' && Labels.filterActive)
+      rows = rows.filter((u) => Labels.allows(u.nick));
+    return rows;
   },
 
   _row(u) {
@@ -212,10 +233,34 @@ const UserTable = {
         <button data-act="toggle-messaged" data-nick="${attr}"
                 title="${u.messaged ? 'Mark as new again' : 'Mark as already messaged'}">
           ${u.messaged ? '↩ Undo' : '✔ Done'}</button>
+        <button data-act="label" data-nick="${attr}"
+                title="Label this person in the Label Manager">🏷</button>
         <button data-act="delete" data-nick="${attr}" class="btn-row-danger"
                 title="Delete this nick from user memory">🗑 Delete</button>
       </td>
     </tr>`;
+  },
+
+  /**
+   * Append the label pills to every nick cell.
+   *
+   * The row itself is an HTML string, but a label name is user text, so the
+   * pills are built as DOM nodes by the shared renderer in labels.js — the
+   * same one the Full User Database uses.
+   */
+  _paintLabels(tbody) {
+    if (typeof Labels === 'undefined') return;
+    tbody.querySelectorAll('.col-nick[data-nick]').forEach((cell) => {
+      const nick = cell.dataset.nick;
+      const pills = Labels.pills(nick);
+      if (pills.childNodes.length) cell.appendChild(pills);
+    });
+  },
+
+  /** Send this person to the Label Manager and open that window. */
+  labelNick(nick) {
+    if (typeof Labels === 'undefined') return;
+    Labels.setPerson(nick, { focus: true });
   },
 
   // ── selection ───────────────────────────────────────────────
