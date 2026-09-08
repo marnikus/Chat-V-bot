@@ -694,6 +694,35 @@ t('a repair-only live event reloads existing bubbles instead of adding duplicate
   ok(named('history_open').pop().args[0] !== initial, 'old replies have been invalidated');
 });
 
+t('pending capture has a warning status and shows structured read diagnostics', () => {
+  CollectorPanel.onStatus(JSON.stringify({
+    state: 'capture_pending', text: 'Capture pending — 1 unreadable; retrying',
+    agent: 11, nick: 'Nick', total: 0, added: 0, capture_missing: 1, capture_errors: 0,
+    capture_diagnostics: [{ from: 0, to: 1, returned: 1, ready: 0,
+      reason: 'payload_pending', sources: { 'message-content': 1 } }],
+  }));
+  const status = document.getElementById('collectorStatus');
+  ok(status.classList.contains('state-capture-pending'));
+  ok(!/No new messages/.test(status.textContent));
+  const rows = document.getElementById('collectorRows').textContent;
+  ok(rows.includes('awaiting retry 1'));
+  ok(rows.includes('v11'));
+  ok(rows.includes('payload_pending'));
+  ok(rows.includes('message-content'));
+});
+
+t('a failed browser read is shown as an error, not a no-new success', () => {
+  CollectorPanel.onStatus(JSON.stringify({
+    state: 'error', text: 'Message read failed', nick: 'Nick', total: 0,
+    capture_errors: 1, error: 'DOM 0:2: invalid response',
+    capture_diagnostics: [{ from: 0, to: 2, returned: 0, ready: 0,
+      reason: 'invalid_response', error: 'invalid response' }],
+  }));
+  ok(document.getElementById('collectorStatus').classList.contains('state-error'));
+  ok(document.getElementById('collectorRows').textContent.includes('read errors 1'));
+  ok(document.getElementById('collectorRows').textContent.includes('DOM 0:2: invalid response'));
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_panels_boot: ' + passed + ' passed, ' + failed + ' failed');

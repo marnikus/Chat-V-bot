@@ -38,6 +38,15 @@ log = logging.getLogger("chatbot")
 SLICE_RETRIES = 4
 
 
+class CaptureReadError(RuntimeError):
+    """An unsuccessful browser probe, not an empty message body."""
+
+    def __init__(self, reason: str, detail: str):
+        self.reason = reason
+        self.detail = str(detail or reason).splitlines()[0][:400]
+        super().__init__(self.detail)
+
+
 def align(dom_fps, tail_fps) -> Alignment:
     """Where a freshly read conversation continues the stored one."""
     return align_batch(dom_fps, tail_fps)
@@ -237,9 +246,21 @@ class ChatParser:
         self.cdp = cdp
         self.chunk_size = max(1, int(chunk_size))
         self.chunk_pause_ms = max(0, int(chunk_pause_ms))
+        self.probe_seconds = 0.0
+        self.last_capture_diagnostic = {}
+
+    def reset_probe_metrics(self) -> None:
+        self.probe_seconds = 0.0
 
     async def _eval(self, expression: str):
-        return await self.cdp.evaluate(expression)
+        started = asyncio.get_running_loop().time()
+        try:
+            return await self.cdp.evaluate(expression)
+        finally:
+            # Only browser/transport time: retry sleeps, scroll-settle waits,
+            # database work and downloads must not inflate browser backoff.
+            self.probe_seconds = max(self.probe_seconds,
+                                     asyncio.get_running_loop().time() - started)
 
     async def state(self) -> dict:
         """One small probe: shape of the conversation, not its content."""
@@ -255,8 +276,8 @@ class ChatParser:
                     "count": 0, "head": [], "tail": [], "pending": 0}
         return raw
 
-    async def install(self) -> int:
-        raw = await self._eval(chat_agent_js.install_expression())
+    async def install(self, *, force: bool = False) -> int:
+        raw = await self._eval(chat_agent_js.install_expression(force=force))
         try:
             return int(raw or 0)
         except (TypeError, ValueError):
@@ -270,9 +291,49 @@ class ChatParser:
             return version
         return await self.install()
 
-    async def slice(self, start: int, end: int) -> list[MessageRecord]:
-        raw = await self._eval(chat_agent_js.slice_expression(start, end))
-        return parse_records(_payload(raw))
+    async def slice(self, start: int, end: int, *, refresh: bool = False) -> list[MessageRecord]:
+        diagnostic = {"from": start, "to": end, "returned": 0, "ready": 0}
+        self.last_capture_diagnostic = diagnostic
+        try:
+            try:
+                raw = await self._eval(chat_agent_js.slice_expression(start, end, refresh=refresh))
+            except Exception as exc:
+                raise CaptureReadError("probe_exception", str(exc)) from exc
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except (TypeError, ValueError) as exc:
+                    raise CaptureReadError("malformed_json", "Message range returned invalid JSON") from exc
+            if isinstance(raw, dict):
+                if raw.get("ok") is False:
+                    raise CaptureReadError("agent_error", raw.get("error") or raw.get("reason") or "Message range probe failed")
+                diagnostic["node_count"] = raw.get("count")
+                items = raw.get("items")
+            else:
+                items = raw
+            if not isinstance(items, list):
+                raise CaptureReadError("invalid_response", "Message range did not return a record list")
+            diagnostic["returned"] = len(items)
+            try:
+                records = parse_records(items)
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise CaptureReadError("invalid_record", "Message range contains malformed records") from exc
+            if len(records) != len(items):
+                raise CaptureReadError("invalid_record", "Message range contains unusable records")
+            reasons, sources = {}, {}
+            for record in records:
+                if record.incomplete:
+                    reason = record.capture_reason or "payload_empty"
+                    reasons[reason] = reasons.get(reason, 0) + 1
+                source = record.text_source or "unspecified"
+                sources[source] = sources.get(source, 0) + 1
+            diagnostic.update(ready=sum(not r.incomplete for r in records),
+                              reasons=reasons, sources=sources,
+                              reason="range_empty" if not records else "payload_pending" if reasons else "ok")
+            return records
+        except CaptureReadError as exc:
+            diagnostic.update(reason=exc.reason, error=exc.detail)
+            raise
 
     async def drain(self) -> list[MessageRecord]:
         raw = await self._eval(chat_agent_js.drain_expression())
@@ -358,7 +419,42 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     """Hold one archive generation across every chunk and media recovery."""
     async with repo.db.operation_lock:
         try:
-            return await _sync_conversation(parser, repo, nick, my_nick, **kwargs)
+            if not kwargs.get("backfill_older"):
+                return await _sync_conversation(parser, repo, nick, my_nick, **kwargs)
+
+            # The visible chat is the only payload we know is available now.
+            # Save it BEFORE scroll-to-top can virtualize/unload it. A failed
+            # visible pass must retry in place, not repeat a destructive scroll.
+            visible_args = {**kwargs, "backfill_older": False}
+            visible = await _sync_conversation(parser, repo, nick, my_nick, **visible_args)
+            if not visible.ok or visible.stopped or visible.capture_missing:
+                visible.backfill_pending = True
+                return visible
+            cap = int(kwargs.get("max_messages") or 0)
+            if cap and visible.scanned >= cap:
+                visible.backfill_pending = True
+                return visible
+            older_args = dict(kwargs)
+            if cap:
+                older_args["max_messages"] = cap - visible.scanned
+            older = await _sync_conversation(parser, repo, nick, my_nick, **older_args)
+            older.added += visible.added
+            older.scanned += visible.scanned
+            older.text_repaired += visible.text_repaired
+            older.media_repaired += visible.media_repaired
+            older.media_requeued += visible.media_requeued
+            older.count = max(older.count, visible.count)
+            older.gap = older.gap or visible.gap
+            older.chunks = visible.chunks + older.chunks
+            older.capture_diagnostics = (visible.capture_diagnostics + older.capture_diagnostics)[-8:]
+            combined = {}
+            for row in visible.records + older.records:
+                key = row.get("id") or (row.get("ord"), row.get("fp"))
+                combined[key] = row
+            older.records = list(combined.values())[-MAX_LIVE_ITEMS:]
+            if older.ok and not older.stopped and not older.capture_missing and older.added:
+                older.reason = "added"
+            return older
         except BaseException:
             if repo.db.is_open:
                 await repo.db.conn.rollback()
@@ -528,11 +624,21 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         end = min(count, position + parser.chunk_size)
         records = []
         best = []
+        read_error = None
+        refreshed = False
+        attempts = 0
         for _attempt in range(SLICE_RETRIES):
             if should_stop and should_stop():
                 result.stopped = True
                 break
-            records = await parser.slice(position, end)
+            attempts += 1
+            try:
+                records = await parser.slice(position, end, refresh=_attempt > 0)
+                read_error = None
+            except CaptureReadError as exc:
+                read_error = exc
+                records = []
+                log.warning("Message read %s DOM %d:%d failed (%s): %s", nick, position, end, exc.reason, exc.detail)
             if verify_partner or require_private:
                 live_state = await parser.state()
                 gate = verify_private(live_state, nick, my_nick,
@@ -544,6 +650,8 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                     result.ok, result.reason = False, gate.reason
                     # Do not scroll the different chat the user switched to.
                     return result
+            if should_stop and should_stop():
+                result.stopped = True
             captured = [r for r in records if not r.incomplete]
             if len(captured) > len(best):
                 best = captured
@@ -551,12 +659,21 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             if records and not missing:
                 best = captured
                 break
-            if _attempt == 0:
-                log.warning("Text/payload extraction incomplete for %s at DOM %d:%d; retrying", nick, position, end)
-            if _attempt == SLICE_RETRIES - 1:
+            if _attempt == 0 and read_error is None:
+                log.warning("Payload pending for %s at DOM %d:%d (%s); retrying", nick, position, end,
+                            parser.last_capture_diagnostic.get("reasons") or "range changed")
+            if _attempt == SLICE_RETRIES - 1 or result.stopped:
                 break
-            if (not records and position == start and backfill_older and
-                    not result.backfilled and before_count > 0 and _attempt == 0):
+            if read_error is not None and not refreshed:
+                # A stale/broken agent may have a healthy state() but a broken
+                # slice(). A same-version no-op install cannot repair that.
+                refreshed = True
+                try:
+                    await parser.install(force=True)
+                except Exception as exc:
+                    log.warning("Could not refresh capture agent: %s", exc)
+            elif (not records and position == start and backfill_older and
+                  not result.backfilled and before_count > 0 and _attempt == 0):
                 await parser.restore_scroll(old_top)
                 fallback = await parser.state()
                 if int(fallback.get("count") or 0) > 0:
@@ -570,12 +687,24 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 await asyncio.sleep(0.2)
         records = best
         missing = max(0, end - position - len(records))
+        diagnostic = {**parser.last_capture_diagnostic, "attempts": attempts,
+                      "agent_refreshed": refreshed, "kept": len(records)}
+        result.capture_diagnostics = (result.capture_diagnostics + [diagnostic])[-8:]
+        if read_error is not None:
+            result.capture_errors += 1
+            result.ok = False
+            result.error = f"DOM {position}:{end}: {read_error.detail}"
+            result.reason = "capture_error"
         if missing:
             result.capture_missing += missing
             result.backfill_pending = True
-            log.warning("Text/payload not captured for %s: %d line(s); deferred for retry", nick, missing)
         if not records:
-            break
+            result.chunks.append({"from": position, "to": end, "added": 0, "pending": missing})
+            position = end
+            # Do not let one old/unreadable chunk starve new text after it.
+            if not result.stopped and position < count and pause_ms:
+                await asyncio.sleep(pause_ms / 1000.0)
+            continue
         scanned += len(records)
         if streaming:
             appended = await repo.append(
@@ -654,11 +783,18 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             tail_state = await parser.state()
             tail_count = int(tail_state.get("count") or 0)
             if tail_count > 0:
-                tail_records = await parser.slice(max(0, tail_count - max(parser.chunk_size, 80)), tail_count)
-                safe = True
+                try:
+                    tail_records = await parser.slice(max(0, tail_count - max(parser.chunk_size, 80)), tail_count, refresh=True)
+                except CaptureReadError as exc:
+                    tail_records = []
+                    result.capture_errors += 1
+                    result.ok, result.reason, result.error = False, "capture_error", exc.detail
+                    result.backfill_pending = True
+                    result.capture_diagnostics = (result.capture_diagnostics + [dict(parser.last_capture_diagnostic)])[-8:]
+                safe = bool(tail_records)
                 if verify_partner or require_private:
                     live_state = await parser.state()
-                    safe = (verify_private(live_state, nick, my_nick,
+                    safe = safe and (verify_private(live_state, nick, my_nick,
                                            require_private=require_private).ok and
                             verify_private(live_state, nick, my_nick, items=tail_records,
                                            require_private=require_private).ok)
@@ -684,13 +820,13 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                         result.media_repaired += int(stats.get("repaired") or 0)
                         result.media_requeued += int(stats.get("requeued") or 0)
 
-    if result.backfilled and not result.stopped and not result.backfill_pending:
+    if result.backfilled and result.ok and not result.stopped and not result.backfill_pending:
         try:
             await repo.mark_backfilled(person_id)
         except Exception as e:                       # noqa: BLE001
             log.debug("could not mark %s fully backfilled: %s", nick, e)
 
-    complete = (not result.stopped) and not result.capture_missing and position >= count
+    complete = (result.ok and not result.stopped and not result.capture_missing and position >= count)
     await repo.append(nick, [], my_nick=my_nick,
                       dom_count=position if not complete else count,
                       head_sig=head_sig if complete else "",

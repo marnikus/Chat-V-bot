@@ -373,7 +373,8 @@ const HistoryStore = {
     PresetsUI.confirm(
       'Clear this conversation?',
       'Every archived message with “' + this.nick + '” is removed. ' +
-      'The person stays in the database and Ctrl+Z restores the messages.',
+      'The person stays in the database. New messages continue to be collected; ' +
+      'cleared messages stay hidden unless you use Ctrl+Z.',
       'Clear', () => App.bridge.history_clear_person(this.nick));
   },
 

@@ -4,8 +4,8 @@
    Page.addScriptToEvaluateOnNewDocument for later navigations). Everything
    expensive happens HERE, in the page, where the DOM is local:
 
-     * every message node is parsed at most once, ever (a node → record
-       cache that is rebuilt — and thereby pruned — on each walk);
+     * complete, unchanged message nodes reuse a cache; incomplete/changed
+       payloads and explicit range refreshes are re-extracted;
      * `state()` ships a summary, never the conversation;
      * `slice(a, b)` ships exactly the range Python asked for;
      * a MutationObserver buffers new lines and pushes a debounced
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 10;
+  var VERSION = 11;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -71,12 +71,24 @@
   /** text of `el` without the text of its child elements (unread badges…) */
   function ownText(el) {
     if (!el) return '';
+    var nodes = el.childNodes;
+    if (nodes) {
+      var direct = '';
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].nodeType === 3 || nodes[i].nodeType === 4)
+          direct += nodes[i].nodeValue || '';
+      }
+      return clean(direct);
+    }
+    // Minimal DOM adapters expose own text followed by their child text.
+    // Substring replacement corrupts nicknames containing a badge's digits
+    // (Svetik25 + unread 2 must never become Svetik5 + unread 2).
     var text = String(el.textContent || '');
     var kids = el.children || [];
-    for (var i = 0; i < kids.length; i++) {
-      var kid = String(kids[i].textContent || '');
-      if (kid) text = text.replace(kid, '');
-    }
+    var childText = '';
+    for (var j = 0; j < kids.length; j++) childText += String(kids[j].textContent || '');
+    if (childText && text.slice(-childText.length) === childText)
+      text = text.slice(0, -childText.length);
     return clean(text);
   }
   function isAncestor(maybe, node) {
@@ -263,7 +275,8 @@
     }
     return { pane: chosen ? chosen.pane : null,
              nodes: chosen ? chosen.nodes : nodes,
-             panes: groups.length };
+             panes: groups.length,
+             source: groups.length === 1 ? 'single-pane' : 'author-match' };
   }
 
   function containers() {
@@ -300,45 +313,117 @@
                  img.getAttribute('data-src') || '');
   }
 
-  /** Preserve line breaks and nested link/emoji text, without sender/time. */
-  function messageText(span) {
-    if (!span) return '';
+  function hasClass(node, name) {
+    return !!(node && node.classList && node.classList.contains(name));
+  }
+
+  function metadata(node) {
+    if (!node || !node.tagName) return false;
+    var tag = String(node.tagName).toLowerCase();
+    if (['svg', 'mat-icon', 'mat-menu', 'script', 'style', 'template',
+         'button', 'input', 'select', 'textarea', 'avatar-item'].indexOf(tag) >= 0) return true;
+    var names = ['from', 'sent-time', 'message-status', 'state-icon',
+                 'additional-icon', 'avatar', 'avatar-wrapper', 'source-indicator',
+                 'message-actions', 'message-menu'];
+    for (var i = 0; i < names.length; i++) if (hasClass(node, names[i])) return true;
+    return !!(node.hidden || (node.style && (node.style.display === 'none' ||
+                                           node.style.visibility === 'hidden')));
+  }
+
+  function insideMetadata(node, scope) {
+    for (var p = node; p && p !== scope; p = p.parentElement) {
+      if (metadata(p)) return true;
+    }
+    return false;
+  }
+
+  /** Payload text only. Never fall back to a container's unfiltered textContent. */
+  function messageText(root, structural) {
+    if (!root) return '';
+    var started = false, separator = false;
+    function bodyText(text) {
+      text = String(text || '');
+      if (structural && !started && !separator) {
+        var trimmed = clean(text);
+        if (['▸', '►', '▶', '>'].indexOf(trimmed) >= 0) {
+          separator = true;
+          return '';
+        }
+        // Some layouts put the separator and body in one text node.
+        if (/^\s*[▸►▶]\s*/.test(text)) {
+          text = text.replace(/^\s*[▸►▶]\s*/, '');
+          separator = true;
+        }
+      }
+      if (clean(text)) started = true;
+      return text;
+    }
     function visit(node) {
-      if (node.nodeType === 3 || node.nodeType === 4) return node.nodeValue || '';
+      if (node.nodeType === 3 || node.nodeType === 4) return bodyText(node.nodeValue);
+      if (node.nodeType === 8 || metadata(node)) return '';
       var tag = String(node.tagName || '').toLowerCase();
+      if (tag === 'app-chat-image' || hasClass(node, 'image-wrapper')) return '';
       if (tag === 'br') return '\n';
-      if (tag === 'img') return (node.getAttribute && node.getAttribute('alt')) || '';
+      if (tag === 'img') {
+        // Emoji belongs to text; attachment alt labels do not.
+        return (!structural || hasClass(node, 'emoji') || hasClass(node, 'emoticon'))
+          ? bodyText(node.getAttribute && node.getAttribute('alt')) : '';
+      }
       var kids = node.childNodes;
-      if (!kids || !kids.length) return String(node.textContent || '');
       var text = '';
-      for (var i = 0; i < kids.length; i++) text += visit(kids[i]);
+      if (kids) {
+        for (var i = 0; i < kids.length; i++) text += visit(kids[i]);
+      } else {
+        // Small DOM adapters without text-node objects still preserve their
+        // own text and element children; the browser uses childNodes above.
+        text = bodyText(ownText(node));
+        kids = node.children || [];
+        for (var j = 0; j < kids.length; j++) text += visit(kids[j]);
+      }
       return text + (tag === 'div' || tag === 'p' ? '\n' : '');
     }
-    return clean(visit(span));
+    return clean(visit(root));
+  }
+
+  function payloadParts(node) {
+    var scope = qs(node, '.message-content') || node;
+    var span = qs(scope, 'span.message') || qs(scope, '.message-text') ||
+               qs(scope, '[data-message-text]');
+    var img = null;
+    var images = qsa(scope, 'img');
+    for (var i = 0; i < images.length; i++) {
+      var candidate = images[i];
+      if (insideMetadata(candidate, scope) ||
+          (span && isAncestor(span, candidate)) ||
+          hasClass(candidate, 'emoji') || hasClass(candidate, 'emoticon')) continue;
+      img = candidate;
+      break;
+    }
+    return { scope: scope, text: span, image: img,
+             hasBody: !!(span || qs(scope, 'p.message') || qs(node, '.message-content')) };
   }
 
   function parseNode(node) {
     stats.parsed++;
-    var dir = node.classList && node.classList.contains('my-message-background')
-      ? 'out' : 'in';
-    var body = qs(node, 'p.message');
-    var from = '', text = '', kind = 'text', media = null;
-    if (body) {
-      from = clean(ownText(qs(body, 'span.from')) ||
-                   (qs(body, 'span.from') || {}).textContent);
-      var span = qs(body, 'span.message');
-      text = messageText(span); // captions and media may coexist
-      var img = qs(body, 'app-chat-image img') || qs(body, 'img');
-      if (img && span && isAncestor(span, img)) img = null; // inline emoji
-      if (img) {
-        var url = liveMediaUrl(img);
-        kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
-        media = { url: url, kind: kind };
-      }
+    var dir = hasClass(node, 'my-message-background') ? 'out' : 'in';
+    var parts = payloadParts(node);
+    var author = qs(parts.scope, 'span.from') || qs(parts.scope, '.from');
+    var from = clean(ownText(author) || (author || {}).textContent);
+    var text = parts.text ? messageText(parts.text, false) : '';
+    var source = text ? 'payload-element' : 'message-content';
+    if (!text) text = messageText(parts.scope, true);
+    var media = null, kind = 'text';
+    if (parts.image) {
+      var url = liveMediaUrl(parts.image);
+      kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
+      media = { url: url, kind: kind };
     }
+    var pending = (!text && !(media && media.url)) || !!(media && !media.url);
+    var reason = !pending ? '' : media ? 'media_url_pending' :
+                 !parts.hasBody ? 'body_missing' : 'payload_empty';
     var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
     return { dir: dir, from: from, kind: kind, text: text, media: media,
-             capture_pending: (!text && !(media && media.url)) || !!(media && !media.url),
+             capture_pending: pending, capture_reason: reason, text_source: source,
              time: clean(stamp ? stamp.textContent : '') };
   }
 
@@ -362,8 +447,7 @@
       if (fields) {
         // a lazy <img> may have gained its real src after the first parse;
         // do not keep the empty-url record in the cache forever
-        var img = qs(node, 'p.message app-chat-image img') ||
-                  qs(node, 'p.message img');
+        var img = payloadParts(node).image;
         var liveUrl = liveMediaUrl(img);
         var cachedUrl = fields.media ? fields.media.url : '';
         if (liveUrl !== cachedUrl) fields = null;
@@ -385,7 +469,8 @@
       out.push({ fp: fields.fp, dir: fields.dir, from: fields.from,
                  kind: fields.kind, text: fields.text, media: fields.media,
                  time: fields.time, occ: occ, idx: i, node: node,
-                 capture_pending: fields.capture_pending });
+                 capture_pending: fields.capture_pending,
+                 capture_reason: fields.capture_reason, text_source: fields.text_source });
     }
     cache = next;                       // rebuilding prunes removed nodes
     stats.cached = cache.size;
@@ -396,7 +481,8 @@
     return { fp: record.fp, dir: record.dir, from: record.from,
              kind: record.kind, text: record.text, media: record.media,
              time: record.time, occ: record.occ, idx: record.idx,
-             capture_pending: !!record.capture_pending };
+             capture_pending: !!record.capture_pending,
+             capture_reason: record.capture_reason || '', text_source: record.text_source || '' };
   }
 
   /** distinct nicks per direction — the private-chat gate reads these */
@@ -725,6 +811,11 @@
     var fps = records.map(function (r) { return r.fp; });
     var summary = describe();
     var authors = authorsOf(records);
+    var issues = {}, sources = {};
+    records.forEach(function (r) {
+      if (r.capture_reason) issues[r.capture_reason] = (issues[r.capture_reason] || 0) + 1;
+      sources[r.text_source] = (sources[r.text_source] || 0) + 1;
+    });
     var pv = visiblePane();
     return {
       ok: true,
@@ -736,6 +827,8 @@
       participants: summary.participants,
       count: records.length,
       incomplete: records.filter(function (r) { return r.capture_pending; }).length,
+      capture_issues: issues,
+      text_sources: sources,
       content_revision: contentRevision,
       content_sig: hex8(fnv1a(fps.join(SEP), 0x811c9dc5)),
       authors: authors.all,
@@ -751,13 +844,20 @@
     };
   }
 
-  function slice(from, to) {
+  function slice(from, to, refresh) {
     reattach();
+    if (refresh) {
+      var nodes = containers();
+      for (var i = Math.max(0, num(from)); i < Math.min(nodes.length, num(to)); i++) {
+        var fields = cache.get(nodes[i]);
+        if (fields) fields.dirty = true;
+      }
+    }
     var records = walk();
     var a = Math.max(0, Math.min(records.length, num(from)));
     var b = Math.max(a, Math.min(records.length, num(to)));
     return { ok: true, from: a, to: b, count: records.length,
-             items: records.slice(a, b).map(strip) };
+             agent: VERSION, items: records.slice(a, b).map(strip) };
   }
 
   function drain() {

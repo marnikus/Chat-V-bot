@@ -475,3 +475,6 @@
 
 /* Old incomplete captures are honest placeholders, never blank bubbles. */
 .msg-text-missing { opacity: .7; font-style: italic; }
+
+/* Incomplete capture is active work, not a successful idle/no-new state. */
+.state-capture-pending { color: var(--yellow); background: var(--yellow-dim); }

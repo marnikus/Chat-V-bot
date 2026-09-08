@@ -481,6 +481,16 @@ To retry older captures:
 4. Check the **Text capture** status/log. Successful repairs refresh Person
    History even when no new message was inserted.
 
+**Clear is not a pause:** cleared messages stay hidden and new messages continue
+to be saved. Collect now / Backfill does not undo Clear; use Ctrl+Z to restore
+cleared rows. The v11 capture agent handles structurally identifiable plain text
+without depending only on `span.message`, preserves nicknames containing unread-
+badge digits, and saves the visible chat before scrolling for older messages.
+An unreadable first batch does not block later messages. Pending capture is a
+warning, not “No new messages”; actual browser read failures show their reason.
+The collector exposes **Capture agent**, **Last read**, and **Text source** for
+diagnosis. Retry/scroll waits no longer inflate browser-latency backoff.
+
 Recovery also works with media downloads disabled. Messages no longer exposed
 by the website cannot be reconstructed from timestamps alone. If an older build
 saved an unusable active path, startup prefers another valid archive; if none
@@ -489,8 +499,22 @@ original files. This startup recovery is not the **Create** button's behavior.
 
 Design and verification:
 `docs/DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md`.
+Capture-after-clear follow-up design and verification:
+`docs/CAPTURE_PENDING_AFTER_CLEAR_DESIGN_2026-09-08.md`.
 Labels design:
 `docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
+
+The DOM/protocol regression tests have a development-only dependency; the
+**desktop app does not require Node/jsdom**. To include these tests:
+
+```sh
+npm ci --prefix tests
+REQUIRE_DOM_TESTS=1 python -m unittest discover -s tests -p 'test_*.py'
+```
+
+These tests execute the shipped expressions in a DOM implementation and feed
+real protocol-shaped responses through the Python capture/storage path. They
+are not a substitute for testing a live Chrome session.
 
 ### Settings (config.json)
 

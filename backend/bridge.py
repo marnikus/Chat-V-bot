@@ -1944,7 +1944,8 @@ class Bridge(QObject):
                     "op": "clear_history", "nick": clean, "token": token})
                 self.log_message.emit(
                     f"🧹 History of “{clean}” cleared — the person stays in "
-                    "the database (Ctrl+Z restores the messages)", "warn")
+                    "the database. New messages continue to be collected; "
+                    "Ctrl+Z restores the cleared messages", "warn")
             self.userdb_changed.emit(json.dumps(
                 {"action": "cleared", "nick": clean, "ok": bool(token)},
                 ensure_ascii=False))

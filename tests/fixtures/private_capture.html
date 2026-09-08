@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Capture regression fixture</title></head>
+<body>
+<app-tab-scroller>
+  <div class="tabs-list">
+    <div class="tab-item active" role="tab">
+      <mat-icon class="chat-type-icon" data-mat-icon-name="user"></mat-icon>
+      <p class="chat-title">Svetik25❤️<span class="unread">2</span></p>
+    </div>
+  </div>
+</app-tab-scroller>
+<div class="pane-host"><div class="container">
+  <app-messages><div class="messages-root" style="height: 300px; overflow-y: auto">
+    <div class="message-container general-background">
+      <mat-menu><button>Delete</button></mat-menu>
+      <div class="message-content">
+        <p class="message"><span class="additional-icon"><mat-icon><svg><title>gender-female</title></svg></mat-icon></span><span class="mat-mdc-menu-trigger from">Svetik25❤️</span><span> ▸ </span><span class="message">Старое сообщение</span></p>
+        <div class="message-status"><span class="sent-time">21:00</span><span class="state-icon">read</span></div>
+      </div>
+    </div>
+    <div class="message-container my-message-background">
+      <mat-menu><button>Delete</button></mat-menu>
+      <div class="message-content">
+        <p class="message"><span class="additional-icon"><mat-icon><svg><title>gender-male</title></svg></mat-icon></span><span class="mat-mdc-menu-trigger from">Хорошо Все</span><span> ▸ </span><span class="message">Старый ответ</span></p>
+        <div class="message-status"><span class="sent-time">21:01</span><span class="state-icon">sent</span></div>
+      </div>
+    </div>
+  </div></app-messages>
+  <users-list>
+    <span class="users-counter">2</span>
+    <user-item><span class="primary-text bold">Хорошо Все</span></user-item>
+    <user-item><span class="primary-text">Svetik25❤️</span></user-item>
+  </users-list>
+</div></div>
+</body>
+</html>

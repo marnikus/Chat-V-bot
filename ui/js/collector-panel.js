@@ -19,6 +19,7 @@ const CollectorPanel = {
     bootstrapping: 'state-collecting',
     collected: 'state-collected',
     no_new: 'state-idle',
+    capture_pending: 'state-capture-pending',
     not_private: 'state-idle',
     group_tab: 'state-idle',
     paused: 'state-idle',
@@ -233,6 +234,8 @@ const CollectorPanel = {
     if (payload.throttled)
       this._row(host, 'Throttled', 'yes — an Action Stack run is in progress');
     if (payload.self_heals) this._row(host, 'Re-syncs', payload.self_heals);
+    if (typeof payload.agent === 'number')
+      this._row(host, 'Capture agent', payload.agent ? 'v' + payload.agent : 'not installed');
     if (payload.last_probe) {
       const p = payload.last_probe;
       this._row(host, 'Page count', p.count);
@@ -248,10 +251,22 @@ const CollectorPanel = {
         sync += ' · added ' + payload.sync_added;
       this._row(host, 'Sync', sync);
     }
-    if (payload.text_repaired || payload.capture_missing) {
+    if (payload.text_repaired || payload.capture_missing || payload.capture_errors) {
       this._row(host, 'Text capture',
         'repaired ' + (payload.text_repaired || 0) +
-        ' · awaiting retry ' + (payload.capture_missing || 0));
+        ' · awaiting retry ' + (payload.capture_missing || 0) +
+        ' · read errors ' + (payload.capture_errors || 0));
+    }
+    const reads = payload.capture_diagnostics || [];
+    if (reads.length) {
+      const read = reads[reads.length - 1];
+      this._row(host, 'Last read',
+        '[' + read.from + ':' + read.to + '] · ' + (read.ready || 0) +
+        '/' + (read.returned || 0) + ' ready · ' + (read.reason || 'unknown') +
+        (read.error ? ' · ' + read.error : ''));
+      const sources = read.sources || {};
+      if (Object.keys(sources).length)
+        this._row(host, 'Text source', Object.keys(sources).map((s) => s + ': ' + sources[s]).join(', '));
     }
     if (payload.media_repaired || payload.media_requeued) {
       this._row(host, 'Media recovery',

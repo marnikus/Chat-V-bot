@@ -47,6 +47,7 @@ class CollectorState:
     COLLECTING = "collecting"
     COLLECTED = "collected"
     NO_NEW = "no_new"
+    CAPTURE_PENDING = "capture_pending"
     ERROR = "error"
 
 
@@ -123,6 +124,8 @@ class Collector(QObject):
         self._last_media_requeued = 0
         self._last_text_repaired = 0
         self._last_capture_missing = 0
+        self._last_capture_errors = 0
+        self._capture_diagnostics = []
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -205,6 +208,8 @@ class Collector(QObject):
         self._last_sync_count = 0
         self._last_text_repaired = 0
         self._last_capture_missing = 0
+        self._last_capture_errors = 0
+        self._capture_diagnostics = []
         self._last_media_repaired = 0
         self._last_media_requeued = 0
         self._backfill_pending = False
@@ -267,7 +272,7 @@ class Collector(QObject):
         if self._busy:
             return self._state
         self._busy = True
-        started = self.now()
+        self.parser.reset_probe_metrics()
         try:
             return await self._tick()
         except Exception as e:                        # noqa: BLE001
@@ -276,8 +281,8 @@ class Collector(QObject):
         finally:
             self._busy = False
             try:
-                self.note_probe_duration(
-                    (self.now() - started).total_seconds())
+                self.note_probe_duration(self.parser.probe_seconds)
+                self._emit()
             except Exception:                         # noqa: BLE001
                 pass
 
@@ -307,6 +312,9 @@ class Collector(QObject):
             "in_authors": list(state.get("in_authors") or []),
             "out_authors": list(state.get("out_authors") or []),
             "scroll": dict(state.get("scroll") or {}),
+            "incomplete": int(state.get("incomplete") or 0),
+            "capture_issues": dict(state.get("capture_issues") or {}),
+            "text_sources": dict(state.get("text_sources") or {}),
         }
 
         if not state.get("ok", True):
@@ -427,8 +435,18 @@ class Collector(QObject):
         self._total = result.total
         self._last_text_repaired = result.text_repaired
         self._last_capture_missing = result.capture_missing
-        if result.capture_missing:
-            self._warning = f"[text not captured] for {result.capture_missing} line(s); retrying capture"
+        self._last_capture_errors = result.capture_errors
+        self._capture_diagnostics = result.capture_diagnostics
+        if result.capture_errors:
+            self._error = result.error or "The browser message read failed"
+            self._log(f"Message read failed: {self._error}; complete rows were kept, retry scheduled", "error", nick)
+        elif result.capture_missing:
+            reasons = {}
+            for diagnostic in result.capture_diagnostics:
+                for reason, count in (diagnostic.get("reasons") or {}).items():
+                    reasons[reason] = reasons.get(reason, 0) + count
+            detail = ", ".join(f"{reason}: {count}" for reason, count in reasons.items()) or "DOM range changed"
+            self._warning = f"[text not captured] for {result.capture_missing} line(s); retrying capture ({detail})"
             self._log(self._warning, "warn", nick)
         if result.text_repaired:
             self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success", nick)
@@ -451,20 +469,27 @@ class Collector(QObject):
             await self._notify_appended(nick, [], 0, result.total, refresh=True)
         if result.added:
             await self._notify_appended(nick, list(result.records[:200]),
-                                        result.added, result.total, refresh=repaired)
-            self._log(f"Archived {result.added} new message(s) "
-                      f"(total {result.total})", "success", nick)
-            return self._set(CollectorState.COLLECTED,
-                             f"Collected {result.added} new "
-                             f"message{'s' if result.added != 1 else ''} "
-                             f"from {nick}{suffix}")
+                                        result.added, result.total,
+                                        refresh=repaired or result.backfill_pending)
+            self._log(f"Archived {result.added} new message(s) (total {result.total})", "success", nick)
+        if result.stopped:
+            return self._set(CollectorState.PAUSED if self._paused else CollectorState.OFF,
+                             f"Capture stopped — {result.added} new message(s) kept")
+        if result.capture_errors:
+            return self._set(CollectorState.ERROR,
+                             f"Message read failed — {result.added} new saved; {self._error}")
         if not result.ok:
-            self._log(f"Sync failed for “{nick}” ({result.reason})", "error",
-                      nick)
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Not in private tab now")
-        self._log(f"No new messages ({result.reason}, page count "
-                  f"{result.count}, added {result.added})", "info", nick)
+            self._log(f"Sync refused for “{nick}” ({result.reason})", "error", nick)
+            self._verified = False
+            return self._set(CollectorState.NOT_PRIVATE, "Not in private tab now")
+        if result.capture_missing:
+            return self._set(CollectorState.CAPTURE_PENDING,
+                             f"Capture pending — {result.added} new saved, "
+                             f"{result.capture_missing} unreadable; retrying")
+        if result.added:
+            return self._set(CollectorState.COLLECTED,
+                             f"Collected {result.added} new message(s) from {nick}{suffix}")
+        self._log(f"No new messages ({result.reason}, page count {result.count}, added 0)", "info", nick)
         return self._set(CollectorState.NO_NEW, self._no_new_text())
 
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
@@ -721,6 +746,8 @@ class Collector(QObject):
             "media_requeued": self._last_media_requeued,
             "text_repaired": self._last_text_repaired,
             "capture_missing": self._last_capture_missing,
+            "capture_errors": self._last_capture_errors,
+            "capture_diagnostics": list(self._capture_diagnostics),
             "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
@@ -749,6 +776,9 @@ class Collector(QObject):
                      payload["backfill_pending"], payload["sync_reason"],
                      payload["sync_added"], payload["sync_count"],
                      payload["media_repaired"], payload["media_requeued"],
+                     payload["capture_missing"], payload["capture_errors"],
+                     payload["interval_ms"], payload["text_repaired"],
+                     json.dumps(payload["capture_diagnostics"], sort_keys=True),
                      payload["error"], payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI

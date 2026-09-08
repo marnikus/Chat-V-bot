@@ -178,7 +178,7 @@ class CollectHistory(BaseAction):
                        "error")
             else:
                 report(f"❌ Collect Message History failed: "
-                       f"{result.reason or 'unknown reason'}", "error")
+                       f"{result.error or result.reason or 'unknown reason'}", "error")
             return ActionResult.FAIL
 
         media = getattr(service, "media", None)
@@ -196,6 +196,11 @@ class CollectHistory(BaseAction):
                    f"{result.added} new message(s) kept for “{nick}” "
                    f"({result.total} in the archive)", "success")
             return ActionResult.OK
+        if result.capture_missing:
+            report(f"⚠ Capture incomplete for “{nick}”: {result.capture_missing} "
+                   f"message(s) still unreadable; {result.added} new message(s) saved. "
+                   "The collector will retry; this is not an empty successful scan.", "warn")
+            return ActionResult.FAIL
         if result.gap:
             report("⚠ Part of the conversation was not visible — a gap was "
                    "recorded in the archive", "info")

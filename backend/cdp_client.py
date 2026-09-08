@@ -17,6 +17,15 @@ log = logging.getLogger("chatbot")
 HIGH, LOW = 0, 1
 
 
+class CDPEvaluationError(RuntimeError):
+    """Runtime/transport failure, not a legitimate empty JavaScript value."""
+
+    def __init__(self, reason: str, detail: str):
+        self.reason = reason
+        self.detail = str(detail or reason).splitlines()[0][:400]
+        super().__init__(f"Browser evaluation failed ({reason}): {self.detail}")
+
+
 @dataclass
 class TabInfo:
     id: str; title: str; url: str; ws_url: str
@@ -240,7 +249,22 @@ class CDPClient(QObject):
     async def evaluate(self, expression: str) -> Any:
         r = await self.send("Runtime.evaluate", {"expression": expression,
                                                    "returnByValue": True, "awaitPromise": True})
-        return r.get("result", {}).get("result", {}).get("value")
+        if not isinstance(r, dict):
+            raise CDPEvaluationError("invalid_response", "No CDP response object")
+        if r.get("error"):
+            error = r["error"]
+            detail = error.get("message", "CDP protocol error") if isinstance(error, dict) else "CDP protocol error"
+            raise CDPEvaluationError("protocol_error", detail)
+        result = r.get("result") or {}
+        details = result.get("exceptionDetails") or {}
+        if details:
+            exception = details.get("exception") or {}
+            raise CDPEvaluationError("javascript_exception",
+                                     exception.get("description") or details.get("text") or "JavaScript exception")
+        remote = result.get("result") or {}
+        # Successful undefined/null may legitimately have no `value`. Errors
+        # must be handled above instead of becoming an empty capture below.
+        return remote.get("value")
 
     async def get_cookies(self, url: str = "") -> str:
         """A `Cookie` header string for the given origin.

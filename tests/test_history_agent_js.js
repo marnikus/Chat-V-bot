@@ -525,6 +525,44 @@ t('src attribute changes repair a lazy media record without a new container', ()
   eq(record.kind, 'gif');
 });
 
+// ── capture after Clear: scoped fallback and nickname integrity ───
+
+t('an unread badge cannot delete matching digits from the private nick', () => {
+  const { el } = require('./dom_stub');
+  const partner = 'Svetik25❤️';
+  const env = load({ partner, me: 'Me', messages: [{ from: partner, text: 'hello' }] });
+  const title = env.document.querySelector('.tab-item.active p.chat-title');
+  title.append(el('span', { class: 'unread', text: '2' }));
+  eq(env.agent.state().partner, partner);
+  eq(env.agent.state().in_authors, [partner]);
+});
+
+t('classless payload spans are read without sender, clock, or separator', () => {
+  const env = load({ messages: [msg(0, { text: 'Полный текст 😊' })] });
+  env.document.querySelector('span.message').className = '';
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Полный текст 😊');
+  eq(record.text_source, 'message-content');
+  ok(!record.capture_pending);
+});
+
+t('a metadata-only line stays incomplete under structural fallback', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, '');
+  ok(record.capture_pending);
+  eq(record.capture_reason, 'payload_empty');
+  eq(env.agent.state().capture_issues.payload_empty, 1);
+  eq(env.agent.state().pane_source, 'single-pane');
+});
+
+t('explicit range refresh reads changed content even without an observer event', () => {
+  const env = load({ messages: [msg(0, { text: 'old cache' })] });
+  env.agent.slice(0, 1);
+  env.document.querySelector('span.message').textContent = 'fresh body';
+  eq(env.agent.slice(0, 1, true).items[0].text, 'fresh body');
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');

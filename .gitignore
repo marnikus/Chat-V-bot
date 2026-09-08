@@ -11,3 +11,6 @@ logs/*.jsonl
 media_cache/
 saved_media/
 history.db*
+
+# Development-only DOM integration dependencies
+node_modules/

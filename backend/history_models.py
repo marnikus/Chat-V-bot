@@ -76,6 +76,8 @@ class MessageRecord:
     occ: int = 0
     idx: int = 0                    # position in the DOM at parse time
     capture_pending: bool = False   # agent saw a line before its payload rendered
+    capture_reason: str = ""        # structural diagnosis, never message contents
+    text_source: str = ""
 
     @property
     def incomplete(self) -> bool:
@@ -118,6 +120,8 @@ class MessageRecord:
             occ=int(data.get("occ") or 0),
             idx=int(data.get("idx") or 0),
             capture_pending=bool(data.get("capture_pending")),
+            capture_reason=str(data.get("capture_reason") or ""),
+            text_source=str(data.get("text_source") or ""),
         )
         rec.ensure_fp()
         return rec
@@ -187,6 +191,9 @@ class SyncResult:
     media_requeued: int = 0
     text_repaired: int = 0
     capture_missing: int = 0
+    capture_errors: int = 0
+    error: str = ""
+    capture_diagnostics: list = field(default_factory=list)
     chunks: list = field(default_factory=list)
     records: list = field(default_factory=list)
 
