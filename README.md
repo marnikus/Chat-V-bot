@@ -482,14 +482,34 @@ To retry older captures:
    History even when no new message was inserted.
 
 **Clear is not a pause:** cleared messages stay hidden and new messages continue
-to be saved. Collect now / Backfill does not undo Clear; use Ctrl+Z to restore
-cleared rows. The v11 capture agent handles structurally identifiable plain text
+to be saved. Collect now / Backfill does not undo Clear. Use **Restore cleared**
+in Person History to bring back that person's cleared rows in place, or Ctrl+Z
+to undo the original clear. The empty view shows how many messages are cleared.
+Individual message deletions stay hidden; Restore itself is one undoable edit,
+and undo/redo of Restore leaves subsequently collected messages untouched.
+
+The capture agent handles structurally identifiable plain text
 without depending only on `span.message`, preserves nicknames containing unread-
 badge digits, and saves the visible chat before scrolling for older messages.
 An unreadable first batch does not block later messages. Pending capture is a
 warning, not “No new messages”; actual browser read failures show their reason.
 The collector exposes **Capture agent**, **Last read**, and **Text source** for
 diagnosis. Retry/scroll waits no longer inflate browser-latency backoff.
+
+Agent **v12** also recognizes your previously declared nicknames: the existing
+My Nick history in config and each conversation's saved self-nickname metadata
+survive Clear. Old self messages are no longer treated as a third person simply
+because your current name changed. Their original sender names stay intact.
+The selected pane's verified two-member roster can identify the current browser
+self without rewriting your configured nickname. Unknown authors, wrong peers,
+rooms and mismatched rosters remain blocked; a push cannot declare its own
+trusted aliases. The collector shows **My previous nicks**, **Browser self** and
+**Identity source** so this can be checked.
+
+If a former nickname was never declared or stored, it must not be guessed from
+someone else's message. You can register it through the existing **My Nick**
+field (enter the previous name, then return to your current name); both remain
+in your explicit nickname history. Do this only for names that really were yours.
 
 Recovery also works with media downloads disabled. Messages no longer exposed
 by the website cannot be reconstructed from timestamps alone. If an older build
@@ -501,6 +521,8 @@ Design and verification:
 `docs/DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md`.
 Capture-after-clear follow-up design and verification:
 `docs/CAPTURE_PENDING_AFTER_CLEAR_DESIGN_2026-09-08.md`.
+Historical self identity and explicit restoration:
+`docs/HISTORICAL_SELF_IDENTITY_AND_CLEAR_RESTORE_DESIGN_2026-09-08.md`.
 Labels design:
 `docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
 

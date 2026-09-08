@@ -563,6 +563,13 @@ t('explicit range refresh reads changed content even without an observer event',
   eq(env.agent.slice(0, 1, true).items[0].text, 'fresh body');
 });
 
+t('identity evidence comes from the selected pane roster, not a global nickname alone', () => {
+  const env = load({ messages: many(2) });
+  const state = env.agent.state();
+  eq(state.me_source, 'pane_roster');
+  eq(state.participant_nicks, ['HiHoney', 'На работе 25']);
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');

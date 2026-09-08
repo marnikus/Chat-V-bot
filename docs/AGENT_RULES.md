@@ -284,6 +284,17 @@ nothing, and a refused check disarms the push channel until a tick verifies
 the conversation again. Never “save it anyway and clean up later” — a
 polluted history cannot be un-mixed.
 
+Historical-name clarification (2026-09-08): the two **participant identities**
+may include previous spellings of the user's own nickname. Only previously
+declared My Nick values / archived self-nickname metadata are trusted as self
+aliases; arbitrary author strings and push-supplied alias lists are not. A
+current browser self override requires scoped two-member roster evidence.
+Unknown authors, other peers and real third participants still fail closed.
+Normalize a known historical self's direction before dedupe without rewriting
+the original sender name. The optional numeric counter hint never disables
+actual author/roster validation. Explicit restoration of already archived Clear
+rows is an undoable edit, not permission to collect from an unverified chat.
+
 Media follows the same ownership rule: bytes are filed under the
 conversation they belong to (`saved_media/<Latin nick>/images|gifs/
 YYYY-MM-DD_NNN.ext`), never in an anonymous global pile, and the UI shows

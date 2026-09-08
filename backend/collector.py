@@ -28,7 +28,8 @@ from PySide6.QtCore import QObject, Signal
 
 from backend.archive_lock import db_operation
 from backend import chat_agent_js
-from backend.chat_parser import (ChatParser, parse_records, state_signatures,
+from backend.chat_parser import (ChatParser, identify_records, parse_records,
+                                 self_nick_history, state_signatures,
                                  sync_conversation, verify_private)
 from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
@@ -85,7 +86,7 @@ class Collector(QObject):
 
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
-                 lease=None, memory=None, parent=None):
+                 lease=None, memory=None, parent=None, identity_history=None):
         super().__init__(parent)
         self.cdp = cdp
         self.repo = repo
@@ -93,6 +94,10 @@ class Collector(QObject):
         self.media = media
         self.lease = lease
         self.memory = memory
+        self._identity_history = identity_history
+        self._effective_my_nick = ""
+        self._verified_self_nicks = []
+        self._identity_source = "configured"
         self._settings = dict(DEFAULTS)
         self.configure(**(settings or {}))
         self.now = datetime.now
@@ -130,6 +135,10 @@ class Collector(QObject):
 
     # ── settings ─────────────────────────────────────────────────
     def configure(self, **kwargs) -> dict:
+        if "my_nick" in kwargs and str(kwargs["my_nick"] or "") != self._settings.get("my_nick", ""):
+            self._effective_my_nick = ""
+            self._verified_self_nicks = []
+            self._verified = False
         for key, value in (kwargs or {}).items():
             if key not in DEFAULTS:
                 continue                       # unknown keys are ignored
@@ -150,8 +159,17 @@ class Collector(QObject):
         return dict(self._settings)
 
     @property
-    def my_nick(self) -> str:
+    def configured_my_nick(self) -> str:
         return self._settings.get("my_nick", "")
+
+    @property
+    def my_nick(self) -> str:
+        return self._effective_my_nick or self.configured_my_nick
+
+    async def known_self_nicks(self, nick: str) -> list[str]:
+        declared = self._identity_history() if callable(self._identity_history) else []
+        person = await self.repo.get_person(nick) or {}
+        return list(dict.fromkeys(self_nick_history(declared) + self_nick_history(person.get("my_nicks"))))
 
     @property
     def enabled(self) -> bool:
@@ -198,6 +216,9 @@ class Collector(QObject):
         self._nick = ""
         self._text = ""
         self._verified = False
+        self._effective_my_nick = ""
+        self._verified_self_nicks = []
+        self._identity_source = "configured"
         self._added = 0
         self._total = 0
         self._error = ""
@@ -309,6 +330,9 @@ class Collector(QObject):
             "pane_source": str(state.get("pane_source") or ""),
             "participants": int(state.get("participants") or 0),
             "partner": str(state.get("partner") or ""),
+            "page_self": str(state.get("me") or ""),
+            "me_source": str(state.get("me_source") or ""),
+            "participant_nicks": list(state.get("participant_nicks") or []),
             "in_authors": list(state.get("in_authors") or []),
             "out_authors": list(state.get("out_authors") or []),
             "scroll": dict(state.get("scroll") or {}),
@@ -350,17 +374,10 @@ class Collector(QObject):
             singles = [o for o in outs if o]
             if len(singles) == 1 and singles[0].lower() != nick.lower():
                 detected_me = singles[0]
-        if not self.my_nick and detected_me:
+        if not self.configured_my_nick and detected_me:
             self.configure(my_nick=detected_me)
             self._detected_my_nick = detected_me
             self._log(f"Detected My Nick as “{detected_me}”", "info", nick)
-
-        my_nick = self.my_nick or detected_me
-        if my_nick and nick.lower() == my_nick.lower():
-            self._log("Partner is the same as My Nick — refusing", "warn",
-                      nick)
-            return self._refuse(CollectorState.NOT_PRIVATE,
-                                "Partner is ambiguous (same as My Nick)")
 
         # A verified private tab (active tab = private, 2 participants, title
         # names the partner) is enough to create the person in BOTH stores.
@@ -371,17 +388,23 @@ class Collector(QObject):
         self._log(f"Partner “{nick}”: {remembered}", "info", nick)
 
         # ── the two-step gate ─────────────────────────────────────
-        check = verify_private(state, nick, self.my_nick)
+        known_names = await self.known_self_nicks(nick)
+        check = verify_private(state, nick, self.configured_my_nick, known_self_nicks=known_names,
+                               require_two_participants=bool(self._settings["require_two_participants"]))
         if not check.ok:
             self._nick = nick
-            self._log(f"Private-chat gate refused “{nick}” ({check.reason})",
-                      "warn", nick)
+            self._log(f"Private-chat gate refused “{nick}” ({check.reason}): {check.detail}; "
+                      f"configured self={self.configured_my_nick!r}, page self={state.get('me')!r}, "
+                      f"known self names={known_names!r}", "warn", nick)
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
-        if check.me and not self._detected_my_nick:
-            self._detected_my_nick = check.me
+        self._effective_my_nick = check.me or self.configured_my_nick
+        self._verified_self_nicks = list(check.self_nicks)
+        self._identity_source = check.identity_source
+        my_nick = self.my_nick
+        self._detected_my_nick = check.me or ""
 
-        self._warning = ("" if self.my_nick else
+        self._warning = check.warning or ("" if self.my_nick else
                          "My Nick is not known yet — the archive will use "
                          "the single outbound author as 'me'")
         if nick != self._nick:
@@ -497,11 +520,13 @@ class Collector(QObject):
         cap = int(self._settings["max_bootstrap"] or 0) if bootstrap else 0
         kwargs = dict(my_nick=my_nick,
                       require_private=bool(self._settings["require_private"]),
+                      require_two_participants=bool(self._settings["require_two_participants"]),
                       verify_partner=True,
                       max_messages=cap or None,
                       backfill_older=backfill_older,
                       backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
                       now=self.now(),
+                      known_self_nicks=self._verified_self_nicks,
                       should_stop=lambda: not self._running or self._paused,
                       media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
@@ -592,10 +617,20 @@ class Collector(QObject):
                   self._nick)
         return await self.tick()
 
+    @db_operation
+    async def archive_edited(self, nick: str) -> None:
+        """Refresh a count after Clear/Restore without changing capture state."""
+        if nick == self._nick:
+            person = await self.repo.get_person(nick) or {}
+            self._total = int(person.get("message_count") or 0)
+            self._emit()
+
     # ── the gate helpers ─────────────────────────────────────────
     def _refuse(self, state: str, text: str) -> str:
         """Refuse to save: the push channel is disarmed with the tick."""
         self._verified = False
+        self._verified_self_nicks = []
+        self._identity_source = "unverified"
         return self._set(state, text)
 
     @staticmethod
@@ -608,6 +643,10 @@ class Collector(QObject):
             return (CollectorState.GROUP_TAB,
                     f"Not a private chat — {shown} write here too "
                     f"(nothing saved for {nick})")
+        if check.reason == "participants_mismatch":
+            return (CollectorState.GROUP_TAB, "Not a two-person private chat — nothing saved")
+        if check.reason == "roster_mismatch":
+            return (CollectorState.NOT_PRIVATE, "Participant list does not match this private chat — nothing saved")
         if check.reason == "title_mismatch":
             return (CollectorState.NOT_PRIVATE,
                     f"Tab does not match “{nick}” — nothing saved")
@@ -638,11 +677,12 @@ class Collector(QObject):
              "partner": data.get("partner") or self._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
-            self._nick, self.my_nick, items=items)
+            self._nick, self.my_nick, items=items,
+            known_self_nicks=self._verified_self_nicks)
         if not check.ok:
             self._refuse(*self._gate_status(check, self._nick))
             return 0
-        records = parse_records(items)
+        records = identify_records(parse_records(items), check)
         missing = sum(r.incomplete for r in records)
         if missing:
             self._last_capture_missing = missing
@@ -730,6 +770,9 @@ class Collector(QObject):
             "text": self._text,
             "nick": self._nick,
             "my_nick": self.my_nick,
+            "configured_my_nick": self.configured_my_nick,
+            "known_self_nicks": list(self._verified_self_nicks),
+            "identity_source": self._identity_source,
             "detected_my_nick": self._detected_my_nick,
             "added": self._added,
             "total": self._total,
@@ -772,6 +815,8 @@ class Collector(QObject):
     def _emit(self) -> None:
         payload = self.state_payload()
         signature = (payload["state"], payload["text"], payload["nick"],
+                     payload["my_nick"], payload["configured_my_nick"],
+                     tuple(payload["known_self_nicks"]), payload["identity_source"],
                      payload["added"], payload["total"], payload["throttled"],
                      payload["backfill_pending"], payload["sync_reason"],
                      payload["sync_added"], payload["sync_count"],

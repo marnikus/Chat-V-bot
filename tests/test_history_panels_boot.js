@@ -165,6 +165,7 @@ function slot(name) {
 global.App = {
   bridge: {
     history_open: slot('history_open'),
+    history_restore_cleared: slot('history_restore_cleared'),
     history_page: slot('history_page'),
     history_search: slot('history_search'),
     userdb_page: slot('userdb_page'),
@@ -721,6 +722,68 @@ t('a failed browser read is shown as an error, not a no-new success', () => {
   ok(document.getElementById('collectorStatus').classList.contains('state-error'));
   ok(document.getElementById('collectorRows').textContent.includes('read errors 1'));
   ok(document.getElementById('collectorRows').textContent.includes('DOM 0:2: invalid response'));
+});
+
+t('cleared history explains the zero count and enables an explicit Restore action', () => {
+  HistoryStore.openPerson('Катя462');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Катя462', items: [], total: 0,
+    my_nick: 'Хорошо Все', stats: { messages: 0, cleared_messages: 2 } }));
+  const button = document.getElementById('historyRestoreClearedBtn');
+  ok(!button.disabled);
+  ok(button.textContent.includes('(2)'));
+  ok(document.getElementById('historyList').textContent.includes('2 cleared message(s) are hidden'));
+  button.fire('click');
+  eq(named('history_restore_cleared').pop().args, ['Катя462']);
+  ok(named('confirm').length > 0, 'restoration is an explicit confirmed edit');
+});
+
+t('Restore stays disabled for a truly empty or only individually-deleted history', () => {
+  const before = named('history_restore_cleared').length;
+  HistoryStore.openPerson('Empty');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Empty', items: [], total: 0,
+    stats: { messages: 0, hidden: 2, cleared_messages: 0 } }));
+  ok(document.getElementById('historyRestoreClearedBtn').disabled);
+  HistoryStore.restoreCleared();
+  eq(named('history_restore_cleared').length, before);
+});
+
+t('restoration confirmation remains bound to the originally selected person', () => {
+  HistoryStore.openPerson('First');
+  HistoryStore.stats = { cleared_messages: 2 };
+  let confirm;
+  const original = PresetsUI.confirm;
+  PresetsUI.confirm = (_title, _body, _label, callback) => { confirm = callback; };
+  try {
+    HistoryStore.restoreCleared();
+    HistoryStore.openPerson('Second');
+    confirm();
+    eq(named('history_restore_cleared').pop().args, ['First']);
+  } finally { PresetsUI.confirm = original; }
+});
+
+t('current browser self and known historical self names are shown separately', () => {
+  CollectorPanel.onStatus(JSON.stringify({ state: 'no_new', text: 'No new messages',
+    nick: 'Катя462', my_nick: 'Хорошо Все', configured_my_nick: 'Пошлый01',
+    known_self_nicks: ['Хорошо Все', 'Пошлый01'], identity_source: 'pane_roster',
+    last_probe: { page_self: 'Хорошо Все', in_authors: ['Катя462'], out_authors: ['Пошлый01'],
+      participants: 2, panes: 1, pane_source: 'single-pane' } }));
+  const text = document.getElementById('collectorRows').textContent;
+  ok(text.includes('My previous nicks'));
+  ok(text.includes('Пошлый01'));
+  ok(text.includes('Configured nick'));
+  ok(text.includes('pane_roster'));
+});
+
+t('a verified page self is displayed without overwriting the My Nick setting input', () => {
+  HistoryStore.setMyNick('configured old');
+  HistoryStore.openPerson('Peer');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Peer', items: rows(1, 1), total: 1,
+    my_nick: 'browser current', stats: { messages: 1 } }));
+  ok(document.getElementById('historyHeader').textContent.includes('browser current'));
+  eq(document.getElementById('myNickInput').value, 'configured old');
 });
 
 // ── reporting ────────────────────────────────────────────────────

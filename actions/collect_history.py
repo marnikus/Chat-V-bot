@@ -162,6 +162,7 @@ class CollectHistory(BaseAction):
         result = await sync_conversation(
             parser, repo, nick, my_nick=my_nick,
             require_private=self.require_private, verify_partner=True,
+            known_self_nicks=(service.known_self_nicks() if callable(getattr(service, "known_self_nicks", None)) else []),
             max_messages=self.max_messages or None,
             chunk_pause_ms=self.chunk_pause_ms,
             should_stop=stopping, on_progress=progress, now=self.now(),

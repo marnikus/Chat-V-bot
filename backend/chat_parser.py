@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Callable, Iterable, Optional
 
@@ -126,6 +126,9 @@ class PrivateCheck:
     me: str = ""                # my nick, detected when it was not configured
     partner: str = ""           # the nick the page says we are talking to
     strangers: list = field(default_factory=list)
+    self_nicks: list = field(default_factory=list)
+    identity_source: str = "configured"
+    warning: str = ""
 
     def __bool__(self) -> bool:
         return bool(self.ok)
@@ -164,63 +167,104 @@ def title_matches(title: str, nick: str) -> bool:
     return have == want or want in have
 
 
+def self_nick_history(value) -> list[str]:
+    """Only explicit nick strings; never learn names from an author payload."""
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return _distinct([n for n in value if isinstance(n, str)])[:32]
+
+
 def verify_private(state: dict, nick: str, my_nick: str = "",
-                   items=None, require_private: bool = True) -> PrivateCheck:
-    """The gate. `ok` is False unless BOTH steps pass."""
+                   items=None, require_private: bool = True,
+                   known_self_nicks=(), require_two_participants: bool = True) -> PrivateCheck:
+    """Two participant identities, including already declared former self names.
+
+    A scoped, two-member browser roster can identify the current self. An
+    untrusted/global `me` field or an arbitrary outbound author cannot override
+    a configured nickname. Alias declarations come from the caller's config /
+    archive metadata, never the incoming push payload.
+    """
     state = state if isinstance(state, dict) else {}
     target = " ".join(str(nick or "").split()).strip()
     partner = " ".join(str(state.get("partner") or "").split()).strip()
     title = str(state.get("title") or state.get("partner") or "")
-    me_cfg = " ".join(str(my_nick or "").split()).strip()
-
+    configured = " ".join(str(my_nick or "").split()).strip()
     if require_private and str(state.get("tab") or "") != "private":
-        return PrivateCheck(False, "not_private",
-                            "the active tab is not a private chat",
-                            me_cfg, partner)
+        return PrivateCheck(False, "not_private", "the active tab is not a private chat", configured, partner)
     if not target or not partner:
-        return PrivateCheck(False, "no_partner",
-                            "the active tab does not name a person",
-                            me_cfg, partner)
-    # ── step 2: the tab title ─────────────────────────────────────
-    if not title_matches(title, target):
-        return PrivateCheck(
-            False, "title_mismatch",
-            f"the active tab is “{' '.join(str(title).split())}”, "
-            f"not “{target}”", me_cfg, partner)
-    if me_cfg and _norm(me_cfg) == _norm(target):
-        return PrivateCheck(False, "self_chat",
-                            "the partner is my own nick", me_cfg, partner)
+        return PrivateCheck(False, "no_partner", "the active tab does not name a person", configured, partner)
+    if require_private and require_two_participants and "participants" in state:
+        try:
+            two_people = int(state["participants"]) == 2
+        except (TypeError, ValueError):
+            two_people = False
+        if not two_people:
+            return PrivateCheck(False, "participants_mismatch", "the pane does not contain exactly two participants", configured, partner)
+    if _norm(partner) != _norm(target) or not title_matches(title, target):
+        return PrivateCheck(False, "title_mismatch", f"the active tab is “{title}”, not “{target}”", configured, partner)
 
-    # ── step 1: exactly two nicks ─────────────────────────────────
+    detected = " ".join(str(state.get("me") or "").split()).strip()
+    roster = {_norm(n) for n in self_nick_history(state.get("participant_nicks"))}
+    scoped_self = (state.get("me_source") == "pane_roster" and
+                   str(state.get("participants")) == "2" and detected and
+                   _norm(detected) != _norm(target) and
+                   roster == {_norm(detected), _norm(target)})
+    me = detected if scoped_self else configured
+    source = "pane_roster" if scoped_self else "configured"
+    if me and _norm(me) == _norm(target):
+        return PrivateCheck(False, "self_chat", "the partner is my own nick", me, partner)
+    aliases = _distinct([me, configured] + self_nick_history(known_self_nicks))
+    aliases = [name for name in aliases if _norm(name) != _norm(target)]
+    accepted = {_norm(n) for n in aliases}
+    if roster and (len(roster) != 2 or _norm(target) not in roster or
+                   not (roster - {_norm(target)}) <= accepted):
+        return PrivateCheck(False, "roster_mismatch", "the pane's participant list does not match this private conversation", me, partner)
+
     if items is not None:
         ins, outs = _authors_from_items(items)
-    elif ("in_authors" in state or "out_authors" in state
-            or "authors" in state):
-        ins = _distinct(state.get("in_authors"))
-        outs = _distinct(state.get("out_authors"))
+    elif any(k in state for k in ("in_authors", "out_authors", "authors")):
+        ins, outs = _distinct(state.get("in_authors")), _distinct(state.get("out_authors"))
         if not ins and not outs:
             everyone = _distinct(state.get("authors"))
-            ins = [a for a in everyone if _norm(a) != _norm(me_cfg or target)]
-            outs = [a for a in everyone if _norm(a) == _norm(me_cfg)]
+            ins = [name for name in everyone if _norm(name) not in accepted]
+            outs = [name for name in everyone if _norm(name) in accepted]
     else:
-        return PrivateCheck(False, "no_author_data",
-                            "this page cannot tell me who wrote what",
-                            me_cfg, partner)
-
-    me = me_cfg or (outs[0] if len(outs) == 1 else "")
-    strangers = [a for a in ins if _norm(a) != _norm(target)]
-    if me:
-        strangers += [a for a in outs
-                      if _norm(a) != _norm(me) and _norm(a) != _norm(target)]
-    elif len(outs) > 1:
-        strangers += list(outs)
-    strangers = _distinct(strangers)
+        return PrivateCheck(False, "no_author_data", "this page cannot tell me who wrote what", me, partner)
+    if not me and len(outs) == 1 and _norm(outs[0]) != _norm(target):
+        # Existing no-configuration fallback: only a single own-side name.
+        me, source = outs[0], "single_outbound"
+        aliases = _distinct([me] + aliases)
+        accepted.add(_norm(me))
+    everyone = _distinct(ins + outs)
+    strangers = [name for name in everyone if _norm(name) != _norm(target) and _norm(name) not in accepted]
     if strangers:
-        shown = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
-        return PrivateCheck(False, "strangers",
-                            f"other people write here: {shown}",
-                            me, partner, strangers)
-    return PrivateCheck(True, "ok", "", me, partner, [])
+        detail = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
+        return PrivateCheck(False, "strangers", f"unrecognized author(s): {detail}", me, partner, strangers,
+                            self_nicks=aliases, identity_source=source)
+    if not everyone and int(state.get("count") or 0) > 0 and items is None:
+        return PrivateCheck(False, "no_author_data", "message authors are not available", me, partner)
+    warning = ""
+    if scoped_self and configured and _norm(configured) != _norm(me):
+        warning = f"Browser self is “{me}”; configured My Nick is “{configured}” (configuration kept)"
+    return PrivateCheck(True, "ok", "", me, partner, [], self_nicks=aliases,
+                        identity_source=source, warning=warning)
+
+
+def identify_records(records, identity: PrivateCheck) -> list[MessageRecord]:
+    """Preserve sender text; correct historical CSS direction using known identity.
+
+    Some sites style old self messages as inbound after a nickname change.
+    Only an already verified self/partner name can be normalized this way.
+    """
+    own = {_norm(name) for name in identity.self_nicks}
+    out = []
+    for record in records:
+        direction = "out" if _norm(record.from_nick) in own else "in"
+        if direction != record.direction:
+            record = replace(record, direction=direction, fp="")
+            record.ensure_fp()
+        out.append(record)
+    return out
 
 
 def _payload(result) -> list:
@@ -472,7 +516,8 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             now: Optional[datetime] = None,
                             backfill_older: bool = False,
                             backfill_wait_s: float = 2.0,
-                            media=None) -> SyncResult:
+                            media=None, known_self_nicks=(),
+                            require_two_participants: bool = True) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 
     With `backfill_older=True` the pane is first scrolled to its first message
@@ -484,6 +529,9 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     pause_ms = parser.chunk_pause_ms if chunk_pause_ms is None \
         else max(0, int(chunk_pause_ms))
     result = SyncResult(ok=True, nick=nick, my_nick=my_nick)
+    known_person = await repo.get_person(nick) or {}
+    known_self_nicks = _distinct(self_nick_history(known_self_nicks) +
+                                 self_nick_history(known_person.get("my_nicks")))
 
     state = await parser.state()
     if int(state.get("agent") or 0) < chat_agent_js.AGENT_VERSION:
@@ -506,10 +554,13 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         # The two-step gate: nothing is written unless the pane holds only
         # the two of us AND the active tab names this person.
         check = verify_private(state, nick, my_nick,
-                               require_private=require_private)
+                               require_private=require_private, known_self_nicks=known_self_nicks,
+                               require_two_participants=require_two_participants)
         if not check.ok:
             result.ok, result.reason = False, check.reason
             return result
+        my_nick = check.me or my_nick
+        result.my_nick = my_nick
 
     restored_top = None
     backfill_pending = False
@@ -642,14 +693,17 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             if verify_partner or require_private:
                 live_state = await parser.state()
                 gate = verify_private(live_state, nick, my_nick,
-                                      require_private=require_private)
+                                      require_private=require_private, known_self_nicks=known_self_nicks,
+                                      require_two_participants=require_two_participants)
                 if gate.ok:
                     gate = verify_private(live_state, nick, my_nick, items=records,
-                                          require_private=require_private)
+                                          require_private=require_private, known_self_nicks=gate.self_nicks,
+                                          require_two_participants=require_two_participants)
                 if not gate.ok:
                     result.ok, result.reason = False, gate.reason
                     # Do not scroll the different chat the user switched to.
                     return result
+                records = identify_records(records, gate)
             if should_stop and should_stop():
                 result.stopped = True
             captured = [r for r in records if not r.incomplete]
@@ -794,10 +848,18 @@ async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 safe = bool(tail_records)
                 if verify_partner or require_private:
                     live_state = await parser.state()
-                    safe = safe and (verify_private(live_state, nick, my_nick,
-                                           require_private=require_private).ok and
-                            verify_private(live_state, nick, my_nick, items=tail_records,
-                                           require_private=require_private).ok)
+                    identity = verify_private(live_state, nick, my_nick,
+                                              require_private=require_private, known_self_nicks=known_self_nicks,
+                                              require_two_participants=require_two_participants)
+                    safe = safe and identity.ok
+                    if safe:
+                        identity = verify_private(live_state, nick, identity.me or my_nick,
+                                                  items=tail_records, require_private=require_private,
+                                                  known_self_nicks=identity.self_nicks,
+                                                  require_two_participants=require_two_participants)
+                        safe = identity.ok
+                    if safe:
+                        tail_records = identify_records(tail_records, identity)
                 if safe:
                     captured = [r for r in tail_records if not r.incomplete]
                     if backfill_older and captured:

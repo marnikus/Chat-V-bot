@@ -222,6 +222,8 @@ var HistoryView = (function () {
       const count = stats.messages != null ? stats.messages
                                            : (stats.message_count || 0);
       meta.appendChild(el('span', 'history-count', String(count) + ' messages'));
+      if (stats.cleared_messages)
+        meta.appendChild(el('span', 'history-cleared', ' · ' + stats.cleared_messages + ' cleared'));
       if (stats.first_day || stats.last_day) {
         meta.appendChild(el('span', 'history-range',
                             (stats.first_day || '?') + ' → ' +

@@ -19,7 +19,7 @@ from typing import Optional
 from backend.archive_lock import db_operation
 from backend.db_paths import (PROTECTED_DATABASE, in_trash, protected_database,
                               same_database)
-from backend.chat_parser import ChatParser
+from backend.chat_parser import ChatParser, self_nick_history
 from backend.collector import Collector, DEFAULTS as COLLECTOR_DEFAULTS
 from backend.history_db import HistoryDB, inspect_archive
 from backend.history_query import HistoryQuery
@@ -97,7 +97,8 @@ class HistoryService:
         self.collector = Collector(cdp=cdp, repo=self.repo, parser=self.parser,
                                    media=self.media, settings=collector_cfg,
                                    lease=getattr(cdp, "lease", None),
-                                   memory=self.memory)
+                                   memory=self.memory,
+                                   identity_history=self.known_self_nicks)
         self._task: Optional[asyncio.Task] = None
         self._binding = False
         self.generation = 0
@@ -130,6 +131,11 @@ class HistoryService:
     @property
     def enabled(self) -> bool:
         return bool(self._settings.get("enabled", True))
+
+    def known_self_nicks(self) -> list[str]:
+        """Previously declared My Nick values survive Clear and DB switches."""
+        history = self.config.get_state("my_nick_recent", []) if self.config else []
+        return self_nick_history(history)
 
     @property
     def my_nick(self) -> str:

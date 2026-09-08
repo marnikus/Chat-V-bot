@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 11;
+  var VERSION = 12;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -418,8 +418,8 @@
       kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
       media = { url: url, kind: kind };
     }
-    var pending = (!text && !(media && media.url)) || !!(media && !media.url);
-    var reason = !pending ? '' : media ? 'media_url_pending' :
+    var pending = !from || (!text && !(media && media.url)) || !!(media && !media.url);
+    var reason = !pending ? '' : !from ? 'author_pending' : media ? 'media_url_pending' :
                  !parts.hasBody ? 'body_missing' : 'payload_empty';
     var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
     return { dir: dir, from: from, kind: kind, text: text, media: media,
@@ -669,14 +669,25 @@
     var base = describeTab();
     var container = containerOf(pane);
     var counter = container ? qs(container, '.users-counter') : null;
-    var mine = container ? qs(container, '.primary-text.bold') : null;
-    var globalMine = qs(document, '.primary-text.bold');
+    var lists = container ? qsa(container, 'users-list') : [];
+    var rosterRoot = lists.length === 1 ? lists[0] : null;
+    var names = [], own = [];
+    qsa(rosterRoot, 'user-item .primary-text').forEach(function (node) {
+      var name = clean(ownText(node) || node.textContent);
+      if (!name) return;
+      names.push(name);
+      if (hasClass(node, 'bold')) own.push(name);
+    });
+    names = distinctNicks(names);
+    own = distinctNicks(own);
+    var scoped = own.length === 1 && names.indexOf(own[0]) >= 0;
+    var fallback = container ? qs(container, '.primary-text.bold') : null;
+    fallback = fallback || qs(document, '.primary-text.bold');
     return {
-      tab: base.tab,
-      partner: base.partner,
-      title: base.title,
-      me: clean(mine ? mine.textContent :
-                (globalMine ? globalMine.textContent : '')),
+      tab: base.tab, partner: base.partner, title: base.title,
+      me: scoped ? own[0] : clean(fallback ? fallback.textContent : ''),
+      me_source: scoped ? 'pane_roster' : 'global_fallback',
+      participant_nicks: names,
       participants: counter ? num(clean(counter.textContent)) : 0,
     };
   }
@@ -824,6 +835,8 @@
       partner: summary.partner,
       title: summary.title,
       me: summary.me,
+      me_source: summary.me_source,
+      participant_nicks: summary.participant_nicks,
       participants: summary.participants,
       count: records.length,
       incomplete: records.filter(function (r) { return r.capture_pending; }).length,

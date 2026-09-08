@@ -14,6 +14,7 @@ from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine, normalize_blocks
 from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
 from backend.db_manager import DbManager
+from backend.db_paths import same_database
 from backend.label_store import LabelStore
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
@@ -837,9 +838,24 @@ class Bridge(QObject):
                     "archive_undo", "the message archive is not running")
             return people is not None
 
+        if op == "restore_cleared" and not same_database(str(value.get("db_path") or ""), archive.db.path):
+            self.history_error.emit("archive_undo", "Load the original database before undoing this restoration")
+            return False
+
+        _, previous_index = self._get_global_history()
+
         async def work():
             repo = archive.repo
-            if forward:
+            if op == "restore_cleared":
+                try:
+                    await repo.apply_clear_restore(nick, value.get("groups") or [], forward=forward)
+                except Exception:
+                    history, index = self._get_global_history()
+                    if index == previous_index + (1 if forward else -1):
+                        self._set_global_history(history, previous_index)
+                        self.history_changed.emit()
+                    raise
+            elif forward:
                 if op == "delete_message":
                     await repo.soft_delete_message(
                         nick, int(value.get("message_id") or 0), token=token)
@@ -852,6 +868,7 @@ class Bridge(QObject):
                     await repo.restore_person(nick, token=token)
                 else:
                     await repo.restore_deleted(nick, token)
+            await archive.collector.archive_edited(nick)
             self.userdb_changed.emit(json.dumps(
                 {"action": "undo" if not forward else "redo", "op": op,
                  "nick": nick}, ensure_ascii=False))
@@ -970,8 +987,9 @@ class Bridge(QObject):
     @Slot(result=str)
     def undo(self):
         if (getattr(self, "_db_command_pending", False) or
-                getattr(self, "_db_actions_pending", 0)):
-            self.log_message.emit("⚠ Wait for the database operation to finish", "warn")
+                getattr(self, "_db_actions_pending", 0) or
+                getattr(self, "_archive_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the archive operation to finish", "warn")
             return "null"
         history, index = self._get_global_history()
         if not history or index < 0 or index >= len(history):
@@ -1012,8 +1030,9 @@ class Bridge(QObject):
     @Slot(result=str)
     def redo(self):
         if (getattr(self, "_db_command_pending", False) or
-                getattr(self, "_db_actions_pending", 0)):
-            self.log_message.emit("⚠ Wait for the database operation to finish", "warn")
+                getattr(self, "_db_actions_pending", 0) or
+                getattr(self, "_archive_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the archive operation to finish", "warn")
             return "null"
         history, index = self._get_global_history()
         if not history or index >= len(history) - 1:
@@ -1689,6 +1708,10 @@ class Bridge(QObject):
     def _run_async(self, scope: str, coro) -> None:
         """Run an archive coroutine, reporting failures on history_error."""
         generation = getattr(self._archive, "generation", None)
+        mutation = scope in {"history_clear_person", "history_restore_cleared",
+                             "history_delete_message", "history_delete_person", "archive_undo"}
+        if mutation:
+            self._archive_actions_pending = getattr(self, "_archive_actions_pending", 0) + 1
 
         async def guarded():
             try:
@@ -1712,8 +1735,15 @@ class Bridge(QObject):
             except Exception as exc:                  # noqa: BLE001
                 log.warning("archive %s failed: %s", scope, exc)
                 self.history_error.emit(scope, str(exc))
-        if not self._schedule(guarded()):
+            finally:
+                if mutation:
+                    self._archive_actions_pending -= 1
+        runner = guarded()
+        if not self._schedule(runner):
+            runner.close()
             coro.close()
+            if mutation:
+                self._archive_actions_pending -= 1
 
     @staticmethod
     def _schedule(coro) -> bool:
@@ -1781,6 +1811,9 @@ class Bridge(QObject):
                 after_ord=(int(opts["after_ord"])
                            if opts.get("after_ord") is not None else None),
                 limit=limit)
+        cleared = await service.repo.cleared_count(nick, self._legacy_clear_tokens(nick))
+        payload["cleared_messages"] = cleared
+        payload.setdefault("stats", {})["cleared_messages"] = cleared
         payload["req_id"] = req_id
         payload["preview"] = service.preview_settings()
         self.history_page_ready.emit(req_id, json.dumps(payload,
@@ -1817,6 +1850,7 @@ class Bridge(QObject):
 
         async def work():
             payload = await self._archive.query.person_stats(nick)
+            payload["cleared_messages"] = await self._archive.repo.cleared_count(nick, self._legacy_clear_tokens(nick))
             payload["req_id"] = req_id
             self.history_stats_ready.emit(req_id, json.dumps(
                 payload, ensure_ascii=False))
@@ -1922,6 +1956,45 @@ class Bridge(QObject):
         self._run_async("history_delete_person", work())
         return True
 
+    def _legacy_clear_tokens(self, nick: str) -> list[str]:
+        """Recognize old Clear commands without treating every tombstone as Clear."""
+        history = self._config.get_state("undo_history", [])
+        if not isinstance(history, list):
+            return []
+        tokens = []
+        for entry in history:
+            if not isinstance(entry, dict) or entry.get("kind") != "archive":
+                continue
+            value = entry.get("value") or {}
+            if (isinstance(value, dict) and value.get("op") == "clear_history"
+                    and str(value.get("nick") or "").strip() == str(nick).strip()
+                    and isinstance(value.get("token"), str) and value["token"]):
+                tokens.append(value["token"])
+        return tokens
+
+    @Slot(str, result=bool)
+    def history_restore_cleared(self, nick):
+        """Explicit, undoable restoration; collection never implicitly calls it."""
+        clean = " ".join(str(nick or "").split()).strip()
+        if not clean or not self._need_archive("history_restore_cleared"):
+            return False
+
+        async def work():
+            archive = self._archive
+            result = await archive.repo.restore_cleared(clean, self._legacy_clear_tokens(clean))
+            count = int(result.get("restored") or 0)
+            if count:
+                self._push_global("archive", {"op": "restore_cleared", "nick": clean,
+                                             "db_path": archive.db.path, "groups": result["groups"]})
+                self.log_message.emit(f"↩ Restored {count} cleared message(s) for “{clean}” — Ctrl+Z reverses this restoration", "success")
+            else:
+                self.log_message.emit(f"ℹ No recoverable cleared messages for “{clean}”", "info")
+            await archive.collector.archive_edited(clean)
+            self.userdb_changed.emit(json.dumps({"action": "cleared_restored", "nick": clean,
+                                                 "ok": True, "restored": count}, ensure_ascii=False))
+        self._run_async("history_restore_cleared", work())
+        return True
+
     @Slot(str, result=bool)
     def history_clear_person(self, nick):
         """Remove the whole conversation but KEEP the person in the database."""
@@ -1941,11 +2014,13 @@ class Bridge(QObject):
                     f"ℹ “{clean}” has no messages to clear", "info")
             else:
                 self._push_global("archive", {
-                    "op": "clear_history", "nick": clean, "token": token})
+                    "op": "clear_history", "nick": clean, "token": token,
+                    "db_path": self._archive.db.path})
                 self.log_message.emit(
                     f"🧹 History of “{clean}” cleared — the person stays in "
                     "the database. New messages continue to be collected; "
                     "Ctrl+Z restores the cleared messages", "warn")
+            await self._archive.collector.archive_edited(clean)
             self.userdb_changed.emit(json.dumps(
                 {"action": "cleared", "nick": clean, "ok": bool(token)},
                 ensure_ascii=False))

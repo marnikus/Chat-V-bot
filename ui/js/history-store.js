@@ -35,6 +35,7 @@ const HistoryStore = {
       images: $('historyImagesToggle'),
       folder: $('historyFolderBtn'),
       clear: $('historyClearBtn'),
+      restoreCleared: $('historyRestoreClearedBtn'),
       removePerson: $('historyDeletePersonBtn'),
       latest: $('historyLatestBtn'),
       myNick: $('myNickInput'),
@@ -72,6 +73,8 @@ const HistoryStore = {
     }
     if (this._els.clear)
       this._els.clear.addEventListener('click', () => this.clearHistory());
+    if (this._els.restoreCleared)
+      this._els.restoreCleared.addEventListener('click', () => this.restoreCleared());
     if (this._els.removePerson) {
       this._els.removePerson.addEventListener('click',
                                               () => this.deletePerson());
@@ -105,6 +108,7 @@ const HistoryStore = {
 
   setMyNick(value) {
     this.myNick = value || '';
+    this.viewMyNick = '';
     if (this._els.myNick && this._els.myNick.value !== this.myNick)
       this._els.myNick.value = this.myNick;
     if (this.model) this.model.myNick = this.myNick;
@@ -139,6 +143,8 @@ const HistoryStore = {
     if (!nick || !this.model) return;
     options = options || {};
     this.nick = nick;
+    this.stats = null;
+    this.viewMyNick = '';
     this.query = '';
     if (this._els.search) this._els.search.value = '';
     this.model.reset({ nick: nick, myNick: this.myNick,
@@ -179,6 +185,7 @@ const HistoryStore = {
     this.stats = page.stats || this.stats;
     if (page.preview) this.applySettings({ preview: page.preview });
     if (page.my_nick && !this.myNick) this.setMyNick(page.my_nick);
+    if (page.my_nick) this.viewMyNick = page.my_nick;
     this.renderHeader();
     this.render();
   },
@@ -240,6 +247,7 @@ const HistoryStore = {
     if (this.model && stats.message_count != null)
       this.model.total = Number(stats.message_count);
     this.renderHeader();
+    if (this.model && this.model.isEmpty) this.render();
   },
 
   /** Show this person's saved images and GIFs in the file manager. */
@@ -347,7 +355,7 @@ const HistoryStore = {
   // ── rendering ────────────────────────────────────────────────
 
   _context() {
-    return { nick: this.nick, myNick: this.myNick,
+    return { nick: this.nick, myNick: this.viewMyNick || this.myNick,
              showImages: this.showImages,
              today: new Date().toISOString().slice(0, 10),
              onCopyMedia: (id) => this.copyMedia(id),
@@ -378,6 +386,17 @@ const HistoryStore = {
       'Clear', () => App.bridge.history_clear_person(this.nick));
   },
 
+  restoreCleared() {
+    const nick = this.nick;
+    const count = Number((this.stats || {}).cleared_messages || 0);
+    if (!nick || !count || !App.bridge || !App.bridge.history_restore_cleared) return;
+    PresetsUI.confirm(
+      'Restore cleared messages?',
+      'Restore ' + count + ' cleared message(s) with “' + nick + '” in place? ' +
+      'Individual message deletions stay hidden. Ctrl+Z reverses this restoration.',
+      'Restore', () => App.bridge.history_restore_cleared(nick));
+  },
+
   /** Remove the person together with their whole history (undoable). */
   deletePerson() {
     if (!this.nick) return;
@@ -390,9 +409,14 @@ const HistoryStore = {
   },
 
   renderHeader() {
+    const count = Number((this.stats || {}).cleared_messages || 0);
+    if (this._els.restoreCleared) {
+      this._els.restoreCleared.disabled = !this.nick || count <= 0;
+      this._els.restoreCleared.textContent = '↩ Restore cleared' + (count ? ' (' + count + ')' : '');
+    }
     if (!this._els.header) return;
     HistoryView.renderHeader(this._els.header, {
-      nick: this.nick, myNick: this.myNick, stats: this.stats || null,
+      nick: this.nick, myNick: this.viewMyNick || this.myNick, stats: this.stats || null,
       labels: (typeof Labels !== 'undefined' && this.nick)
         ? Labels.forNick(this.nick) : [],
       pill: (typeof Labels !== 'undefined')
@@ -410,6 +434,11 @@ const HistoryStore = {
     options = options || {};
     if (!this.model || !this._els.list) return;
     if (this.model.isEmpty) {
+      const cleared = Number((this.stats || {}).cleared_messages || 0);
+      if (cleared) {
+        this.renderEmpty(cleared + ' cleared message(s) are hidden. Click Restore cleared to bring them back.');
+        return;
+      }
       this.renderEmpty(this.model.missing
         ? 'Nothing archived for “' + this.nick + '” yet.'
         : 'No messages to show.');

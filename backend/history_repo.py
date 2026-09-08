@@ -27,6 +27,7 @@ from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     MessageRecord, fingerprint)  # noqa: F401
 
 log = logging.getLogger("chatbot")
+CLEAR_TOKEN_PREFIX = "clear:"
 
 TAIL_FP_LIMIT = 200
 
@@ -1063,7 +1064,7 @@ class HistoryRepo:
         person = await self.get_person(nick)
         if not person:
             return ""
-        stamp = token or self.new_op_token()
+        stamp = token or CLEAR_TOKEN_PREFIX + self.new_op_token()
         cur = await self.db.execute(
             "UPDATE messages SET deleted_at=? WHERE person_id=? AND deleted_at=''",
             (stamp, int(person["id"])))
@@ -1073,6 +1074,78 @@ class HistoryRepo:
             return ""
         await self._recount(int(person["id"]))
         return stamp
+
+    @staticmethod
+    def _clear_filter(legacy_tokens=()) -> tuple[str, list]:
+        tokens = list(dict.fromkeys(t for t in legacy_tokens if isinstance(t, str) and t))[:200]
+        clause, params = "m.deleted_at LIKE ?", [CLEAR_TOKEN_PREFIX + "%"]
+        if tokens:
+            clause += " OR m.deleted_at IN (" + ",".join("?" for _ in tokens) + ")"
+            params.extend(tokens)
+        return clause, params
+
+    @db_operation
+    async def cleared_groups(self, nick: str, legacy_tokens=()) -> list[dict]:
+        """Recoverable Clear rows, not individual deletes or deleted people.
+
+        New operations have a purpose prefix. Old unprefixed Clear tokens
+        must be supplied by the owning global undo history, never guessed.
+        The compact result contains IDs/tokens only, no message bodies.
+        """
+        person = await self.get_person(nick)
+        if not person or person.get("deleted"):
+            return []
+        clause, params = self._clear_filter(legacy_tokens)
+        rows = await self.db.fetchall(
+            "SELECT m.id, m.deleted_at FROM messages m WHERE m.person_id=? AND (" + clause + ") ORDER BY m.id",
+            [int(person["id"])] + params)
+        groups = {}
+        for rid, token in rows:
+            groups.setdefault(token, []).append(int(rid))
+        return [{"token": token, "ids": ids} for token, ids in groups.items()]
+
+    @db_operation
+    async def cleared_count(self, nick: str, legacy_tokens=()) -> int:
+        # Stats must not materialize every cleared row/ID on every UI refresh.
+        clause, params = self._clear_filter(legacy_tokens)
+        return int(await self.db.scalar(
+            "SELECT COUNT(*) FROM messages m JOIN persons p ON p.id=m.person_id "
+            "WHERE p.nick=? AND COALESCE(p.deleted_at,'')='' AND (" + clause + ")",
+            [self.normalise_nick(nick)] + params, 0))
+
+    @db_operation
+    async def apply_clear_restore(self, nick: str, groups, *, forward: bool = True) -> int:
+        """Apply/reverse one explicit restoration; later messages are untouched."""
+        person = await self.get_person(nick)
+        if not person or person.get("deleted"):
+            return 0
+        changed = 0
+        for group in groups or []:
+            token = str(group.get("token") or "")
+            if not token:
+                raise ValueError("A restore group must name its original clear token")
+            ids = list(dict.fromkeys(int(i) for i in group.get("ids", []) if int(i) > 0))
+            for at in range(0, len(ids), 400):
+                batch = ids[at:at + 400]
+                current, desired = (token, "") if forward else ("", token)
+                cur = await self.db.execute(
+                    "UPDATE messages SET deleted_at=? WHERE person_id=? AND deleted_at=? "
+                    "AND id IN (" + ",".join("?" for _ in batch) + ")",
+                    [desired, int(person["id"]), current] + batch)
+                changed += int(cur.rowcount or 0)
+        if changed:
+            # _recount commits. Keep the visibility update and its counters
+            # in the same transaction so a failed restore remains reversible.
+            await self._recount(int(person["id"]))
+        else:
+            await self.db.commit()
+        return changed
+
+    @db_operation
+    async def restore_cleared(self, nick: str, legacy_tokens=()) -> dict:
+        groups = await self.cleared_groups(nick, legacy_tokens)
+        restored = await self.apply_clear_restore(nick, groups)
+        return {"restored": restored, "groups": groups}
 
     @db_operation
     async def restore_deleted(self, nick: str, token: str) -> int:

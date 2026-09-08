@@ -226,7 +226,14 @@ const CollectorPanel = {
     const partner = String(payload.nick || payload.partner || '').trim();
     if (partner) this._rowLink(host, 'Partner', partner);
     else this._row(host, 'Partner', '');
-    this._row(host, 'My nick', this.myNick || (payload.settings || {}).my_nick);
+    const currentSelf = payload.my_nick || this.myNick || (payload.settings || {}).my_nick;
+    this._row(host, 'My nick', currentSelf);
+    if (payload.configured_my_nick && payload.configured_my_nick !== currentSelf)
+      this._row(host, 'Configured nick', payload.configured_my_nick);
+    const ownNames = Array.isArray(payload.known_self_nicks) ? payload.known_self_nicks : [];
+    const previous = ownNames.filter((n) => n !== currentSelf);
+    if (previous.length) this._row(host, 'My previous nicks', previous.join(', '));
+    if (payload.identity_source) this._row(host, 'Identity source', payload.identity_source);
     this._row(host, 'In archive', payload.total);
     this._row(host, 'Added this session', this._appended || payload.added || 0);
     this._row(host, 'Check every',
@@ -239,6 +246,10 @@ const CollectorPanel = {
     if (payload.last_probe) {
       const p = payload.last_probe;
       this._row(host, 'Page count', p.count);
+      if (p.page_self) this._row(host, 'Browser self', p.page_self);
+      if ((p.in_authors || []).length || (p.out_authors || []).length)
+        this._row(host, 'Message authors', 'in: ' + (p.in_authors || []).join(', ') +
+          ' · out: ' + (p.out_authors || []).join(', '));
       this._row(host, 'People',
                 String(p.participants) + ' · ' + String(p.panes) +
                 ' pane(s) · ' + (p.pane_source || 'n/a'));

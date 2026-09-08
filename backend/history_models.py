@@ -81,7 +81,8 @@ class MessageRecord:
 
     @property
     def incomplete(self) -> bool:
-        return self.capture_pending or (not self.text.strip() and not self.media_url.strip())
+        return (self.capture_pending or not self.from_nick.strip() or
+                (not self.text.strip() and not self.media_url.strip()))
 
     @property
     def payload(self) -> str:
