@@ -7,6 +7,12 @@
        everywhere happens in the Label Manager;
      · the same renderer feeds People and the Full User Database, so the
        two tables can never disagree;
+     · clicking a badge in Active Labels ASSIGNS it to the selected person
+       (toggle), a separate "edit" text opens an inline rename/colour
+       editor, and the ✕ still deletes system-wide — three distinct zones;
+     · clicking a person in People targets them for quick assign: the
+       Label Manager opens, the target chip follows, and both tables
+       highlight the target row;
      · the colour picker is a movable popup with 20 bright presets in a
        5×4 grid, a white ring on the current colour, and a Cancel button;
      · label names are user text and must never become markup.
@@ -473,13 +479,16 @@ function buildManager() {
   ['winLabels', 'labelActiveList', 'labelNameInput', 'labelColorBtn',
    'labelAddBtn', 'labelFilterList', 'labelIncludeBtn', 'labelExcludeBtn',
    'labelClearFilterBtn', 'labelFilterState', 'labelPersonSelect',
-   'labelAssignList', 'labelAssignBtn', 'labelAssignHint',
+   'labelAssignList', 'labelAssignBtn', 'labelAssignHint', 'labelAssignTarget',
   ].forEach((id) => { byId[id] = mkEl('div'); });
   byId.labelNameInput = mkEl('input');
   byId.labelPersonSelect = mkEl('select');
   Labels._wired = false;
   Labels.selected = new Set();
   Labels.person = '';
+  Labels.editing = '';
+  Labels.editName = '';
+  Labels.editColor = '';
   connect();
   Labels._fixture = STATE;
   Labels.init();
@@ -644,6 +653,176 @@ t('a person option shows the labels they already have', () => {
     .filter((o) => o.value === 'Nick');
   ok(options.length === 1, 'the person is listed once');
   ok(/Rude/.test(options[0].textContent), options[0].textContent);
+});
+
+// ── badge click = assign (the bug fix), edit = rename, ✕ = delete ──
+t('each active label entry has three separate zones: badge, edit, ✕', () => {
+  buildManager();
+  const items = byId.labelActiveList.querySelectorAll('.label-manage-item');
+  eq(items.length, 2);
+  items.forEach((item) => {
+    eq(item.querySelectorAll('.label-pill').length, 1, 'one badge');
+    eq(item.querySelectorAll('.label-manage-edit').length, 1, 'one edit');
+    eq(item.querySelectorAll('.label-del').length, 1, 'one delete');
+    eq(item.querySelector('.label-manage-edit').textContent, 'edit');
+  });
+});
+
+t('clicking the badge with a person selected assigns that label', () => {
+  buildManager();
+  Labels.setPerson('Other');          // Other carries lbl_1 (Rude) only
+  calls.length = 0;
+  const items = byId.labelActiveList.querySelectorAll('.label-manage-item');
+  const badge = items[1].querySelector('.label-pill');   // VIP = lbl_2
+  badge.click();
+  eq(calls.length, 1, 'exactly one backend call');
+  eq(calls[0], ['label_assign', 'Other', 'lbl_2']);
+});
+
+t('clicking the badge of an already-assigned label takes it away', () => {
+  buildManager();
+  Labels.setPerson('Other');          // Other carries lbl_1 (Rude)
+  calls.length = 0;
+  const items = byId.labelActiveList.querySelectorAll('.label-manage-item');
+  items[0].querySelector('.label-pill').click();   // Rude = lbl_1
+  eq(calls[0], ['label_unassign', 'Other', 'lbl_1']);
+});
+
+t('a badge click with no person selected assigns nothing', () => {
+  buildManager();
+  calls.length = 0;
+  const items = byId.labelActiveList.querySelectorAll('.label-manage-item');
+  items[0].querySelector('.label-pill').click();
+  eq(calls.length, 0, 'no backend call without a target');
+  ok(byId.labelActiveList.textContent.indexOf('Rude') >= 0,
+     'the list itself is untouched');
+});
+
+t('the badges of the current target wear the assigned ring and a ✓', () => {
+  buildManager();
+  Labels.setPerson('Nick');           // Nick carries both labels
+  const pills = byId.labelActiveList.querySelectorAll('.label-pill');
+  eq(pills.length, 2);
+  eq(pills.filter((p) => p.classList.contains('assigned')).length, 2);
+  ok(pills[0].textContent.indexOf('✓') >= 0, pills[0].textContent);
+});
+
+t('the badge tooltip says what the click will do', () => {
+  buildManager();
+  Labels.setPerson('Other');
+  const items = byId.labelActiveList.querySelectorAll('.label-manage-item');
+  const badge = items[1].querySelector('.label-pill');   // VIP, not assigned
+  ok(/assign.*VIP.*Other/i.test(badge.title), badge.title);
+  const taken = items[0].querySelector('.label-pill');   // Rude, assigned
+  ok(/take.*Rude.*away/i.test(taken.title), taken.title);
+});
+
+t('clicking "edit" opens an inline editor prefilled with name and colour', () => {
+  buildManager();
+  byId.labelActiveList.querySelectorAll('.label-manage-edit')[0].click();
+  eq(byId.labelActiveList.querySelectorAll('.label-edit-row').length, 1,
+     'the entry becomes the editor');
+  const input = byId.labelActiveList.querySelector('.label-edit-input');
+  eq(input.value, 'Rude');
+  eq(byId.labelActiveList.querySelector('.label-edit-color').style.background,
+     '#ff3b30');
+  ok(/Save/.test(byId.labelActiveList.textContent), 'a Save button');
+  ok(/Cancel/.test(byId.labelActiveList.textContent), 'a Cancel button');
+});
+
+t('saving the editor sends only the changed fields to label_update', () => {
+  buildManager();
+  byId.labelActiveList.querySelectorAll('.label-manage-edit')[0].click();
+  const input = byId.labelActiveList.querySelector('.label-edit-input');
+  input.value = 'Annoying';
+  input.fire('input');
+  byId.labelActiveList.querySelector('.label-edit-color').click();
+  ColorPicker.pick('#e935c1');
+  byId.labelActiveList.querySelector('.label-edit-save').click();
+  eq(calls.length, 1);
+  eq(calls[0], ['label_update', 'lbl_1', 'Annoying', '#e935c1']);
+  eq(byId.labelActiveList.querySelectorAll('.label-edit-row').length, 0,
+     'the editor closes after saving');
+});
+
+t('Enter saves the editor, Escape cancels it', () => {
+  buildManager();
+  byId.labelActiveList.querySelectorAll('.label-manage-edit')[0].click();
+  let input = byId.labelActiveList.querySelector('.label-edit-input');
+  input.fire('keydown', { key: 'Escape' });
+  eq(byId.labelActiveList.querySelectorAll('.label-edit-row').length, 0);
+  eq(calls.length, 0, 'cancel touches nothing');
+
+  byId.labelActiveList.querySelectorAll('.label-manage-edit')[0].click();
+  input = byId.labelActiveList.querySelector('.label-edit-input');
+  input.value = 'Annoying';
+  input.fire('input');
+  input.fire('keydown', { key: 'Enter' });
+  eq(calls[0], ['label_update', 'lbl_1', 'Annoying', '']);
+});
+
+t('renaming to the same name sends nothing at all', () => {
+  buildManager();
+  byId.labelActiveList.querySelectorAll('.label-manage-edit')[0].click();
+  byId.labelActiveList.querySelector('.label-edit-save').click();
+  eq(calls.length, 0);
+  eq(byId.labelActiveList.querySelectorAll('.label-edit-row').length, 0);
+});
+
+t('the ✕ still deletes system-wide and never assigns', () => {
+  buildManager();
+  Labels.setPerson('Other');
+  calls.length = 0;
+  byId.labelActiveList.querySelectorAll('.label-del')[0].click();
+  eq(calls.length, 1);
+  eq(calls[0], ['label_delete', 'lbl_1']);
+  ok(!calls.some((c) => c[0] === 'label_assign'),
+     'the ✕ must not double as an assign click');
+});
+
+// ── quick assign: the target chip and the table row highlight ────
+t('the target chip follows the person selected elsewhere', () => {
+  buildManager();
+  eq(byId.labelAssignTarget.textContent, 'click a person to quick-assign');
+  ok(!byId.labelAssignTarget.classList.contains('on'));
+  Labels.setPerson('Other');
+  ok(/Other/.test(byId.labelAssignTarget.textContent),
+     byId.labelAssignTarget.textContent);
+  ok(byId.labelAssignTarget.classList.contains('on'));
+});
+
+t('setPerson keeps Section 4 and the hint in sync', () => {
+  buildManager();
+  Labels.setPerson('Other');
+  eq(byId.labelPersonSelect.value, 'Other');
+  ok(/Other/.test(byId.labelAssignHint.textContent),
+     byId.labelAssignHint.textContent);
+});
+
+t('the People table rows carry data-nick and react to plain row clicks', () => {
+  const src = readUi('js/user-table.js');
+  ok(/<tr class="\$\{rowCls\}" data-nick="\$\{attr\}">/.test(src),
+     'every row is addressable by nick');
+  ok(/Labels\.setPerson\(row\.dataset\.nick\)/.test(src),
+     'a click anywhere on the row targets the person');
+  ok(/markLabelTarget\(nick\)/.test(src),
+     'the target highlight moves in place');
+  ok(/row-label-target/.test(src), 'render stamps the target class');
+});
+
+t('the Storage table also follows the quick-assign target', () => {
+  const src = readUi('js/history-db.js');
+  ok(/markLabelTarget\(nick\)/.test(src),
+     'the target highlight moves in place');
+  ok(/row-label-target/.test(src), 'render stamps the target class');
+});
+
+t('the CSS styles the zones, the chip and the target row', () => {
+  ok(/\.label-manage-edit/.test(css), 'the edit zone is styled');
+  ok(/\.label-pill-check/.test(css), 'the assigned ✓ is styled');
+  ok(/\.label-edit-row/.test(css), 'the inline editor is styled');
+  ok(/\.label-target-chip/.test(css), 'the target chip is styled');
+  ok(/tr\.row-label-target/.test(css), 'the target row is highlighted');
 });
 
 // ── reporting ────────────────────────────────────────────────────
