@@ -258,11 +258,21 @@ window, and any window that can be shown while empty needs an empty state
 filter"* and may shrink at any time — filters purge it, People-list edits
 delete from it, undo rewrites it.
 
-`persons` / `messages` (history.db) answer *"what was actually said"* and are
-append-only. No filter, purge, undo or People-list edit may delete archived
-messages, and no collector may add anyone to the queue. Deleting a person in
-the Full User Database writes a tombstone (`deleted_at`) that Undelete
-reverses; only an explicit hard delete erases rows.
+`persons` / `messages` (history.db) answer *"what was actually said"*. Ordinary
+collection is append-only/idempotent; unrelated People-list/filter edits must
+not erase history. Explicit **Clear History / Delete Person** are authorized
+clean-slate commands (2026-09-09 requirement): they physically remove messages,
+all per-person tracking and, for Delete, the person row. They must use the
+service reset boundary, not a bulk tombstone. The same chat is re-collected on
+the next scan. Individual-message deletion remains a separate operation.
+
+Undo snapshots belong outside the active archive (`db_trash/history_undo`).
+The collector/parser/normal repository matching path MUST NEVER read those
+snapshots or use undo history as an already-seen registry. Only explicit undo
+or legacy storage conversion can read that store. Undo merges with current
+rows without duplicates; it does not restore obsolete DOM/full-scan pointers.
+Runtime caches, session counters and stale push/UI epochs must be invalidated
+at a reset without touching unrelated conversations or pause/run preferences.
 
 The two stores are joined **by nick at read time only** — clicking a nick in
 User Memory looks the person up in the archive; it never copies data between
@@ -292,8 +302,10 @@ current browser self override requires scoped two-member roster evidence.
 Unknown authors, other peers and real third participants still fail closed.
 Normalize a known historical self's direction before dedupe without rewriting
 the original sender name. The optional numeric counter hint never disables
-actual author/roster validation. Explicit restoration of already archived Clear
-rows is an undoable edit, not permission to collect from an unverified chat.
+actual author/roster validation. Already trusted self names may be retained as
+independent identity preferences across a clean-slate reset; they are not
+message hashes/counts/pointers. Explicit undo of an isolated archive snapshot
+is not permission to collect from an unverified chat.
 
 Media follows the same ownership rule: bytes are filed under the
 conversation they belong to (`saved_media/<Latin nick>/images|gifs/

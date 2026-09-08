@@ -238,7 +238,7 @@ class TestUserDatabase(QueryCase):
     async def test_tombstoned_people_are_hidden_unless_asked_for(self):
         await self.seed("Nick", n=2)
         await self.seed("Gone", n=2)
-        await self.repo.delete_person("Gone")
+        await self.repo.legacy_hide_person("Gone")
         self.assertEqual((await self.q.list_persons())["total"], 1)
         withdel = await self.q.list_persons(include_deleted=True)
         self.assertEqual(withdel["total"], 2)

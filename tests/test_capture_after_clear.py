@@ -171,41 +171,33 @@ class TestCaptureDOM(unittest.IsolatedAsyncioTestCase):
         finally:
             self.bridge.userdb_changed.disconnect(changed)
 
-    async def test_two_text_messages_clear_then_new_text_is_saved_old_stays_hidden(self):
+    async def test_two_text_messages_are_recollected_fresh_after_clear(self):
         self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
         before = await self.rows()
-        self.assertEqual([r['text'] for r in before], ['Старое сообщение', 'Старый ответ'])
         await self.clear_through_bridge()
-        self.assertEqual(await self.rows(), [])
-        self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
+        self.assertEqual(await self.rows(True), [], 'clear removes even hidden/known rows')
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        fresh = await self.rows()
+        self.assertEqual([r['text'] for r in fresh], [r['text'] for r in before])
+        self.assertTrue({r['id'] for r in before}.isdisjoint(r['id'] for r in fresh))
         await self.col.backfill_older()
-        self.assertEqual(await self.rows(), [], 'Backfill is not permission to undo Clear')
-        self.assertEqual(len(await self.rows(True)), 2)
-
+        self.assertEqual(len(await self.rows()), 2, 'freshly re-collected rows now deduplicate normally')
         text = 'Новое сообщение\nНе терять строку 😊'
         await self.append_dom(text)
-        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
-        saved = await self.rows()
-        self.assertEqual(len(saved), 1)
-        self.assertEqual(saved[0]['text'], text)
-        self.assertEqual(saved[0]['from_nick'], NICK)
-        self.assertEqual(saved[0]['my_nick'], ME)
-        self.assertEqual(saved[0]['ts_display'], '21:02')
-        self.assertEqual(saved[0]['direction'], 'in')
-        all_rows = await self.rows(True)
-        self.assertTrue(all_rows[0]['deleted_at'] and all_rows[1]['deleted_at'])
-        self.assertEqual(self.col.state_payload()['capture_missing'], 0)
-        self.assertEqual(self.col.state_payload()['last_probe']['pane_source'], 'single-pane')
+        await self.col.tick()
+        self.assertEqual(len(await self.rows()), 3)
+        self.assertEqual((await self.rows())[-1]['text'], text)
+        self.assertEqual(self.col.state_payload()['session_added'], 3)
 
-    async def test_outgoing_direct_text_is_saved_after_clear(self):
+    async def test_outgoing_direct_text_and_visible_old_messages_are_saved_after_clear(self):
         await self.col.tick()
         await self.clear_through_bridge()
         await self.append_dom('Новый исходящий ответ', direction='out', source='direct')
         await self.col.tick()
         rows = await self.rows()
-        self.assertEqual([r['text'] for r in rows], ['Новый исходящий ответ'])
-        self.assertEqual(rows[0]['from_nick'], ME)
-        self.assertEqual(rows[0]['direction'], 'out')
+        self.assertEqual([r['text'] for r in rows], ['Старое сообщение', 'Старый ответ', 'Новый исходящий ответ'])
+        self.assertEqual(rows[-1]['from_nick'], ME)
+        self.assertEqual(rows[-1]['direction'], 'out')
 
     async def test_clear_undo_remains_a_single_command_and_keeps_new_messages(self):
         await self.col.tick()
@@ -228,6 +220,7 @@ class TestCaptureDOM(unittest.IsolatedAsyncioTestCase):
     async def test_real_observer_push_saves_new_classless_text_after_clear(self):
         await self.col.tick()
         await self.clear_through_bridge()
+        await self.col.tick()  # establish the fresh epoch before accepting push
         self.cdp.forward_events = True
         appended = asyncio.get_running_loop().create_future()
         def notified(payload):
@@ -239,7 +232,7 @@ class TestCaptureDOM(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(appended, 3)
         finally:
             self.col.history_appended.disconnect(notified)
-        self.assertEqual([r['text'] for r in await self.rows()], ['Из MutationObserver'])
+        self.assertEqual([r['text'] for r in await self.rows()], ['Старое сообщение', 'Старый ответ', 'Из MutationObserver'])
 
     async def test_scoped_fallback_preserves_links_breaks_and_emoji_not_icons_or_controls(self):
         await self.cdp.evaluate('''(() => {
@@ -355,10 +348,10 @@ class TestCaptureDOM(unittest.IsolatedAsyncioTestCase):
           };
         })()""")
         await self.col.tick()
-        self.assertEqual([r['text'] for r in await self.rows()], ['Сохранить несмотря на ошибку раньше'])
+        self.assertEqual([r['text'] for r in await self.rows()], ['Старый ответ', 'Сохранить несмотря на ошибку раньше'])
         self.assertEqual(self.col.state_payload()['capture_errors'], 1)
         self.assertEqual(self.col.state, CollectorState.ERROR)
-        self.assertTrue((await self.rows(True))[0]['deleted_at'])
+        self.assertTrue(all(not row['deleted_at'] for row in await self.rows(True)))
 
     async def test_javascript_exception_is_preserved_by_the_production_cdp_decoder(self):
         with self.assertRaisesRegex(CDPEvaluationError, 'runtime failure'):

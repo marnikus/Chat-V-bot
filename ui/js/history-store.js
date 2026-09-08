@@ -35,7 +35,6 @@ const HistoryStore = {
       images: $('historyImagesToggle'),
       folder: $('historyFolderBtn'),
       clear: $('historyClearBtn'),
-      restoreCleared: $('historyRestoreClearedBtn'),
       removePerson: $('historyDeletePersonBtn'),
       latest: $('historyLatestBtn'),
       myNick: $('myNickInput'),
@@ -73,8 +72,6 @@ const HistoryStore = {
     }
     if (this._els.clear)
       this._els.clear.addEventListener('click', () => this.clearHistory());
-    if (this._els.restoreCleared)
-      this._els.restoreCleared.addEventListener('click', () => this.restoreCleared());
     if (this._els.removePerson) {
       this._els.removePerson.addEventListener('click',
                                               () => this.deletePerson());
@@ -174,12 +171,33 @@ const HistoryStore = {
     return id;
   },
 
+  _acceptGeneration(payload) {
+    if (typeof payload.generation !== 'number') return true;
+    if (payload.generation < (this._generation || 0)) return false;
+    this._generation = payload.generation;
+    return true;
+  },
+
+  onReset(json) {
+    let payload;
+    try { payload = typeof json === 'string' ? JSON.parse(json) : json; } catch (_) { return; }
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick != null && payload.nick !== this.nick) return;
+    this.stats = null;
+    this._open = 'reset-' + (++this._seq);
+    this.query = '';
+    if (this.model) this.model.reset({ nick: this.nick, myNick: this.myNick,
+      showImages: this.showImages, preloadRows: this.preloadRows });
+    this.renderHeader();
+    this.renderEmpty('History reset — the next scan can collect this chat again.');
+  },
+
   // ── bridge answers ───────────────────────────────────────────
 
   onPage(reqId, json) {
     let page = null;
     try { page = JSON.parse(json); } catch (e) { return; }
-    if (!page || page.nick !== this.nick) return;
+    if (!page || page.nick !== this.nick || !this._acceptGeneration(page)) return;
     const position = reqId === this._open ? 'initial' : undefined;
     this.model.applyPage(page, position ? { position } : undefined);
     this.stats = page.stats || this.stats;
@@ -193,7 +211,7 @@ const HistoryStore = {
   onSearch(reqId, json) {
     let data = null;
     try { data = JSON.parse(json); } catch (e) { return; }
-    if (!data) return;
+    if (!data || !this._acceptGeneration(data)) return;
     if (data.scope === 'global') {
       HistoryView.renderSearchGroups(this._els.list, data.groups || [], {
         query: this.query,
@@ -212,7 +230,7 @@ const HistoryStore = {
   onLiveAppend(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload || !this.model) return;
+    if (!payload || !this.model || !this._acceptGeneration(payload)) return;
     if (payload.nick !== this.nick) return;
     if (payload.refresh) {
       this.reloadCurrent();
@@ -242,7 +260,7 @@ const HistoryStore = {
   onStats(reqId, json) {
     let stats = null;
     try { stats = JSON.parse(json); } catch (e) { return; }
-    if (!stats || stats.nick !== this.nick) return;
+    if (!stats || stats.nick !== this.nick || !this._acceptGeneration(stats)) return;
     this.stats = stats;
     if (this.model && stats.message_count != null)
       this.model.total = Number(stats.message_count);
@@ -376,44 +394,31 @@ const HistoryStore = {
 
   /** Wipe the whole conversation but keep the person (undoable). */
   clearHistory() {
-    if (!this.nick) return;
+    const nick = this.nick;
+    if (!nick) return;
     if (!App.bridge || !App.bridge.history_clear_person) return;
     PresetsUI.confirm(
       'Clear this conversation?',
-      'Every archived message with “' + this.nick + '” is removed. ' +
-      'The person stays in the database. New messages continue to be collected; ' +
-      'cleared messages stay hidden unless you use Ctrl+Z.',
-      'Clear', () => App.bridge.history_clear_person(this.nick));
-  },
-
-  restoreCleared() {
-    const nick = this.nick;
-    const count = Number((this.stats || {}).cleared_messages || 0);
-    if (!nick || !count || !App.bridge || !App.bridge.history_restore_cleared) return;
-    PresetsUI.confirm(
-      'Restore cleared messages?',
-      'Restore ' + count + ' cleared message(s) with “' + nick + '” in place? ' +
-      'Individual message deletions stay hidden. Ctrl+Z reverses this restoration.',
-      'Restore', () => App.bridge.history_restore_cleared(nick));
+      'Every archived message with “' + nick + '” is removed. ' +
+      'All message tracking is erased too. The person stays; the next scan can ' +
+      'collect the same visible messages again. Undo is kept separately. Pause collection first to keep the view empty.',
+      'Clear', () => App.bridge.history_clear_person(nick));
   },
 
   /** Remove the person together with their whole history (undoable). */
   deletePerson() {
-    if (!this.nick) return;
+    const nick = this.nick;
+    if (!nick) return;
     if (!App.bridge || !App.bridge.history_delete_person) return;
     PresetsUI.confirm(
       'Remove this person?',
-      '“' + this.nick + '” and their entire history are removed from the ' +
-      'database. Ctrl+Z restores both.',
-      'Remove', () => App.bridge.history_delete_person(this.nick, false));
+      '“' + nick + '” and their entire history are removed from the ' +
+      'database and erase all message tracking. The same chat can be collected ' +
+      'fresh on the next scan. Ctrl+Z can restore the separate undo snapshot.',
+      'Remove', () => App.bridge.history_delete_person(nick, false));
   },
 
   renderHeader() {
-    const count = Number((this.stats || {}).cleared_messages || 0);
-    if (this._els.restoreCleared) {
-      this._els.restoreCleared.disabled = !this.nick || count <= 0;
-      this._els.restoreCleared.textContent = '↩ Restore cleared' + (count ? ' (' + count + ')' : '');
-    }
     if (!this._els.header) return;
     HistoryView.renderHeader(this._els.header, {
       nick: this.nick, myNick: this.viewMyNick || this.myNick, stats: this.stats || null,
@@ -434,11 +439,6 @@ const HistoryStore = {
     options = options || {};
     if (!this.model || !this._els.list) return;
     if (this.model.isEmpty) {
-      const cleared = Number((this.stats || {}).cleared_messages || 0);
-      if (cleared) {
-        this.renderEmpty(cleared + ' cleared message(s) are hidden. Click Restore cleared to bring them back.');
-        return;
-      }
       this.renderEmpty(this.model.missing
         ? 'Nothing archived for “' + this.nick + '” yet.'
         : 'No messages to show.');

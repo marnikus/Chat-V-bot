@@ -384,7 +384,7 @@ class TestCountersAndCursor(ArchiveCase):
 class TestLifecycle(ArchiveCase):
     async def test_tombstone_hides_and_restore_brings_back(self):
         await self.repo.append("Nick", convo(3), now=NOW)
-        self.assertTrue(await self.repo.delete_person("Nick"))
+        self.assertTrue(await self.repo.legacy_hide_person("Nick"))
         person = await self.repo.get_person("Nick")
         self.assertIsNotNone(person["deleted_at"])
         rows = await self.db.fetchall("SELECT COUNT(*) FROM messages")

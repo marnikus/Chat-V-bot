@@ -1,5 +1,11 @@
 # Capture pending after clearing Person History
 
+> **Superseded bulk-delete semantics (2026-09-09):** the user now explicitly
+> requires full erasure of active message tracking and automatic re-collection.
+> See [Clean-slate reset](CLEAN_SLATE_COLLECTION_RESET_DESIGN_2026-09-09.md).
+> The test results below are the historical results for the earlier requirement.
+
+
 Date: 2026-09-08
 Status: **Implemented and verified.** The investigation/design above was written before application-code changes; the implementation record is in §5.
 Branch: `arena/01a08228-chat-v-bot`

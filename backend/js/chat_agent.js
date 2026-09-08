@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 12;
+  var VERSION = 13;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -29,6 +29,10 @@
   var PUSH_DEBOUNCE_MS = 120;
   var AUTHOR_SCAN_MAX = 1200;   // per-pane author scan cap (keeps state cheap)
   var SEP = '\u001f';
+  var INSTANCE = String(Date.now()) + '-' + String(Math.random()).slice(2);
+  var epoch = 0;
+  var cachePartner = '';
+  function captureEpoch() { return INSTANCE + ':' + String(epoch); }
 
   if (window.__cvbAgent && window.__cvbAgent.version === VERSION) {
     return window.__cvbAgent.version;
@@ -434,6 +438,15 @@
 
   /** Parse the whole conversation, reusing the cache; returns records. */
   function walk() {
+    var partner = normNick(describeTab().partner);
+    if (partner !== cachePartner) {
+      cache = new Map();
+      buffer = [];
+      dropped = 0;
+      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+      cachePartner = partner;
+      epoch++;
+    }
     stats.walks++;
     var nodes = containers();
     var next = new Map();
@@ -482,7 +495,8 @@
              kind: record.kind, text: record.text, media: record.media,
              time: record.time, occ: record.occ, idx: record.idx,
              capture_pending: !!record.capture_pending,
-             capture_reason: record.capture_reason || '', text_source: record.text_source || '' };
+             capture_reason: record.capture_reason || '', text_source: record.text_source || '',
+             capture_epoch: captureEpoch() };
   }
 
   /** distinct nicks per direction — the private-chat gate reads these */
@@ -530,8 +544,9 @@
   function sendPush(count, kind) {
     var hook = window.__cvbPush;
     if (typeof hook !== 'function') return;
-    var summary = describe();
     var records = walk();
+    var summary = describe();
+    if (!buffer.length) return;
     var authors = authorsOf(records);
     // A pending payload can finish rendering during the debounce window.
     records.forEach(function (record) {
@@ -543,6 +558,7 @@
       hook(JSON.stringify({
         kind: kind || 'append',
         agent: VERSION,
+        capture_epoch: captureEpoch(),
         count: count,
         partner: summary.partner,
         title: summary.title,
@@ -831,6 +847,7 @@
     return {
       ok: true,
       agent: VERSION,
+      capture_epoch: captureEpoch(),
       tab: summary.tab,
       partner: summary.partner,
       title: summary.title,
@@ -870,7 +887,7 @@
     var a = Math.max(0, Math.min(records.length, num(from)));
     var b = Math.max(a, Math.min(records.length, num(to)));
     return { ok: true, from: a, to: b, count: records.length,
-             agent: VERSION, items: records.slice(a, b).map(strip) };
+             agent: VERSION, capture_epoch: captureEpoch(), items: records.slice(a, b).map(strip) };
   }
 
   function drain() {
@@ -881,9 +898,34 @@
     return { ok: true, items: items, dropped: lost };
   }
 
+  function reset(nick) {
+    var target = normNick(nick);
+    var active = normNick(describeTab().partner);
+    // Parsed-node caching is only an optimization. Evicting it cannot lose
+    // another person's buffered messages or change their database cursor.
+    cache = new Map();
+    stats.cached = 0;
+    if (!target || target === active || target === cachePartner) {
+      buffer = [];
+      dropped = 0;
+      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+      contentRevision = 0;
+      stats.parsed = 0;
+      stats.walks = 0;
+      lastBeforeTops = [];
+      lastPane = null;
+      lastPartner = '';
+      cachePartner = active;
+      epoch++;
+      return { ok: true, reset: true, capture_epoch: captureEpoch() };
+    }
+    return { ok: true, reset: false, capture_epoch: captureEpoch() };
+  }
+
   var agent = {
     version: VERSION,
     state: state,
+    reset: reset,
     slice: slice,
     drain: drain,
     fingerprint: fingerprint,

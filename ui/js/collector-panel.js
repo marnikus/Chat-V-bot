@@ -13,6 +13,8 @@ const CollectorPanel = {
   paused: false,
   myNick: '',
   _els: {},
+  _generation: 0,
+  _sessionTotals: new Map(),
 
   STATE_CLASS: {
     collecting: 'state-collecting',
@@ -130,6 +132,7 @@ const CollectorPanel = {
     if (!message && !nick) return;
     const entry = document.createElement('div');
     entry.className = 'collector-log-entry ' + level;
+    entry.dataset.nick = nick;
     const ts = document.createElement('span');
     ts.className = 'collector-log-ts';
     ts.textContent = '[' + (payload.ts || '') + '] ';
@@ -153,10 +156,40 @@ const CollectorPanel = {
     this._els.log.replaceChildren();
   },
 
+  _acceptGeneration(payload) {
+    if (typeof payload.generation !== 'number') return true;
+    if (payload.generation < this._generation) return false;
+    this._generation = payload.generation;
+    return true;
+  },
+
+  onReset(json) {
+    let payload;
+    try { payload = typeof json === 'string' ? JSON.parse(json) : json; } catch (_) { return; }
+    if (!payload || !this._acceptGeneration(payload)) return;
+    const nick = payload.nick;
+    if (nick == null) this._sessionTotals.clear();
+    else this._sessionTotals.delete(nick);
+    if (this._els.log) {
+      Array.from(this._els.log.children).forEach((entry) => {
+        if (nick == null || entry.dataset.nick === nick) entry.remove();
+      });
+    }
+    if (!this._last || !this._last.nick || nick == null || this._last.nick === nick) {
+      this._last = { nick: nick || '', my_nick: this.myNick, added: 0, session_added: 0,
+        total: 0, state: 'no_new', text: 'History reset — next scan starts fresh',
+        generation: this._generation };
+      if (this._els.status) this._els.status.textContent = this._last.text;
+    }
+    this.renderRows(this._last || {});
+  },
+
   onStatus(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload) return;
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick && payload.session_added !== undefined)
+      this._sessionTotals.set(payload.nick, Number(payload.session_added) || 0);
     this._last = payload;
     this.state = payload.state || 'off';
     this.paused = !!payload.paused;
@@ -184,8 +217,12 @@ const CollectorPanel = {
   onAppended(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload) return;
-    this._appended = (this._appended || 0) + (payload.added || 0);
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick) {
+      const total = payload.session_added !== undefined ? Number(payload.session_added)
+        : (this._sessionTotals.get(payload.nick) || 0) + (Number(payload.added) || 0);
+      this._sessionTotals.set(payload.nick, total || 0);
+    }
     if (typeof HistoryDb !== 'undefined' && HistoryDb.rows &&
         HistoryDb.rows.length) HistoryDb._requestStats();
     this.renderRows(this._last || {});
@@ -235,7 +272,7 @@ const CollectorPanel = {
     if (previous.length) this._row(host, 'My previous nicks', previous.join(', '));
     if (payload.identity_source) this._row(host, 'Identity source', payload.identity_source);
     this._row(host, 'In archive', payload.total);
-    this._row(host, 'Added this session', this._appended || payload.added || 0);
+    this._row(host, 'Added this session', this._sessionTotals.get(partner) || 0);
     this._row(host, 'Check every',
               payload.interval_ms ? payload.interval_ms + ' ms' : '');
     if (payload.throttled)

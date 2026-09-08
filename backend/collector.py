@@ -107,6 +107,8 @@ class Collector(QObject):
         self._nick = ""
         self._verified = False      # the two-step gate passed for _nick
         self._added = 0
+        self._session_added = {}
+        self._capture_epoch = ""
         self._total = 0
         self._error = ""
         self._warning = ""
@@ -220,6 +222,8 @@ class Collector(QObject):
         self._verified_self_nicks = []
         self._identity_source = "configured"
         self._added = 0
+        self._session_added.clear()
+        self._capture_epoch = ""
         self._total = 0
         self._error = ""
         self._warning = ""
@@ -236,6 +240,22 @@ class Collector(QObject):
         self._backfill_pending = False
         self._force_backfill = False
         self._last_emitted = ()
+
+    def reset_person(self, nick: str) -> None:
+        clean = self.repo.normalise_nick(nick)
+        self._session_added.pop(clean, None)
+        if self._nick == clean:
+            sessions = dict(self._session_added)
+            self.reset_state()
+            self._session_added = sessions
+            self._probe_penalty = 1.0
+            state = CollectorState.PAUSED if self._paused else (
+                CollectorState.OFF if not self._running or not self.enabled else CollectorState.NO_NEW)
+            self._set(state, "History reset — next scan starts fresh")
+
+    def wake(self) -> None:
+        if self._running and not self._paused and self._stop_event:
+            self._stop_event.set()
 
     def on_run_started(self) -> None:
         """An Action-Stack run began: keep collecting, but stay out of its way."""
@@ -276,6 +296,8 @@ class Collector(QObject):
             try:
                 await asyncio.wait_for(self._stop_event.wait(),
                                        timeout=self.next_interval_ms() / 1000.0)
+                if self._running:
+                    self._stop_event.clear()  # wake-on-reset is not a permanent busy loop
             except asyncio.TimeoutError:
                 pass
 
@@ -398,6 +420,7 @@ class Collector(QObject):
                       f"known self names={known_names!r}", "warn", nick)
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
+        self._capture_epoch = str(state.get("capture_epoch") or "")
         self._effective_my_nick = check.me or self.configured_my_nick
         self._verified_self_nicks = list(check.self_nicks)
         self._identity_source = check.identity_source
@@ -491,6 +514,7 @@ class Collector(QObject):
         if repaired and not result.added:
             await self._notify_appended(nick, [], 0, result.total, refresh=True)
         if result.added:
+            self._session_added[nick] = self._session_added.get(nick, 0) + result.added
             await self._notify_appended(nick, list(result.records[:200]),
                                         result.added, result.total,
                                         refresh=repaired or result.backfill_pending)
@@ -668,6 +692,15 @@ class Collector(QObject):
         items = self._records(data)
         if not items:
             return 0
+        incoming_epoch = str(data.get("capture_epoch") or "")
+        if not incoming_epoch:
+            epochs = {str(item.get("capture_epoch") or "") for item in items}
+            if len(epochs) == 1:
+                incoming_epoch = epochs.pop()
+        if self._capture_epoch and incoming_epoch != self._capture_epoch:
+            # A queued pre-reset push cannot repopulate a cleared archive, even
+            # if it arrives after a new tick has already verified this partner.
+            return 0
         if not self._verified:
             # No tick has verified this conversation (or the last one
             # refused it): the observer may be describing another pane.
@@ -703,6 +736,7 @@ class Collector(QObject):
             await self._notify_appended(self._nick, [], 0, result.total, refresh=True)
             self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success")
         if result.added:
+            self._session_added[self._nick] = self._session_added.get(self._nick, 0) + result.added
             self._added = result.added
             self._total = result.total
             await self._notify_appended(self._nick,
@@ -759,7 +793,8 @@ class Collector(QObject):
         try:
             self.history_appended.emit(json.dumps(
                 {"nick": nick, "my_nick": self.my_nick, "items": live,
-                 "added": added, "total": total, "refresh": refresh}, ensure_ascii=False))
+                 "added": added, "total": total, "refresh": refresh,
+                 "session_added": self._session_added.get(nick, 0)}, ensure_ascii=False))
         except Exception as e:                        # noqa: BLE001
             log.debug("history_appended emit failed: %s", e)
 
@@ -775,6 +810,8 @@ class Collector(QObject):
             "identity_source": self._identity_source,
             "detected_my_nick": self._detected_my_nick,
             "added": self._added,
+            "session_added": self._session_added.get(self._nick, 0),
+            "capture_epoch": self._capture_epoch,
             "total": self._total,
             "throttled": self._throttled,
             "backfill_pending": self._backfill_pending,
@@ -817,7 +854,7 @@ class Collector(QObject):
         signature = (payload["state"], payload["text"], payload["nick"],
                      payload["my_nick"], payload["configured_my_nick"],
                      tuple(payload["known_self_nicks"]), payload["identity_source"],
-                     payload["added"], payload["total"], payload["throttled"],
+                     payload["added"], payload["session_added"], payload["total"], payload["throttled"],
                      payload["backfill_pending"], payload["sync_reason"],
                      payload["sync_added"], payload["sync_count"],
                      payload["media_repaired"], payload["media_requeued"],

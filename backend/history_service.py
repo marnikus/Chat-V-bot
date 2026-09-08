@@ -22,6 +22,7 @@ from backend.db_paths import (PROTECTED_DATABASE, in_trash, protected_database,
 from backend.chat_parser import ChatParser, self_nick_history
 from backend.collector import Collector, DEFAULTS as COLLECTOR_DEFAULTS
 from backend.history_db import HistoryDB, inspect_archive
+from backend.history_undo import HistoryUndoStore
 from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.media_store import MediaStore
@@ -75,6 +76,8 @@ class HistoryService:
         self.config = config
         self.session_id = session_id or ""
         self.memory = memory
+        self.undo_store = HistoryUndoStore()
+        self._session_self_nicks = []
         self._settings = _merge(HISTORY_DEFAULTS, self._stored("history"))
         if db_path:
             self._settings["db_path"] = db_path
@@ -135,7 +138,8 @@ class HistoryService:
     def known_self_nicks(self) -> list[str]:
         """Previously declared My Nick values survive Clear and DB switches."""
         history = self.config.get_state("my_nick_recent", []) if self.config else []
-        return self_nick_history(history)
+        declared = self.config.get_state("declared_self_nicks", []) if self.config else []
+        return list(dict.fromkeys(self_nick_history(history) + self_nick_history(declared) + self._session_self_nicks))
 
     @property
     def my_nick(self) -> str:
@@ -179,6 +183,9 @@ class HistoryService:
     # ── lifecycle ────────────────────────────────────────────────
     async def init(self) -> "HistoryService":
         await self._open_initial_db()
+        affected = await self._migrate_bulk_tombstones(self.db)
+        for nick in affected:
+            self.parser.invalidate_person(nick)
         folder = self._settings["media"].get("cache_dir")
         if folder:
             try:
@@ -319,6 +326,172 @@ class HistoryService:
         async with self.db.operation_lock:
             await self.db.close()
 
+    def _keep_self_declarations(self, person) -> None:
+        """Own identity is a preference, not a memory of this peer's messages."""
+        names = self_nick_history((person or {}).get("my_nicks"))
+        if not names:
+            return
+        self._session_self_nicks = list(dict.fromkeys(self._session_self_nicks + names))
+        if self.config is not None:
+            before = self_nick_history(self.config.get_state("declared_self_nicks", []))
+            after = list(dict.fromkeys(before + names))
+            if before != after:
+                self.config.set_state(declared_self_nicks=after)
+
+    def reset_runtime(self, nick=None) -> None:
+        """Invalidate message state, not enabled/paused/throttled preferences."""
+        self.generation += 1
+        if nick is None:
+            self.parser.invalidate_person(None)
+            self.collector.reset_state()
+            self.media._dirs.clear()
+        else:
+            self.parser.invalidate_person(nick)
+            self.collector.reset_person(nick)
+            self.media._dirs.pop(self.repo.normalise_nick(nick), None)
+        self.collector.wake()
+
+    @db_operation
+    async def reset_conversation(self, nick: str, *, delete_person: bool = False,
+                                 with_undo: bool = True, message_ids=None) -> dict:
+        """The command-side clean-slate boundary. Collection never calls undo."""
+        clean = self.repo.normalise_nick(nick)
+        if not clean:
+            raise ValueError("A reset needs a person")
+        person = await self.repo.get_person(clean)
+        self._keep_self_declarations(person)
+        snapshot = ""
+        try:
+            await self.db.execute("BEGIN IMMEDIATE")
+            if with_undo and person:
+                snapshot = await self.undo_store.capture(self.db, clean, self.media.cache_dir,
+                                                         message_ids=message_ids)
+            result = await self.repo.forget_messages(clean, delete_person=delete_person,
+                                                     message_ids=message_ids, commit=False)
+            await self.db.commit()
+        except BaseException:
+            await self.db.conn.rollback()
+            raise
+        if snapshot and not result["changed"]:
+            await self.undo_store.discard(snapshot, self.db.path)
+        self.reset_runtime(clean)
+        await self.undo_store.cleanup_files(self.db, result["orphan_files"], self.media.cache_dir)
+        return {"ok": True, "nick": clean, "changed": result["changed"],
+                "snapshot": snapshot if result["changed"] else "", "reset": True,
+                "delete_person": delete_person, "generation": self.generation,
+                "db_path": self.db.path}
+
+    @db_operation
+    async def undo_conversation_reset(self, nick: str, snapshot: str, **options) -> dict:
+        """Explicit undo only. The live collector has no path to this reader."""
+        clean = self.repo.normalise_nick(nick)
+        try:
+            await self.db.execute("BEGIN IMMEDIATE")
+            result = await self.undo_store.restore(self.repo, self.media, snapshot, clean, **options)
+            await self.db.commit()
+        except BaseException:
+            await self.db.conn.rollback()
+            raise
+        self.reset_runtime(clean)
+        return {**result, "ok": True, "nick": clean, "reset": True,
+                "generation": self.generation, "db_path": self.db.path}
+
+    async def _migrate_bulk_tombstones(self, db) -> list[str]:
+        """One-time storage conversion, before this DB is offered to collection.
+
+        Old command tokens are migration input ONLY. No collector/parser/repo
+        append reads the undo timeline or the detached snapshots.
+        """
+        # A clean/new archive does not even consult undo command metadata on
+        # startup. Only actual legacy deletion marks can trigger conversion.
+        has_marks = await db.scalar("SELECT 1 FROM messages WHERE deleted_at<>'' LIMIT 1", (), 0)
+        has_people = await db.scalar("SELECT 1 FROM persons WHERE COALESCE(deleted_at,'')<>'' LIMIT 1", (), 0)
+        if not has_marks and not has_people:
+            return []
+        history = copy.deepcopy(self.config.get_state("undo_history", [])) if self.config else []
+        if not isinstance(history, list):
+            history = []
+        original_history = copy.deepcopy(history)
+        known = {}
+        for entry in history:
+            value = entry.get("value") if isinstance(entry, dict) else None
+            if not isinstance(value, dict) or entry.get("kind") != "archive":
+                continue
+            if value.get("db_path") and not same_database(value["db_path"], db.path):
+                continue
+            nick = self.repo.normalise_nick(value.get("nick") or "")
+            if value.get("op") == "clear_history" and value.get("token"):
+                known.setdefault(nick, set()).add(str(value["token"]))
+            if value.get("op") == "restore_cleared":
+                known.setdefault(nick, set()).update(str(g.get("token")) for g in value.get("groups", []) if g.get("token"))
+        people = await db.fetchdicts("SELECT * FROM persons")
+        affected, changed_history = [], False
+        repo = HistoryRepo(db)
+        for person in people:
+            nick, pid = person["nick"], int(person["id"])
+            tokens = set(known.get(nick, set()))
+            tokens.update(r[0] for r in await db.fetchall(
+                "SELECT DISTINCT deleted_at FROM messages WHERE person_id=? AND deleted_at LIKE 'clear:%'", (pid,)))
+            deleted_person = bool(person.get("deleted_at"))
+            if deleted_person:
+                ids = None
+            elif tokens:
+                ids = [int(r[0]) for r in await db.fetchall(
+                    "SELECT id,deleted_at FROM messages WHERE person_id=? AND deleted_at<>''", (pid,)) if r[1] in tokens]
+                if not ids:
+                    continue
+            else:
+                continue
+            self._keep_self_declarations(repo._person_dict(person))
+            try:
+                await db.execute("BEGIN IMMEDIATE")
+                snapshot = await self.undo_store.capture(db, nick, self.media.cache_dir,
+                                                         message_ids=ids, legacy_tokens=tokens)
+                result = await repo.forget_messages(nick, delete_person=deleted_person,
+                                                     message_ids=ids, commit=False)
+                await db.commit()
+            except BaseException:
+                await db.conn.rollback()
+                raise
+            await self.undo_store.cleanup_files(db, result["orphan_files"], self.media.cache_dir)
+            for entry in history:
+                value = entry.get("value") if isinstance(entry, dict) else None
+                if not isinstance(value, dict) or entry.get("kind") != "archive" or value.get("nick") != nick:
+                    continue
+                if value.get("db_path") and not same_database(value["db_path"], db.path):
+                    continue
+                op, token = value.get("op"), value.get("token")
+                if ((op == "clear_history" and token in tokens) or
+                        (op == "delete_person" and deleted_person and token == person.get("deleted_at"))):
+                    value.update(op="reset_person" if op == "delete_person" else "reset_history",
+                                 snapshot=snapshot, legacy_token=token,
+                                 legacy_person=(op == "delete_person"), db_path=db.path)
+                    changed_history = True
+                elif op == "restore_cleared":
+                    entries = [{"snapshot": snapshot, "ids": group.get("ids") or []}
+                               for group in value.get("groups", []) if group.get("token") in tokens]
+                    if entries:
+                        value["legacy_snapshots"] = entries
+                        value["db_path"] = db.path
+                        changed_history = True
+            affected.append(nick)
+            log.info("Converted legacy bulk deletion for %s to isolated undo; active tracking reset", nick)
+        if changed_history and self.config:
+            # Candidate migration may run while the active archive/UI stays
+            # usable. Patch only the original entries; do not overwrite edits
+            # appended to the global timeline while snapshot I/O was awaited.
+            current = copy.deepcopy(self.config.get_state("undo_history", []))
+            if isinstance(current, list):
+                for before, after in zip(original_history, history):
+                    if before == after:
+                        continue
+                    for index, entry in enumerate(current):
+                        if entry == before:
+                            current[index] = after
+                            break
+                self.config.set_state(undo_history=current)
+        return affected
+
     # ── swapping the database file (DB Connection window) ────────
     def _check_target(self, path: str) -> None:
         root = os.path.dirname(os.path.abspath(self.db.path))
@@ -363,12 +536,13 @@ class HistoryService:
         adopted = False
         try:
             await fresh.init(allow_create=False)
+            await self._migrate_bulk_tombstones(fresh)
             async with lock:
                 previous = self.db
                 self._rebind_db(fresh)
                 adopted = True
                 self._persist_db_path(target)
-                self.collector.reset_state()
+                self.reset_runtime()
                 # A queued push belongs to the previous archive/gate and will
                 # be refused until the next tick verifies the on-screen chat.
                 try:

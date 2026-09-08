@@ -724,42 +724,48 @@ t('a failed browser read is shown as an error, not a no-new success', () => {
   ok(document.getElementById('collectorRows').textContent.includes('DOM 0:2: invalid response'));
 });
 
-t('cleared history explains the zero count and enables an explicit Restore action', () => {
-  HistoryStore.openPerson('Катя462');
+t('reset removes old message IDs and rejects older replies and appends', () => {
+  HistoryStore.openPerson('Nick');
   const req = named('history_open').pop().args[0];
-  HistoryStore.onPage(req, JSON.stringify({ nick: 'Катя462', items: [], total: 0,
-    my_nick: 'Хорошо Все', stats: { messages: 0, cleared_messages: 2 } }));
-  const button = document.getElementById('historyRestoreClearedBtn');
-  ok(!button.disabled);
-  ok(button.textContent.includes('(2)'));
-  ok(document.getElementById('historyList').textContent.includes('2 cleared message(s) are hidden'));
-  button.fire('click');
-  eq(named('history_restore_cleared').pop().args, ['Катя462']);
-  ok(named('confirm').length > 0, 'restoration is an explicit confirmed edit');
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onReset({ nick: 'Nick', generation: 1, reset: true });
+  eq(HistoryStore.model.items.length, 0);
+  eq(HistoryStore.model.total, 0);
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onStats('old', JSON.stringify({ nick: 'Nick', generation: 0, message_count: 25 }));
+  eq(HistoryStore.model.items.length, 0);
+  eq(HistoryStore.model.total, 0);
+  ok(!document.getElementById('historyRestoreClearedBtn'), 're-collection must not depend on Restore cleared');
 });
 
-t('Restore stays disabled for a truly empty or only individually-deleted history', () => {
-  const before = named('history_restore_cleared').length;
-  HistoryStore.openPerson('Empty');
-  const req = named('history_open').pop().args[0];
-  HistoryStore.onPage(req, JSON.stringify({ nick: 'Empty', items: [], total: 0,
-    stats: { messages: 0, hidden: 2, cleared_messages: 0 } }));
-  ok(document.getElementById('historyRestoreClearedBtn').disabled);
-  HistoryStore.restoreCleared();
-  eq(named('history_restore_cleared').length, before);
+t('session totals reset per person and re-collection starts from zero, not fifty', () => {
+  CollectorPanel.onStatus(JSON.stringify({ nick: 'Nick', generation: 2, state: 'collected', session_added: 25, total: 25 }));
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Other', generation: 2, session_added: 7, added: 7 }));
+  CollectorPanel.onLog(JSON.stringify({ nick: 'Nick', message: 'old count 25' }));
+  CollectorPanel.onLog(JSON.stringify({ nick: 'Other', message: 'keep other log' }));
+  CollectorPanel.onReset({ nick: 'Nick', generation: 3, reset: true });
+  ok(!CollectorPanel._sessionTotals.has('Nick'));
+  eq(CollectorPanel._sessionTotals.get('Other'), 7);
+  ok(!document.getElementById('collectorLog').textContent.includes('old count 25'));
+  ok(document.getElementById('collectorLog').textContent.includes('keep other log'));
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Nick', generation: 2, session_added: 25, added: 25 }));
+  ok(!CollectorPanel._sessionTotals.has('Nick'), 'an old append cannot restore the old count');
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Nick', generation: 3, session_added: 25, added: 25 }));
+  eq(CollectorPanel._sessionTotals.get('Nick'), 25);
 });
 
-t('restoration confirmation remains bound to the originally selected person', () => {
+t('clear confirmation is bound to the original person and promises a fresh scan', () => {
   HistoryStore.openPerson('First');
-  HistoryStore.stats = { cleared_messages: 2 };
-  let confirm;
+  let confirm, body;
   const original = PresetsUI.confirm;
-  PresetsUI.confirm = (_title, _body, _label, callback) => { confirm = callback; };
+  PresetsUI.confirm = (_title, text, _label, callback) => { confirm = callback; body = text; };
   try {
-    HistoryStore.restoreCleared();
+    HistoryStore.clearHistory();
     HistoryStore.openPerson('Second');
     confirm();
-    eq(named('history_restore_cleared').pop().args, ['First']);
+    eq(named('history_clear_person').pop().args, ['First']);
+    ok(body.includes('same visible messages again'));
   } finally { PresetsUI.confirm = original; }
 });
 

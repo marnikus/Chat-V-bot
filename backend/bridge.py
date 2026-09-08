@@ -54,6 +54,7 @@ class Bridge(QObject):
     collector_status = Signal(str)           # JSON collector state payload
     collector_log = Signal(str)              # JSON {ts, level, message, nick}
     history_appended = Signal(str)           # JSON {nick, items, added}
+    history_reset = Signal(str)        # reset boundary, no old message data
     my_nick_changed = Signal(str)            # the configured "my nick"
     history_error = Signal(str, str)         # scope, message
     # ── person labels / database management ──
@@ -816,62 +817,110 @@ class Bridge(QObject):
             return self._apply_db_command(value, forward)
         return False
 
+    def _update_archive_command(self, original: dict, patch: dict) -> None:
+        history, index = self._get_global_history()
+        for entry in history:
+            value = entry.get("value") or {}
+            matches = (value.get("command_id") == original.get("command_id")
+                       if original.get("command_id") else (self._values_equal(value, original) or
+                       (original.get("token") and value.get("token") == original["token"] and
+                        value.get("nick") == original.get("nick"))))
+            if entry.get("kind") == "archive" and matches:
+                value.update(patch)
+                self._set_global_history(history, index)
+                return
+
+    def _emit_archive_change(self, action: str, nick: str, **extra) -> None:
+        payload = {"action": action, "nick": nick, "ok": True,
+                   "generation": self._archive.generation, **extra}
+        if payload.get("reset"):
+            self.history_reset.emit(json.dumps(payload, ensure_ascii=False))
+        self.userdb_changed.emit(json.dumps(payload, ensure_ascii=False))
+
     def _apply_archive_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a message, chat or person deletion.
-
-        Deletions are soft: rows are stamped with one operation token, so the
-        reversal is a single UPDATE and the undo entry never has to carry a
-        message body (see docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN).
-        """
+        """Explicit undo/redo owns snapshots; ordinary collection cannot read them."""
         archive = self._archive
-        op = str(value.get("op") or "")
-        nick = str(value.get("nick") or "")
-        token = str(value.get("token") or "")
-        people = value.get("people") if isinstance(value.get("people"), dict) else None
-        if people is not None:
-            rows = people.get("after" if forward else "before")
-            if isinstance(rows, list):
-                self._apply_people(rows)
         if archive is None:
-            if op:
-                self.history_error.emit(
-                    "archive_undo", "the message archive is not running")
-            return people is not None
-
-        if op == "restore_cleared" and not same_database(str(value.get("db_path") or ""), archive.db.path):
-            self.history_error.emit("archive_undo", "Load the original database before undoing this restoration")
+            self.history_error.emit("archive_undo", "the message archive is not running")
             return False
-
+        op, nick = str(value.get("op") or ""), str(value.get("nick") or "")
+        if value.get("db_path") and not same_database(value["db_path"], archive.db.path):
+            self.history_error.emit("archive_undo", "Load the original database before undoing this archive edit")
+            return False
+        original = copy.deepcopy(value)
         _, previous_index = self._get_global_history()
 
         async def work():
-            repo = archive.repo
-            if op == "restore_cleared":
-                try:
-                    await repo.apply_clear_restore(nick, value.get("groups") or [], forward=forward)
-                except Exception:
-                    history, index = self._get_global_history()
-                    if index == previous_index + (1 if forward else -1):
-                        self._set_global_history(history, previous_index)
-                        self.history_changed.emit()
-                    raise
-            elif forward:
-                if op == "delete_message":
-                    await repo.soft_delete_message(
-                        nick, int(value.get("message_id") or 0), token=token)
-                elif op == "clear_history":
-                    await repo.soft_delete_history(nick, token=token)
-                elif op == "delete_person":
-                    await repo.delete_person(nick, hard=False, token=token)
-            else:
-                if op == "delete_person":
-                    await repo.restore_person(nick, token=token)
+            command = dict(value)
+            reset = False
+            try:
+                # Old stored command references are converted only here/startup,
+                # never by the collector's already-seen logic.
+                if op in ("clear_history", "delete_person") and not command.get("snapshot"):
+                    await archive._migrate_bulk_tombstones(archive.db)
+                    history, _ = self._get_global_history()
+                    for entry in history:
+                        candidate = entry.get("value") or {}
+                        if (entry.get("kind") == "archive" and candidate.get("nick") == nick
+                                and candidate.get("token") == command.get("token") and candidate.get("snapshot")):
+                            command = candidate
+                            break
+                kind = command.get("op")
+                if kind in ("reset_history", "reset_person", "clear_history", "delete_person"):
+                    deleting = kind in ("reset_person", "delete_person")
+                    if forward:
+                        result = await archive.reset_conversation(nick, delete_person=deleting)
+                        patch = {"op": "reset_person" if deleting else "reset_history", "snapshot": result["snapshot"],
+                                 "legacy_token": "", "legacy_person": False, "db_path": archive.db.path}
+                        self._update_archive_command(original, patch)
+                        if deleting and self._memory is not None:
+                            await self._memory.delete_user(nick)
+                    else:
+                        if not command.get("snapshot"):
+                            raise ValueError("This legacy deletion has no recoverable undo snapshot")
+                        await archive.undo_conversation_reset(nick, command["snapshot"],
+                            legacy_token=command.get("legacy_token") or "",
+                            legacy_person=bool(command.get("legacy_person")))
+                        queue = command.get("queue_before")
+                        if queue and self._memory is not None:
+                            await self._memory.restore_user(queue)
+                        elif deleting and isinstance(command.get("people"), dict) and self._memory is not None:
+                            for row in command["people"].get("before", []):
+                                if row.get("nick") == nick:
+                                    await self._memory.restore_user(row)
+                    reset = True
+                elif kind == "restore_cleared":
+                    # Compatibility with v12's explicit restoration command.
+                    # Its reverse now physically removes those rows and resets
+                    # the cursor, rather than restoring an active denylist.
+                    if forward:
+                        snapshots = command.get("legacy_snapshots") or []
+                        if not snapshots:
+                            raise ValueError("This old restoration has no isolated snapshot")
+                        for item in snapshots:
+                            await archive.undo_conversation_reset(nick, item["snapshot"], only_ids=item.get("ids"))
+                    else:
+                        ids = [rid for group in command.get("groups", []) for rid in group.get("ids", [])]
+                        result = await archive.reset_conversation(nick, message_ids=ids)
+                        self._update_archive_command(original, {"legacy_snapshots": [{"snapshot": result["snapshot"]}]})
+                    reset = True
+                elif kind == "delete_message":
+                    if forward:
+                        await archive.repo.soft_delete_message(nick, int(command.get("message_id") or 0), token=command.get("token") or "")
+                    else:
+                        await archive.repo.restore_deleted(nick, command.get("token") or "")
+                    await archive.collector.archive_edited(nick)
                 else:
-                    await repo.restore_deleted(nick, token)
-            await archive.collector.archive_edited(nick)
-            self.userdb_changed.emit(json.dumps(
-                {"action": "undo" if not forward else "redo", "op": op,
-                 "nick": nick}, ensure_ascii=False))
+                    raise ValueError("Unknown archive undo command")
+            except Exception:
+                history, index = self._get_global_history()
+                if index == previous_index + (1 if forward else -1):
+                    self._set_global_history(history, previous_index)
+                    self.history_changed.emit()
+                raise
+            if op in ("reset_person", "delete_person"):
+                await self._refresh_users()
+            self._emit_archive_change("redo" if forward else "undo", nick, op=op, reset=reset)
         self._run_async("archive_undo", work())
         return True
 
@@ -948,6 +997,9 @@ class Bridge(QObject):
         # Independent create/delete and failed loads must not clear the
         # working Person History window or invalidate its pending reads.
         if payload.get("ok") and payload.get("active_changed"):
+            if self._archive is not None:
+                self.history_reset.emit(json.dumps({"reset": True, "nick": None,
+                                                    "generation": self._archive.generation}))
             self.userdb_changed.emit(json.dumps(
                 {"action": "db_" + action, "ok": True}, ensure_ascii=False))
         if payload.get("error"):
@@ -1682,7 +1734,7 @@ class Bridge(QObject):
         if service is None:
             return
         try:
-            service.collector.status_changed.connect(self.collector_status.emit)
+            service.collector.status_changed.connect(self._on_collector_status)
             service.collector.collector_log.connect(self.collector_log.emit)
             service.collector.history_appended.connect(self._on_history_appended)
             # a private chat with an unknown partner creates a People row:
@@ -1698,8 +1750,15 @@ class Bridge(QObject):
             except Exception:                         # noqa: BLE001
                 pass
 
+    def _on_collector_status(self, payload: str) -> None:
+        data = json.loads(payload)
+        data["generation"] = self._archive.generation
+        self.collector_status.emit(json.dumps(data, ensure_ascii=False))
+
     def _on_history_appended(self, payload: str) -> None:
-        self.history_appended.emit(payload)
+        data = json.loads(payload)
+        data["generation"] = self._archive.generation
+        self.history_appended.emit(json.dumps(data, ensure_ascii=False))
 
     @property
     def _archive(self):
@@ -1811,10 +1870,8 @@ class Bridge(QObject):
                 after_ord=(int(opts["after_ord"])
                            if opts.get("after_ord") is not None else None),
                 limit=limit)
-        cleared = await service.repo.cleared_count(nick, self._legacy_clear_tokens(nick))
-        payload["cleared_messages"] = cleared
-        payload.setdefault("stats", {})["cleared_messages"] = cleared
         payload["req_id"] = req_id
+        payload["generation"] = service.generation
         payload["preview"] = service.preview_settings()
         self.history_page_ready.emit(req_id, json.dumps(payload,
                                                         ensure_ascii=False))
@@ -1840,6 +1897,7 @@ class Bridge(QObject):
             payload = await service.query.search_global(query, limit=limit)
             payload["scope"] = "global"
         payload["req_id"] = req_id
+        payload["generation"] = service.generation
         self.history_search_ready.emit(req_id, json.dumps(payload,
                                                           ensure_ascii=False))
 
@@ -1850,7 +1908,7 @@ class Bridge(QObject):
 
         async def work():
             payload = await self._archive.query.person_stats(nick)
-            payload["cleared_messages"] = await self._archive.repo.cleared_count(nick, self._legacy_clear_tokens(nick))
+            payload["generation"] = self._archive.generation
             payload["req_id"] = req_id
             self.history_stats_ready.emit(req_id, json.dumps(
                 payload, ensure_ascii=False))
@@ -1906,126 +1964,53 @@ class Bridge(QObject):
     # ── deleting from the archive (all reversible, RULE 12) ──────
     @Slot(str, bool, result=bool)
     def history_delete_person(self, nick, hard=False):
-        """Remove a person WITH their whole history.
-
-        Soft (the default) tombstones the person, hides every message under
-        one operation token and drops the People-list row — all three halves
-        travel in ONE history entry, so a single Ctrl+Z brings the person
-        back. `hard=True` erases the rows and is NOT reversible; it is only
-        reachable from an explicit purge.
-        """
+        """Remove the person and ALL message knowledge; undo is isolated."""
         clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self._archive is None:
-            self.history_error.emit("history_delete_person",
-                                    "the message archive is not running")
+        if not clean or not self._need_archive("history_delete_person"):
             return False
 
         async def work():
-            repo = self._archive.repo
-            token = repo.new_op_token()
-            # The People list is a separate database; when it is present the
-            # row travels inside the SAME undo entry, so one Ctrl+Z restores
-            # the person, their messages and their queue position together.
-            people_before = await self._people_snapshot()
-            ok = await repo.delete_person(clean, hard=bool(hard), token=token)
-            if people_before is not None:
-                try:
-                    await self._memory.delete_user(clean)
-                except Exception as exc:              # noqa: BLE001
-                    log.debug("people row for %s not removed: %s", clean, exc)
-            people_after = await self._people_snapshot()
-            if ok and not hard:
-                entry = {"op": "delete_person", "nick": clean, "token": token}
-                if people_before is not None and people_after is not None:
-                    entry["people"] = {"before": people_before,
-                                       "after": people_after}
-                self._push_global("archive", entry)
-                self.log_message.emit(
-                    f"🗑 “{clean}” and their history removed — Ctrl+Z restores "
-                    "both", "warn")
-            elif ok and hard:
+            queue_before = None
+            if self._memory is not None:
+                user = await self._memory.get_user(clean)
+                queue_before = self._people_row(user) if user else None
+            result = await self._archive.reset_conversation(clean, delete_person=True, with_undo=not hard)
+            if self._memory is not None:
+                await self._memory.delete_user(clean)
+            if result["changed"] and not hard:
+                self._push_global("archive", {"op": "reset_person", "command_id": uuid.uuid4().hex,
+                    "nick": clean, "snapshot": result["snapshot"], "db_path": self._archive.db.path,
+                    "queue_before": queue_before})
+            elif hard:
                 self.label_store.forget(clean)
-                self.log_message.emit(
-                    f"🔥 “{clean}” erased permanently (not undoable)", "warn")
-            self.userdb_changed.emit(json.dumps(
-                {"action": "deleted", "nick": clean, "hard": bool(hard),
-                 "ok": ok}, ensure_ascii=False))
+            self.log_message.emit(f"🗑 “{clean}” removed with all message tracking — the next scan starts fresh", "info")
             await self._refresh_users()
+            self._emit_archive_change("deleted", clean, reset=True, hard=bool(hard))
         self._run_async("history_delete_person", work())
-        return True
-
-    def _legacy_clear_tokens(self, nick: str) -> list[str]:
-        """Recognize old Clear commands without treating every tombstone as Clear."""
-        history = self._config.get_state("undo_history", [])
-        if not isinstance(history, list):
-            return []
-        tokens = []
-        for entry in history:
-            if not isinstance(entry, dict) or entry.get("kind") != "archive":
-                continue
-            value = entry.get("value") or {}
-            if (isinstance(value, dict) and value.get("op") == "clear_history"
-                    and str(value.get("nick") or "").strip() == str(nick).strip()
-                    and isinstance(value.get("token"), str) and value["token"]):
-                tokens.append(value["token"])
-        return tokens
-
-    @Slot(str, result=bool)
-    def history_restore_cleared(self, nick):
-        """Explicit, undoable restoration; collection never implicitly calls it."""
-        clean = " ".join(str(nick or "").split()).strip()
-        if not clean or not self._need_archive("history_restore_cleared"):
-            return False
-
-        async def work():
-            archive = self._archive
-            result = await archive.repo.restore_cleared(clean, self._legacy_clear_tokens(clean))
-            count = int(result.get("restored") or 0)
-            if count:
-                self._push_global("archive", {"op": "restore_cleared", "nick": clean,
-                                             "db_path": archive.db.path, "groups": result["groups"]})
-                self.log_message.emit(f"↩ Restored {count} cleared message(s) for “{clean}” — Ctrl+Z reverses this restoration", "success")
-            else:
-                self.log_message.emit(f"ℹ No recoverable cleared messages for “{clean}”", "info")
-            await archive.collector.archive_edited(clean)
-            self.userdb_changed.emit(json.dumps({"action": "cleared_restored", "nick": clean,
-                                                 "ok": True, "restored": count}, ensure_ascii=False))
-        self._run_async("history_restore_cleared", work())
         return True
 
     @Slot(str, result=bool)
     def history_clear_person(self, nick):
-        """Remove the whole conversation but KEEP the person in the database."""
+        """Keep the contact, erase all of its messages and tracking state."""
         clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self._archive is None:
-            self.history_error.emit("history_clear_person",
-                                    "the message archive is not running")
+        if not clean or not self._need_archive("history_clear_person"):
             return False
 
         async def work():
-            repo = self._archive.repo
-            token = await repo.soft_delete_history(clean)
-            if not token:
-                self.log_message.emit(
-                    f"ℹ “{clean}” has no messages to clear", "info")
-            else:
-                self._push_global("archive", {
-                    "op": "clear_history", "nick": clean, "token": token,
-                    "db_path": self._archive.db.path})
-                self.log_message.emit(
-                    f"🧹 History of “{clean}” cleared — the person stays in "
-                    "the database. New messages continue to be collected; "
-                    "Ctrl+Z restores the cleared messages", "warn")
-            await self._archive.collector.archive_edited(clean)
-            self.userdb_changed.emit(json.dumps(
-                {"action": "cleared", "nick": clean, "ok": bool(token)},
-                ensure_ascii=False))
+            result = await self._archive.reset_conversation(clean)
+            if result["changed"]:
+                self._push_global("archive", {"op": "reset_history", "command_id": uuid.uuid4().hex,
+                    "nick": clean, "snapshot": result["snapshot"], "db_path": self._archive.db.path})
+            self.log_message.emit(f"🧹 History and tracking for “{clean}” erased — visible messages can be collected again", "info")
+            self._emit_archive_change("cleared", clean, reset=True)
         self._run_async("history_clear_person", work())
         return True
+
+    @Slot(str, result=bool)
+    def history_restore_cleared(self, nick):
+        """Old UI compatibility: there is no active cleared-message registry."""
+        self.log_message.emit("ℹ Collection now starts fresh after Clear. Use global Undo to restore the old archive immediately.", "info")
+        return False
 
     @Slot(str, str, result=bool)
     def history_delete_message(self, nick, message_id):
