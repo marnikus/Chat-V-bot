@@ -262,8 +262,10 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .config-panel.has-block .config-empty { display: none; }
 
 /* ═══════════════════════════════════════════════════════════════
-   WINDOW CONTROLS — close, minimize, maximize per window
-   Clean icons: ─ minimize, □ maximize, ✕ close, with tooltip
+   WINDOW CONTROLS — minimize / restore / close per window
+   Clean standard glyphs (dark theme): ─ minimize, □ maximize/restore, ✕
+   close, with a hover tooltip on each. The toggle shows ─ while the window
+   is open and □ once it is minimized (docked at the bottom strip).
    ═══════════════════════════════════════════════════════════════ */
 
 /* title bar flex: grip + title text + spacer + controls + other buttons */
@@ -277,24 +279,26 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .win-controls {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   margin-left: 6px;
   flex-shrink: 0;
 }
+/* Every window-control button: equal 20px hit area, centered glyph, no
+   border — the standard ─ □ ✕ trio (here the toggle is ─ or □ by state). */
 .win-controls .win-btn {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: background .12s, color .12s, transform .08s;
   padding: 0;
   border: none;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 600;
@@ -303,66 +307,107 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .win-controls .win-btn:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 .win-controls .win-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
 }
+/* close keeps the familiar destructive hover tint */
 .win-controls .win-btn.win-close:hover {
-  background: var(--red-dim, rgba(255,80,80,.18));
-  color: var(--red, #ff5a5a);
+  background: var(--red-dim, rgba(248,113,113,.16));
+  color: var(--red, #f87171);
 }
-.win-controls .win-btn.win-maximize:hover {
+/* minimize/restore hover tint matches the window-manager accent */
+.win-controls .win-btn.win-toggle:hover {
   background: var(--accent-soft, rgba(108,140,255,.15));
   color: var(--accent);
 }
-.win-controls .win-btn.win-minimize:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
-}
 
-/* minimized window — only title bar visible */
-.sash-window.sash-win-minimized {
-  flex: 0 0 auto !important;
-  min-height: 32px !important;
-  max-height: 36px;
-  overflow: hidden;
-}
-.sash-window.sash-win-minimized > .panel {
+/* ── minimized windows ────────────────────────────────────────────
+   A minimized window leaves the grid entirely (its .sash-window wrapper is
+   given .sash-win-hidden → display:none, exactly like a closed window), so
+   the visible siblings expand into the freed space. Its title bar lives on
+   the bottom dock strip (.sash-min-dock). No in-place shrink rules are
+   needed — display:none releases the whole slot, guaranteeing zero gaps. */
+
+/* ── minimized dock — slim strip pinned under the grid ─────────── */
+.sash-min-dock {
   flex: 0 0 auto;
-  min-height: 0 !important;
-  overflow: hidden;
-}
-.sash-window.sash-win-minimized > .panel > :not(.win-title) {
-  display: none !important;
-}
-.sash-window.sash-win-minimized > .panel > .win-title {
-  margin-bottom: 0;
-  border-bottom: none;
-}
-
-/* maximized window — takes full grid */
-.sash-grid.sash-grid-maximized {
-  position: relative;
-}
-.sash-grid.sash-grid-maximized .sash {
-  display: none !important;
-}
-.sash-grid.sash-grid-maximized .sash-window:not(.sash-window-maximized) {
-  display: none !important;
-}
-.sash-window.sash-window-maximized {
-  display: flex !important;
-  flex: 1 1 100% !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 5;
-}
-.sash-window.sash-window-maximized > .panel {
-  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-header);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
   min-height: 0;
+}
+.sash-min-chip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  height: 26px;
+  max-width: 240px;
+  padding: 0 2px 0 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.sash-min-chip:hover {
+  border-color: var(--accent-dim);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 1px rgba(108,140,255,.25);
+}
+.sash-min-chip .smc-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+.sash-min-chip:hover .smc-label { color: var(--text-primary); }
+.sash-min-chip .smc-label::before {
+  content: '▤ ';
+  color: var(--text-muted);
+  font-size: 9px;
+}
+/* reuse the window-control button look inside the dock chips */
+.sash-min-chip .win-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  transition: background .12s, color .12s;
+}
+.sash-min-chip .win-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.sash-min-chip .win-btn.win-toggle:hover {
+  background: var(--accent-soft, rgba(108,140,255,.15));
+  color: var(--accent);
+}
+.sash-min-chip .win-btn.win-close:hover {
+  background: var(--red-dim, rgba(248,113,113,.16));
+  color: var(--red, #f87171);
 }
 
 /* when a window is closed via closedWindows set, wrapper hidden */
@@ -426,7 +471,6 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .wm-state-icon.open { color: var(--green, #4ade80); }
 .wm-state-icon.closed { color: var(--text-muted); }
 .wm-state-icon.minimized { color: var(--yellow, #facc15); }
-.wm-state-icon.maximized { color: var(--accent); }
 .wm-title {
   flex: 1;
   white-space: nowrap;
@@ -447,7 +491,6 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 .wm-badge.b-open { background: rgba(74,222,128,.12); color: var(--green, #4ade80); }
 .wm-badge.b-closed { background: var(--bg-card); color: var(--text-muted); }
 .wm-badge.b-min { background: rgba(250,204,21,.12); color: var(--yellow, #facc15); }
-.wm-badge.b-max { background: rgba(108,140,255,.18); color: var(--accent); }
 .wm-actions {
   display: inline-flex;
   gap: 1px;

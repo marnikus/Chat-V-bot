@@ -658,25 +658,24 @@ class Bridge(QObject):
                               "tree": self._default_grid_tree()},
                              ensure_ascii=False, separators=(",", ":"))
         self._config.set_state(grid_layout=payload,
-                               window_states={"closed": [], "minimized": [], "maximized": None})
+                               window_states={"closed": [], "minimized": []})
         self._push_global("grid", payload)
         self.log_message.emit("↺ Grid layout reset to default "
                               "(all windows visible)", "info")
         return payload
 
-    # ── window open/close/minimize/maximize states ───────────────
+    # ── window open/close/minimize states ────────────────────────
     @Slot(result=str)
     def get_window_states(self):
+        """Return open-window state. The full-grid "maximized" concept was
+        removed by design; any legacy stored value is ignored here."""
         raw = self._config.get_state("window_states", None)
         if isinstance(raw, dict):
             closed = raw.get("closed", [])
             minimized = raw.get("minimized", [])
-            maximized = raw.get("maximized")
             closed = [i for i in closed if isinstance(i, str) and i in self.WINDOW_IDS]
             minimized = [i for i in minimized if isinstance(i, str) and i in self.WINDOW_IDS and i not in closed]
-            if maximized is not None and (not isinstance(maximized, str) or maximized not in self.WINDOW_IDS or maximized in closed):
-                maximized = None
-            return json.dumps({"closed": closed, "minimized": minimized, "maximized": maximized},
+            return json.dumps({"closed": closed, "minimized": minimized},
                               ensure_ascii=False)
         return ""
 
@@ -690,16 +689,13 @@ class Bridge(QObject):
             return False
         closed = data.get("closed", [])
         minimized = data.get("minimized", [])
-        maximized = data.get("maximized")
         if not isinstance(closed, list):
             closed = []
         if not isinstance(minimized, list):
             minimized = []
         closed = [i for i in closed if isinstance(i, str) and i in self.WINDOW_IDS]
         minimized = [i for i in minimized if isinstance(i, str) and i in self.WINDOW_IDS and i not in closed]
-        if maximized is not None and (not isinstance(maximized, str) or maximized not in self.WINDOW_IDS or maximized in closed):
-            maximized = None
-        self._config.set_state(window_states={"closed": closed, "minimized": minimized, "maximized": maximized})
+        self._config.set_state(window_states={"closed": closed, "minimized": minimized})
         return True
 
     @classmethod

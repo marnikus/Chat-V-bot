@@ -31,7 +31,7 @@
                title="The nick YOU are using in this chat session. Stored in config.json and written next to every archived message, so the history always shows both sides.">
       </div>
       <button id="windowsMenuBtn" class="btn-icon"
-              title="Windows — open/close, minimize, maximize any window"><span class="material-icons">widgets</span></button>
+              title="Windows — open, close, minimize and restore windows"><span class="material-icons">widgets</span></button>
       <button id="layoutMenuBtn" class="btn-icon"
               title="Grid layouts — drag any window by its title bar, or pick a preset arrangement"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
@@ -380,9 +380,9 @@
   <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible (Undo with the global button)</span></button>
 </div>
 
-<!-- WINDOWS MENU — lists all windows with open/closed/minimized/maximized state -->
+<!-- WINDOWS MENU — lists all windows with open / minimized / closed state -->
 <div id="windowsMenu" class="layout-menu windows-menu hidden">
-  <div class="layout-menu-title">Windows — click to toggle open / closed</div>
+  <div class="layout-menu-title">Windows — ● open · ─ minimized · ○ closed (click a row to act)</div>
   <div id="windowsMenuList"></div>
   <div class="layout-menu-sep"></div>
   <div class="layout-menu-row">

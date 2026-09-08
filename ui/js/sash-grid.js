@@ -9,7 +9,17 @@
    Interactions
      • drag a window by its title bar (h3.win-title)
      • sash resize, double-click reset, Escape cancel
-     • layout menu + windows menu (open/close/minimize/maximize)
+     • layout menu + windows menu (open/close/minimize/restore)
+
+   Window states (open / minimized / closed)
+     • open      — panel visible in the grid at its normal slot
+     • minimized — the window releases its grid space (same mechanism as
+                   closed) and its title bar docks in the strip at the
+                   bottom edge (.sash-min-dock); click the strip to restore
+     • closed    — hidden, reopened from the Windows dropdown
+
+   Every open window title bar shows ─ (Minimize) and ✕ (Close). The
+   docked strip shows □ (Restore/Maximize) and ✕. No full-grid maximize.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -18,13 +28,13 @@ const SashGrid = {
   STORAGE_KEY: 'chatbot.sashLayout.v1',
   STORAGE_CLOSED: 'chatbot.sashWindows.closed.v1',
   STORAGE_MINIMIZED: 'chatbot.sashWindows.minimized.v1',
-  STORAGE_MAXIMIZED: 'chatbot.sashWindows.maximized.v1',
 
   THRESHOLD: 4,
   MIN_PX: 96,
   SASH_W: 6,
 
   gridEl: null,
+  dockEl: null,
   root: null,
   winEls: {},
   _drag: null,
@@ -32,7 +42,6 @@ const SashGrid = {
 
   closedWindows: null,
   minimizedWindows: null,
-  maximizedWindow: null,
 
   WIN_ICONS: {
     stats: 'bar_chart', filters: 'filter_list', stack: 'view_list',
@@ -44,6 +53,7 @@ const SashGrid = {
   init() {
     this.gridEl = document.getElementById('sashGrid');
     if (!this.gridEl) { console.warn('sash-grid: #sashGrid missing'); return; }
+    this._ensureDock();
 
     const winElIds = {
       stats: 'winStats', filters: 'winFilters', stack: 'winStack',
@@ -60,7 +70,6 @@ const SashGrid = {
 
     this.closedWindows = new Set();
     this.minimizedWindows = new Set();
-    this.maximizedWindow = null;
 
     this.root = this._loadTree() || SashCore.defaultTree();
     this._loadWindowStates();
@@ -107,16 +116,9 @@ const SashGrid = {
           });
         }
       }
-      const rawMax = localStorage.getItem(this.STORAGE_MAXIMIZED);
-      if (rawMax) {
-        try {
-          const v = JSON.parse(rawMax);
-          if (typeof v === 'string' && SashCore.WINDOW_IDS.includes(v) && !this.closedWindows.has(v)) this.maximizedWindow = v;
-        } catch (e) {
-          const cleaned = rawMax.replace(/"/g, '');
-          if (SashCore.WINDOW_IDS.includes(cleaned) && !this.closedWindows.has(cleaned)) this.maximizedWindow = cleaned;
-        }
-      }
+      // NOTE: a legacy 'chatbot.sashWindows.maximized.v1' value may exist from
+      // older builds — the full-grid maximize state was removed by design, so
+      // it is intentionally ignored here (and dropped on the next save).
     } catch (e) {}
   },
 
@@ -124,14 +126,12 @@ const SashGrid = {
     try {
       localStorage.setItem(this.STORAGE_CLOSED, JSON.stringify(Array.from(this.closedWindows)));
       localStorage.setItem(this.STORAGE_MINIMIZED, JSON.stringify(Array.from(this.minimizedWindows)));
-      localStorage.setItem(this.STORAGE_MAXIMIZED, JSON.stringify(this.maximizedWindow));
     } catch (e) {}
     try {
       if (typeof App !== 'undefined' && App.bridge && App.bridge.save_window_states) {
         const payload = JSON.stringify({
           closed: Array.from(this.closedWindows),
           minimized: Array.from(this.minimizedWindows),
-          maximized: this.maximizedWindow,
         });
         App.bridge.save_window_states(payload);
       }
@@ -190,8 +190,7 @@ const SashGrid = {
             if (!data || typeof data !== 'object') return;
             if (Array.isArray(data.closed)) this.closedWindows = new Set(data.closed.filter((id) => SashCore.WINDOW_IDS.includes(id)));
             if (Array.isArray(data.minimized)) this.minimizedWindows = new Set(data.minimized.filter((id) => SashCore.WINDOW_IDS.includes(id) && !this.closedWindows.has(id)));
-            if (data.maximized && SashCore.WINDOW_IDS.includes(data.maximized) && !this.closedWindows.has(data.maximized)) this.maximizedWindow = data.maximized;
-            else if (data.maximized === null) this.maximizedWindow = null;
+            // 'maximized' from old builds is intentionally ignored.
             this.render();
             this._saveWindowStates();
           } catch (e) {}
@@ -214,26 +213,19 @@ const SashGrid = {
   showAllWindows() {
     this.closedWindows.clear();
     this.minimizedWindows.clear();
-    this.maximizedWindow = null;
     Object.values(this.winEls).forEach((panel) => {
       if (!panel) return;
       panel.classList.remove('hidden');
       if (panel.style.display === 'none') panel.style.display = '';
     });
     this._saveWindowStates();
-    this._syncHidden();
-    this._syncMinimized();
-    this._syncMaximized();
-    this._syncEmptySplits();
-    this._updateWindowsMenu();
-    this._checkEmptyGrid();
+    this._applyStates();
   },
 
   resetToDefault() {
     this.root = SashCore.defaultTree();
     this.closedWindows.clear();
     this.minimizedWindows.clear();
-    this.maximizedWindow = null;
     this.showAllWindows();
     this.render();
     let saved = false;
@@ -265,23 +257,16 @@ const SashGrid = {
 
   isClosed(id) { return this.closedWindows.has(id); },
   isMinimized(id) { return this.minimizedWindows.has(id); },
-  isMaximized(id) { return this.maximizedWindow === id; },
 
   closeWindow(id) {
     if (!SashCore.WINDOW_IDS.includes(id)) return false;
     if (this.closedWindows.has(id)) return false;
     this.closedWindows.add(id);
     this.minimizedWindows.delete(id);
-    if (this.maximizedWindow === id) this.maximizedWindow = null;
     const panel = this.winEls[id];
     if (panel) panel.classList.add('hidden');
     this._saveWindowStates();
-    this._syncHidden();
-    this._syncMinimized();
-    this._syncMaximized();
-    this._syncEmptySplits();
-    this._updateWindowsMenu();
-    this._checkEmptyGrid();
+    this._applyStates();
     if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 Closed ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
     return true;
   },
@@ -296,20 +281,18 @@ const SashGrid = {
       if (panel.style.display === 'none') panel.style.display = '';
     }
     this._saveWindowStates();
-    this._syncHidden();
-    this._syncEmptySplits();
-    this._updateWindowsMenu();
-    this._checkEmptyGrid();
+    this._applyStates();
     this._flashLanded(id);
     if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 Opened ' + (SashCore.WINDOW_TITLES[id] || id), 'success');
     return true;
   },
 
-  /** Ensure a window is visible. Used by collectors / history jumpers that
-   *  only need the panel shown, whether or not it was previously closed. */
+  /** Ensure a window is visible in the grid. Used by collectors / history
+   *  jumpers: opens it when closed and restores it when minimized. */
   showWindow(winId) {
     if (!SashCore.WINDOW_IDS.includes(winId)) return false;
     if (this.closedWindows.has(winId)) return this.openWindow(winId);
+    if (this.minimizedWindows.has(winId)) return this.restoreMinimized(winId);
     const panel = this.winEls[winId];
     if (!panel) return false;
     panel.classList.remove('hidden');
@@ -322,30 +305,33 @@ const SashGrid = {
 
   toggleWindow(id) {
     if (this.isClosed(id)) return this.openWindow(id);
+    if (this.isMinimized(id)) return this.restoreMinimized(id);
     return this.closeWindow(id);
   },
 
+  /** Collapse an open window: its panel leaves the grid and its title bar is
+   *  docked in the strip at the bottom edge (.sash-min-dock). The wrapper is
+   *  marked hidden — the exact mechanism closeWindow() uses — so every other
+   *  open window expands into the freed space and no empty band remains. */
   minimizeWindow(id) {
     if (!SashCore.WINDOW_IDS.includes(id)) return false;
     if (this.isClosed(id)) return false;
     if (this.isMinimized(id)) return false;
-    if (this.isMaximized(id)) this.restoreMaximize();
     this.minimizedWindows.add(id);
     this._saveWindowStates();
-    this._syncMinimized();
-    this._updateWindowsMenu();
-    if (typeof LogConsole !== 'undefined') LogConsole.log('🗕 Minimized ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
+    this._applyStates();
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🗕 Minimized ' + (SashCore.WINDOW_TITLES[id] || id) + ' — docked at the bottom strip', 'info');
     return true;
   },
 
+  /** Bring a minimized window back into the grid at its previous slot. */
   restoreMinimized(id) {
     if (!this.isMinimized(id)) return false;
     this.minimizedWindows.delete(id);
     this._saveWindowStates();
-    this._syncMinimized();
-    this._updateWindowsMenu();
+    this._applyStates();
     this._flashLanded(id);
-    if (typeof LogConsole !== 'undefined') LogConsole.log('🗖 Restored ' + (SashCore.WINDOW_TITLES[id] || id), 'info');
+    if (typeof LogConsole !== 'undefined') LogConsole.log('🗖 Restored ' + (SashCore.WINDOW_TITLES[id] || id), 'success');
     return true;
   },
 
@@ -354,37 +340,73 @@ const SashGrid = {
     return this.minimizeWindow(id);
   },
 
-  maximizeWindow(id) {
-    if (!SashCore.WINDOW_IDS.includes(id)) return false;
-    if (this.isClosed(id)) this.openWindow(id);
-    if (this.maximizedWindow === id) return false;
-    this.maximizedWindow = id;
-    this.minimizedWindows.delete(id);
-    this._saveWindowStates();
-    this._syncMaximized();
-    this._syncMinimized();
+  /** Push all derived UI state (grid wrapper classes, empty splits, dock,
+   *  windows menu, empty-grid hint) from the closed/minimized sets. */
+  _applyStates() {
+    this._syncHidden();
     this._syncEmptySplits();
+    this._renderDock();
     this._updateWindowsMenu();
-    if (typeof LogConsole !== 'undefined') LogConsole.log('⛶ Maximized ' + (SashCore.WINDOW_TITLES[id] || id) + ' — full area', 'info');
-    return true;
+    this._checkEmptyGrid();
   },
 
-  restoreMaximize() {
-    if (!this.maximizedWindow) return false;
-    const id = this.maximizedWindow;
-    this.maximizedWindow = null;
-    this._saveWindowStates();
-    this._syncMaximized();
-    this._syncEmptySplits();
-    this._updateWindowsMenu();
-    this._flashLanded(id);
-    if (typeof LogConsole !== 'undefined') LogConsole.log('↩ Restored ' + (SashCore.WINDOW_TITLES[id] || id) + ' from maximized', 'info');
-    return true;
+  // ── minimized dock (bottom strip) ──────────────────────────
+
+  _ensureDock() {
+    if (this.dockEl) return;
+    if (!this.gridEl || !this.gridEl.parentNode) return;
+    let dock = document.getElementById('sashMinDock');
+    if (!dock) {
+      dock = document.createElement('div');
+      dock.id = 'sashMinDock';
+      dock.className = 'sash-min-dock hidden';
+      this.gridEl.parentNode.insertBefore(dock, this.gridEl.nextSibling);
+    }
+    this.dockEl = dock;
   },
 
-  toggleMaximize(id) {
-    if (this.isMaximized(id)) return this.restoreMaximize();
-    return this.maximizeWindow(id);
+  _renderDock() {
+    this._ensureDock();
+    if (!this.dockEl) return;
+    this.dockEl.innerHTML = '';
+    this.dockEl.classList.toggle('hidden', this.minimizedWindows.size === 0);
+    if (this.minimizedWindows.size === 0) return;
+    SashCore.WINDOWS.forEach((w) => {
+      const id = w.id;
+      if (!this.minimizedWindows.has(id)) return;
+      const title = w.title || id;
+      const chip = document.createElement('div');
+      chip.className = 'sash-min-chip';
+      chip.dataset.win = id;
+      chip.title = 'Restore ' + title;
+      const label = document.createElement('span');
+      label.className = 'smc-label';
+      label.textContent = title;
+      chip.appendChild(label);
+      const restoreBtn = document.createElement('button');
+      restoreBtn.className = 'win-btn win-toggle';
+      restoreBtn.textContent = '□';
+      restoreBtn.title = 'Restore ' + title;
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'win-btn win-close';
+      closeBtn.textContent = '✕';
+      closeBtn.title = 'Close ' + title;
+      chip.appendChild(restoreBtn);
+      chip.appendChild(closeBtn);
+      chip.addEventListener('click', (e) => {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        this.restoreMinimized(id);
+      });
+      restoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.restoreMinimized(id);
+      });
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.closeWindow(id);
+      });
+      this.dockEl.appendChild(chip);
+    });
   },
 
   // ── rendering ───────────────────────────────────────────────
@@ -394,12 +416,7 @@ const SashGrid = {
     frag.style.flex = '1 1 0%';
     this.gridEl.replaceChildren(frag);
     this._ensureWindowControls();
-    this._syncHidden();
-    this._syncMinimized();
-    this._syncMaximized();
-    this._syncEmptySplits();
-    this._updateWindowsMenu();
-    this._checkEmptyGrid();
+    this._applyStates();
   },
 
   _buildNode(node, path) {
@@ -450,11 +467,19 @@ const SashGrid = {
       }
       controls = document.createElement('span');
       controls.className = 'win-controls';
-      // Clean Unicode icons: ─ minimize, □ maximize, ✕ close
-      controls.innerHTML =
-        '<button class="win-btn win-minimize" title="Minimize">─</button>' +
-        '<button class="win-btn win-maximize" title="Maximize">□</button>' +
-        '<button class="win-btn win-close" title="Close">✕</button>';
+      // Standard window-control glyphs (dark theme): ─ minimize/restore
+      // toggle + ✕ close. The toggle swaps to □ while the window is
+      // minimized (visible on the dock strip / windows menu).
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'win-btn win-toggle';
+      toggleBtn.textContent = '─';
+      toggleBtn.title = 'Minimize';
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'win-btn win-close';
+      closeBtn.textContent = '✕';
+      closeBtn.title = 'Close';
+      controls.appendChild(toggleBtn);
+      controls.appendChild(closeBtn);
       const existingClose = title.querySelector('#closeConfigBtn');
       if (existingClose) existingClose.style.display = 'none';
       const spacer = title.querySelector('.spacer');
@@ -466,15 +491,11 @@ const SashGrid = {
         title.appendChild(sp);
         title.appendChild(controls);
       }
-      controls.querySelector('.win-minimize').addEventListener('click', (e) => {
+      toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.toggleMinimize(id);
       });
-      controls.querySelector('.win-maximize').addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.toggleMaximize(id);
-      });
-      controls.querySelector('.win-close').addEventListener('click', (e) => {
+      closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.closeWindow(id);
       });
@@ -483,38 +504,19 @@ const SashGrid = {
   },
 
   _updateWindowControlIcons(title, id) {
-    const minBtn = title.querySelector('.win-minimize');
-    const maxBtn = title.querySelector('.win-maximize');
+    const toggleBtn = title.querySelector('.win-toggle');
     const closeBtn = title.querySelector('.win-close');
-    if (!minBtn || !maxBtn || !closeBtn) return;
+    if (!toggleBtn || !closeBtn) return;
+    const name = SashCore.WINDOW_TITLES[id] || id;
     const isMin = this.isMinimized(id);
-    const isMax = this.isMaximized(id);
-    // Clean icons with tooltip
-    if (isMin) {
-      minBtn.textContent = '□';
-      minBtn.title = 'Restore';
-    } else {
-      minBtn.textContent = '─';
-      minBtn.title = 'Minimize';
-    }
-    if (isMax) {
-      maxBtn.textContent = '❐';
-      maxBtn.title = 'Restore';
-    } else {
-      maxBtn.textContent = '□';
-      maxBtn.title = 'Maximize';
-    }
+    // ─ while open (minimize); □ once minimized (restore). A minimized
+    // window's title bar is docked at the bottom, so in the grid the toggle
+    // is normally seen as ─ only — the □ state lives on the dock strip and
+    // in the Windows dropdown (FULL SPEC toggle pair).
+    toggleBtn.textContent = isMin ? '□' : '─';
+    toggleBtn.title = (isMin ? 'Restore ' : 'Minimize ') + name;
     closeBtn.textContent = '✕';
-    closeBtn.title = 'Close';
-  },
-
-  _updateAllControlIcons() {
-    if (!this.gridEl) return;
-    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
-      const id = winEl.dataset.win;
-      const title = winEl.querySelector(':scope > .panel > .win-title');
-      if (title) this._updateWindowControlIcons(title, id);
-    });
+    closeBtn.title = 'Close ' + name;
   },
 
   // ── hidden windows ──────────────────────────────────────────
@@ -532,8 +534,11 @@ const SashGrid = {
       const id = winEl.dataset.win;
       const panel = winEl.querySelector(':scope > .panel');
       const isClosed = this.closedWindows.has(id);
+      const isMinimized = this.minimizedWindows.has(id);
       const isHiddenByPanel = this._panelIsHidden(panel);
-      const shouldHide = isClosed || isHiddenByPanel;
+      // minimized windows release their grid slot exactly like closed ones —
+      // the wrapper gets display:none so the visible siblings expand into it.
+      const shouldHide = isClosed || isMinimized || isHiddenByPanel;
       winEl.classList.toggle('sash-win-hidden', shouldHide);
       winEl.classList.toggle('sash-win-closed', isClosed);
     });
@@ -549,31 +554,10 @@ const SashGrid = {
     });
   },
 
-  _syncMinimized() {
-    if (!this.gridEl) return;
-    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
-      const id = winEl.dataset.win;
-      const isMin = this.minimizedWindows.has(id) && !this.closedWindows.has(id) && this.maximizedWindow !== id;
-      winEl.classList.toggle('sash-win-minimized', isMin);
-    });
-    this._updateAllControlIcons();
-  },
-
-  _syncMaximized() {
-    if (!this.gridEl) return;
-    const hasMax = !!this.maximizedWindow;
-    this.gridEl.classList.toggle('sash-grid-maximized', hasMax);
-    this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
-      const id = winEl.dataset.win;
-      const isMax = this.maximizedWindow === id;
-      winEl.classList.toggle('sash-window-maximized', isMax);
-    });
-    this._updateAllControlIcons();
-  },
-
   // ── FIX FOR BUG #2: empty rows / splits ──────────────────────
-  // If all descendant windows of a split are closed/hidden, hide the split itself
-  // so no blank row remains. Minimized windows count as visible.
+  // If all descendant windows of a split are closed/hidden (a minimized
+  // window counts as hidden — its content moved to the bottom dock), hide the
+  // split itself so no blank row remains.
   _syncEmptySplits() {
     if (!this.gridEl) return;
     // bottom-up so child splits are evaluated before parents
@@ -614,11 +598,14 @@ const SashGrid = {
     const existing = this.gridEl.querySelector('.sash-grid-empty');
     if (existing) existing.remove();
     const visible = this.gridEl.querySelectorAll('.sash-window:not(.sash-win-hidden):not(.sash-win-closed)');
-    const hasVisible = visible.length > 0 || this.maximizedWindow;
+    const hasVisible = visible.length > 0;
     if (!hasVisible) {
+      const allMinimized = this.minimizedWindows.size > 0 && this.closedWindows.size === 0;
       const empty = document.createElement('div');
       empty.className = 'sash-grid-empty';
-      empty.innerHTML = '<div style="font-size:28px">◫</div><div>All windows are closed</div><div style="font-size:11px;opacity:.8">Open windows from the <b>Windows</b> menu in the top bar</div><button class="btn-small" id="emptyShowAllBtn" style="margin-top:8px">Show all windows</button>';
+      empty.innerHTML = allMinimized
+        ? '<div style="font-size:28px">▁</div><div>All windows are minimized</div><div style="font-size:11px;opacity:.8">Click a strip at the <b>bottom edge</b> to restore a window</div><button class="btn-small" id="emptyShowAllBtn" style="margin-top:8px">Show all windows</button>'
+        : '<div style="font-size:28px">◫</div><div>All windows are closed</div><div style="font-size:11px;opacity:.8">Open windows from the <b>Windows</b> menu in the top bar</div><button class="btn-small" id="emptyShowAllBtn" style="margin-top:8px">Show all windows</button>';
       this.gridEl.appendChild(empty);
       const btn = empty.querySelector('#emptyShowAllBtn');
       if (btn) btn.addEventListener('click', () => {
@@ -634,11 +621,11 @@ const SashGrid = {
       let changed = false;
       this.gridEl.querySelectorAll('.sash-window').forEach((winEl) => {
         const id = winEl.dataset.win;
-        if (this.closedWindows.has(id)) return;
         const panel = winEl.querySelector(':scope > .panel');
-        const hidden = this._panelIsHidden(panel);
-        if (winEl.classList.contains('sash-win-hidden') !== hidden) changed = true;
-        winEl.classList.toggle('sash-win-hidden', hidden);
+        const panelHidden = this._panelIsHidden(panel);
+        const shouldHide = this.closedWindows.has(id) || this.minimizedWindows.has(id) || panelHidden;
+        if (winEl.classList.contains('sash-win-hidden') !== shouldHide) changed = true;
+        winEl.classList.toggle('sash-win-hidden', shouldHide);
       });
       if (changed) {
         this._syncHidden();
@@ -691,15 +678,9 @@ const SashGrid = {
       e.stopPropagation();
       SashCore.WINDOW_IDS.forEach((id) => this.closedWindows.add(id));
       this.minimizedWindows.clear();
-      this.maximizedWindow = null;
       Object.values(this.winEls).forEach((panel) => { if (panel) panel.classList.add('hidden'); });
       this._saveWindowStates();
-      this._syncHidden();
-      this._syncMinimized();
-      this._syncMaximized();
-      this._syncEmptySplits();
-      this._updateWindowsMenu();
-      this._checkEmptyGrid();
+      this._applyStates();
       menu.classList.add('hidden');
       if (typeof LogConsole !== 'undefined') LogConsole.log('🪟 All windows closed — reopen from Windows menu', 'warn');
     });
@@ -716,18 +697,12 @@ const SashGrid = {
       const title = w.title;
       const isClosed = this.isClosed(id);
       const isMin = this.isMinimized(id);
-      const isMax = this.isMaximized(id);
       let stateIcon, stateClass, badge, badgeClass;
       if (isClosed) {
         stateIcon = '○';
         stateClass = 'closed';
         badge = 'Closed';
         badgeClass = 'b-closed';
-      } else if (isMax) {
-        stateIcon = '□';
-        stateClass = 'maximized';
-        badge = 'Maximized';
-        badgeClass = 'b-max';
       } else if (isMin) {
         stateIcon = '─';
         stateClass = 'minimized';
@@ -739,15 +714,16 @@ const SashGrid = {
         badge = 'Open';
         badgeClass = 'b-open';
       }
-      return `<div class="wm-item ${isClosed ? 'wm-closed' : ''}" data-win="${id}" title="Click to ${isClosed ? 'open' : 'close'} ${title}">
+      const rowTitle = isClosed ? 'Click to open' : (isMin ? 'Click to restore' : 'Click to close');
+      const toggle = isClosed
+        ? `<button class="wm-mini-btn" data-action="open" data-win="${id}" title="Open ${title}">●</button>`
+        : `<button class="wm-mini-btn" data-action="minimize" data-win="${id}" title="${isMin ? 'Restore' : 'Minimize'} ${title}">${isMin ? '□' : '─'}</button>
+          <button class="wm-mini-btn" data-action="close" data-win="${id}" title="Close ${title}">✕</button>`;
+      return `<div class="wm-item ${isClosed ? 'wm-closed' : ''}" data-win="${id}" title="${rowTitle} ${title}">
         <span class="wm-state-icon ${stateClass}">${stateIcon}</span>
         <span class="wm-title">${title}</span>
         <span class="wm-badge ${badgeClass}">${badge}</span>
-        <span class="wm-actions">
-          <button class="wm-mini-btn" data-action="minimize" data-win="${id}" title="${isMin ? 'Restore' : 'Minimize'}">${isMin ? '□' : '─'}</button>
-          <button class="wm-mini-btn" data-action="maximize" data-win="${id}" title="${isMax ? 'Restore' : 'Maximize'}">${isMax ? '❐' : '□'}</button>
-          <button class="wm-mini-btn" data-action="close" data-win="${id}" title="${isClosed ? 'Open' : 'Close'}">${isClosed ? '●' : '✕'}</button>
-        </span>
+        <span class="wm-actions">${toggle}</span>
       </div>`;
     }).join('');
     listEl.innerHTML = items;
@@ -765,8 +741,8 @@ const SashGrid = {
         const id = btn.dataset.win;
         const action = btn.dataset.action;
         if (action === 'minimize') this.toggleMinimize(id);
-        else if (action === 'maximize') this.toggleMaximize(id);
-        else if (action === 'close') this.toggleWindow(id);
+        else if (action === 'open') this.openWindow(id);
+        else if (action === 'close') this.closeWindow(id);
         this._renderWindowsMenu();
       });
     });
@@ -788,7 +764,7 @@ const SashGrid = {
     if (ev.target.closest('button, input, select, textarea, a, .chip, .win-controls, .win-btn')) return;
     const winEl = title.closest('.sash-window');
     if (!winEl) return;
-    if (winEl.classList.contains('sash-window-maximized')) return;
+    if (winEl.classList.contains('sash-win-hidden') || winEl.classList.contains('sash-win-closed')) return;
     this._startDrag(winEl, ev);
   },
 
@@ -1188,7 +1164,7 @@ const SashGrid = {
 
   getTree() { return SashCore.clone(this.root); },
   getWindowStates() {
-    return { closed: Array.from(this.closedWindows), minimized: Array.from(this.minimizedWindows), maximized: this.maximizedWindow };
+    return { closed: Array.from(this.closedWindows), minimized: Array.from(this.minimizedWindows) };
   },
 
   simulateDrop(draggedId, targetId, zone) {

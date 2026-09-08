@@ -1,5 +1,12 @@
 # Grid Window Management Controls — Design
 
+> ⚠️ **SUPERSEDED (2026-09-08).** The window-control part of this design was
+> replaced after user testing: minimize now docks the title strip at the
+> bottom edge (releasing the grid slot like a close), the full-grid
+> "maximized" state is removed, and the controls are a ─/□ toggle pair plus
+> ✕. See `docs/WINDOW_CONTROLS_MINIMIZE_DOCK_FIX_DESIGN_2026-09-08.md`
+> (implemented) for the current model. Kept here for history.
+
 Date: 2026-09-07
 Status: implementation design, written before code changes
 Feature request: every window in the grid must support close/reopen, minimize/maximize, and a top-bar dropdown listing all windows with open/closed state icons.
