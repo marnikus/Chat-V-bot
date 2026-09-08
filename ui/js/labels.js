@@ -25,6 +25,9 @@ const Labels = {
   selected: new Set(),              // ticked labels in the filter section
   person: '',                       // the person section 4 works on
   draftColor: '',
+  editing: '',                      // label id currently open in the inline editor
+  editName: '',                     // editor drafts (name / colour)
+  editColor: '',
   _wired: false,
   _els: {},
 
@@ -36,6 +39,7 @@ const Labels = {
     this._els = {
       panel: $('winLabels'),
       active: $('labelActiveList'),
+      target: $('labelAssignTarget'),
       name: $('labelNameInput'),
       colorBtn: $('labelColorBtn'),
       addBtn: $('labelAddBtn'),
@@ -76,8 +80,9 @@ const Labels = {
       this._els.clearBtn.addEventListener('click', () => this.clearFilter());
     if (this._els.personSelect) {
       this._els.personSelect.addEventListener('change', (e) => {
-        this.person = e.target.value || '';
-        this.renderAssign();
+        // The dropdown is only a mirror — the quick-assign funnel is the
+        // same one the table row clicks use, minus the window auto-open.
+        this.setPerson(e.target.value || '', { focus: false });
       });
     }
     if (this._els.assignBtn)
@@ -117,6 +122,8 @@ const Labels = {
     Array.from(this.selected).forEach((id) => {
       if (!live.has(id)) this.selected.delete(id);
     });
+    // and close the inline editor when its label disappeared
+    if (this.editing && !live.has(this.editing)) this.editing = '';
     this.render();
     this.repaintTables();
   },
@@ -184,7 +191,14 @@ const Labels = {
     return host;
   },
 
-  /** One compact rounded pill: bright translucent background + ✕. */
+  /** One compact rounded pill: bright translucent background + ✕.
+   *
+   *  options.title    — full tooltip override (the Label Manager badge
+   *                     explains the click action + how many people carry it)
+   *  options.marked   — prepend a ✓ (the target person carries this label)
+   *  options.assigned — stronger fill + colour ring, the "on" state of the
+   *                     quick-assign toggle in the Label Manager
+   */
   pill(label, nick, options) {
     options = options || {};
     const color = String((label && label.color) || '#8892a6');
@@ -194,8 +208,14 @@ const Labels = {
     pill.style.background = this.tint(color, 0.22);
     pill.style.borderColor = color;
     pill.style.color = '#fff';
-    pill.title = (label && label.name ? label.name : '') +
-      (options.removable === false ? '' : ' — ✕ removes it from this person only');
+    pill.title = options.title || ((label && label.name ? label.name : '') +
+      (options.removable === false ? '' : ' — ✕ removes it from this person only'));
+    if (options.marked) {
+      const check = document.createElement('span');
+      check.className = 'label-pill-check';
+      check.textContent = '✓';
+      pill.appendChild(check);
+    }
     const dot = document.createElement('span');
     dot.className = 'label-pill-dot';
     dot.style.background = color;
@@ -204,6 +224,11 @@ const Labels = {
     text.className = 'label-pill-text';
     text.textContent = (label && label.name) || '';
     pill.appendChild(text);
+    if (options.assigned) {
+      pill.classList.add('assigned');
+      pill.style.background = this.tint(color, 0.42);
+      pill.style.boxShadow = '0 0 0 1.5px ' + color;
+    }
     if (options.removable !== false) {
       const x = document.createElement('button');
       x.type = 'button';
@@ -263,17 +288,79 @@ const Labels = {
     bridge.label_delete(id);
   },
 
-  recolor(id, anchor) {
+  // ── quick assign: badge click = assign to the current target ──
+  /**
+   * The badge click in Active Labels. With no target it only warns — the
+   * chip and the section flash, nothing reaches the backend. With a target
+   * it is a TOGGLE: a second click takes the label away again, so the
+   * badge doubles as an instant undo (RULE 12 covers the backend entry).
+   */
+  toggleAssign(id) {
+    if (!this.person) {
+      this.flashNoTarget();
+      if (typeof LogConsole !== 'undefined')
+        LogConsole.log('⚠ Click a person first (People, Storage or Person ' +
+          'History) — then click the badge to assign it', 'warn');
+      return;
+    }
+    if (this.idsFor(this.person).indexOf(id) >= 0)
+      this.unassign(this.person, id);
+    else this.assignTo(this.person, id);
+  },
+
+  /** Draw the eye to the Active Labels section + the target chip. */
+  flashNoTarget() {
+    const flash = (el, cls) => {
+      if (!el || !el.classList) return;
+      el.classList.remove(cls);
+      void el.offsetWidth;               // restart the animation
+      el.classList.add(cls);
+    };
+    const host = this._els.active;
+    flash(host && host.closest ? host.closest('.label-section') : null,
+          'label-section-flash');
+    flash(this._els.target, 'flash');
+  },
+
+  // ── inline editor (rename + recolour, inside Active Labels) ──
+  startEdit(id) {
     const label = this.byId(id);
-    ColorPicker.open({
-      anchor: anchor,
-      color: label ? label.color : '',
-      title: 'Pick Color' + (label ? ' — ' + label.name : ''),
-      onPick: (hex) => {
-        const bridge = this._bridge('label_update');
-        if (bridge) bridge.label_update(id, '', hex);
-      },
-    });
+    if (!label) return;
+    this.editing = id;
+    this.editName = label.name;
+    this.editColor = label.color;
+    this.renderActive();
+    const input = this._els.active
+      ? this._els.active.querySelector('.label-edit-input') : null;
+    if (input) {
+      if (typeof input.focus === 'function') input.focus();
+      if (typeof input.select === 'function') input.select();
+    }
+  },
+
+  cancelEdit() {
+    this.editing = '';
+    this.renderActive();
+  },
+
+  saveEdit() {
+    const label = this.byId(this.editing);
+    if (!label) { this.cancelEdit(); return; }
+    const name = String(this.editName || '').trim();
+    if (!name) {
+      if (typeof LogConsole !== 'undefined')
+        LogConsole.log('⚠ A label needs a name', 'warn');
+      return;
+    }
+    const color = String(this.editColor || '');
+    const bridge = this._bridge('label_update');
+    if (!bridge) { this.cancelEdit(); return; }
+    // send only the fields that actually changed; '' = keep (backend rule)
+    const nameChanged = name !== label.name ? name : '';
+    const colorChanged = color && color !== label.color ? color : '';
+    if (!nameChanged && !colorChanged) { this.cancelEdit(); return; }
+    bridge.label_update(label.id, nameChanged, colorChanged);
+    this.cancelEdit();
   },
 
   assignTo(nick, id) {
@@ -329,19 +416,33 @@ const Labels = {
     }
   },
 
-  /** The Label Manager follows whichever person the user is looking at. */
+  /**
+   * The single funnel for "this person is now the label target" — every
+   * person click in the app (People row, Storage row, 🏷 buttons, the
+   * Section 4 dropdown) ends up here. It
+   *
+   *   1. re-renders the manager (badge rings + target chip follow);
+   *   2. opens the Label Manager window so the badge click can land —
+   *      openWindow() never steals focus and is a no-op when already open;
+   *   3. moves the target highlight in BOTH tables.
+   *
+   * options.focus === false skips the window open (Section 4 dropdown).
+   */
   setPerson(nick, options) {
+    options = options || {};
     const clean = String(nick == null ? '' : nick).trim();
-    if (!clean || clean === this.person) {
-      if (clean) this.renderAssign();
-      return;
-    }
     this.person = clean;
     this.renderAssign();
-    if (options && options.focus && typeof SashGrid !== 'undefined' &&
+    this.renderActive();
+    this.renderTarget();
+    if (clean && options.focus !== false && typeof SashGrid !== 'undefined' &&
         SashGrid.openWindow) {
       SashGrid.openWindow('labels');
     }
+    if (typeof UserTable !== 'undefined' && UserTable.markLabelTarget)
+      UserTable.markLabelTarget(clean);
+    if (typeof HistoryDb !== 'undefined' && HistoryDb.markLabelTarget)
+      HistoryDb.markLabelTarget(clean);
   },
 
   assignSelected() {
@@ -362,6 +463,7 @@ const Labels = {
     this.renderActive();
     this.renderFilter();
     this.renderAssign();
+    this.renderTarget();
   },
 
   _notice(text) {
@@ -371,6 +473,13 @@ const Labels = {
     return note;
   },
 
+  /**
+   * Active Labels — one entry per label with THREE separate click zones
+   * (visual spec): the badge ASSIGNS to the current person, the small
+   * "edit" text opens the inline editor, the ✕ deletes the label
+   * everywhere. No listener sits on the wrapper, so the zones can never
+   * bleed into each other.
+   */
   renderActive() {
     const host = this._els.active;
     if (!host) return;
@@ -380,18 +489,47 @@ const Labels = {
         'No labels yet — type a name below, pick a colour and press “+ Add Label”.'));
     }
     this.defs.forEach((label) => {
+      if (this.editing === label.id) {
+        nodes.push(this._editRow(label));
+        return;
+      }
+      const assigned = !!this.person &&
+        this.idsFor(this.person).indexOf(label.id) >= 0;
+
       const wrap = document.createElement('span');
       wrap.className = 'label-manage-item';
-      const pill = this.pill(label, '', { removable: false });
-      pill.title = label.name + ' — click the dot to recolour';
-      pill.addEventListener('click', () => this.recolor(label.id, pill));
+      if (assigned) wrap.classList.add('assigned');
+
+      // Zone 1 — the badge: click = assign (or take away) on the target.
+      const pill = this.pill(label, '', {
+        removable: false,
+        title: this._badgeTitle(label),
+        marked: assigned,
+        assigned: assigned,
+      });
+      pill.classList.add('label-manage-badge');
+      pill.setAttribute('role', 'button');
+      pill.setAttribute('tabindex', '0');
+      pill.addEventListener('click', () => this.toggleAssign(label.id));
+      pill.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.preventDefault) e.preventDefault();
+          this.toggleAssign(label.id);
+        }
+      });
       wrap.appendChild(pill);
-      const count = this.countFor(label.id);
-      const badge = document.createElement('span');
-      badge.className = 'label-count';
-      badge.textContent = count ? String(count) : '0';
-      badge.title = count + ' person(s) carry this label';
-      wrap.appendChild(badge);
+
+      // Zone 2 — "edit": rename / recolour in place.
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'label-manage-edit';
+      edit.textContent = 'edit';
+      edit.title = 'Rename or recolour “' + label.name + '” — ' +
+        this.countFor(label.id) + ' person(s) carry this label';
+      edit.addEventListener('click', () => this.startEdit(label.id));
+      wrap.appendChild(edit);
+
+      // Zone 3 — ✕: delete from the whole system.
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'label-del';
@@ -400,9 +538,101 @@ const Labels = {
         '” from the whole system (and from every person)';
       del.addEventListener('click', () => this.deleteLabel(label.id));
       wrap.appendChild(del);
+
       nodes.push(wrap);
     });
     host.replaceChildren.apply(host, nodes);
+  },
+
+  /** Badge tooltip: what the click will do + how many people carry it. */
+  _badgeTitle(label) {
+    const n = this.countFor(label.id);
+    const count = (n ? n : 'No') + ' person(s) carry “' + label.name + '”.';
+    if (!this.person)
+      return 'Click a person in People first — then click this badge to ' +
+        'assign “' + label.name + '”. ' + count;
+    return this.idsFor(this.person).indexOf(label.id) >= 0
+      ? '✓ assigned to ' + this.person + ' — click to take “' +
+        label.name + '” away. ' + count
+      : 'Click to assign “' + label.name + '” to ' + this.person + '. ' + count;
+  },
+
+  /** The inline editor that replaces a label entry while it is edited. */
+  _editRow(label) {
+    const row = document.createElement('span');
+    row.className = 'label-edit-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'label-edit-input';
+    input.value = this.editName || label.name;
+    input.spellcheck = false;
+    input.maxLength = 40;
+    input.title = 'Rename this label — Enter saves, Escape cancels';
+    input.addEventListener('input', () => { this.editName = input.value; });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (e.preventDefault) e.preventDefault();
+        this.saveEdit();
+      } else if (e.key === 'Escape') {
+        if (e.preventDefault) e.preventDefault();
+        this.cancelEdit();
+      }
+    });
+    row.appendChild(input);
+
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = 'label-edit-color';
+    colorBtn.style.background = this.editColor || label.color;
+    colorBtn.title = 'Change the label colour';
+    colorBtn.addEventListener('click', () => {
+      ColorPicker.open({
+        anchor: colorBtn,
+        color: this.editColor || label.color,
+        title: 'Pick Color — ' + label.name,
+        onPick: (hex) => {
+          this.editColor = hex;
+          colorBtn.style.background = hex;
+        },
+      });
+    });
+    row.appendChild(colorBtn);
+
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn-small btn-primary label-edit-save';
+    save.textContent = 'Save';
+    save.title = 'Save the new name and colour';
+    save.addEventListener('click', () => this.saveEdit());
+    row.appendChild(save);
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn-small label-edit-cancel';
+    cancel.textContent = 'Cancel';
+    cancel.title = 'Discard the changes';
+    cancel.addEventListener('click', () => this.cancelEdit());
+    row.appendChild(cancel);
+
+    return row;
+  },
+
+  /** The chip in the Active Labels title: who a badge click lands on. */
+  renderTarget() {
+    const chip = this._els.target;
+    if (!chip) return;
+    if (this.person) {
+      chip.textContent = '🎯 ' + this.person;
+      chip.classList.add('on');
+      chip.title = 'Every badge below assigns to “' + this.person +
+        '” — click again to take the label away';
+    } else {
+      chip.textContent = 'click a person to quick-assign';
+      chip.classList.remove('on');
+      chip.title = 'Click a person in People, Storage or Person History — ' +
+        'then click a badge to assign it';
+    }
   },
 
   countFor(id) {
@@ -515,7 +745,8 @@ const Labels = {
     }
     if (this._els.assignHint) {
       this._els.assignHint.textContent = this.person
-        ? 'Assigning to “' + this.person + '” — tick the labels, then press Assign'
+        ? 'Target: “' + this.person + '” — click a badge above, or tick ' +
+          'below and press Assign'
         : 'No person selected';
     }
     if (this._els.assignBtn) this._els.assignBtn.disabled = !this.person;

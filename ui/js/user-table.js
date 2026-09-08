@@ -72,13 +72,22 @@ const UserTable = {
           return;
         }
         const btn = e.target.closest('button[data-act]');
-        if (!btn) return;
-        const nick = btn.dataset.nick;
-        const act = btn.dataset.act;
-        if (act === 'delete') this.deleteNick(nick);
-        else if (act === 'toggle-messaged') this.toggleMessaged(nick);
-        else if (act === 'message') this.manualMessage(nick);
-        else if (act === 'label') this.labelNick(nick);
+        if (btn) {
+          const nick = btn.dataset.nick;
+          const act = btn.dataset.act;
+          if (act === 'delete') this.deleteNick(nick);
+          else if (act === 'toggle-messaged') this.toggleMessaged(nick);
+          else if (act === 'message') this.manualMessage(nick);
+          else if (act === 'label') this.labelNick(nick);
+          return;
+        }
+        // Quick assign: a click anywhere else on the row points the Label
+        // Manager at this person (checkbox cell and action buttons excepted).
+        if (e.target.closest('.col-select') || e.target.closest('.row-actions'))
+          return;
+        const row = e.target.closest('tr[data-nick]');
+        if (row && typeof Labels !== 'undefined')
+          Labels.setPerson(row.dataset.nick);
       });
       tbody.addEventListener('change', (e) => {
         const cb = e.target.closest('input[type="checkbox"][data-nick]');
@@ -217,9 +226,11 @@ const UserTable = {
     const rowCls = [
       !u.messaged ? 'row-new' : '',
       this.selected.has(u.nick) ? 'row-selected' : '',
+      (typeof Labels !== 'undefined' && Labels.person === u.nick)
+        ? 'row-label-target' : '',
     ].filter(Boolean).join(' ');
 
-    return `<tr class="${rowCls}">
+    return `<tr class="${rowCls}" data-nick="${attr}">
       <td class="col-select">
         <input type="checkbox" data-nick="${attr}"${checked}
                aria-label="Select ${nick}"></td>
@@ -261,6 +272,22 @@ const UserTable = {
   labelNick(nick) {
     if (typeof Labels === 'undefined') return;
     Labels.setPerson(nick, { focus: true });
+  },
+
+  /**
+   * Quick-assign target highlight, called by Labels.setPerson(): move the
+   * accent bar to this person's row in place (no full re-render). render()
+   * stamps the same class from Labels.person, so the two stay in agreement.
+   */
+  markLabelTarget(nick) {
+    const tbody = document.getElementById('userTableBody');
+    if (!tbody || !tbody.querySelectorAll) return;
+    const clean = String(nick || '').trim();
+    tbody.querySelectorAll('tr[data-nick]').forEach((tr) => {
+      const on = !!clean && tr.dataset.nick === clean;
+      tr.classList.toggle('row-label-target', on);
+      if (on && tr.scrollIntoView) tr.scrollIntoView({ block: 'nearest' });
+    });
   },
 
   // ── selection ───────────────────────────────────────────────

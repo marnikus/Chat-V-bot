@@ -171,6 +171,22 @@ const HistoryDb = {
     Labels.setPerson(nick, { focus: true });
   },
 
+  /**
+   * Quick-assign target highlight, called by Labels.setPerson(): move the
+   * accent bar to this person's row in place. render() stamps the same
+   * class from Labels.person, so the two stay in agreement.
+   */
+  markLabelTarget(nick) {
+    const body = this._els.body;
+    if (!body || !body.querySelectorAll) return;
+    const clean = String(nick || '').trim();
+    body.querySelectorAll('tr[data-nick]').forEach((row) => {
+      const on = !!clean && row.dataset.nick === clean;
+      row.classList.toggle('row-label-target', on);
+      if (on && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+    });
+  },
+
   /** Show one person in the database: filter to that nick, flash the row. */
   highlightNick(nick) {
     this._flashNick = String(nick || '').trim();
@@ -272,7 +288,10 @@ const HistoryDb = {
     }
     visible.forEach((person) => {
       const row = document.createElement('tr');
-      row.className = 'userdb-row' + (person.deleted ? ' deleted' : '');
+      row.className = 'userdb-row' + (person.deleted ? ' deleted' : '') +
+        ((typeof Labels !== 'undefined' &&
+          Labels.person === (person.nick || ''))
+          ? ' row-label-target' : '');
       row.dataset.nick = person.nick || '';
       const nickCell = this._cell(row, person.nick, 'userdb-nick');
       nickCell.title = 'Open this conversation';
