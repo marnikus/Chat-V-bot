@@ -52,10 +52,15 @@ var HistoryView = (function () {
   function mediaRestoreNode(media, opts, row) {
     const box = el('div', 'msg-media-restore');
     box.dataset.mediaId = String(media.id == null ? '' : media.id);
+    box.dataset.mediaUrl = media.url || '';
+    box.dataset.mediaKind = media.kind || 'image';
     box.appendChild(el('span', 'msg-media-restore-kind',
                        media.kind === 'gif' ? 'GIF' : 'Image'));
-    box.appendChild(el('span', 'msg-media-restore-label', 'click to restore'));
-    box.title = media.url || '';
+    box.appendChild(el('span', 'msg-media-restore-label', media.state === 'pending'
+      ? 'waiting for download — click to restore now' : 'click to restore'));
+    if (media.error)
+      box.appendChild(el('span', 'msg-media-restore-error', media.error));
+    box.title = [media.error, media.url].filter(Boolean).join('\n');
     if (typeof opts.onRestoreMedia === 'function') {
       box.addEventListener('click', (event) => {
         if (event && event.button) return;          // left click only
@@ -86,13 +91,18 @@ var HistoryView = (function () {
     const img = document.createElement('img');
     img.className = 'msg-media' + (media.kind === 'gif' ? ' is-gif' : '');
     img.dataset.mediaId = String(media.id == null ? '' : media.id);
+    img.dataset.mediaUrl = media.url || '';
+    img.dataset.mediaKind = media.kind || 'image';
     img.setAttribute('src', mediaSrc(media));
     img.setAttribute('alt', media.kind === 'gif' ? 'GIF' : 'image');
     img.setAttribute('loading', 'lazy');
     img.title = 'Click to copy';
     img.addEventListener('error', (event) => {
       if (event && event.preventDefault) event.preventDefault();
-      wrap.replaceChildren(mediaRestoreNode(media, opts, row));
+      wrap.replaceChildren(mediaRestoreNode(Object.assign({}, media, {
+        state: 'missing', path: '',
+        error: 'The saved image could not be displayed. Click to restore it.',
+      }), opts, row));
     });
     if (typeof opts.onCopyMedia === 'function') {
       img.addEventListener('click', (event) => {
@@ -286,59 +296,54 @@ var HistoryView = (function () {
     if (store && store.copyMedia) store.copyMedia(String(mediaId));
   }
 
-  function appendMediaPath(host, mediaId, path, kind) {
+  function restoreFromView(mediaId) {
+    const store = (typeof HistoryStore !== 'undefined') ? HistoryStore
+      : (typeof window !== 'undefined' ? window.HistoryStore : null);
+    if (store && store.restoreMedia) store.restoreMedia(String(mediaId));
+  }
+
+  /** Update a rendered media state (also works on search results). */
+  function applyMediaInfo(host, mediaId, info) {
+    if (!host || !host.querySelectorAll || !info) return false;
     const want = String(mediaId == null ? '' : mediaId);
-    const src = mediaSrc({ path: path });
-    if (!want || !src) return false;
+    if (!want) return false;
+    const nodes = Array.from(host.querySelectorAll('.msg-media'))
+      .concat(Array.from(host.querySelectorAll('.msg-media-restore')));
     let changed = false;
-    host.querySelectorAll('.msg-media').forEach((node) => {
+    nodes.forEach((node) => {
       if (String(node.dataset.mediaId) !== want) return;
-      node.setAttribute('src', src);
-      changed = true;
-    });
-    host.querySelectorAll('.msg-media-restore').forEach((node) => {
-      if (String(node.dataset.mediaId) !== want) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'msg-media-box';
-      const img = document.createElement('img');
-      img.className = 'msg-media' + (kind === 'gif' ? ' is-gif' : '');
-      img.dataset.mediaId = want;
-      img.setAttribute('src', src);
-      img.setAttribute('alt', kind === 'gif' ? 'GIF' : 'image');
-      img.setAttribute('loading', 'lazy');
-      img.title = 'Click to copy';
-      img.addEventListener('click', (event) => {
-        if (event && event.button) return;          // left click only
-        if (event && event.preventDefault) event.preventDefault();
-        copyFromView(mediaId);
+      const media = Object.assign({ id: mediaId,
+        url: node.dataset.mediaUrl || '', kind: node.dataset.mediaKind || 'image',
+      }, info);
+      // Reuse the normal renderer: late previews retain GIF, copy and error /
+      // restore handlers, rather than becoming an unhandled broken <img>.
+      const replacement = mediaNode({ media }, {
+        onCopyMedia: () => copyFromView(mediaId),
+        onRestoreMedia: () => restoreFromView(mediaId),
       });
-      wrap.appendChild(img);
-      if (typeof node.replaceWith === 'function') node.replaceWith(wrap);
-      else if (node.parentNode) {
-        const at = node.parentNode.children.indexOf(node);
-        if (at >= 0) node.parentNode.children.splice(at, 1, wrap);
-        wrap.parentNode = node.parentNode;
-      }
+      const parent = node.parentNode;
+      const target = node.classList.contains('msg-media') && parent &&
+        parent.classList.contains('msg-media-box') ? parent : node;
+      if (typeof target.replaceWith === 'function') target.replaceWith(replacement);
+      else if (target.parentNode) target.parentNode.replaceChild(replacement, target);
+      else return;
       changed = true;
     });
     return changed;
   }
 
-  /**
-   * A file finished caching after the rows were drawn: point the <img> at
-   * it without re-rendering (and without losing the scroll position).
-   */
+  /** A cache completion can swap a local file in without changing scroll. */
   function applyMediaPath(host, mediaId, path, kind) {
-    if (!host || !host.querySelectorAll) return false;
-    const want = String(mediaId == null ? '' : mediaId);
-    if (!want || !mediaSrc({ path: path })) return false;
-    return appendMediaPath(host, want, path, kind);
+    if (!mediaSrc({ path: path })) return false;
+    const info = { state: 'cached', path: path, error: '' };
+    if (kind) info.kind = kind;
+    return applyMediaInfo(host, mediaId, info);
   }
 
   return {
     renderRows, renderGroups, renderHeader, renderSearchGroups, renderNotice,
     appendHighlighted, messageNode, gapNode, dayNode, mediaSrc,
-    applyMediaPath, el,
+    applyMediaPath, applyMediaInfo, el,
   };
 })();
 

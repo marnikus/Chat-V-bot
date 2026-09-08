@@ -790,6 +790,18 @@ class Collector(QObject):
                     total = int(page.get("total") or 0)
             except Exception as e:                    # noqa: BLE001
                 log.debug("live history page for %s failed: %s", nick, e)
+        # AppendResult was assembled before downloads ran. A completion event
+        # may also precede the UI row, so always send current media state here.
+        if self.media is not None:
+            media_info = {}
+            for item in live:
+                attachment = item.get("media")
+                if not attachment or attachment.get("id") is None:
+                    continue
+                mid = attachment["id"]
+                if mid not in media_info:
+                    media_info[mid] = await self.media.path_for(mid)
+                item["media"] = dict(attachment, **media_info[mid])
         try:
             self.history_appended.emit(json.dumps(
                 {"nick": nick, "my_nick": self.my_nick, "items": live,

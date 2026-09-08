@@ -60,6 +60,14 @@ function mkEl(tag) {
       cs.forEach((c) => el.appendChild(typeof c === 'string' ? mkText(c) : c));
     },
     replaceChildren(...cs) { el.children = []; el.append(...cs); },
+    replaceChild(next, old) {
+      const index = el.children.indexOf(old);
+      if (index < 0) throw new Error('node is not a child');
+      el.children.splice(index, 1, next);
+      old.parentNode = null;
+      next.parentNode = el;
+      return old;
+    },
     removeChild(c) {
       el.children = el.children.filter((n) => n !== c);
       c.parentNode = null;
@@ -790,6 +798,150 @@ t('a verified page self is displayed without overwriting the My Nick setting inp
     my_nick: 'browser current', stats: { messages: 1 } }));
   ok(document.getElementById('historyHeader').textContent.includes('browser current'));
   eq(document.getElementById('myNickInput').value, 'configured old');
+});
+
+// ── nested attachment delivery (2026-09-09 incident) ────────────
+
+const MEDIA_URL = 'https://images.example.test/a.gif';
+const MEDIA_PATH = 'C:\\Saved media\\Peer\\gifs\\2026-09-09_001.gif';
+function openMedia(extra) {
+  HistoryStore.showImages = true;
+  HistoryStore.openPerson('Media Peer');
+  const generation = (HistoryStore._generation || 0) + 1;
+  const attachment = Object.assign({ id: 501, url: MEDIA_URL, kind: 'gif',
+    state: 'pending', path: '', error: '' }, extra || {});
+  HistoryStore.onPage(HistoryStore._open, JSON.stringify({
+    nick: 'Media Peer', generation, total: 1, has_more: false, has_newer: false,
+    items: [{ id: 401, ord: 1, fp: 'media-501', dir: 'out', from: 'Previous Self',
+      kind: 'gif', text: '', time: '23:29', day: '2026-09-09', media: attachment }],
+  }));
+  return { generation, list: document.getElementById('historyList') };
+}
+function ready(generation, extra) {
+  HistoryStore.onMediaReady('', JSON.stringify(Object.assign({
+    id: 501, generation, state: 'cached', path: MEDIA_PATH, url: MEDIA_URL,
+    kind: 'gif', error: '', bytes: 42,
+  }, extra || {})));
+}
+
+t('a cache completion turns a pending live row into a saved GIF without reopening', () => {
+  const { generation, list } = openMedia();
+  ok(list.querySelector('.msg-media-restore').textContent.includes('waiting for download'));
+  const opens = named('history_open').length;
+  list.scrollTop = 135;
+  ready(generation);
+  const img = list.querySelector('.msg-media');
+  ok(img && img.classList.contains('is-gif'));
+  eq(img.getAttribute('src'), HistoryModel.fileUrl(MEDIA_PATH));
+  eq(list.scrollTop, 135, 'scroll anchor survives the update');
+  eq(named('history_open').length, opens, 'no manual page reopen');
+  eq(HistoryStore.model.total, 1);
+  eq(HistoryStore.model.items[0].media.state, 'cached');
+});
+
+t('a failed media update displays its actual reason rather than a generic unavailable marker', () => {
+  const { generation, list } = openMedia();
+  ready(generation, { state: 'failed', path: '', error: 'HTTP 403 — host refused the download' });
+  const marker = list.querySelector('.msg-media-restore');
+  ok(marker.textContent.includes('HTTP 403'));
+  ok(marker.title.includes(MEDIA_URL));
+  eq(list.querySelectorAll('.msg-media').length, 0);
+  marker.fire('click');
+  eq(named('media_restore').pop().args[1], '501');
+});
+
+t('evicted or missing media clears an existing saved path and can recover again', () => {
+  const { generation, list } = openMedia({ state: 'cached', path: MEDIA_PATH });
+  ready(generation, { state: 'evicted', path: '', error: '' });
+  eq(HistoryStore.model.items[0].media.path, '');
+  eq(list.querySelectorAll('.msg-media').length, 0);
+  ok(list.querySelector('.msg-media-restore'));
+  ready(generation);
+  ok(list.querySelector('.msg-media'));
+});
+
+t('a stale pre-reset or pre-load media reply cannot replace a current path with a reused ID', () => {
+  const { generation, list } = openMedia({ state: 'cached', path: MEDIA_PATH });
+  ready(generation - 1, { path: 'C:/old-archive/wrong.gif' });
+  eq(HistoryStore.model.items[0].media.path, MEDIA_PATH);
+  eq(list.querySelector('.msg-media').getAttribute('src'), HistoryModel.fileUrl(MEDIA_PATH));
+  ready(generation - 1, { state: 'failed', path: '', error: 'obsolete failure' });
+  ok(list.querySelector('.msg-media'));
+});
+
+t('a media completion respects Images off and appears when the user turns them on', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.showImages = false;
+  HistoryStore.render();
+  ready(generation);
+  eq(list.querySelectorAll('img').length, 0);
+  ok(list.querySelector('.msg-media-off'));
+  HistoryStore.showImages = true;
+  HistoryStore.render();
+  ok(list.querySelector('.msg-media'));
+});
+
+t('buffered live rows also receive a finished local media path', () => {
+  const { generation } = openMedia();
+  HistoryStore.model.hasNewer = true;
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Media Peer', generation,
+    added: 1, total: 2, items: [{ ord: 2, fp: 'buffered', kind: 'gif',
+      media: { id: 502, kind: 'gif', url: MEDIA_URL, state: 'pending', path: '' } }] }));
+  ready(generation, { id: 502 });
+  eq(HistoryStore.model.buffer[0].media.path, MEDIA_PATH);
+  eq(HistoryStore.model.buffer[0].media.state, 'cached');
+  eq(HistoryStore.model.items[0].media.state, 'pending', 'another ID stays pending');
+});
+
+t('media completions update every occurrence of a shared ID and leave other IDs alone', () => {
+  const { generation } = openMedia();
+  const duplicate = JSON.parse(JSON.stringify(HistoryStore.model.items[0]));
+  duplicate.ord = 2;
+  duplicate.fp = 'another occurrence';
+  HistoryStore.model.items.push(duplicate);
+  const other = JSON.parse(JSON.stringify(duplicate));
+  other.ord = 3;
+  other.media.id = 999;
+  HistoryStore.model.items.push(other);
+  ready(generation);
+  eq(HistoryStore.model.items.map(row => row.media.state), ['cached', 'cached', 'pending']);
+});
+
+t('search results retain GIF, copy and restore/error behavior after a late cache completion', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.query = 'caption';
+  HistoryStore.onSearch('search-media', JSON.stringify({ scope: 'person', generation,
+    items: [Object.assign({}, HistoryStore.model.items[0], { text: 'caption' })] }));
+  ready(generation);
+  const img = list.querySelector('.msg-media');
+  ok(img.classList.contains('is-gif'));
+  ok(list.textContent.includes('caption'), 'the search result was not replaced with the unfiltered model');
+  img.fire('click');
+  eq(named('copy_media').pop().args, ['501']);
+  img.fire('error');
+  const marker = list.querySelector('.msg-media-restore');
+  ok(marker.textContent.includes('could not be displayed'));
+  marker.fire('click');
+  eq(named('media_restore').pop().args[1], '501');
+});
+
+t('a failed search-result media update stays a search result and shows its error', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.query = 'caption';
+  HistoryStore.onSearch('search-failure', JSON.stringify({ scope: 'person', generation,
+    items: [Object.assign({}, HistoryStore.model.items[0], { text: 'caption' })] }));
+  ready(generation, { state: 'failed', path: '', error: 'Download timed out' });
+  ok(list.textContent.includes('caption'));
+  ok(list.querySelector('.msg-media-restore').textContent.includes('Download timed out'));
+});
+
+t('repeated media-ready events neither duplicate rows nor change message totals', () => {
+  const { generation, list } = openMedia();
+  ready(generation);
+  ready(generation);
+  eq(HistoryStore.model.total, 1);
+  eq(list.querySelectorAll('.msg').length, 1);
+  eq(list.querySelectorAll('.msg-media').length, 1);
 });
 
 // ── reporting ────────────────────────────────────────────────────

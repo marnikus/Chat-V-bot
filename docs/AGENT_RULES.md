@@ -311,3 +311,16 @@ Media follows the same ownership rule: bytes are filed under the
 conversation they belong to (`saved_media/<Latin nick>/images|gifs/
 YYYY-MM-DD_NNN.ext`), never in an anonymous global pile, and the UI shows
 the saved file rather than the remote URL.
+
+Attachment components (`app-chat-image` / `.image-wrapper`) can be nested
+inside `.message-text`, `span.message` or `[data-message-text]`. Never exclude
+all images merely because they descend from a text payload. Keep attachment
+classification separate from caption/emoji extraction, and defer an attachment
+whose image/URL has not rendered. Text-selector changes must be tested against
+both legacy media markup and the supplied `tests/fixtures/person_media.html`.
+
+Committed cache-state changes must reach the open history window, including
+idle-batch completions; new live rows must not retain pre-download media DTOs.
+Use one truthful media-info shape with local path/state/error and generation
+checks on bridge/UI replies. Missing or failed previews must not silently look
+cached, and a renderer callback failure must not break media storage.

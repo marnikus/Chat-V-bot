@@ -19,6 +19,7 @@ import aiohttp
 import asyncio
 import base64
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -107,6 +108,25 @@ def _extension(url: str, mime: str) -> str:
     return MIME_EXT.get((mime or "").split(";")[0].strip(), ".bin")
 
 
+def media_info(row) -> dict:
+    """One truthful, byte-free media DTO for cache events and history rows."""
+    data = dict(row or {})
+    state = data.get("state") or "pending"
+    path = data.get("cache_path") or ""
+    error = data.get("fail_reason") or ""
+    if state == "cached":
+        if not path or not os.path.isfile(path):
+            state, path = "missing", ""
+            error = "The saved media file is missing. Click to restore it."
+        else:
+            error = ""
+    else:
+        path = ""                 # failed/evicted files are not usable previews
+    return {"id": data.get("id"), "state": state, "path": path,
+            "url": data.get("url") or "", "kind": data.get("kind") or "image",
+            "bytes": int(data.get("bytes") or 0), "error": error}
+
+
 class MediaStore:
     """URL registry + on-disk byte cache for images and GIFs."""
 
@@ -123,6 +143,7 @@ class MediaStore:
         self.paused = False
         self._dirs: dict[str, str] = {}      # nick → person folder
         self._http_fetcher = None            # test hook for the Python downloader
+        self.on_change = None                # optional sync/async state listener
 
     # ── the readable tree on disk ────────────────────────────────
     NICK_MARKER = "_nick.txt"
@@ -351,6 +372,7 @@ class MediaStore:
             "cache_path=?, fail_reason='', last_used=? WHERE id=?",
             (digest, len(data), path, _now(), row["id"]))
         await self.db.commit()
+        await self._notify_changed(row["id"])
         return True
 
     async def _fetch_in_page(self, url: str) -> dict:
@@ -573,17 +595,36 @@ class MediaStore:
             await self.db.commit()
         return moved
 
+    async def _notify_changed(self, media_id: int) -> None:
+        """Publish only committed metadata, never bytes; UI failures are isolated."""
+        callback = self.on_change
+        if not callable(callback):
+            return
+        try:
+            row = await self.get(media_id)
+            if not row:
+                return
+            result = callback(media_info(row))
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:                     # noqa: BLE001
+            log.warning("media state listener failed: %s", exc)
+
     async def _fail(self, media_id: int, reason: str) -> None:
         await self.db.execute(
             "UPDATE media SET state='failed', fail_reason=? WHERE id=?",
             (reason[:300], media_id))
         await self.db.commit()
+        log.warning("Media %s could not be cached: %s", media_id, reason[:300])
+        await self._notify_changed(media_id)
 
     async def _skip(self, media_id: int, reason: str) -> None:
         await self.db.execute(
             "UPDATE media SET state='skipped', fail_reason=? WHERE id=?",
             (reason[:300], media_id))
         await self.db.commit()
+        log.warning("Media %s was not cached: %s", media_id, reason[:300])
+        await self._notify_changed(media_id)
 
     @db_operation
     async def retry_failed(self) -> int:
@@ -628,12 +669,19 @@ class MediaStore:
         """
         row = await self.get(media_id)
         if not row:
-            return {"state": "missing", "id": media_id, "path": "", "url": ""}
-        if not self.enabled or self.paused or self.cdp is None:
             return await self.path_for(media_id)
-        path = row.get("cache_path") or ""
-        if row.get("state") == "cached" and path and os.path.exists(path):
-            return await self.path_for(media_id)
+        info = await self.path_for(media_id)
+        if info["path"]:
+            return info
+        reason = ""
+        if not self.enabled:
+            reason = "Media caching is disabled. Enable it before restoring media."
+        elif self.paused:
+            reason = "Media caching is paused. Resume it before restoring media."
+        elif self.cdp is None or not getattr(self.cdp, "is_connected", True):
+            reason = "Browser is not connected. Connect it before restoring media."
+        if reason:
+            return dict(info, error=reason)
         await self.db.execute(
             "UPDATE media SET state='pending', fail_reason='', "
             "recovered_at=?, recovery_attempts=recovery_attempts+1, "
@@ -666,16 +714,15 @@ class MediaStore:
     async def path_for(self, media_id) -> dict:
         row = await self.get(media_id)
         if not row:
-            return {"state": "missing", "path": "", "url": ""}
-        path = row.get("cache_path") or ""
-        usable = row.get("state") == "cached" and path and os.path.exists(path)
-        if usable:
+            return {"id": media_id, "state": "missing", "path": "", "url": "",
+                    "kind": "image", "bytes": 0,
+                    "error": "Media is no longer present in this archive."}
+        info = media_info(row)
+        if info["path"]:
             await self.db.execute("UPDATE media SET last_used=? WHERE id=?",
                                   (_now(), row["id"]))
             await self.db.commit()
-        return {"state": row.get("state"), "path": path if usable else "",
-                "url": row.get("url") or "", "kind": row.get("kind") or "image",
-                "bytes": int(row.get("bytes") or 0)}
+        return info
 
     @db_operation
     async def clipboard_payload(self, media_id) -> dict:
@@ -743,6 +790,7 @@ class MediaStore:
         await self.db.execute(
             "UPDATE media SET state='evicted', bytes=0 WHERE id=?", (media_id,))
         await self.db.commit()
+        await self._notify_changed(media_id)
 
     @db_operation
     async def clear_cache(self) -> int:
