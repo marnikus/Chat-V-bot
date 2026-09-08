@@ -176,6 +176,21 @@ class UserMemory:
         await self._db.commit()
         return cur.rowcount
 
+    async def restore_user(self, row: dict) -> bool:
+        """Undo one person deletion without replacing other/new queue rows."""
+        nick = str((row or {}).get("nick") or "").strip()
+        if not nick:
+            return False
+        cur = await self._db.execute(
+            "INSERT OR IGNORE INTO users(nick,gender,registered,anonymous,guest,first_seen,last_seen,"
+            "messaged,message_count,last_messaged,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (nick, str(row.get("gender") or "unknown"), bool(row.get("registered")),
+             bool(row.get("anonymous")), bool(row.get("guest")), row.get("first_seen") or "",
+             row.get("last_seen") or "", bool(row.get("messaged")), int(row.get("message_count") or 0),
+             row.get("last_messaged"), str(row.get("notes") or "")))
+        await self._db.commit()
+        return bool(cur.rowcount)
+
     async def replace_all(self, rows: list[dict]) -> int:
         """Restore a full snapshot: wipe the table and insert the given rows.
 

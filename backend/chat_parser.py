@@ -292,6 +292,30 @@ class ChatParser:
         self.chunk_pause_ms = max(0, int(chunk_pause_ms))
         self.probe_seconds = 0.0
         self.last_capture_diagnostic = {}
+        self._pending_resets = set()
+
+    def invalidate_person(self, nick=None) -> None:
+        # Reset intent only: never old IDs, counts, fingerprints or an undo ref.
+        self._pending_resets.add(_norm(nick) if nick is not None else None)
+        self.last_capture_diagnostic = {}
+        self.probe_seconds = 0.0
+
+    async def _flush_resets(self) -> bool:
+        for nick in list(self._pending_resets):
+            try:
+                result = await self._eval(chat_agent_js.reset_expression(nick))
+                if isinstance(result, str):
+                    result = json.loads(result)
+                if not isinstance(result, dict) or not result.get("ok"):
+                    # A reconnect may still have the pre-reset agent. Replacing
+                    # it also drops every old buffered payload and epoch.
+                    if await self.install(force=True) < chat_agent_js.AGENT_VERSION:
+                        return False
+                self._pending_resets.discard(nick)
+            except Exception as exc:
+                log.warning("Browser reset remains pending: %s", exc)
+                return False
+        return True
 
     def reset_probe_metrics(self) -> None:
         self.probe_seconds = 0.0
@@ -308,6 +332,9 @@ class ChatParser:
 
     async def state(self) -> dict:
         """One small probe: shape of the conversation, not its content."""
+        if self._pending_resets and not await self._flush_resets():
+            return {"ok": False, "agent": chat_agent_js.AGENT_VERSION,
+                    "reason": "browser_reset_pending", "count": 0, "tab": "none", "partner": ""}
         raw = await self._eval(chat_agent_js.state_expression())
         if isinstance(raw, str):
             try:

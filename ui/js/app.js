@@ -406,6 +406,12 @@ function setupBridgeListeners() {
     b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
   if (b.userdb_page_ready)
     b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
+  if (b.history_reset) {
+    b.history_reset.connect((json) => {
+      HistoryStore.onReset(json);
+      CollectorPanel.onReset(json);
+    });
+  }
   if (b.userdb_changed) {
     b.userdb_changed.connect(() => {
       HistoryDb.onChanged();

@@ -481,35 +481,43 @@ To retry older captures:
 4. Check the **Text capture** status/log. Successful repairs refresh Person
    History even when no new message was inserted.
 
-**Clear is not a pause:** cleared messages stay hidden and new messages continue
-to be saved. Collect now / Backfill does not undo Clear. Use **Restore cleared**
-in Person History to bring back that person's cleared rows in place, or Ctrl+Z
-to undo the original clear. The empty view shows how many messages are cleared.
-Individual message deletions stay hidden; Restore itself is one undoable edit,
-and undo/redo of Restore leaves subsequently collected messages untouched.
+**Clear History now means a full clean slate.** The active database physically
+removes that person's messages (including hidden rows), IDs/hashes, cursor,
+full-scan flags, gap/recovery state and message-derived counters/dates. It keeps
+the contact/note. **Delete Person** removes the contact too. The next scan treats
+the same visible chat as new and collects it again; no Restore cleared button
+or deleted-person denylist is involved. If the private chat remains open, the
+next automatic scan may refill history immediately—pause collection first if
+you want it to stay empty.
 
-The capture agent handles structurally identifiable plain text
-without depending only on `span.message`, preserves nicknames containing unread-
-badge digits, and saves the visible chat before scrolling for older messages.
-An unreadable first batch does not block later messages. Pending capture is a
-warning, not “No new messages”; actual browser read failures show their reason.
-The collector exposes **Capture agent**, **Last read**, and **Text source** for
-diagnosis. Retry/scroll waits no longer inflate browser-latency backoff.
+**Undo is isolated from collection.** Per-person snapshots and cached-media
+copies are stored under `db_trash/history_undo/` with a non-archive storage
+identity. They are never attached to or queried by the collector. Ctrl+Z is the
+only way to explicitly read one back. Undo merges with any messages already
+freshly re-collected, without duplicates; redo performs another clean reset.
+Shared media and other people's history are preserved. Individual-message
+Delete remains separate until a whole-history/person reset removes every row
+for that person.
 
-Agent **v12** also recognizes your previously declared nicknames: the existing
-My Nick history in config and each conversation's saved self-nickname metadata
-survive Clear. Old self messages are no longer treated as a third person simply
-because your current name changed. Their original sender names stay intact.
-The selected pane's verified two-member roster can identify the current browser
-self without rewriting your configured nickname. Unknown authors, wrong peers,
-rooms and mismatched rosters remain blocked; a push cannot declare its own
-trusted aliases. The collector shows **My previous nicks**, **Browser self** and
-**Identity source** so this can be checked.
+Agent **v13** resets parsed-node caches, queued pushes, and its capture epoch.
+A delayed pre-reset push cannot reinsert old data after a fresh gate has been
+verified. Radar's per-person session count and visible history/paging cache are
+reset, and stale-generation UI replies are ignored. Browser reset failures are
+retried safely after reconnect, without accepting old buffered messages.
 
-If a former nickname was never declared or stored, it must not be guessed from
-someone else's message. You can register it through the existing **My Nick**
-field (enter the previous name, then return to your current name); both remain
-in your explicit nickname history. Do this only for names that really were yours.
+The capture agent also handles structurally identifiable plain text without
+requiring exactly `span.message`, and saves the visible chat before backfill
+scrolling. Read errors are errors, not a false “No new messages” success.
+**Capture agent**, **Last read**, and **Text source** remain available for
+diagnostics. Genuine third-party authors and invalid private-chat scopes stay
+blocked.
+
+Trusted former self nicknames remain independent identity preferences, not
+message-seen markers. A reset preserves these declarations outside per-chat
+message metadata, so re-collection after a nickname change still works. The
+collector never learns identities from an undo snapshot or an untrusted push.
+If a former nickname was never declared, use the existing My Nick field to
+register it, then return to your current name; only declare names that were yours.
 
 Recovery also works with media downloads disabled. Messages no longer exposed
 by the website cannot be reconstructed from timestamps alone. If an older build
@@ -521,8 +529,10 @@ Design and verification:
 `docs/DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md`.
 Capture-after-clear follow-up design and verification:
 `docs/CAPTURE_PENDING_AFTER_CLEAR_DESIGN_2026-09-08.md`.
-Historical self identity and explicit restoration:
+Historical self-identity work (its hide/Restore behavior is superseded):
 `docs/HISTORICAL_SELF_IDENTITY_AND_CLEAR_RESTORE_DESIGN_2026-09-08.md`.
+Current clean-slate reset design and verification:
+`docs/CLEAN_SLATE_COLLECTION_RESET_DESIGN_2026-09-09.md`.
 Labels design:
 `docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
 

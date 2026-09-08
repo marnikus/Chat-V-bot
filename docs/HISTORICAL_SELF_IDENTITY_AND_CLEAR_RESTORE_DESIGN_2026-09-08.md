@@ -1,5 +1,11 @@
 # Historical self nicknames and restoring cleared history
 
+> **Superseded bulk-delete semantics (2026-09-09):** the user now explicitly
+> requires full erasure of active message tracking and automatic re-collection.
+> See [Clean-slate reset](CLEAN_SLATE_COLLECTION_RESET_DESIGN_2026-09-09.md).
+> The test results below are the historical results for the earlier requirement.
+
+
 Date: 2026-09-08
 Status: **Implemented and verified. Design was written before application-code changes.**
 Baseline: `8aec80a8869b3b02927736725229ee8d62c8d36d`

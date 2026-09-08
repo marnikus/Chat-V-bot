@@ -16,7 +16,7 @@ import os
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
 #: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 12
+AGENT_VERSION = 13
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")
@@ -57,6 +57,14 @@ def state_expression() -> str:
             "try{return JSON.stringify(a.state());}"
             "catch(e){return JSON.stringify({ok:false,agent:a.version,"
             "reason:String(e)});}})()")
+
+
+def reset_expression(nick=None) -> str:
+    payload = {"nick": nick}
+    return ("/*CVB_RESET_AGENT*/(function(){var a=window.__cvbAgent;"
+            "if(!a||!a.reset)return JSON.stringify({ok:false,reason:'reset unavailable'});"
+            "try{return JSON.stringify(a.reset(" + json.dumps(nick, ensure_ascii=False) + "));}"
+            "catch(e){return JSON.stringify({ok:false,reason:String(e)});}})()" + _args(payload))
 
 
 def slice_expression(start: int, end: int, *, refresh: bool = False) -> str:

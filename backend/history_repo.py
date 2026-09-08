@@ -169,10 +169,14 @@ class HistoryRepo:
         row = await self.db.fetchone(
             "SELECT * FROM cursors WHERE person_id=?", (person_id,))
         if not row:
-            return {"person_id": person_id, "last_ord": 0, "dom_count": 0,
-                    "head_sig": "", "tail_sig": "", "tail_fps": [],
-                    "tail_keys": [], "bootstrapped": False,
-                    "full_scan_complete": False, "full_scan_at": ""}
+            tail = await self.db.fetchall(
+                "SELECT fp, dup_key, ord FROM (SELECT fp, dup_key, ord FROM messages "
+                "WHERE person_id=? ORDER BY ord DESC LIMIT ?) ORDER BY ord",
+                (person_id, TAIL_FP_LIMIT))
+            return {"person_id": person_id, "last_ord": int(tail[-1][2]) if tail else 0,
+                    "dom_count": 0, "head_sig": "", "tail_sig": "",
+                    "tail_fps": [r[0] for r in tail], "tail_keys": [r[1] for r in tail],
+                    "bootstrapped": False, "full_scan_complete": False, "full_scan_at": ""}
         data = dict(row)
         try:
             data["tail_fps"] = json.loads(data.get("tail_fps") or "[]")
@@ -1000,7 +1004,7 @@ class HistoryRepo:
              datetime.now().isoformat(timespec="seconds")))
         await self.db.commit()
 
-    async def _recount(self, person_id: int, my_nick: str = "") -> None:
+    async def _recount(self, person_id: int, my_nick: str = "", *, commit: bool = True) -> None:
         # Counters describe what the user can SEE, so hidden (soft-deleted)
         # rows are excluded — while `last_ord` still spans every row so a
         # deletion can never make the next append reuse an ord.
@@ -1026,7 +1030,8 @@ class HistoryRepo:
              int(row["media"] or 0), int(row["last_ord"] or 0),
              json.dumps(nicks, ensure_ascii=False),
              row["first_ts"], row["last_ts"], person_id))
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
 
     # ── lifecycle ────────────────────────────────────────────────
     @staticmethod
@@ -1059,8 +1064,8 @@ class HistoryRepo:
         return stamp
 
     @db_operation
-    async def soft_delete_history(self, nick: str, token: str = "") -> str:
-        """Hide every visible message of a person, keeping the person."""
+    async def legacy_hide_history(self, nick: str, token: str = "") -> str:
+        """Pre-reset compatibility only. Never used by Clear or its redo."""
         person = await self.get_person(nick)
         if not person:
             return ""
@@ -1074,6 +1079,85 @@ class HistoryRepo:
             return ""
         await self._recount(int(person["id"]))
         return stamp
+
+    @db_operation
+    async def forget_messages(self, nick: str, *, delete_person: bool = False,
+                              message_ids=None, commit: bool = True) -> dict:
+        """Erase active message knowledge. Undo is owned by the service, not us.
+
+        Full reset includes hidden rows, every hash/index entry, browser cursor,
+        history gaps and recovery markers. `message_ids` is used only for legacy
+        maintenance/undo compatibility; it never consults an undo database.
+        """
+        person = await self.get_person(nick)
+        if not person:
+            return {"changed": False, "removed": 0, "orphan_files": []}
+        pid = int(person["id"])
+        partial = message_ids is not None
+        ids = sorted({int(i) for i in message_ids or [] if int(i) > 0})
+        if partial and not ids:
+            return {"changed": False, "removed": 0, "orphan_files": []}
+        media_ids, removed = set(), 0
+        batches = [None] if not partial else [ids[i:i + 400] for i in range(0, len(ids), 400)]
+        for batch in batches:
+            where, args = "person_id=?", [pid]
+            if batch is not None:
+                where += " AND id IN (" + ",".join("?" for _ in batch) + ")"
+                args.extend(batch)
+            media_ids.update(int(r[0]) for r in await self.db.fetchall(
+                "SELECT DISTINCT media_id FROM messages WHERE " + where + " AND media_id IS NOT NULL", args))
+            cur = await self.db.execute("DELETE FROM messages WHERE " + where, args)
+            removed += int(cur.rowcount or 0)
+        tracking = int(await self.db.scalar("SELECT COUNT(*) FROM cursors WHERE person_id=?", (pid,), 0))
+        tracking += int(await self.db.scalar("SELECT COUNT(*) FROM gaps WHERE person_id=?", (pid,), 0))
+        await self.db.execute("DELETE FROM cursors WHERE person_id=?", (pid,))
+        await self.db.execute("DELETE FROM gaps WHERE person_id=?", (pid,))
+        orphan_files = []
+        for mid in media_ids:
+            refs = int(await self.db.scalar("SELECT COUNT(*) FROM messages WHERE media_id=?", (mid,), 0))
+            if refs:
+                await self.db.execute(
+                    "UPDATE media SET ref_count=?, owner=CASE WHEN owner=? THEN "
+                    "COALESCE((SELECT p.nick FROM messages m JOIN persons p ON p.id=m.person_id "
+                    "WHERE m.media_id=? LIMIT 1),owner) ELSE owner END WHERE id=?",
+                    (refs, person["nick"], mid, mid))
+            else:
+                path = await self.db.scalar("SELECT cache_path FROM media WHERE id=?", (mid,), "")
+                await self.db.execute("DELETE FROM media WHERE id=?", (mid,))
+                if path and not await self.db.scalar("SELECT 1 FROM media WHERE cache_path=? LIMIT 1", (path,), 0):
+                    orphan_files.append(path)
+        changed = bool(removed or tracking or delete_person or person.get("message_count") or
+                       person.get("last_ord") or person.get("first_seen") or person.get("last_seen") or
+                       person.get("my_nicks") or person.get("deleted"))
+        if delete_person:
+            await self.db.execute("DELETE FROM persons WHERE id=?", (pid,))
+        else:
+            await self.db.execute(
+                "UPDATE persons SET message_count=0,in_count=0,out_count=0,media_count=0,"
+                "last_ord=0,first_seen=NULL,last_seen=NULL,my_nicks='[]',deleted_at=NULL WHERE id=?", (pid,))
+            if partial:
+                # Surviving post-clear rows are current data, not old tombstones.
+                rows = await self.db.fetchall("SELECT id FROM messages WHERE person_id=? ORDER BY ord,id", (pid,))
+                for ordinal, (rid,) in enumerate(rows, 1):
+                    await self.db.execute("UPDATE messages SET ord=? WHERE id=?", (ordinal, rid))
+                await self._recount(pid, commit=False)
+        if commit:
+            await self.db.commit()
+        return {"changed": changed, "removed": removed, "orphan_files": list(dict.fromkeys(orphan_files))}
+
+    @db_operation
+    async def clear_history(self, nick: str) -> bool:
+        return bool((await self.forget_messages(nick))["changed"])
+
+    @db_operation
+    async def soft_delete_history(self, nick: str, token: str = "") -> str:
+        """Deprecated bulk API: even old callers now get a physical clean slate.
+
+        The returned token is a compatibility receipt only; it is not stored
+        in messages and cannot suppress re-collection. UI undo uses snapshots.
+        """
+        changed = await self.clear_history(nick)
+        return (token or self.new_op_token()) if changed else ""
 
     @staticmethod
     def _clear_filter(legacy_tokens=()) -> tuple[str, list]:
@@ -1194,8 +1278,8 @@ class HistoryRepo:
         return before
 
     @db_operation
-    async def delete_person(self, nick: str, hard: bool = False,
-                            token: str = "") -> bool:
+    async def legacy_hide_person(self, nick: str, hard: bool = False,
+                                 token: str = "") -> bool:
         """Remove a person WITH their history.
 
         Soft (the default) tombstones the person and hides every message
@@ -1222,6 +1306,15 @@ class HistoryRepo:
         if not hard:
             await self._recount(pid)
         return True
+
+    @db_operation
+    async def delete_person(self, nick: str, hard: bool = False, token: str = "") -> bool:
+        """Delete the actual person and all message state, never a deny tombstone.
+
+        `hard`/`token` remain accepted for older callers. The command service
+        decides whether to save an isolated undo snapshot before this call.
+        """
+        return bool((await self.forget_messages(nick, delete_person=True))["changed"])
 
     @db_operation
     async def restore_person(self, nick: str, token: str = "") -> bool:

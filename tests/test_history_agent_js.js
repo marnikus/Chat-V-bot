@@ -570,6 +570,32 @@ t('identity evidence comes from the selected pane roster, not a global nickname 
   eq(state.participant_nicks, ['HiHoney', 'На работе 25']);
 });
 
+t('reset discards cached fields and old buffered pushes, then parses the same DOM fresh', () => {
+  const env = load({ messages: many(2) });
+  const before = env.agent.state();
+  env.append(msg(2));
+  ok(env.agent.stats().pending > 0);
+  const result = env.agent.reset('На работе 25');
+  ok(result.ok && result.reset);
+  eq(env.agent.stats().cached, 0);
+  eq(env.agent.stats().parsed, 0);
+  eq(env.agent.drain().items, []);
+  const after = env.agent.state();
+  eq(after.count, 3);
+  ok(after.capture_epoch !== before.capture_epoch);
+  eq(env.agent.slice(0, 3).items[0].capture_epoch, after.capture_epoch);
+});
+
+t('resetting an inactive person does not lose the active persons push buffer', () => {
+  const env = load({ messages: many(2) });
+  const before = env.agent.state();
+  env.append(msg(2));
+  const result = env.agent.reset('Someone else');
+  ok(result.ok && !result.reset);
+  eq(result.capture_epoch, before.capture_epoch);
+  eq(env.agent.drain().items.length, 1);
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');

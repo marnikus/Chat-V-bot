@@ -383,8 +383,7 @@ class DbManager:
                     raise
                 log.warning("clean failed: %s", getattr(exc, "detail", str(exc)))
                 return {"ok": False, "error": str(exc), "backup": backup}
-            self.service.collector.reset_state()
-            self.service.generation += 1
+            self.service.reset_runtime()
             # Compaction is optional; failure cannot undo a committed clean.
             try:
                 await db.execute("VACUUM")
@@ -434,8 +433,7 @@ class DbManager:
                         return {"ok": False, "error": "Cannot restore database: backup failed."}
                     await candidate.conn.backup(self.service.db.conn)
                     self.service.db.fts_enabled = candidate.fts_enabled
-                    self.service.collector.reset_state()
-                    self.service.generation += 1
+                    self.service.reset_runtime()
                 else:
                     await candidate.close()
                     if os.path.exists(destination):

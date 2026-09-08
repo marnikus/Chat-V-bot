@@ -1,8 +1,8 @@
-"""Regression: former self nick is not a stranger; Clear has explicit restore.
+"""Regression: former self nick is not a stranger; a full reset recollects fresh.
 
 No hardcoded application allowlist. These tests declare names through the real
 My Nick API/archive metadata and exercise generated JS, the live gate, Clear,
-Restore, and global undo with actual temporary SQLite files.
+reset, and isolated global undo with actual temporary SQLite files.
 """
 
 import asyncio
@@ -129,7 +129,7 @@ class TestHistoricalIdentity(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_DOM, 'Install development DOM dependency: npm ci --prefix tests')
-class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
+class TestIdentityAndResetDOM(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -154,6 +154,7 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         self.events = []
         self.bridge.userdb_changed.connect(lambda payload: self.events.append(json.loads(payload)))
 
+
     async def rows(self, hidden=False, nick=PEER):
         person = await self.service.repo.get_person(nick)
         if not person:
@@ -161,6 +162,7 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         return await self.service.db.fetchdicts(
             'SELECT * FROM messages WHERE person_id=?' + ('' if hidden else " AND deleted_at=''") + ' ORDER BY ord',
             (person['id'],))
+
 
     async def action(self, name, *args):
         self.events.clear()
@@ -176,16 +178,19 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         finally:
             self.bridge.userdb_changed.disconnect(handler)
 
+
     async def seed(self):
         self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
         self.assertEqual(len(await self.rows()), 2)
         return await self.rows()
+
 
     async def rename(self, general_background=False):
         await self.cdp.evaluate('document.querySelector(".primary-text.bold").textContent=' + json.dumps(CURRENT, ensure_ascii=False))
         if general_background:
             await self.cdp.evaluate("document.querySelector('.my-message-background').className='message-container general-background'")
         self.bridge.set_my_nick(CURRENT)
+
 
     async def append_new(self, author=CURRENT):
         await self.cdp.evaluate('''(() => {
@@ -197,29 +202,6 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
           document.querySelector('.messages-root').appendChild(node);
         })()''' % json.dumps(author, ensure_ascii=False))
 
-    async def test_reported_case_clear_rename_explicit_restore_same_original_ids_and_text(self):
-        before = await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.rename()
-        self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
-        self.assertEqual(await self.rows(), [], 'a tick must not undo Clear')
-        self.assertIn(OLD, self.col.state_payload()['known_self_nicks'])
-        self.assertEqual(self.col.state_payload()['my_nick'], CURRENT)
-        self.assertEqual(await self.service.repo.cleared_count(PEER), 2)
-        result = await self.action('history_restore_cleared', PEER)
-        self.assertEqual(result['restored'], 2)
-        self.assertEqual(await self.rows(), before, 'only the deletion flag is changed; original rows/metadata return')
-        self.assertEqual(self.col.state_payload()['total'], 2)
-        await self.col.tick()
-        self.assertEqual(len(await self.rows(True)), 2, 're-reading must not insert duplicates')
-
-    async def test_archive_self_metadata_is_sufficient_even_without_recent_config_entries(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.rename()
-        self.cfg.set_state(my_nick_recent=[])
-        self.assertEqual(await self.col.tick(), CollectorState.NO_NEW)
-        self.assertIn(OLD, self.col.state_payload()['known_self_nicks'])
 
     async def test_declared_nick_history_allows_reimport_into_a_fresh_empty_archive(self):
         await self.rename()
@@ -229,15 +211,6 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[1]['from_nick'], OLD)
         self.assertEqual(rows[1]['direction'], 'out')
 
-    async def test_historical_general_background_is_normalized_before_dedupe(self):
-        before = await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.rename(general_background=True)
-        await self.col.tick()
-        self.assertEqual(await self.rows(), [])
-        self.assertEqual(len(await self.rows(True)), 2, 'the same old body must not get a new inbound identity')
-        await self.action('history_restore_cleared', PEER)
-        self.assertEqual(await self.rows(), before)
 
     async def test_scoped_browser_self_overrides_stale_config_only_for_capture(self):
         await self.cdp.evaluate('document.querySelector(".primary-text.bold").textContent=' + json.dumps(CURRENT, ensure_ascii=False))
@@ -248,104 +221,6 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.cfg.get('collector', 'my_nick'), OLD, 'no silent settings rewrite')
         self.assertEqual(self.col.state_payload()['identity_source'], 'pane_roster')
 
-    async def test_explicit_restore_undo_redo_does_not_touch_messages_collected_later(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.rename()
-        await self.col.tick()
-        await self.action('history_restore_cleared', PEER)
-        await self.append_new()
-        await self.col.tick()
-        self.assertEqual(len(await self.rows()), 3)
-        self.assertEqual(self.bridge._get_global_history()[0][-1]['value']['op'], 'restore_cleared')
-        await self.action('undo')
-        self.assertEqual([r['text'] for r in await self.rows()], ['Новое после восстановления'])
-        await self.action('redo')
-        self.assertEqual(len(await self.rows()), 3)
-        self.assertEqual(len(await self.rows(True)), 3)
-        await self.action('undo')
-        self.assertEqual(len(await self.rows()), 1)
-
-    async def test_individual_deletion_is_not_restored_by_restore_cleared(self):
-        before = await self.seed()
-        await self.action('history_delete_message', PEER, str(before[0]['id']))
-        await self.action('history_clear_person', PEER)
-        self.assertEqual(await self.service.repo.cleared_count(PEER), 1)
-        result = await self.action('history_restore_cleared', PEER)
-        self.assertEqual(result['restored'], 1)
-        self.assertEqual([r['id'] for r in await self.rows()], [before[1]['id']])
-        self.assertTrue((await self.rows(True))[0]['deleted_at'])
-
-    async def test_v11_clear_tokens_are_recognized_from_the_existing_global_history(self):
-        before = await self.seed()
-        token = '2026-09-08T22:00:00#legacy-clear'
-        await self.service.repo.soft_delete_history(PEER, token=token)
-        self.bridge._push_global('archive', {'op': 'clear_history', 'nick': PEER, 'token': token})
-        self.assertEqual(await self.service.repo.cleared_count(PEER), 0, 'an unknown token is not assumed to be Clear')
-        result = await self.action('history_restore_cleared', PEER)
-        self.assertEqual(result['restored'], 2)
-        self.assertEqual(await self.rows(), before)
-
-    async def test_unknown_legacy_deletion_is_not_guessed_to_be_a_clear(self):
-        before = await self.seed()
-        await self.service.repo.soft_delete_message(PEER, before[0]['id'], token='unknown-legacy-delete')
-        result = await self.action('history_restore_cleared', PEER)
-        self.assertEqual(result['restored'], 0)
-        self.assertEqual(len(await self.rows()), 1)
-        self.assertEqual(self.bridge._get_global_history()[0], [])
-
-    async def test_restoring_twice_adds_no_duplicate_rows_or_noop_history_entry(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.action('history_restore_cleared', PEER)
-        size = len(self.bridge._get_global_history()[0])
-        again = await self.action('history_restore_cleared', PEER)
-        self.assertEqual(again['restored'], 0)
-        self.assertEqual(len(self.bridge._get_global_history()[0]), size)
-        self.assertEqual(len(await self.rows(True)), 2)
-
-    async def test_other_person_and_deleted_person_are_not_restored(self):
-        await self.seed()
-        await self.service.repo.append(OTHER, [raw('other body', from_nick=OTHER)], now=NOW)
-        await self.service.repo.soft_delete_history(OTHER)
-        await self.action('history_clear_person', PEER)
-        await self.action('history_restore_cleared', PEER)
-        self.assertEqual(await self.rows(nick=OTHER), [])
-        await self.service.repo.soft_delete_history(PEER)
-        await self.service.repo.delete_person(PEER)
-        self.assertEqual((await self.action('history_restore_cleared', PEER))['restored'], 0)
-        self.assertTrue((await self.service.repo.get_person(PEER))['deleted'])
-
-    async def test_restore_is_available_without_a_live_chat_and_does_not_resume_collection(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        self.col.stop()
-        self.assertEqual((await self.action('history_restore_cleared', PEER))['restored'], 2)
-        self.assertFalse(self.col.running)
-        self.assertEqual(len(await self.rows()), 2)
-
-    async def test_unknown_push_author_and_payload_alias_forgery_stay_refused(self):
-        await self.seed()
-        await self.rename()
-        await self.col.tick()
-        result = await self.col.handle_push({'partner': PEER, 'title': PEER, 'tab': 'private',
-            'known_self_nicks': [OTHER], 'me': OTHER, 'me_source': 'pane_roster',
-            'participant_nicks': [PEER, OTHER],
-            'items': [raw('foreign', from_nick=OTHER, direction='out')]})
-        self.assertEqual(result, 0)
-        self.assertFalse(self.col._verified)
-        self.assertEqual(len(await self.rows()), 2)
-
-    async def test_verified_old_self_push_keeps_its_author_without_duplicate_old_rows(self):
-        await self.seed()
-        await self.rename()
-        await self.col.tick()
-        result = await self.col.handle_push({'partner': PEER, 'title': PEER, 'tab': 'private',
-            'items': [raw('new old-self text', from_nick=OLD, direction='in', time='21:02', idx=2)]})
-        self.assertEqual(result, 1)
-        row = (await self.rows())[-1]
-        self.assertEqual(row['from_nick'], OLD)
-        self.assertEqual(row['direction'], 'out')
 
     async def test_manual_collect_history_uses_the_same_known_identity_gate(self):
         await self.rename()
@@ -356,96 +231,108 @@ class TestIdentityAndRestoreDOM(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await self.rows()), 2)
         self.assertEqual((await self.rows())[1]['from_nick'], OLD)
 
-    async def test_restore_undo_is_refused_on_a_different_database(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.action('history_restore_cleared', PEER)
-        before_index = self.bridge._get_global_history()[1]
-        manager = DbManager(self.cfg, self.service, self.temp.name)
-        other = await manager.create('other')
-        await manager.load(other['path'])
-        await self.service.repo.append(PEER, [raw('keep other db', from_nick=PEER)], now=NOW)
-        self.assertEqual(self.bridge.undo(), 'null')
-        self.assertEqual(self.bridge._get_global_history()[1], before_index)
-        self.assertEqual([r['text'] for r in await self.rows()], ['keep other db'])
 
-    async def test_media_links_and_reference_counts_are_preserved_by_restore(self):
-        await self.cdp.evaluate("""(() => {
-          const wrapper = document.createElement('div');
-          wrapper.className = 'image-wrapper';
-          wrapper.innerHTML = '<img src="https://example.test/photo.gif" alt="chat image">';
-          document.querySelectorAll('.message-content')[1].appendChild(wrapper);
-        })()""")
-        before = await self.seed()
-        media_id = before[1]['media_id']
-        self.assertIsNotNone(media_id)
-        media_before = await self.service.media.get(media_id)
-        await self.action('history_clear_person', PEER)
-        await self.action('history_restore_cleared', PEER)
-        self.assertEqual(await self.rows(), before)
-        self.assertEqual(await self.service.media.get(media_id), media_before)
-
-    async def test_failed_counter_update_rolls_back_the_entire_restore(self):
+    async def test_unknown_push_author_and_payload_alias_forgery_stay_refused(self):
         await self.seed()
-        await self.action('history_clear_person', PEER)
-        before = await self.rows(True)
-        with patch.object(self.service.repo, '_recount', AsyncMock(side_effect=RuntimeError('counter update failed'))):
-            with self.assertRaisesRegex(RuntimeError, 'counter update failed'):
-                await self.service.repo.restore_cleared(PEER)
-        self.assertEqual(await self.rows(True), before)
-        self.assertEqual(await self.rows(), [])
-        self.assertEqual((await self.service.repo.get_person(PEER))['message_count'], 0)
-
-    async def test_global_undo_waits_for_the_restore_command_to_finish(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        entered, release = asyncio.Event(), asyncio.Event()
-        original = self.service.repo.restore_cleared
-        async def delayed(*args, **kwargs):
-            entered.set()
-            await release.wait()
-            return await original(*args, **kwargs)
-        with patch.object(self.service.repo, 'restore_cleared', delayed):
-            operation = asyncio.create_task(self.action('history_restore_cleared', PEER))
-            try:
-                await asyncio.wait_for(entered.wait(), 3)
-                self.assertEqual(self.bridge.undo(), 'null')
-                self.assertEqual(self.bridge.redo(), 'null')
-                self.assertEqual(self.bridge._get_global_history()[1], 0)
-            finally:
-                release.set()
-                await operation
-        self.assertEqual(self.bridge._get_global_history()[1], 1)
-        self.assertEqual(getattr(self.bridge, '_archive_actions_pending'), 0)
-
-    async def test_failed_restore_undo_keeps_the_global_index_and_rows(self):
-        await self.seed()
-        await self.action('history_clear_person', PEER)
-        await self.action('history_restore_cleared', PEER)
-        previous = self.bridge._get_global_history()[1]
-        error = asyncio.get_running_loop().create_future()
-        def failed(_scope, message):
-            if not error.done():
-                error.set_result(message)
-        self.bridge.history_error.connect(failed)
-        try:
-            with patch.object(self.service.repo, 'apply_clear_restore', AsyncMock(side_effect=RuntimeError('write failed'))):
-                self.assertEqual(json.loads(self.bridge.undo())['kind'], 'archive')
-                self.assertIn('write failed', await asyncio.wait_for(error, 3))
-        finally:
-            self.bridge.history_error.disconnect(failed)
-        self.assertEqual(self.bridge._get_global_history()[1], previous)
+        await self.rename()
+        await self.col.tick()
+        result = await self.col.handle_push({'partner': PEER, 'title': PEER, 'tab': 'private', 'capture_epoch': self.col._capture_epoch,
+            'known_self_nicks': [OTHER], 'me': OTHER, 'me_source': 'pane_roster',
+            'participant_nicks': [PEER, OTHER],
+            'items': [raw('foreign', from_nick=OTHER, direction='out')]})
+        self.assertEqual(result, 0)
+        self.assertFalse(self.col._verified)
         self.assertEqual(len(await self.rows()), 2)
 
-    async def test_history_page_reports_recoverable_count_for_the_empty_view(self):
+
+    async def test_verified_old_self_push_keeps_its_author_without_duplicate_old_rows(self):
+        await self.seed()
+        await self.rename()
+        await self.col.tick()
+        result = await self.col.handle_push({'partner': PEER, 'title': PEER, 'tab': 'private', 'capture_epoch': self.col._capture_epoch,
+            'items': [raw('new old-self text', from_nick=OLD, direction='in', time='21:02', idx=2)]})
+        self.assertEqual(result, 1)
+        row = (await self.rows())[-1]
+        self.assertEqual(row['from_nick'], OLD)
+        self.assertEqual(row['direction'], 'out')
+
+
+    async def test_old_self_identity_survives_clear_outside_the_message_tracking_store(self):
+        await self.seed()
+        await self.action('history_clear_person', PEER)
+        await self.rename()
+        self.cfg.set_state(my_nick_recent=[])
+        self.assertEqual((await self.service.repo.get_person(PEER))['my_nicks'], [])
+        self.assertIn(OLD, self.cfg.get_state('declared_self_nicks'))
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        self.assertEqual(len(await self.rows()), 2)
+        self.assertEqual((await self.rows())[1]['from_nick'], OLD)
+
+    async def test_historical_general_background_recollects_as_self_after_full_reset(self):
+        before = await self.seed()
+        await self.action('history_clear_person', PEER)
+        await self.rename(general_background=True)
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        fresh = await self.rows()
+        self.assertEqual(len(fresh), 2)
+        self.assertEqual(fresh[1]['direction'], 'out')
+        self.assertEqual(fresh[1]['from_nick'], OLD)
+        self.assertTrue({r['id'] for r in before}.isdisjoint(r['id'] for r in fresh))
+        await self.col.tick()
+        self.assertEqual(len(await self.rows(True)), 2)
+
+    async def test_legacy_clear_conversion_keeps_explicit_undo_but_no_active_tombstones(self):
+        before = await self.seed()
+        token = '2026-09-08T22:00:00#legacy-clear'
+        await self.service.repo.legacy_hide_history(PEER, token=token)
+        self.bridge._push_global('archive', {'op': 'clear_history', 'nick': PEER, 'token': token})
+        await self.service._migrate_bulk_tombstones(self.service.db)
+        self.service.reset_runtime(PEER)
+        self.assertEqual(await self.rows(True), [])
+        self.assertEqual(self.bridge._get_global_history()[0][-1]['value']['op'], 'reset_history')
+        await self.action('undo')
+        self.assertEqual([r['text'] for r in await self.rows()], [r['text'] for r in before])
+        await self.action('redo')
+        self.assertEqual(await self.rows(True), [])
+        await self.col.tick()
+        self.assertEqual(len(await self.rows()), 2)
+
+    async def test_legacy_deleted_person_is_converted_and_can_be_seen_as_new(self):
+        await self.seed()
+        token = self.service.repo.new_op_token()
+        await self.service.repo.legacy_hide_person(PEER, token=token)
+        self.bridge._push_global('archive', {'op': 'delete_person', 'nick': PEER, 'token': token})
+        await self.service._migrate_bulk_tombstones(self.service.db)
+        self.service.reset_runtime(PEER)
+        self.assertIsNone(await self.service.repo.get_person(PEER))
+        await self.col.tick()
+        self.assertEqual(len(await self.rows()), 2)
+        await self.action('undo')
+        self.assertEqual(len(await self.rows(True)), 2, 'legacy undo merges with fresh collection')
+
+    async def test_legacy_restore_undo_does_not_reintroduce_a_bulk_denylist(self):
+        await self.seed()
+        token = await self.service.repo.legacy_hide_history(PEER)
+        groups = await self.service.repo.cleared_groups(PEER)
+        await self.service.repo.apply_clear_restore(PEER, groups)
+        self.bridge._push_global('archive', {'op': 'restore_cleared', 'nick': PEER,
+                                             'db_path': self.service.db.path, 'groups': groups})
+        await self.action('undo')
+        self.assertEqual(await self.rows(True), [])
+        await self.action('redo')
+        self.assertEqual(len(await self.rows()), 2)
+        self.assertEqual(await self.service.repo.deleted_count(PEER), 0)
+
+    async def test_clear_page_has_no_old_hidden_count_or_restore_registry(self):
         await self.seed()
         await self.action('history_clear_person', PEER)
         replies = []
-        self.bridge.history_page_ready.connect(lambda _req, payload: replies.append(json.loads(payload)))
+        self.bridge.history_page_ready.connect(lambda _req, data: replies.append(json.loads(data)))
         await self.bridge._history_page('inspect', PEER, {})
         self.assertEqual(replies[-1]['items'], [])
-        self.assertEqual(replies[-1]['cleared_messages'], 2)
-        self.assertEqual(replies[-1]['stats']['cleared_messages'], 2)
+        self.assertEqual(replies[-1]['total'], 0)
+        self.assertEqual(replies[-1]['stats']['hidden'], 0)
+        self.assertNotIn('cleared_messages', replies[-1])
 
 
 if __name__ == '__main__':
