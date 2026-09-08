@@ -352,6 +352,21 @@ on the clipboard (plus the path as text), so it can be pasted straight into
 a chat. Older flat `media_cache/<sha256>.<ext>` files are moved into the new
 tree automatically on the first start.
 
+**Media capture and live previews (agent v14):** attachments inside
+`.message-body .message-text` are captured as images/GIFs, including captions;
+avatars and inline emoji are not attachments. A lazy attachment whose image or
+URL has not rendered yet is retried instead of becoming an empty text row.
+Completed downloads update the open Person History window automatically—even
+when no new message arrives. Download failures show the actual reason next to
+the restore control, and stale replies from before Clear/Delete/Load are ignored.
+
+After upgrading, restart the app and confirm **Capture agent v14** in the
+collector. With media downloads enabled, use **Collect now** in the same private
+chat; there is no need to clear history first. For an existing failed/missing
+file, click its **restore** marker. A source no longer available from the chat or
+image host cannot be reconstructed. The diagnosis and regression results are in
+[`docs/PERSON_HISTORY_MEDIA_CAPTURE_DESIGN_2026-09-09.md`](docs/PERSON_HISTORY_MEDIA_CAPTURE_DESIGN_2026-09-09.md).
+
 ### How collection works (and why it does not freeze the UI)
 
 A tiny agent is injected into the page. Every heartbeat it returns only a
@@ -499,7 +514,7 @@ Shared media and other people's history are preserved. Individual-message
 Delete remains separate until a whole-history/person reset removes every row
 for that person.
 
-Agent **v13** resets parsed-node caches, queued pushes, and its capture epoch.
+Agent **v14** retains the full reset of parsed-node caches, queued pushes, and its capture epoch.
 A delayed pre-reset push cannot reinsert old data after a fresh gate has been
 verified. Radar's per-person session count and visible history/paging cache are
 reset, and stale-generation UI replies are ignored. Browser reset failures are

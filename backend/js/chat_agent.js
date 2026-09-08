@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 13;
+  var VERSION = 14;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -328,7 +328,7 @@
          'button', 'input', 'select', 'textarea', 'avatar-item'].indexOf(tag) >= 0) return true;
     var names = ['from', 'sent-time', 'message-status', 'state-icon',
                  'additional-icon', 'avatar', 'avatar-wrapper', 'source-indicator',
-                 'message-actions', 'message-menu'];
+                 'message-actions', 'message-menu', 'message-header', 'message-meta', 'message-avatar'];
     for (var i = 0; i < names.length; i++) if (hasClass(node, names[i])) return true;
     return !!(node.hidden || (node.style && (node.style.display === 'none' ||
                                            node.style.visibility === 'hidden')));
@@ -366,7 +366,7 @@
       if (node.nodeType === 3 || node.nodeType === 4) return bodyText(node.nodeValue);
       if (node.nodeType === 8 || metadata(node)) return '';
       var tag = String(node.tagName || '').toLowerCase();
-      if (tag === 'app-chat-image' || hasClass(node, 'image-wrapper')) return '';
+      if (attachmentContainer(node)) return '';
       if (tag === 'br') return '\n';
       if (tag === 'img') {
         // Emoji belongs to text; attachment alt labels do not.
@@ -389,8 +389,21 @@
     return clean(visit(root));
   }
 
+  function attachmentContainer(node) {
+    return String((node || {}).tagName || '').toLowerCase() === 'app-chat-image' ||
+           hasClass(node, 'image-wrapper');
+  }
+
+  function insideAttachment(node, scope) {
+    for (var p = node; p; p = p.parentElement) {
+      if (attachmentContainer(p)) return true;
+      if (p === scope) break;
+    }
+    return false;
+  }
+
   function payloadParts(node) {
-    var scope = qs(node, '.message-content') || node;
+    var scope = qs(node, '.message-content') || qs(node, '.message-body') || node;
     var span = qs(scope, 'span.message') || qs(scope, '.message-text') ||
                qs(scope, '[data-message-text]');
     var img = null;
@@ -398,13 +411,20 @@
     for (var i = 0; i < images.length; i++) {
       var candidate = images[i];
       if (insideMetadata(candidate, scope) ||
-          (span && isAncestor(span, candidate)) ||
           hasClass(candidate, 'emoji') || hasClass(candidate, 'emoticon')) continue;
+      // Current layouts put real attachments INSIDE .message-text. Only an
+      // inline image outside an attachment component is treated as text/emoji.
+      if (span && isAncestor(span, candidate) && !insideAttachment(candidate, scope)) continue;
       img = candidate;
       break;
     }
-    return { scope: scope, text: span, image: img,
-             hasBody: !!(span || qs(scope, 'p.message') || qs(node, '.message-content')) };
+    var hosts = qsa(scope, 'app-chat-image').concat(qsa(scope, '.image-wrapper'));
+    var hasMedia = !!img;
+    for (var j = 0; j < hosts.length && !hasMedia; j++)
+      hasMedia = !insideMetadata(hosts[j], scope);
+    return { scope: scope, text: span, image: img, hasMedia: hasMedia,
+             hasBody: !!(span || qs(scope, 'p.message') || qs(node, '.message-content') ||
+                         qs(node, '.message-body')) };
   }
 
   function parseNode(node) {
@@ -417,7 +437,7 @@
     var source = text ? 'payload-element' : 'message-content';
     if (!text) text = messageText(parts.scope, true);
     var media = null, kind = 'text';
-    if (parts.image) {
+    if (parts.hasMedia) {
       var url = liveMediaUrl(parts.image);
       kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
       media = { url: url, kind: kind };

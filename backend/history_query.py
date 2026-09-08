@@ -13,12 +13,12 @@ ASCII only.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Optional
 
 from backend.archive_lock import db_operation
 from backend.history_db import HistoryDB
+from backend.media_store import media_info
 
 log = logging.getLogger("chatbot")
 
@@ -82,18 +82,12 @@ class HistoryQuery:
         data = dict(row)
         media = None
         if data.get("media_id"):
-            path = data.get("cache_path") or ""
-            state = data.get("media_state") or "pending"
-            # A cached row whose file vanished must not render as a broken
-            # <img> from a dead local path: report it as missing so the UI
-            # shows a "click to restore" marker instead.
-            if path and not os.path.exists(path):
-                state = "missing"
-                path = ""
-            media = {"id": data.get("media_id"), "url": data.get("media_url"),
-                     "kind": data.get("media_kind") or data.get("kind"),
-                     "state": state,
-                     "path": path}
+            media = media_info({
+                "id": data["media_id"], "url": data.get("media_url"),
+                "kind": data.get("media_kind") or data.get("kind"),
+                "state": data.get("media_state"), "cache_path": data.get("cache_path"),
+                "bytes": data.get("media_bytes"), "fail_reason": data.get("media_error"),
+            })
         return {
             "id": int(data.get("id") or 0),
             "ord": int(data.get("ord") or 0),
@@ -114,7 +108,8 @@ class HistoryQuery:
         }
 
     _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
-               "md.state AS media_state, md.cache_path AS cache_path "
+               "md.state AS media_state, md.cache_path AS cache_path, "
+               "md.bytes AS media_bytes, md.fail_reason AS media_error "
                "FROM messages m LEFT JOIN media md ON md.id = m.media_id ")
     #: soft-deleted rows are invisible to every read (they exist only so a
     #: single Ctrl+Z can bring them back)
@@ -269,6 +264,7 @@ class HistoryQuery:
 
         select = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
                   "md.state AS media_state, md.cache_path AS cache_path, "
+                  "md.bytes AS media_bytes, md.fail_reason AS media_error, "
                   "p.nick AS nick FROM messages m "
                   "JOIN persons p ON p.id = m.person_id "
                   "LEFT JOIN media md ON md.id = m.media_id ")

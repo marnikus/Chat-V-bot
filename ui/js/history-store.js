@@ -287,18 +287,15 @@ const HistoryStore = {
   onMediaReady(reqId, json) {
     let info = null;
     try { info = JSON.parse(json); } catch (e) { return; }
-    if (!info) return;
+    if (!info || !this._acceptGeneration(info)) return;
     const id = info.id != null ? info.id : reqId;
-    if (info.path) {
-      // Put the fresh local path into the model, then re-render.  That lets
-      // a restored "click to restore" marker become a working <img> without
-      // a manual refresh, while the scroll anchor is preserved by render().
-      const hit = this._applyModelMedia(id, info);
-      if (hit) { this.render(); return; }
-      HistoryView.applyMediaPath(this._els.list, id, info.path);
-    }
-    if (!info.path && typeof LogConsole !== 'undefined')
-      LogConsole.log('⚠ ' + (info.error || 'media is not available yet') +
+    // An empty path is meaningful too (failed, missing or evicted). Update
+    // buffered rows as well, so scrolling back to the live end is accurate.
+    const hit = this._applyModelMedia(id, info);
+    if (hit && !this.query) this.render();
+    else HistoryView.applyMediaInfo(this._els.list, id, info);
+    if (!info.path && info.error && typeof LogConsole !== 'undefined')
+      LogConsole.log('⚠ ' + info.error +
                      (info.state ? ' (' + info.state + ')' : ''), 'warn');
   },
 
@@ -306,13 +303,13 @@ const HistoryStore = {
     if (!this.model) return false;
     const want = String(id == null ? '' : id);
     let changed = false;
-    this.model.items.forEach((item) => {
+    this.model.items.concat(this.model.buffer || []).forEach((item) => {
       if (!item.media || String(item.media.id) !== want) return;
-      if (info.path) item.media.path = info.path;
-      if (info.state) item.media.state = info.state;
-      if (info.url) item.media.url = info.url;
-      if (info.kind) item.media.kind = info.kind;
-      changed = true;
+      ['path', 'state', 'url', 'kind', 'error', 'bytes'].forEach((key) => {
+        if (!Object.prototype.hasOwnProperty.call(info, key) || item.media[key] === info[key]) return;
+        item.media[key] = info[key];
+        changed = true;
+      });
     });
     return changed;
   },

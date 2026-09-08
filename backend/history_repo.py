@@ -22,6 +22,7 @@ from typing import Iterable, Optional, Sequence
 
 from backend.archive_lock import db_operation
 from backend.history_db import HistoryDB
+from backend.media_store import media_info
 from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
                                     MessageRecord, fingerprint)  # noqa: F401
@@ -707,13 +708,7 @@ class HistoryRepo:
                                              (media_id,))
                 row = dict(row) if row else None
             if row:
-                media = {
-                    "id": int(row.get("id") or media_id),
-                    "url": row.get("url") or rec.media_url or "",
-                    "kind": row.get("kind") or rec.media_kind or rec.kind,
-                    "state": row.get("state") or "pending",
-                    "path": row.get("cache_path") or "",
-                }
+                media = media_info(row)
         return {
             "id": message_id,
             "ord": int(ord_value or 0),

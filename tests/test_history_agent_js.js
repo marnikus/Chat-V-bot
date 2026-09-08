@@ -596,6 +596,46 @@ t('resetting an inactive person does not lose the active persons push buffer', (
   eq(env.agent.drain().items.length, 1);
 });
 
+// ── real attachments nested inside the text payload ────────────
+
+t('app-chat-image inside message-text is media, not an inline emoji', () => {
+  const { el } = require('./dom_stub');
+  const env = load({ messages: [msg(0, { media: 'https://example.test/nested.gif' })] });
+  const body = env.document.querySelector('p.message');
+  const attachment = body.querySelector('app-chat-image');
+  body.children = body.children.filter(node => node !== attachment);
+  body.append(el('div', { class: 'message-text', text: 'Caption' }, [attachment]));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.media.url, 'https://example.test/nested.gif');
+  eq(record.kind, 'gif');
+  eq(record.text, 'Caption');
+  ok(!record.capture_pending);
+});
+
+t('an attachment host without its image stays pending even when text is ready', () => {
+  const { el } = require('./dom_stub');
+  const env = load({ messages: [msg(0, { text: 'Caption' })] });
+  const span = env.document.querySelector('span.message');
+  span.append(el('app-chat-image', {}, [el('div', { class: 'image-wrapper' })]));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Caption');
+  eq(record.media.url, '');
+  eq(record.capture_reason, 'media_url_pending');
+  ok(record.capture_pending);
+});
+
+t('v14 replaces the old v13 attachment parser rather than reusing it', () => {
+  const env = buildChat({ messages: many(1) });
+  let uninstalled = 0;
+  const old = { version: 13, uninstall() { uninstalled++; } };
+  env.window.__cvbAgent = old;
+  new Function('window', 'document', 'MutationObserver', 'setTimeout', 'clearTimeout', SRC)(
+    env.window, env.document, env.MutationObserver, env.setTimeout, env.clearTimeout);
+  ok(env.window.__cvbAgent !== old);
+  ok(env.window.__cvbAgent.version >= 14);
+  eq(uninstalled, 1);
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');

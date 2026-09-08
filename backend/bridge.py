@@ -1733,6 +1733,7 @@ class Bridge(QObject):
         self.db_manager.attach(service)
         if service is None:
             return
+        service.media.on_change = lambda info: self._emit_media_info(service, info)
         try:
             service.collector.status_changed.connect(self._on_collector_status)
             service.collector.collector_log.connect(self.collector_log.emit)
@@ -2090,6 +2091,13 @@ class Bridge(QObject):
         return True
 
     # ── media + clipboard ────────────────────────────────────────
+    def _emit_media_info(self, service, payload: dict, req_id: str = "") -> None:
+        """Cache completions and RPCs share the same generation-guarded channel."""
+        if service is not self._archive:
+            return
+        info = dict(payload, generation=service.generation)
+        self.media_ready.emit(req_id, json.dumps(info, ensure_ascii=False))
+
     @Slot(str, str)
     def media_path(self, req_id, media_ref):
         if not self._need_archive("media_path", req_id):
@@ -2099,8 +2107,7 @@ class Bridge(QObject):
             payload = await self._archive.media.path_for(media_ref)
             payload["req_id"] = req_id
             payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, req_id)
         self._run_async("media_path", work())
 
     @Slot(str, str)
@@ -2113,8 +2120,7 @@ class Bridge(QObject):
             payload = await self._archive.media.download_one(media_ref)
             payload["req_id"] = req_id
             payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, req_id)
         self._run_async("media_restore", work())
 
     @Slot(str, result=str)
@@ -2250,8 +2256,7 @@ class Bridge(QObject):
                         "📋 Copied " + (payload.get("path") or
                                         payload.get("text") or "media"),
                         "success")
-            self.media_ready.emit(str(media_ref), json.dumps(
-                payload, ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, str(media_ref))
         self._run_async("copy_media", work())
 
     @Slot(str, result=bool)
