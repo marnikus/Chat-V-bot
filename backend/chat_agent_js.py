@@ -19,7 +19,7 @@ import os
 #: node cache is invalidated whenever ANY parsed field changed live, not
 #: only the media URL — a text span that rendered after the first parse no
 #: longer stays an empty '' forever (Bug 2 of 2026-09-08).
-AGENT_VERSION = 10
+AGENT_VERSION = 11
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")

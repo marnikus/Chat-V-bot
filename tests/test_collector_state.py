@@ -117,6 +117,16 @@ class TestDetection(CollectorCase):
         self.assertEqual(await self.col.tick(), CollectorState.GROUP_TAB)
         self.assertEqual(self.page.slice_calls, [])
 
+    async def test_private_chat_without_a_counter_is_still_collected(self):
+        # A partner without avatar identification can render a private pane
+        # with no readable users-counter. "No count" is not "a group": the
+        # author gate refuses any third nick, so collecting is safe and the
+        # old behaviour (refuse as "Group tab (0 people)") was a silent
+        # loss of exactly those chats (2026-09-08).
+        self.page.participants = 0
+        self.assertEqual(await self.col.tick(), CollectorState.COLLECTED)
+        self.assertEqual(self.col.state_payload()["nick"], "Nick")
+
     async def test_group_guard_can_be_switched_off(self):
         self.page.participants = 3
         self.col.configure(require_two_participants=False)

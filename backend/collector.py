@@ -323,7 +323,14 @@ class Collector(QObject):
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Not in private tab now")
         participants = int(state.get("participants") or 0)
-        if self._settings["require_two_participants"] and participants != 2:
+        # "Exactly two people" is enforced whenever the page exposes a
+        # count. A private pane WITHOUT a readable counter — the partner
+        # with no avatar identification (2026-09-08) — falls through to the
+        # author gate below, which refuses the chat the moment any third
+        # nick writes here. No gender/avatar check belongs in this path:
+        # filters only govern auto-detection in the Action block.
+        if (self._settings["require_two_participants"]
+                and participants > 0 and participants != 2):
             self._log(f"Refused: {participants} participants, not a private "
                       "chat", "warn", state.get("partner") or "")
             return self._refuse(

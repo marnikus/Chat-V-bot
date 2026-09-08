@@ -140,6 +140,48 @@ t('a room tab is reported as such', () => {
   eq(s.participants, 17);
 });
 
+// ── identification-free private chats (2026-09-08) ───────────────
+// A partner without avatar/gender identification must never make the
+// collector refuse an open private chat: only the room is identified
+// positively, by its own icon. Everything else with a nick in the title
+// is a private-chat candidate; "two people, one is me" is verified from
+// the pane, not from the icon.
+
+t('a private tab with a foreign icon is still a private chat', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  const icon = env.document.querySelectorAll('.tab-item')[1]
+                   .querySelector('mat-icon.chat-type-icon');
+  icon.setAttribute('data-mat-icon-name', 'anonymous');
+  const s = env.agent.state();
+  eq(s.tab, 'private');
+  eq(s.partner, 'На работе 25');
+});
+
+t('a private tab with NO icon at all is still a private chat', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  const tab = env.document.querySelectorAll('.tab-item')[1];
+  tab.remove(tab.querySelector('mat-icon.chat-type-icon'));
+  eq(env.agent.state().tab, 'private');
+});
+
+t('participants fall back to the pane user list without a counter', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  env.document.querySelector('.users-counter').textContent = '';
+  eq(env.agent.state().participants, 2);
+});
+
+t('an icon-less tab with no title is not a private chat', () => {
+  const env = load({ partner: 'На работе 25', messages: many(2) });
+  const tab = env.document.querySelectorAll('.tab-item')[1];
+  tab.querySelector('p.chat-title').textContent = '';
+  tab.querySelector('mat-icon.chat-type-icon')
+     .setAttribute('data-mat-icon-name', 'anonymous');
+  eq(env.agent.state().tab, 'none');
+});
+
 t('switching tabs changes the reported partner', () => {
   const env = load({ messages: many(2) });
   eq(env.agent.state().tab, 'private');

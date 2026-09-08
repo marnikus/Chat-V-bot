@@ -201,3 +201,49 @@ Every counter the user can see is derived from a committed write.
    re-collect) runs without a single "no such column" in the log.
 8. Full test suite green (including the previously date-dependent media
    recovery test).
+
+## 7. Addendum (evening, 2026-09-08): identification-free private chats
+
+**Report.** A private chat whose partner lost every avatar/gender
+identification ("female or other") was refused — the nick in the tab was
+correct, yet nothing was parsed or archived. Chats with a female avatar
+kept working.
+
+**Root cause.** The parse path contained no gender check of its own, but two
+of its inputs were derived from page *identification* metadata:
+
+1. the agent classified the active tab by its `chat-type-icon`:
+   `data-mat-icon-name='user'` ⇒ private, **anything else ⇒ room** — a
+   missing/foreign icon (guest, anonymous, late-rendered SVG) reported an
+   open private chat as a room, and the collector answered
+   "Not in private tab now";
+2. the two-person check read only `.users-counter`; a pane without a
+   readable counter reported `participants = 0` and was refused as
+   "Group tab (0 people)".
+
+**Contract (user's wording).** An open tab with a nick in its title IS a
+private chat; verify only (a) exactly two people and (b) one of them is My
+(current) nick. Filters (female/registered/…) belong exclusively to
+auto-detection in the Action block — for parsing they are irrelevant.
+
+**Changes.**
+
+* `backend/js/chat_agent.js` (VERSION 10 → 11): the room is the only tab
+  identified positively, by its own `room` icon; any other active tab with
+  a non-empty title is reported as `private` (icon never consulted). A
+  title-less tab stays `none`. New `countPaneUsers()` counts DISTINCT
+  `user-item` nicks in the pane, so `participants` survives a missing or
+  empty `.users-counter` (counter wins whenever it shows a positive number).
+* `backend/chat_agent_js.py`: `AGENT_VERSION = 11` in lockstep (running
+  apps reinstall the agent on the next tick).
+* `backend/collector.py`: the group refusal fires only when the count is
+  KNOWN (`participants > 0`) and != 2. With no count, `verify_private`'s
+  author gate enforces "two people, one is me": every inbound author must
+  be the partner, every outbound author me (or the pane's single
+  self-reported nick), any third nick ⇒ refused.
+
+**Verification.** `tests/test_history_agent_js.js` 43/0 (foreign icon, no
+icon, counter-less participants, icon-less untitled tab); `tests/
+test_collector_state.py` + `test_private_chat_without_a_counter_is_still_
+collected` while `test_group_tab_is_not_collected` (participants = 3)
+still refuses.

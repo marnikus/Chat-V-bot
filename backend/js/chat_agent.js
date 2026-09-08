@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 10;
+  var VERSION = 11;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -550,15 +550,44 @@
     var active = qs(document, '.tab-item.active');
     var tab = 'none', partner = '', title = '';
     if (active) {
-      var icon = qs(active, 'mat-icon.chat-type-icon') || qs(active, 'mat-icon');
+      var icon = qs(active, 'mat-icon.chat-type-icon') ||
+                 qs(active, 'mat-icon');
       var name = icon ? icon.getAttribute('data-mat-icon-name') : '';
-      tab = name === 'user' ? 'private' : 'room';
       title = ownText(qs(active, 'p.chat-title'));
+      /* The main room is the ONLY tab we identify positively, by its own
+       * icon. Every other open tab that names a person in its title IS a
+       * private chat: a partner without an avatar identification (guest,
+       * anonymous, or an icon the page renders late or never) used to be
+       * reported as a room, and the collector refused their chat with
+       * "Not in private tab now" (2026-09-08). Whether this really is a
+       * two-person conversation with me in it is verified from the pane
+       * itself — never from the tab's icon or the partner's avatar. */
+      tab = name === 'room' ? 'room' : (clean(title) ? 'private' : 'none');
       partner = title;
     }
     var mine = qs(document, '.primary-text.bold');
     return { tab: tab, partner: partner, title: title,
              me: clean(mine ? mine.textContent : ''), participants: 0 };
+  }
+
+  /** The pane's own people, counted without any identification metadata.
+   *
+   * A private pane can render without a readable `.users-counter` —
+   * exactly the identification-free chats this agent must still serve.
+   * Counting DISTINCT user-item nicks (the partner and me) keeps the
+   * "exactly two people" fact available; no avatar class or gender icon
+   * is consulted. */
+  function countPaneUsers(container) {
+    if (!container) return 0;
+    var items = qsa(container, 'user-item'), seen = {}, n = 0;
+    for (var i = 0; i < items.length; i++) {
+      var el = qs(items[i], '.primary-text');
+      var nick = normNick(el ? el.textContent : '');
+      if (!nick || seen[nick]) continue;
+      seen[nick] = 1;
+      n += 1;
+    }
+    return n;
   }
 
   function describePane(pane) {
@@ -567,13 +596,14 @@
     var counter = container ? qs(container, '.users-counter') : null;
     var mine = container ? qs(container, '.primary-text.bold') : null;
     var globalMine = qs(document, '.primary-text.bold');
+    var count = counter ? num(clean(counter.textContent)) : 0;
     return {
       tab: base.tab,
       partner: base.partner,
       title: base.title,
       me: clean(mine ? mine.textContent :
                 (globalMine ? globalMine.textContent : '')),
-      participants: counter ? num(clean(counter.textContent)) : 0,
+      participants: count > 0 ? count : countPaneUsers(container),
     };
   }
 
