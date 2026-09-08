@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Iterable, Optional, Sequence
 
+from backend.archive_lock import db_operation
 from backend.history_db import HistoryDB
 from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
@@ -105,6 +106,7 @@ class HistoryRepo:
     def normalise_nick(nick: str) -> str:
         return " ".join(str(nick or "").split()).strip()
 
+    @db_operation
     async def ensure_person(self, nick: str) -> int:
         clean = self.normalise_nick(nick)
         if not clean:
@@ -121,11 +123,13 @@ class HistoryRepo:
         await self.db.commit()
         return int(cur.lastrowid)
 
+    @db_operation
     async def get_person(self, nick: str) -> Optional[dict]:
         row = await self.db.fetchone(
             "SELECT * FROM persons WHERE nick=?", (self.normalise_nick(nick),))
         return self._person_dict(row) if row else None
 
+    @db_operation
     async def get_person_by_id(self, person_id: int) -> Optional[dict]:
         row = await self.db.fetchone("SELECT * FROM persons WHERE id=?",
                                      (person_id,))
@@ -141,6 +145,7 @@ class HistoryRepo:
         data["deleted"] = bool(data.get("deleted_at"))
         return data
 
+    @db_operation
     async def possible_duplicates(self) -> list[dict]:
         """Nicks that differ only by case/spacing — candidates for a merge."""
         rows = await self.db.fetchdicts(
@@ -158,6 +163,7 @@ class HistoryRepo:
         return out
 
     # ── cursor ───────────────────────────────────────────────────
+    @db_operation
     async def get_cursor(self, person_id: int) -> dict:
         row = await self.db.fetchone(
             "SELECT * FROM cursors WHERE person_id=?", (person_id,))
@@ -179,6 +185,7 @@ class HistoryRepo:
         data["full_scan_complete"] = bool(data.get("full_scan_complete"))
         return data
 
+    @db_operation
     async def reset_cursor(self, nick: str) -> None:
         """Forget where we were in the DOM — the archive itself is untouched."""
         person_id = await self.ensure_person(nick)
@@ -199,6 +206,7 @@ class HistoryRepo:
         return int(await self.db.scalar(
             "SELECT MAX(ord) FROM messages WHERE person_id=?", (person_id,), 0))
 
+    @db_operation
     async def mark_backfilled(self, nick_or_id) -> None:
         """Record that the full-top-to-bottom scan for this person is done.
 
@@ -219,6 +227,7 @@ class HistoryRepo:
         await self.db.commit()
 
     # ── append ───────────────────────────────────────────────────
+    @db_operation
     async def append(self, nick: str, records: Iterable, my_nick: str = "",
                      align: bool = True, expect_idx: Optional[int] = None,
                      dom_count: int = 0, head_sig: Optional[str] = None,
@@ -238,10 +247,14 @@ class HistoryRepo:
             result.last_ord = await self._last_ord(person_id)
             return result
 
+        repair = await self.recover_text(person_id, recs, now=now)
+        result.text_repaired = repair["repaired"]
         if prepend:
-            return await self._prepend(person_id, recs, my_nick, now,
-                                       dom_count, head_sig, tail_sig,
-                                       session_id, nick=nick)
+            prepended = await self._prepend(person_id, recs, my_nick, now,
+                                            dom_count, head_sig, tail_sig,
+                                            session_id, nick=nick)
+            prepended.text_repaired += result.text_repaired
+            return prepended
 
         cursor = await self.get_cursor(person_id)
         batch_keys = [r.dup_key for r in recs]
@@ -273,9 +286,10 @@ class HistoryRepo:
         added = 0
         slots: dict = {}
         slot_rows: Optional[list] = None
+        hidden_slots = await self._deleted_empty_slots(person_id)
         for rec, day in zip(pending, days[start:]):
             dup_key = rec.dup_key
-            if dup_key in known:
+            if dup_key in known or self._was_deleted_slot(rec, day, hidden_slots):
                 continue
             # a media line that was parsed before its <img> rendered left an
             # EMPTY slot behind; the real payload fills that slot in place
@@ -292,7 +306,7 @@ class HistoryRepo:
                 if len(result.records) < MAX_LIVE_ITEMS:
                     result.records.append(await self._ui_record(
                         rec, await self._ord_of(slot_id), day, my_nick,
-                        media_id))
+                        media_id, message_id=slot_id))
                 continue
             known.add(dup_key)
             media_id = await self._media_id(rec, nick, day)
@@ -313,7 +327,7 @@ class HistoryRepo:
                 last_ord = assigned
                 if len(result.records) < MAX_LIVE_ITEMS:
                     result.records.append(await self._ui_record(
-                        rec, assigned, day, my_nick, media_id))
+                        rec, assigned, day, my_nick, media_id, message_id=cur.lastrowid))
         await self.db.commit()
 
         await self._after_write(person_id, my_nick, dom_count, head_sig,
@@ -341,8 +355,9 @@ class HistoryRepo:
         known = await self._existing_dup_keys(person_id,
                                               [r.dup_key for r in recs])
         fresh = []
+        hidden_slots = await self._deleted_empty_slots(person_id)
         for rec, day in zip(recs, days):
-            if rec.dup_key in known:
+            if rec.dup_key in known or self._was_deleted_slot(rec, day, hidden_slots):
                 continue
             known.add(rec.dup_key)
             fresh.append((rec, day))
@@ -364,40 +379,57 @@ class HistoryRepo:
                                   await self._media_id(rec, nick, day)))
                 else:
                     inserts.append((rec, day))
-            if inserts:
-                shift = len(inserts)
-                await self.db.execute(
-                    "UPDATE messages SET ord = ord + ? WHERE person_id=?",
-                    (shift, person_id))
-            stamp = datetime.now().isoformat(timespec="seconds")
-            position = 0
+            # Missing payloads are deferred by the collector. When they
+            # arrive, they may belong BETWEEN known lines, not just before
+            # the entire archive. Group inserts by their nearest known
+            # neighbor, then shift from right to left to keep anchor ords stable.
+            anchors = {r["dup_key"]: int(r["ord"]) for r in await self.db.fetchdicts(
+                "SELECT dup_key, ord FROM messages WHERE person_id=?", (person_id,))}
+            for rec, _day, slot_id, _media_id in fills:
+                anchors[rec.dup_key] = await self._ord_of(slot_id)
+            positions = {rec.dup_key: i for i, rec in enumerate(recs)}
+            groups = {}
             for rec, day in inserts:
-                position += 1
-                media_id = await self._media_id(rec, nick, day)
-                cur = await self.db.execute(
-                    "INSERT OR IGNORE INTO messages("
-                    "person_id, ord, fp, direction, from_nick, my_nick, kind, "
-                    "text, text_lc, media_id, ts_display, ts_resolved, day, "
-                    "ts_exact, occ, dom_idx, session_id, created_at, dup_key) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
-                    (person_id, position, rec.fp, rec.direction, rec.from_nick,
-                     my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
-                     media_id, rec.ts_display,
-                     f"{day} {rec.ts_display or '00:00'}", day, rec.occ,
-                     rec.idx, session_id or self.session_id, stamp,
-                     rec.dup_key))
-                if cur.rowcount:
-                    result.added += 1
-                    if len(result.records) < MAX_LIVE_ITEMS:
-                        result.records.append(await self._ui_record(
-                            rec, position, day, my_nick, media_id))
+                i = positions[rec.dup_key]
+                following = next((anchors[r.dup_key] for r in recs[i + 1:]
+                                  if r.dup_key in anchors), None)
+                preceding = next((anchors[r.dup_key] for r in reversed(recs[:i])
+                                  if r.dup_key in anchors), None)
+                at = following if following is not None else (
+                    preceding + 1 if preceding is not None else 1)
+                groups.setdefault(at, []).append((rec, day))
+            stamp = datetime.now().isoformat(timespec="seconds")
+            for at, group in sorted(groups.items(), reverse=True):
+                await self.db.execute(
+                    "UPDATE messages SET ord = ord + ? WHERE person_id=? AND ord>=?",
+                    (len(group), person_id, at))
+                for offset, (rec, day) in enumerate(group):
+                    position = at + offset
+                    media_id = await self._media_id(rec, nick, day)
+                    cur = await self.db.execute(
+                        "INSERT OR IGNORE INTO messages("
+                        "person_id, ord, fp, direction, from_nick, my_nick, kind, "
+                        "text, text_lc, media_id, ts_display, ts_resolved, day, "
+                        "ts_exact, occ, dom_idx, session_id, created_at, dup_key) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
+                        (person_id, position, rec.fp, rec.direction, rec.from_nick,
+                         my_nick or "", rec.kind, rec.text, (rec.text or "").lower(),
+                         media_id, rec.ts_display,
+                         f"{day} {rec.ts_display or '00:00'}", day, rec.occ,
+                         rec.idx, session_id or self.session_id, stamp,
+                         rec.dup_key))
+                    if cur.rowcount:
+                        result.added += 1
+                        if len(result.records) < MAX_LIVE_ITEMS:
+                            result.records.append(await self._ui_record(
+                                rec, position, day, my_nick, media_id, message_id=cur.lastrowid))
             for rec, day, slot_id, media_id in fills:
                 await self._fill_slot(slot_id, rec, media_id)
                 result.added += 1
                 if len(result.records) < MAX_LIVE_ITEMS:
                     result.records.append(await self._ui_record(
                         rec, await self._ord_of(slot_id), day, my_nick,
-                        media_id))
+                        media_id, message_id=slot_id))
             await self.db.commit()
         await self._after_write(person_id, my_nick, dom_count, head_sig,
                                 tail_sig, bootstrapped=True)
@@ -407,6 +439,7 @@ class HistoryRepo:
         result.first_ord = 1
         return result
 
+    @db_operation
     async def record_gap(self, nick_or_id, after_ord: int, reason: str,
                          detail: str = "") -> None:
         """Note a known hole in a conversation (cap, lost alignment, …)."""
@@ -439,6 +472,106 @@ class HistoryRepo:
             [person_id] + keys)
         return {r[0] for r in rows if r[0]}
 
+    # ── text lost by older parsers / partially rendered DOM ───────
+    @db_operation
+    async def has_missing_text(self, person_id: int, *, force: bool = False,
+                               rescan_after_s: int = 30) -> bool:
+        cutoff = (datetime.now() - timedelta(seconds=max(1, rescan_after_s))).isoformat(timespec="seconds")
+        return bool(await self.db.scalar(
+            "SELECT 1 FROM messages WHERE person_id=? AND deleted_at='' "
+            "AND kind='text' AND media_id IS NULL "
+            "AND trim(text, char(9)||char(10)||char(13)||' ')='' "
+            + ("" if force else "AND (text_scan_at='' OR text_scan_at<?) ") + "LIMIT 1",
+            (person_id,) if force else (person_id, cutoff), 0))
+
+    @db_operation
+    async def recover_text(self, person_id: int, records, now=None) -> dict:
+        """Fill only confidently identified empty text slots (or captions).
+
+        Timestamp alone is not identity: a media line and a text line can
+        share one minute. Require the same DOM index, or known neighbors on
+        BOTH sides of a shifted slot. Day, author and direction always match.
+        Never touch an explicit deletion or replace text already captured.
+        """
+        recs = [_as_record(r) for r in records or []]
+        days = resolve_days([r.ts_display for r in recs], now or datetime.now())
+        rows = await self.db.fetchdicts(
+            "SELECT m.*, md.url AS media_url FROM messages m "
+            "LEFT JOIN media md ON md.id=m.media_id "
+            "WHERE m.person_id=? AND m.deleted_at='' "
+            "AND trim(m.text, char(9)||char(10)||char(13)||' ')='' "
+            "AND (m.kind='text' OR m.media_id IS NOT NULL) ORDER BY m.ord", (person_id,))
+        if not rows:
+            return {"repaired": 0, "scanned": 0}
+        stamp = datetime.now().isoformat(timespec="seconds")
+        by_slot = {}
+        for pos, (rec, day) in enumerate(zip(recs, days)):
+            by_slot.setdefault(self._slot_key(rec) + (day,), []).append((pos, rec))
+        repaired, unavailable, used, anchors = 0, 0, set(), None
+        for row in rows:
+            # Media-only messages legitimately have no text; don't make them
+            # automatic text-repair candidates. A caption can still be filled
+            # when the same URL actually arrives with text in this batch.
+            key = self._slot_row_key(row)
+            group = by_slot.get(key, [])
+            matches = [(pos, rec) for pos, rec in group
+                       if pos not in used and rec.text.strip() and
+                       bool(rec.media_url) == bool(row["media_id"]) and
+                       (not rec.media_url or rec.media_url == row["media_url"])]
+            match = None
+            exact = [(pos, rec) for pos, rec in matches if rec.idx == row["dom_idx"]]
+            same_position = [r for r in rows if self._slot_row_key(r) == key
+                             and r["dom_idx"] == row["dom_idx"]]
+            if row["from_nick"] and row["ts_display"] and len(exact) == 1 and len(same_position) == 1:
+                match = exact[0]
+            elif len(matches) == 1 and len(group) == 1:
+                if anchors is None:
+                    anchors = {r["dup_key"]: r for r in await self.db.fetchdicts(
+                        "SELECT ord, dup_key, day FROM messages WHERE person_id=? "
+                        "AND deleted_at='' AND text<>''", (person_id,))}
+                pos, rec = matches[0]
+                left = next((anchors[r.dup_key] for r in reversed(recs[:pos])
+                             if r.dup_key in anchors), None)
+                right = next((anchors[r.dup_key] for r in recs[pos + 1:]
+                              if r.dup_key in anchors), None)
+                if (left and right and left["day"] == right["day"] == row["day"]
+                        and left["ord"] < row["ord"] < right["ord"]):
+                    match = (pos, rec)
+            if match:
+                pos, rec = match
+                duplicate = await self.db.fetchone(
+                    "SELECT id, day, dom_idx, deleted_at FROM messages "
+                    "WHERE person_id=? AND dup_key=? AND id<>?",
+                    (person_id, rec.dup_key, row["id"]))
+                if duplicate:
+                    # Only an unmistakable pre-fix duplicate is removed.
+                    # Otherwise retain the honest placeholder, not guessed text.
+                    if (duplicate["deleted_at"] or duplicate["day"] != row["day"]
+                            or duplicate["dom_idx"] != rec.idx):
+                        await self.db.execute("UPDATE messages SET text_scan_at=? WHERE id=?", (stamp, row["id"]))
+                        unavailable += row["media_id"] is None
+                        continue
+                    await self.db.execute("DELETE FROM messages WHERE id=?", (duplicate["id"],))
+                fp = fingerprint(rec.direction, rec.from_nick, rec.ts_display,
+                                 rec.kind, rec.payload, rec.occ)
+                await self.db.execute(
+                    "UPDATE messages SET text=?, text_lc=?, fp=?, dup_key=?, "
+                    "text_scan_at=?, text_recovered_at=? WHERE id=?",
+                    (rec.text, rec.text.lower(), fp, rec.dup_key, stamp, stamp, row["id"]))
+                used.add(pos)
+                repaired += 1
+            elif row["media_id"] is None:
+                unavailable += 1
+                await self.db.execute("UPDATE messages SET text_scan_at=? WHERE id=?", (stamp, row["id"]))
+        await self.db.commit()
+        if repaired:
+            await self._recount(person_id)
+            log.info("Recovered text for %d message(s), person_id=%s", repaired, person_id)
+        if unavailable:
+            log.info("Text not captured for %d stored message(s), person_id=%s: "
+                     "payload unavailable or identity ambiguous; Backfill can retry", unavailable, person_id)
+        return {"repaired": repaired, "scanned": len(rows)}
+
     # ── empty slots left by a media line parsed too early ────────
     #
     # The in-page observer can fire before Angular renders `app-chat-image`,
@@ -461,9 +594,23 @@ class HistoryRepo:
         lower-cased record key inside a WHERE clause.
         """
         return await self.db.fetchdicts(
-            "SELECT id, direction, from_nick, ts_display, day FROM messages "
-            "WHERE person_id=? AND media_id IS NULL AND text='' "
+            "SELECT id, direction, from_nick, ts_display, day, dom_idx, kind FROM messages "
+            "WHERE person_id=? AND deleted_at='' AND media_id IS NULL AND text='' "
             "ORDER BY ord", (person_id,))
+
+    async def _deleted_empty_slots(self, person_id: int) -> list:
+        return await self.db.fetchdicts(
+            "SELECT direction, from_nick, ts_display, day, dom_idx, kind "
+            "FROM messages WHERE person_id=? AND deleted_at<>'' "
+            "AND media_id IS NULL AND trim(text, char(9)||char(10)||char(13)||' ')=''",
+            (person_id,))
+
+    def _was_deleted_slot(self, rec: MessageRecord, day: str, rows: list) -> bool:
+        # Payload-derived fingerprints change when an incomplete body renders.
+        # The explicit deletion must survive that change of fingerprint too.
+        key = self._slot_key(rec) + (day,)
+        return any(self._slot_row_key(row) == key and row["dom_idx"] == rec.idx
+                   and (row["kind"] == "text" or bool(rec.media_url)) for row in rows)
 
     @staticmethod
     def _slot_row_key(row) -> tuple:
@@ -478,10 +625,9 @@ class HistoryRepo:
                                rows: Optional[list] = None) -> Optional[int]:
         """The id of the next payload-less row matching this media line.
 
-        Only media-bearing records may fill a slot: an empty row exists
-        precisely because an `app-chat-image` had not rendered when the line
-        was first parsed — text never renders late, so a same-minute text
-        record must never steal a media slot. Several media lines can share
+        Only media-bearing records use this matching path. Text also renders
+        late, but needs the stricter DOM-position/neighbor matching in
+        `recover_text`, so a same-minute text cannot steal a media slot. Several media lines can share
         one HH:MM stamp from the same author; slots are consumed in `ord`
         order so the Nth payload-bearing record fills the Nth empty slot.
         The resolved calendar day is part of the key so a NEW message at
@@ -539,7 +685,7 @@ class HistoryRepo:
         return int(row[0]) if row else None
 
     async def _ui_record(self, rec: MessageRecord, ord_value: int, day: str,
-                         my_nick: str, media_id) -> dict:
+                         my_nick: str, media_id, message_id=None) -> dict:
         """The row shape the History window expects, straight from the write.
 
         The page parser ships `rec` only; the UI needs `ord`, `day`, `time`
@@ -564,6 +710,7 @@ class HistoryRepo:
                     "path": row.get("cache_path") or "",
                 }
         return {
+            "id": message_id,
             "ord": int(ord_value or 0),
             "fp": rec.fp or "",
             "dir": rec.direction or "in",
@@ -598,6 +745,7 @@ class HistoryRepo:
             " ".join(str(ts_display or "").split()).strip().lower(),
         ])
 
+    @db_operation
     async def recover_media(self, person_id: int, records, media=None,
                             nick: str = "", now=None,
                             requeue_failed: bool = True) -> dict:
@@ -634,7 +782,7 @@ class HistoryRepo:
         # second, and a shared stamp would make the second pass believe the
         # rows the first pass scanned were its own work.
         self._scan_seq += 1
-        marker = f"{stamp}.{self._scan_seq}"
+        marker = f"{datetime.now().isoformat(timespec='seconds')}.{self._scan_seq}"
 
         # The DOM records from this pass, keyed by the same three visible
         # fields that make a chat line recognisable to a human.
@@ -655,7 +803,7 @@ class HistoryRepo:
             "m.media_recovered_at, m.dup_key, md.url AS media_url, "
             "md.kind AS media_kind, md.state AS media_state "
             "FROM messages m LEFT JOIN media md ON md.id = m.media_id "
-            "WHERE m.person_id=? "
+            "WHERE m.person_id=? AND m.deleted_at='' "
             "AND (m.media_scan_at='' OR m.media_scan_at<>?) "
             "AND ("
             "  (m.media_id IS NULL AND (m.kind IN ('image','gif') "
@@ -774,6 +922,7 @@ class HistoryRepo:
             (person_id,))
         return {r[0] for r in rows}
 
+    @db_operation
     async def has_repairable_media(self, person_id: int,
                                    include_failed: bool = False,
                                    rescan_after_s: int = 600) -> bool:
@@ -794,7 +943,7 @@ class HistoryRepo:
                       "(SELECT id FROM media WHERE state IN "
                       "('failed','skipped'))")
             return bool(await self.db.scalar(
-                f"SELECT COUNT(*) FROM messages WHERE person_id=? "
+                f"SELECT COUNT(*) FROM messages WHERE person_id=? AND deleted_at='' "
                 f"AND ({clause})", (person_id,), 0))
         cutoff = (datetime.now() -
                   timedelta(seconds=max(60, int(rescan_after_s)))
@@ -802,7 +951,7 @@ class HistoryRepo:
         clause = ("(media_id IS NULL AND (kind IN ('image','gif') "
                   "OR text='') AND (media_scan_at='' OR media_scan_at<?))")
         return bool(await self.db.scalar(
-            f"SELECT COUNT(*) FROM messages WHERE person_id=? AND ({clause})",
+            f"SELECT COUNT(*) FROM messages WHERE person_id=? AND deleted_at='' AND ({clause})",
             (person_id, cutoff), 0))
 
 
@@ -889,6 +1038,7 @@ class HistoryRepo:
         return (datetime.now().isoformat(timespec="seconds") + "#" +
                 uuid.uuid4().hex[:8])
 
+    @db_operation
     async def soft_delete_message(self, nick: str, message_id: int,
                                   token: str = "") -> str:
         """Hide ONE message. Returns the token that reverses it ('' = no-op)."""
@@ -907,6 +1057,7 @@ class HistoryRepo:
         await self._recount(int(person["id"]))
         return stamp
 
+    @db_operation
     async def soft_delete_history(self, nick: str, token: str = "") -> str:
         """Hide every visible message of a person, keeping the person."""
         person = await self.get_person(nick)
@@ -923,6 +1074,7 @@ class HistoryRepo:
         await self._recount(int(person["id"]))
         return stamp
 
+    @db_operation
     async def restore_deleted(self, nick: str, token: str) -> int:
         """Exact reversal of one delete operation. Returns rows restored."""
         person = await self.get_person(nick)
@@ -937,6 +1089,7 @@ class HistoryRepo:
             await self._recount(int(person["id"]))
         return restored
 
+    @db_operation
     async def deleted_count(self, nick: str = "") -> int:
         if nick:
             person = await self.get_person(nick)
@@ -948,6 +1101,7 @@ class HistoryRepo:
         return int(await self.db.scalar(
             "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0))
 
+    @db_operation
     async def purge_deleted(self, nick: str = "") -> int:
         """Erase hidden rows for good — the ONLY path that removes bytes."""
         params: tuple = ()
@@ -966,6 +1120,7 @@ class HistoryRepo:
             await self._recount(int(person["id"]))
         return before
 
+    @db_operation
     async def delete_person(self, nick: str, hard: bool = False,
                             token: str = "") -> bool:
         """Remove a person WITH their history.
@@ -995,6 +1150,7 @@ class HistoryRepo:
             await self._recount(pid)
         return True
 
+    @db_operation
     async def restore_person(self, nick: str, token: str = "") -> bool:
         person = await self.get_person(nick)
         if not person:
@@ -1011,6 +1167,7 @@ class HistoryRepo:
         await self._recount(pid)
         return True
 
+    @db_operation
     async def merge_persons(self, from_nick: str, into_nick: str) -> int:
         """Fold one nick's archive into another. Returns the rows moved."""
         source = await self.get_person(from_nick)

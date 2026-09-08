@@ -32,7 +32,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_db import HistoryDB  # noqa: E402
+from backend.history_db import HistoryDB, SCHEMA, SCHEMA_VERSION  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 
@@ -84,7 +84,7 @@ class TestSchema(ArchiveCase):
         for t in ("persons", "messages", "media", "cursors", "gaps",
                   "schema_meta"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), "4")
+        self.assertEqual(await self.db.get_meta("schema_version"), SCHEMA_VERSION)
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)
@@ -123,6 +123,11 @@ class TestLegacyMigration(ArchiveCase):
             " session_id TEXT NOT NULL DEFAULT '',"
             " created_at TEXT,"
             " UNIQUE(person_id, fp, day))")
+        # A real v1 archive has all core tables and valid person references;
+        # an isolated legacy `messages` table is an incompatible foreign DB.
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT INTO persons(id,nick,nick_lc) VALUES(1,'Nick','nick')")
+        conn.execute("INSERT INTO schema_meta(key,value) VALUES('schema_version','1')")
         fp0 = fingerprint("in", "Nick", "12:00", "text", "Nice", 0)
         fp1 = fingerprint("in", "Nick", "12:00", "text", "Nice", 1)
         for i, fp in enumerate((fp0, fp1), start=1):

@@ -63,6 +63,7 @@ const DbPanel = {
 
   /** Ask for fresh sizes + the file list. */
   refresh() {
+    if (this.busy) return;
     const bridge = this._bridge('db_info');
     if (!bridge) { this.render(); return; }
     this._seq += 1;
@@ -73,6 +74,7 @@ const DbPanel = {
 
   /** db_info_ready(req_id, json) */
   onInfo(reqId, json) {
+    if (this.busy) return; // pre-operation measurements cannot re-enable controls
     if (this._pending && reqId && reqId !== this._pending) return;
     let payload = json;
     if (typeof json === 'string') {
@@ -80,11 +82,11 @@ const DbPanel = {
     }
     if (!payload) return;
     this.info = payload;
-    this.items = Array.isArray(payload.items) ? payload.items : [];
+    this.items = this.manageableItems(payload.items);
     this.activePath = payload.path || payload.db_path || this.activePath;
-    this.busy = false;
-    // Keep a reported failure on screen; only clear a progress line.
-    if (!this._els.status || !this._els.status.classList.contains('error'))
+    // Keep completion/error notices; only clear a progress line.
+    if (payload.error) this.setStatus('⚠ ' + payload.error, true);
+    else if (this._els.status && this._els.status.textContent === 'Measuring database…')
       this.setStatus('');
     this.render();
   },
@@ -96,9 +98,27 @@ const DbPanel = {
       try { payload = JSON.parse(json); } catch (e) { payload = null; }
     }
     this.busy = false;
+    if (payload && payload.ok) {
+      if (payload.active_path || payload.path_after)
+        this.activePath = payload.active_path || payload.path_after;
+      if (payload.op === 'delete')
+        this.items = this.items.filter((item) => item.path !== payload.path);
+    }
+    this.render();
     this.refresh();
-    // After refresh(), so the "measuring…" line cannot bury the failure.
+    // After refresh(), so the measuring line cannot bury the result.
     if (payload && payload.error) this.setStatus('⚠ ' + payload.error, true);
+    else if (payload && payload.ok && payload.op === 'create')
+      this.setStatus('Created ' + this.baseName(payload.path) +
+        '. Click Load to connect. The active database is unchanged.');
+  },
+
+  onError(scope, message) {
+    if (!String(scope || '').startsWith('db_')) return;
+    this.busy = false;
+    this._pending = 'error-' + (++this._seq);
+    this.setStatus('⚠ ' + message, true);
+    this.render();
   },
 
   setStatus(text, isError) {
@@ -107,8 +127,21 @@ const DbPanel = {
     this._els.status.classList.toggle('error', !!isError);
   },
 
+  manageableItems(items) {
+    return (Array.isArray(items) ? items : []).filter((item) => item && item.path &&
+      item.exists !== false && !item.protected && item.manageable !== false);
+  },
+
+  _begin(text) {
+    this.busy = true;
+    this._pending = 'mutation-' + (++this._seq); // invalidate in-flight info
+    this.setStatus(text);
+    this.render();
+  },
+
   // ── actions ─────────────────────────────────────────────────
   create() {
+    if (this.busy) return;
     const input = this._els.nameInput;
     const name = input ? String(input.value || '').trim() : '';
     if (!name) {
@@ -118,23 +151,31 @@ const DbPanel = {
     }
     const bridge = this._bridge('db_create');
     if (!bridge) return;
-    this.busy = true;
-    this.setStatus('Creating “' + name + '”…');
+    this._begin('Creating “' + name + '”…');
     bridge.db_create(name);
     if (input) input.value = '';
   },
 
   load(path) {
-    if (!path || path === this.activePath) return;
+    if (this.busy || !path || path === this.activePath) return;
+    const item = this.manageableItems(this.items).find((row) => row.path === path);
+    if (!item || item.can_load === false) return;
     const bridge = this._bridge('db_load');
     if (!bridge) return;
-    this.busy = true;
-    this.setStatus('Connecting to ' + this.baseName(path) + '…');
+    this._begin('Connecting to ' + this.baseName(path) + '…');
     bridge.db_load(path);
   },
 
   remove(path) {
-    if (!path) return;
+    if (this.busy || !path) return;
+    const items = this.manageableItems(this.items);
+    const item = items.find((row) => row.path === path);
+    if (!item) return;
+    if (items.length <= 1 || item.can_delete === false) {
+      this.setStatus(item.delete_reason ||
+        'Cannot delete the last database. Create a new one first.', true);
+      return;
+    }
     const bridge = this._bridge('db_delete');
     if (!bridge) return;
     PresetsUI.confirm(
@@ -142,13 +183,14 @@ const DbPanel = {
       '“' + this.baseName(path) + '” moves to the db_trash folder. ' +
       'Nothing is erased and Ctrl+Z puts it back.',
       'Delete', () => {
-        this.busy = true;
-        this.setStatus('Moving ' + this.baseName(path) + ' to db_trash…');
+        if (this.busy) return;
+        this._begin('Moving ' + this.baseName(path) + ' to db_trash…');
         bridge.db_delete(path);
       });
   },
 
   clean() {
+    if (this.busy || !this.activePath) return;
     const bridge = this._bridge('db_clean');
     if (!bridge) return;
     const name = this.baseName(this.activePath) || 'the current database';
@@ -157,8 +199,8 @@ const DbPanel = {
       'Every message, person and media record in “' + name + '” is removed. ' +
       'A full backup goes to db_trash first, so Ctrl+Z restores everything.',
       'Clean', () => {
-        this.busy = true;
-        this.setStatus('Cleaning ' + name + '…');
+        if (this.busy) return;
+        this._begin('Cleaning ' + name + '…');
         bridge.db_clean();
       });
   },
@@ -189,6 +231,9 @@ const DbPanel = {
     this.renderList();
     if (this._els.cleanBtn)
       this._els.cleanBtn.disabled = !this.activePath || this.busy;
+    ['createBtn', 'refreshBtn', 'nameInput'].forEach((key) => {
+      if (this._els[key]) this._els[key].disabled = this.busy;
+    });
   },
 
   renderActive() {
@@ -256,7 +301,8 @@ const DbPanel = {
     const host = this._els.list;
     if (!host) return;
     const nodes = [];
-    if (!this.items.length) {
+    const items = this.manageableItems(this.items);
+    if (!items.length) {
       const empty = document.createElement('div');
       empty.className = 'db-empty';
       empty.textContent = this.info
@@ -264,10 +310,9 @@ const DbPanel = {
         : 'Reading the database folder…';
       nodes.push(empty);
     }
-    this.items.forEach((item) => {
+    items.forEach((item) => {
       const row = document.createElement('div');
-      row.className = 'db-row' + (item.active ? ' active' : '') +
-        (item.exists === false ? ' missing' : '');
+      row.className = 'db-row' + (item.active ? ' active' : '');
       const name = document.createElement('span');
       name.className = 'db-row-name';
       name.textContent = item.name || this.baseName(item.path);
@@ -275,7 +320,7 @@ const DbPanel = {
       row.appendChild(name);
       const size = document.createElement('span');
       size.className = 'db-row-size';
-      size.textContent = item.exists === false ? 'missing' : this.bytes(item.bytes);
+      size.textContent = this.bytes(item.bytes);
       row.appendChild(size);
       const actions = document.createElement('span');
       actions.className = 'db-row-actions';
@@ -284,12 +329,13 @@ const DbPanel = {
         tag.className = 'db-tag';
         tag.textContent = 'connected';
         actions.appendChild(tag);
-      } else if (item.exists !== false) {
+      } else if (item.can_load !== false) {
         const load = document.createElement('button');
         load.type = 'button';
         load.className = 'btn-small';
         load.textContent = 'Load';
-        load.title = 'Disconnect the current database and connect this one';
+        load.title = 'Validate this database, then connect to it';
+        load.disabled = this.busy;
         load.addEventListener('click', () => this.load(item.path));
         actions.appendChild(load);
       }
@@ -297,8 +343,11 @@ const DbPanel = {
       del.type = 'button';
       del.className = 'btn-small danger';
       del.textContent = 'Delete';
-      del.disabled = item.exists === false;
-      del.title = 'Move this file to db_trash (undoable)';
+      const last = items.length <= 1 || item.can_delete === false;
+      del.disabled = this.busy || last;
+      del.title = last ? (item.delete_reason ||
+        'Cannot delete the last database. Create a new one first.')
+        : 'Move this file to db_trash (undoable)';
       del.addEventListener('click', () => this.remove(item.path));
       actions.appendChild(del);
       row.appendChild(actions);

@@ -684,6 +684,16 @@ t('the filter buttons send an include/exclude rule', () => {
   eq(named('label_clear_filter').length, 1);
 });
 
+t('a repair-only live event reloads existing bubbles instead of adding duplicates', () => {
+  HistoryStore.openPerson('Nick');
+  const initial = named('history_open').pop().args[0];
+  HistoryStore.onPage(initial, JSON.stringify({ nick: 'Nick', items: rows(1, 3), total: 3 }));
+  const before = named('history_open').length;
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Nick', added: 0, total: 3, refresh: true }));
+  eq(named('history_open').length, before + 1);
+  ok(named('history_open').pop().args[0] !== initial, 'old replies have been invalidated');
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_panels_boot: ' + passed + ' passed, ' + failed + ' failed');

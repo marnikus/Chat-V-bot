@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import logging
+import tempfile
 from typing import Any
 
 log = logging.getLogger("chatbot")
@@ -141,12 +142,28 @@ class ConfigManager:
             self._data = {}
 
     def save(self) -> None:
+        temporary = ""
         try:
-            with open(self._path, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, indent=2, ensure_ascii=False)
+            path = os.path.abspath(self._path)
+            with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=os.path.dirname(path),
+                    prefix="." + os.path.basename(path) + ".", suffix=".tmp",
+                    delete=False) as handle:
+                temporary = handle.name
+                json.dump(self._data, handle, indent=2, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+            temporary = ""
             log.info("Config saved to %s", self._path)
-        except OSError as exc:
-            log.error("Config save failed: %s", exc)
+        except (OSError, TypeError, ValueError) as exc:
+            log.error("Config save failed (previous file kept): %s", exc)
+        finally:
+            if temporary:
+                try:
+                    os.unlink(temporary)
+                except OSError:
+                    log.warning("Could not remove incomplete config staging file")
 
     # ── access ───────────────────────────────────────────────────
     def get(self, *keys: str, default: Any = None) -> Any:

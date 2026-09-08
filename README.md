@@ -436,23 +436,60 @@ colour wears a white ring; picking one closes the popup, so do `Cancel`, the
 
 ### The database window
 
-**DB Connection** is also a normal grid window. It shows the connected file,
-its measurements and every `*.db` next to it:
+**DB Connection** is a normal grid window. It lists only existing, compatible
+chat-history databases beside the active file or in recent locations. The
+People queue (`chatbot.db`), undo/internal stores, backups and missing files
+are not manageable here. The global undo timeline remains in `config.json`.
 
 | Reading | Meaning |
 |---|---|
-| **Full DB size** | `history.db` on disk, including its `-wal` / `-shm` companions. |
+| **Full DB size** | The active SQLite file, including its `-wal` / `-shm` companions. |
 | **Text size** | How many bytes of the messages are actual text. |
 | **Images folder** | Size *and* file count of `saved_media/`. |
 
-Buttons: `Load` (connect to another database — the collector is parked and
-restarted around the switch), `＋ Create` (a fresh empty database, named
-safely, and connect to it), `🗑` (remove a database) and `🧹 Clean DB` (empty
-the connected one). **Delete and Clean never unlink anything**: the file is
-moved to `db_trash/` first, the path is stored in the undo entry, and Ctrl+Z
-brings the database back and reconnects it.
+* **＋ Create** builds and validates an independent empty archive. It does **not**
+  connect to it, reset history, or interrupt collection. Click **Load** explicitly
+  when you want to switch.
+* **Load** validates the target before swapping connections. In-flight writes,
+  queries and downloads finish in their original database. An incompatible
+  target is refused; the working connection stays open.
+* **Delete** moves the file to `db_trash/` and removes it from the list and recents.
+  Deleting the active archive first connects to another valid archive. The last
+  valid archive cannot be deleted: create another one first.
+* **Clean DB** first takes a consistent SQLite backup, then empties the active
+  archive transactionally. A failed backup aborts the operation.
 
-Design document:
+Ctrl+Z uses the existing global history. Undo/redo of **Create** concerns the
+file, not a connection switch. Restoring an inactive deleted file keeps the
+current connection; undoing an active deletion reconnects the restored archive.
+Undo/redo waits while a database action is in flight. Settings/undo JSON is
+published atomically so a failed save cannot truncate the previous timeline.
+
+### Recovering missing message text
+
+The collector retries partially rendered messages instead of saving timestamps
+alone. Text and media captions are captured together. Historical empty rows are
+repaired in place when the private chat can supply the text; unknown or
+ambiguous content is never invented. If neither text nor media is available,
+Person History shows **`[text not captured]`** instead of a blank bubble.
+
+To retry older captures:
+
+1. Open that person's original **private chat** in the connected browser.
+2. Ensure the collector is enabled/resumed and your own nick is correct.
+3. Click **Backfill older** in Chat Message Collector and keep the chat open.
+4. Check the **Text capture** status/log. Successful repairs refresh Person
+   History even when no new message was inserted.
+
+Recovery also works with media downloads disabled. Messages no longer exposed
+by the website cannot be reconstructed from timestamps alone. If an older build
+saved an unusable active path, startup prefers another valid archive; if none
+exists, it creates a separately named recovery archive without overwriting the
+original files. This startup recovery is not the **Create** button's behavior.
+
+Design and verification:
+`docs/DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md`.
+Labels design:
 `docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
 
 ### Settings (config.json)

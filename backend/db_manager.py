@@ -1,14 +1,8 @@
-"""Create / load / delete / clean the message-archive database.
+"""Safe lifecycle for chat archives, never the queue or global undo store.
 
-The DB Connection window drives this module. Two promises shape it:
-
-* **nothing is ever unlinked.** "Delete DB" and "Clean DB" move the file (and
-  its `-wal`/`-shm` siblings) into `db_trash/` first, so both operations are
-  reversible with one Ctrl+Z, exactly like every other editable surface
-  (AGENT_RULES RULE 12).
-* **a failed swap leaves the app connected.** Switching databases closes the
-  live connection, and if the new file cannot be opened the previous one is
-  re-opened before the error is reported (fail closed).
+Create is independent of Load. Validated candidates are opened before a live
+swap. Delete/Clean retain SQLite-consistent undo backups in db_trash but no
+missing/trash entries appear in the connection panel.
 """
 
 from __future__ import annotations
@@ -16,14 +10,34 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
+import tempfile
+import uuid
 from datetime import datetime
+from functools import wraps
+from pathlib import Path
+
+import aiosqlite
+
+from backend.archive_lock import ArchiveLock
+from backend.db_paths import (PROTECTED_DATABASE, canonical_path, in_trash,
+                              protected_database, same_database)
+from backend.history_db import (HistoryDB, INCOMPATIBLE_SCHEMA, SCHEMA_VERSION,
+                                SchemaError, inspect_archive)
 
 log = logging.getLogger("chatbot")
-
 TRASH_DIR = "db_trash"
-SUFFIXES = ("", "-wal", "-shm")
+SUFFIXES = ("", "-wal", "-shm", "-journal")
 _SAFE = re.compile(r"[^0-9A-Za-z._-]+")
+LAST_DATABASE = "Cannot delete the last database. Create a new one first."
+CREATE_SCHEMA_ERROR = "Failed to create database. Schema error."
+
+
+def mutation(method):
+    @wraps(method)
+    async def guarded(self, *args, **kwargs):
+        async with self._mutations:
+            return await method(self, *args, **kwargs)
+    return guarded
 
 
 def safe_db_name(name: str) -> str:
@@ -31,9 +45,9 @@ def safe_db_name(name: str) -> str:
     clean = _SAFE.sub("_", str(name or "").strip()).strip("._-")
     if not clean:
         clean = "history"
-    if not clean.lower().endswith(".db"):
-        clean += ".db"
-    return clean[:80]
+    if clean.lower().endswith(".db"):
+        clean = clean[:-3]
+    return clean[:77] + ".db"
 
 
 def folder_size(path: str) -> tuple[int, int]:
@@ -63,14 +77,13 @@ def file_group_size(path: str) -> int:
 
 
 class DbManager:
-    """Lifecycle + size reporting for the archive database file."""
-
     def __init__(self, config=None, service=None, root: str = ""):
         self._config = config
         self._service = service
-        self.root = root or os.getcwd()
+        self.root = os.path.abspath(root or os.getcwd())
+        self._mutations = ArchiveLock()
+        self._offline_lock = ArchiveLock()
 
-    # ── wiring ───────────────────────────────────────────────────
     def attach(self, service) -> None:
         self._service = service
 
@@ -78,94 +91,93 @@ class DbManager:
     def service(self):
         return self._service
 
-    # ── paths ────────────────────────────────────────────────────
+    @property
+    def _archive_lock(self):
+        return self.service.db.operation_lock if self.service else self._offline_lock
+
     def active_path(self) -> str:
-        if self._service is not None:
-            try:
-                return self._service.db.path
-            except Exception:                          # noqa: BLE001
-                pass
-        if self._config is not None:
-            stored = self._config.get("history", "db_path", default="history.db")
-            if isinstance(stored, str) and stored:
-                return stored
-        return "history.db"
+        if self.service is not None:
+            return os.path.abspath(self.service.db.path)
+        stored = self._config.get("history", "db_path", default="history.db") \
+            if self._config is not None else "history.db"
+        stored = stored if isinstance(stored, str) and stored else "history.db"
+        return os.path.abspath(stored if os.path.isabs(stored) else os.path.join(self.root, stored))
 
     def resolve(self, name_or_path: str) -> str:
-        """Absolute-ish path for a user-supplied name (kept inside the app)."""
         text = str(name_or_path or "").strip()
         if not text:
             return ""
-        if os.path.isabs(text) or os.sep in text or "/" in text:
-            return os.path.normpath(text)
-        return os.path.join(os.path.dirname(self.active_path()) or ".",
-                            safe_db_name(text))
+        if os.path.isabs(text):
+            return canonical_path(text)
+        if os.sep in text or "/" in text:
+            return canonical_path(os.path.join(self.root, text))
+        return canonical_path(os.path.join(os.path.dirname(self.active_path()), safe_db_name(text)))
 
     def trash_dir(self) -> str:
-        base = os.path.dirname(os.path.abspath(self.active_path())) or self.root
-        return os.path.join(base, TRASH_DIR)
+        return os.path.join(os.path.dirname(self.active_path()), TRASH_DIR)
 
     def media_dir(self) -> str:
-        if self._service is not None:
-            try:
-                return self._service.media.cache_dir
-            except Exception:                          # noqa: BLE001
-                pass
-        if self._config is not None:
-            media = self._config.get("history", "media", default={}) or {}
-            if isinstance(media, dict):
-                return str(media.get("cache_dir") or "saved_media")
-        return "saved_media"
+        if self.service is not None:
+            return self.service.media.cache_dir
+        media = self._config.get("history", "media", default={}) if self._config else {}
+        return str((media or {}).get("cache_dir") or "saved_media")
 
-    # ── listing ──────────────────────────────────────────────────
+    def _protected(self, path: str) -> bool:
+        return protected_database(path, root=self.root,
+                                  memory=getattr(self.service, "memory", None)) or in_trash(path)
+
+    def _eligible(self, path: str) -> bool:
+        return not self._protected(path) and inspect_archive(path, full=True)
+
+    # ── discovery / recent files ─────────────────────────────────
     def known_paths(self) -> list[str]:
-        stored = []
-        if self._config is not None:
-            raw = self._config.get_state("db_recent", [])
-            if isinstance(raw, list):
-                stored = [p for p in raw if isinstance(p, str) and p]
-        return stored
+        raw = self._config.get_state("db_recent", []) if self._config else []
+        return [p for p in raw if isinstance(p, str) and p] if isinstance(raw, list) else []
+
+    def _set_recent(self, paths) -> None:
+        if self._config is not None and self.known_paths() != paths:
+            self._config.set_state(db_recent=paths)
 
     def _remember(self, path: str) -> None:
-        if self._config is None or not path:
-            return
-        recent = [p for p in self.known_paths() if p != path]
-        recent.insert(0, path)
-        self._config.set_state(db_recent=recent[:12])
+        self._set_recent(([canonical_path(path)] + [p for p in self.known_paths()
+                            if not same_database(p, path) and self._eligible(p)])[:12])
+
+    def _forget(self, path: str) -> None:
+        self._set_recent([p for p in self.known_paths()
+                          if not same_database(p, path) and self._eligible(p)])
 
     def list_dbs(self) -> list[dict]:
-        """Every `*.db` next to the active file, plus remembered paths."""
+        """Only existing chat archives; missing recents are not UI entities."""
         active = self.active_path()
-        folder = os.path.dirname(os.path.abspath(active)) or self.root
-        found: dict[str, dict] = {}
+        paths = [active] + self.known_paths()
+        folder = os.path.dirname(active)
         try:
-            for name in sorted(os.listdir(folder)):
-                if not name.lower().endswith(".db"):
-                    continue
-                path = os.path.join(folder, name)
-                found[os.path.abspath(path)] = {
-                    "path": path, "name": name,
-                    "bytes": file_group_size(path),
-                    "exists": True,
-                }
+            paths += [os.path.join(folder, n) for n in sorted(os.listdir(folder))
+                      if n.lower().endswith(".db") and not n.startswith(".cvb-")]
         except OSError as exc:
-            log.debug("cannot list databases in %s: %s", folder, exc)
-        for path in [active] + self.known_paths():
-            key = os.path.abspath(path)
-            if key in found:
+            log.debug("cannot list archives in %s: %s", folder, exc)
+        found = []
+        for path in paths:
+            path = canonical_path(path)
+            if any(same_database(path, old["path"]) for old in found) or not self._eligible(path):
                 continue
-            found[key] = {"path": path, "name": os.path.basename(path),
-                          "bytes": file_group_size(path),
-                          "exists": os.path.exists(path)}
-        items = list(found.values())
-        for item in items:
-            item["active"] = (os.path.abspath(item["path"]) ==
-                              os.path.abspath(active))
-        items.sort(key=lambda i: (not i["active"], i["name"].lower()))
-        return items
+            found.append({"path": path, "name": os.path.basename(path),
+                          "bytes": file_group_size(path), "exists": True,
+                          "active": same_database(path, active)})
+        self._set_recent([canonical_path(p) for p in self.known_paths()
+                          if any(same_database(p, i["path"]) for i in found)])
+        for item in found:
+            item["can_load"] = not item["active"]
+            item["can_delete"] = len(found) > 1
+            item["delete_reason"] = "" if item["can_delete"] else LAST_DATABASE
+        found.sort(key=lambda i: (not i["active"], i["name"].lower()))
+        return found
 
-    # ── info ─────────────────────────────────────────────────────
     async def info(self) -> dict:
+        async with self._archive_lock:
+            return await self._info()
+
+    async def _info(self) -> dict:
         """Sizes + counts for the DB Connection window."""
         path = self.active_path()
         media_dir = self.media_dir()
@@ -210,183 +222,295 @@ class DbManager:
         return payload
 
     # ── lifecycle ────────────────────────────────────────────────
+    def _new_db(self, path: str) -> HistoryDB:
+        use_fts = bool(self.service.settings().get("use_fts", True)) if self.service else True
+        return HistoryDB(path, use_fts=use_fts)
+
+    @staticmethod
+    def _stage(folder: str) -> str:
+        fd, path = tempfile.mkstemp(prefix=".cvb-", suffix=".db", dir=folder)
+        os.close(fd)
+        return path
+
+    @staticmethod
+    def _remove_owned(path: str) -> None:
+        if not path:
+            return
+        for suffix in SUFFIXES:
+            try:
+                os.unlink(path + suffix)
+            except FileNotFoundError:
+                pass
+
+    @staticmethod
+    def _publish(stage: str, destination: str) -> None:
+        # Same-folder hardlink is atomic and refuses overwrite even if another
+        # creator wins after the initial existence check (also on NTFS).
+        os.link(stage, destination)
+        os.unlink(stage)
+
+    @mutation
     async def create(self, name: str) -> dict:
-        """Create an EMPTY database and connect to it."""
+        """Initialize an independent file. NEVER touch the active pipeline."""
         path = self.resolve(name)
         if not path:
             return {"ok": False, "error": "give the database a name"}
-        if os.path.exists(path):
+        if self._protected(path):
+            return {"ok": False, "error": PROTECTED_DATABASE}
+        if any(os.path.lexists(path + s) for s in SUFFIXES):
             return {"ok": False, "error": f"{os.path.basename(path)} already exists"}
         before = self.active_path()
-        folder = os.path.dirname(os.path.abspath(path))
+        stage, fresh = "", None
+        phase = "file"
         try:
+            folder = os.path.dirname(path)
             os.makedirs(folder, exist_ok=True)
-        except OSError as exc:
-            return {"ok": False, "error": str(exc)}
-        result = await self.load(path, create=True)
-        if result.get("ok"):
-            result["op"] = "create"
-            result["before_path"] = before
-        return result
+            stage = self._stage(folder)
+            fresh = self._new_db(stage)
+            phase = "schema"
+            await fresh.init()
+            await fresh.validate()
+            await fresh.close()  # checkpoint all WAL content before publishing
+            phase = "publish"
+            self._publish(stage, path)
+            self._remember(path)
+            return {"ok": True, "op": "create", "path": path,
+                    "before_path": before, "path_after": before,
+                    "active_changed": False, "schema_version": SCHEMA_VERSION}
+        except Exception as exc:
+            detail = getattr(exc, "detail", str(exc))
+            log.warning("create %s failed (%s): %s", path, phase, detail)
+            error = CREATE_SCHEMA_ERROR if phase == "schema" else str(exc)
+            return {"ok": False, "error": error, "detail": detail}
+        finally:
+            if fresh is not None:
+                await fresh.close()
+            self._remove_owned(stage)
 
-    async def load(self, path: str, create: bool = False) -> dict:
-        """Switch the running archive over to another database file."""
+    @mutation
+    async def load(self, path: str) -> dict:
         target = self.resolve(path)
         if not target:
             return {"ok": False, "error": "no database selected"}
-        if not create and not os.path.exists(target):
+        if self._protected(target):
+            return {"ok": False, "error": PROTECTED_DATABASE}
+        if not os.path.isfile(target):
             return {"ok": False, "error": f"{target} does not exist"}
         before = self.active_path()
-        if os.path.abspath(target) == os.path.abspath(before) and not create:
-            return {"ok": True, "op": "load", "path": target,
-                    "before_path": before, "unchanged": True}
-        if self._service is None:
-            self._persist_path(target)
-            self._remember(target)
-            return {"ok": True, "op": "load", "path": target,
-                    "before_path": before, "offline": True}
+        fresh = None
         try:
-            await self._service.switch_db(target)
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("switching to %s failed: %s", target, exc)
-            return {"ok": False, "error": str(exc), "path": target}
-        self._persist_path(target)
+            if self.service is not None:
+                await self.service.switch_db(target)
+            else:
+                fresh = self._new_db(target)
+                await fresh.init(allow_create=False)
+                self._persist_path(target)
+        except Exception as exc:
+            detail = getattr(exc, "detail", str(exc))
+            log.warning("load %s refused: %s", target, detail)
+            return {"ok": False, "error": INCOMPATIBLE_SCHEMA, "detail": detail, "path": target}
+        finally:
+            if fresh is not None:
+                await fresh.close()
         self._remember(target)
-        return {"ok": True, "op": "load", "path": target, "before_path": before}
+        unchanged = same_database(target, before)
+        return {"ok": True, "op": "load", "path": target, "before_path": before,
+                "path_after": target, "unchanged": unchanged,
+                "active_changed": not unchanged}
 
+    @mutation
     async def delete(self, path: str) -> dict:
-        """Move a database into `db_trash/` (never unlink) and switch away."""
-        target = self.resolve(path)
-        if not target or not os.path.exists(target):
-            return {"ok": False, "error": "that database does not exist"}
-        was_active = (os.path.abspath(target) ==
-                      os.path.abspath(self.active_path()))
-        fallback = ""
-        if was_active:
-            fallback = self._pick_fallback(target)
-            if self._service is not None:
-                try:
-                    await self._service.detach_db()
-                except Exception as exc:               # noqa: BLE001
-                    return {"ok": False, "error": str(exc)}
-        backup = self._move_to_trash(target)
-        if not backup:
-            if was_active and self._service is not None:
-                await self._service.switch_db(target)
-            return {"ok": False, "error": "the database file is in use"}
-        result = {"ok": True, "op": "delete", "path": target, "backup": backup,
-                  "was_active": was_active, "before_path": target}
-        if was_active:
-            opened = await self.load(fallback, create=not os.path.exists(fallback))
-            result["path_after"] = opened.get("path", fallback)
-            if not opened.get("ok"):
-                result["error"] = opened.get("error", "")
-        return result
+        async with self._archive_lock:
+            target = self.resolve(path)
+            if not target or not os.path.isfile(target):
+                if target:
+                    self._forget(target)
+                return {"ok": False, "error": "that database does not exist"}
+            if self._protected(target):
+                return {"ok": False, "error": PROTECTED_DATABASE}
+            if not self._eligible(target):
+                return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
+            before = self.active_path()
+            was_active = same_database(target, before)
+            alternatives = [i["path"] for i in self.list_dbs()
+                            if not same_database(i["path"], target)]
+            if not alternatives:
+                return {"ok": False, "error": LAST_DATABASE}
+            if was_active:
+                for fallback in alternatives:
+                    opened = await self.load(fallback)
+                    if opened.get("ok"):
+                        break
+                else:
+                    return {"ok": False, "error": LAST_DATABASE,
+                            "detail": "No other database passed activation validation."}
+            backup = self._move_to_trash(target)
+            if not backup:
+                if was_active:
+                    await self.load(before)
+                return {"ok": False, "error": "the database file is in use"}
+            self._forget(target)
+            return {"ok": True, "op": "delete", "path": target, "backup": backup,
+                    "was_active": was_active, "before_path": before,
+                    "path_after": self.active_path(), "active_changed": was_active}
 
+    @mutation
     async def clean(self) -> dict:
-        """Empty every table, keeping the file (a backup goes to the trash)."""
-        path = self.active_path()
-        if self._service is None:
+        if self.service is None:
             return {"ok": False, "error": "the message archive is not running"}
-        backup = self._copy_to_trash(path, tag="clean")
-        db = self._service.db
-        removed = {}
-        try:
-            for table in ("messages", "media", "cursors", "gaps", "persons"):
-                removed[table] = int(await db.scalar(
-                    f"SELECT COUNT(*) FROM {table}", (), 0))
-                await db.execute(f"DELETE FROM {table}")
-            await db.execute("DELETE FROM sqlite_sequence")
-            if db.fts_enabled:
-                try:
-                    await db.execute(
-                        "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
-                except Exception:                      # noqa: BLE001
-                    pass
-            await db.commit()
-            await db.execute("VACUUM")
-            await db.commit()
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("clean failed: %s", exc)
-            return {"ok": False, "error": str(exc), "backup": backup}
-        return {"ok": True, "op": "clean", "path": path, "backup": backup,
-                "removed": removed, "before_path": path}
-
-    async def restore_backup(self, backup: str, target: str = "") -> dict:
-        """Put a trashed/backed-up file back (the undo half of delete/clean)."""
-        source = str(backup or "")
-        if not source or not os.path.exists(source):
-            return {"ok": False, "error": "the backup is gone"}
-        destination = self.resolve(target) or self.active_path()
-        active = (os.path.abspath(destination) ==
-                  os.path.abspath(self.active_path()))
-        if active and self._service is not None:
+        async with self._archive_lock:
+            path = self.active_path()
+            if self._protected(path):
+                return {"ok": False, "error": PROTECTED_DATABASE}
+            db = self.service.db
+            backup = ""
+            removed = {}
             try:
-                await self._service.detach_db()
-            except Exception as exc:                   # noqa: BLE001
-                return {"ok": False, "error": str(exc)}
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(destination)) or ".",
-                        exist_ok=True)
-            for suffix in SUFFIXES:
-                if not os.path.exists(source + suffix):
-                    continue
-                shutil.copyfile(source + suffix, destination + suffix)
-        except OSError as exc:
-            return {"ok": False, "error": str(exc)}
-        if self._service is not None:
-            await self._service.switch_db(destination)
-        self._persist_path(destination)
-        return {"ok": True, "path": destination, "backup": source}
+                await db.validate()
+                await db.commit()
+                backup = await self._copy_to_trash(path, tag="clean")
+                if not backup:
+                    return {"ok": False, "error": "Cannot clean database: backup failed."}
+                await db.execute("BEGIN IMMEDIATE")
+                for table in ("messages", "cursors", "gaps", "media", "persons"):
+                    removed[table] = int(await db.scalar(f"SELECT COUNT(*) FROM {table}"))
+                    await db.execute(f"DELETE FROM {table}")
+                await db.execute("DELETE FROM sqlite_sequence")
+                await db.commit()
+            except BaseException as exc:
+                await db.conn.rollback()
+                if not isinstance(exc, Exception):
+                    raise
+                log.warning("clean failed: %s", getattr(exc, "detail", str(exc)))
+                return {"ok": False, "error": str(exc), "backup": backup}
+            self.service.collector.reset_state()
+            self.service.generation += 1
+            # Compaction is optional; failure cannot undo a committed clean.
+            try:
+                await db.execute("VACUUM")
+            except Exception as exc:
+                log.warning("database cleaned, compaction skipped: %s", exc)
+            return {"ok": True, "op": "clean", "path": path, "backup": backup,
+                    "removed": removed, "before_path": path, "active_changed": True}
 
-    # ── helpers ──────────────────────────────────────────────────
+    @mutation
+    async def restore_backup(self, backup: str, target: str = "", *, activate: bool = False) -> dict:
+        """Validate a snapshot before restoration; inactive restores stay inactive."""
+        source = str(backup or "")
+        destination = self.resolve(target) or self.active_path()
+        if self._protected(destination):
+            return {"ok": False, "error": PROTECTED_DATABASE}
+        if not source or not os.path.isfile(source):
+            return {"ok": False, "error": "the backup is gone"}
+        if not in_trash(source) or not inspect_archive(source):
+            return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
+        stage, candidate, displaced = "", None, ""
+        async with self._archive_lock:
+            before = self.active_path()
+            active = same_database(destination, before)
+            if os.path.exists(destination) and not self._eligible(destination):
+                return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
+            try:
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                stage = self._stage(os.path.dirname(destination))
+                # Old backups can carry WAL siblings. SQLite reads a consistent
+                # snapshot; copying just the main file would lose those rows.
+                reader = await aiosqlite.connect(Path(os.path.abspath(source)).as_uri() + "?mode=ro", uri=True)
+                try:
+                    writer = await aiosqlite.connect(stage)
+                    try:
+                        await reader.backup(writer)
+                    finally:
+                        await writer.close()
+                finally:
+                    await reader.close()
+                candidate = self._new_db(stage)
+                await candidate.init(allow_create=False)
+                if active and self.service is not None:
+                    # SQLite's backup transaction replaces contents atomically,
+                    # with no close/unlink window (important on Windows).
+                    safety = await self._copy_to_trash(destination, tag="restore")
+                    if not safety:
+                        return {"ok": False, "error": "Cannot restore database: backup failed."}
+                    await candidate.conn.backup(self.service.db.conn)
+                    self.service.db.fts_enabled = candidate.fts_enabled
+                    self.service.collector.reset_state()
+                    self.service.generation += 1
+                else:
+                    await candidate.close()
+                    if os.path.exists(destination):
+                        displaced = self._move_to_trash(destination)
+                        if not displaced:
+                            return {"ok": False, "error": "the database file is in use"}
+                    try:
+                        self._publish(stage, destination)
+                    except BaseException:
+                        if displaced:
+                            self._move_group(displaced, destination)
+                        raise
+                self._remember(destination)
+                if activate and not active:
+                    opened = await self.load(destination)
+                    if not opened.get("ok"):
+                        return opened
+                return {"ok": True, "path": destination, "backup": source,
+                        "before_path": before, "path_after": self.active_path(),
+                        "active_changed": active or activate}
+            except Exception as exc:
+                log.warning("restore failed: %s", getattr(exc, "detail", str(exc)))
+                return {"ok": False, "error": str(exc)}
+            finally:
+                if candidate is not None:
+                    await candidate.close()
+                self._remove_owned(stage)
+
+    # ── backups / config ─────────────────────────────────────────
     def _persist_path(self, path: str) -> None:
         if self._config is None:
             return
         history = self._config.get("history", default={}) or {}
-        if not isinstance(history, dict):
-            history = {}
-        history = dict(history)
+        history = dict(history) if isinstance(history, dict) else {}
         history["db_path"] = path
         self._config.set("history", history)
         self._config.save()
 
-    def _pick_fallback(self, deleted: str) -> str:
-        """Which database to open after the active one is deleted."""
-        for item in self.list_dbs():
-            if (os.path.abspath(item["path"]) != os.path.abspath(deleted)
-                    and item.get("exists")):
-                return item["path"]
-        folder = os.path.dirname(os.path.abspath(deleted)) or self.root
-        return os.path.join(folder, "history.db")
-
     def _stamp(self, tag: str, name: str) -> str:
-        return (f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{tag}_{name}")
+        return f"{datetime.now():%Y%m%d-%H%M%S}_{tag}_{uuid.uuid4().hex[:12]}_{name}"
+
+    @staticmethod
+    def _move_group(source: str, destination: str) -> None:
+        moved = []
+        try:
+            for suffix in SUFFIXES:
+                if os.path.exists(source + suffix):
+                    os.rename(source + suffix, destination + suffix)
+                    moved.append(suffix)
+        except OSError:
+            for suffix in reversed(moved):
+                os.rename(destination + suffix, source + suffix)
+            raise
 
     def _move_to_trash(self, path: str) -> str:
         trash = self.trash_dir()
         try:
             os.makedirs(trash, exist_ok=True)
-            target = os.path.join(trash,
-                                  self._stamp("deleted", os.path.basename(path)))
-            for suffix in SUFFIXES:
-                if os.path.exists(path + suffix):
-                    shutil.move(path + suffix, target + suffix)
+            target = os.path.join(trash, self._stamp("deleted", os.path.basename(path)))
+            self._move_group(path, target)
             return target
         except OSError as exc:
             log.warning("cannot trash %s: %s", path, exc)
             return ""
 
-    def _copy_to_trash(self, path: str, tag: str = "backup") -> str:
-        trash = self.trash_dir()
+    async def _copy_to_trash(self, path: str, tag: str = "backup") -> str:
+        target = ""
         try:
-            os.makedirs(trash, exist_ok=True)
-            target = os.path.join(trash,
-                                  self._stamp(tag, os.path.basename(path)))
-            for suffix in SUFFIXES:
-                if os.path.exists(path + suffix):
-                    shutil.copyfile(path + suffix, target + suffix)
+            os.makedirs(self.trash_dir(), exist_ok=True)
+            target = os.path.join(self.trash_dir(), self._stamp(tag, os.path.basename(path)))
+            await self.service.db.backup_to(target)
             return target
-        except OSError as exc:
+        except BaseException as exc:
+            self._remove_owned(target)
+            if not isinstance(exc, Exception):
+                raise
             log.warning("cannot back up %s: %s", path, exc)
             return ""

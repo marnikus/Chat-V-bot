@@ -137,6 +137,7 @@ function build() {
   ].forEach((id) => { byId[id] = mkEl('div'); });
   byId.dbNewNameInput = mkEl('input');
   DbPanel._wired = false;
+  DbPanel.busy = false;
   DbPanel.info = null;
   DbPanel.items = [];
   DbPanel.activePath = '';
@@ -279,6 +280,86 @@ t('without a bridge nothing explodes', () => {
   DbPanel.refresh();
   byId.dbCleanBtn.click();
   global.App.bridge = keep;
+});
+
+// ── deletion protection / stale responses / independent create ───
+
+t('last archive has a disabled Delete and a direct call warns without calling Python', () => {
+  build();
+  DbPanel.items = [INFO.items[0]];
+  DbPanel.render();
+  const del = byId.dbFileList.querySelectorAll('button').find((b) => b.textContent === 'Delete');
+  ok(del.disabled);
+  DbPanel.remove(INFO.path);
+  eq(calls.length, 0);
+  eq(confirms.length, 0);
+  eq(byId.dbConnStatus.textContent,
+     'Cannot delete the last database. Create a new one first.');
+});
+
+t('backend capabilities can refuse deletion even if the client list is stale', () => {
+  build();
+  DbPanel.items[1] = Object.assign({}, INFO.items[1], { can_delete: false });
+  DbPanel.remove(INFO.items[1].path);
+  eq(calls.length, 0);
+  ok(/Cannot delete/.test(byId.dbConnStatus.textContent));
+});
+
+t('missing and protected entries never render as ghost rows', () => {
+  build();
+  DbPanel.items = [INFO.items[0],
+    { path: '/app/new.db', exists: false },
+    { path: '/app/undo.db', protected: true },
+    { path: '/app/other.db', manageable: false }];
+  DbPanel.render();
+  eq(byId.dbFileList.querySelectorAll('.db-row').length, 1);
+  ok(!/missing|new.db|undo.db/.test(byId.dbFileList.textContent));
+});
+
+t('create disables mutation controls and repeated calls send only one request', () => {
+  build();
+  byId.dbNewNameInput.value = 'new';
+  const stale = DbPanel._pending;
+  DbPanel.create(); DbPanel.create(); DbPanel.load(INFO.items[1].path); DbPanel.clean();
+  eq(calls.filter((c) => c[0] !== 'db_info'), [['db_create', 'new']]);
+  ok(byId.dbCreateBtn.disabled && byId.dbCleanBtn.disabled);
+  byId.dbFileList.querySelectorAll('button').forEach((b) => ok(b.disabled));
+  DbPanel.onInfo(stale, JSON.stringify(INFO));
+  ok(DbPanel.busy, 'stale info must not finish a mutation');
+  ok(byId.dbCreateBtn.disabled);
+});
+
+t('create completion keeps the active database and tells the user to Load', () => {
+  build();
+  DbPanel.onChanged({ ok: true, op: 'create', path: '/app/new.db', active_path: INFO.path });
+  eq(DbPanel.activePath, INFO.path);
+  ok(/Click Load/.test(byId.dbConnStatus.textContent));
+  DbPanel.onInfo(DbPanel._pending, JSON.stringify(INFO));
+  ok(/active database is unchanged/.test(byId.dbConnStatus.textContent));
+  ok(!calls.some((c) => c[0] === 'db_load'));
+});
+
+t('delete completion removes its row immediately and ignores older list responses', () => {
+  build();
+  const stale = DbPanel._pending;
+  DbPanel.remove(INFO.items[1].path);
+  DbPanel.onChanged({ ok: true, op: 'delete', path: INFO.items[1].path, active_path: INFO.path });
+  eq(byId.dbFileList.querySelectorAll('.db-row').length, 1);
+  DbPanel.onInfo(stale, JSON.stringify(INFO));
+  eq(byId.dbFileList.querySelectorAll('.db-row').length, 1);
+  const del = byId.dbFileList.querySelectorAll('button').find((b) => b.textContent === 'Delete');
+  ok(del.disabled, 'the remaining database is protected immediately');
+});
+
+t('an unexpected bridge error releases busy controls and keeps the active database', () => {
+  build();
+  byId.dbNewNameInput.value = 'new';
+  DbPanel.create();
+  DbPanel.onError('db_create', 'disk unavailable');
+  ok(!DbPanel.busy);
+  ok(!byId.dbCreateBtn.disabled);
+  eq(DbPanel.activePath, INFO.path);
+  ok(/disk unavailable/.test(byId.dbConnStatus.textContent));
 });
 
 // ── reporting ────────────────────────────────────────────────────

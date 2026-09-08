@@ -5,6 +5,7 @@ import copy
 import json
 import logging
 import os
+import uuid
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
@@ -858,41 +859,80 @@ class Bridge(QObject):
         return True
 
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a DB Connection action."""
+        """Reverse the file operation, not an implicit Create→Load switch."""
+        if getattr(self, "_db_command_pending", False):
+            return False
+        self._db_command_pending = True
         op = str(value.get("op") or "")
         path = str(value.get("path") or "")
         before_path = str(value.get("before_path") or "")
         backup = str(value.get("backup") or "")
         manager = self.db_manager
+        _history, previous_index = self._get_global_history()
 
         async def work():
-            if forward:
-                if op in ("create", "load"):
-                    result = await manager.load(path, create=(op == "create"))
-                elif op == "delete":
-                    result = await manager.delete(path)
-                elif op == "clean":
-                    result = await manager.clean()
-                else:
-                    return
-            else:
-                if op in ("create", "load"):
-                    result = await manager.load(before_path)
-                elif op in ("delete", "clean"):
-                    result = await manager.restore_backup(backup, path)
-                else:
-                    return
-            self._emit_db_change(op, result)
+            try:
+                try:
+                    if forward:
+                        if op == "create":
+                            result = (await manager.restore_backup(backup, path)
+                                      if backup else await manager.create(path))
+                        elif op == "load":
+                            result = await manager.load(path)
+                        elif op == "delete":
+                            result = await manager.delete(path)
+                        elif op == "clean":
+                            result = await manager.clean()
+                        else:
+                            result = {"ok": False, "error": "Unknown database operation"}
+                    elif op == "create":
+                        result = await manager.delete(path)
+                    elif op == "load":
+                        result = await manager.load(before_path)
+                    elif op in ("delete", "clean"):
+                        result = await manager.restore_backup(
+                            backup, path, activate=bool(value.get("was_active", op == "clean")))
+                    else:
+                        result = {"ok": False, "error": "Unknown database operation"}
+                except Exception as exc:
+                    log.exception("database undo/redo %s failed", op)
+                    result = {"ok": False, "error": str(exc)}
+                history, index = self._get_global_history()
+                if result.get("ok"):
+                    # Redo can make a NEW backup. Keep the matching command's
+                    # reference current, so repeated undo/redo never restores
+                    # an older snapshot or re-creates an empty file over data.
+                    for entry in history:
+                        old = entry.get("value") or {}
+                        matches = (old.get("command_id") == value.get("command_id")
+                                   if value.get("command_id") else self._values_equal(old, value))
+                        if entry.get("kind") == "dbconn" and matches:
+                            if result.get("backup"):
+                                old["backup"] = result["backup"]
+                            if op == "delete" and forward:
+                                old["was_active"] = result.get("was_active", False)
+                            self._set_global_history(history, index)
+                            break
+                elif index == previous_index + (1 if forward else -1):
+                    # A refused last-DB undo is NOT a successful timeline step.
+                    self._set_global_history(history, previous_index)
+                self.history_changed.emit()
+                self._emit_db_change(op, result)
+            finally:
+                self._db_command_pending = False
         self._run_async("db_undo", work())
         return True
 
     def _emit_db_change(self, action: str, result) -> None:
         payload = dict(result or {})
         payload["action"] = action
+        payload["active_path"] = self.db_manager.active_path()
         self.db_changed.emit(json.dumps(payload, ensure_ascii=False))
-        self.userdb_changed.emit(json.dumps(
-            {"action": "db_" + action, "ok": bool(payload.get("ok"))},
-            ensure_ascii=False))
+        # Independent create/delete and failed loads must not clear the
+        # working Person History window or invalidate its pending reads.
+        if payload.get("ok") and payload.get("active_changed"):
+            self.userdb_changed.emit(json.dumps(
+                {"action": "db_" + action, "ok": True}, ensure_ascii=False))
         if payload.get("error"):
             self.log_message.emit("⚠ " + str(payload["error"]), "warn")
 
@@ -929,6 +969,10 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def undo(self):
+        if (getattr(self, "_db_command_pending", False) or
+                getattr(self, "_db_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the database operation to finish", "warn")
+            return "null"
         history, index = self._get_global_history()
         if not history or index < 0 or index >= len(history):
             self.log_message.emit("⚠ Nothing to undo", "warn")
@@ -967,6 +1011,10 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def redo(self):
+        if (getattr(self, "_db_command_pending", False) or
+                getattr(self, "_db_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the database operation to finish", "warn")
+            return "null"
         history, index = self._get_global_history()
         if not history or index >= len(history) - 1:
             self.log_message.emit("⚠ Nothing to redo", "warn")
@@ -1640,9 +1688,27 @@ class Bridge(QObject):
 
     def _run_async(self, scope: str, coro) -> None:
         """Run an archive coroutine, reporting failures on history_error."""
+        generation = getattr(self._archive, "generation", None)
+
         async def guarded():
             try:
-                await coro
+                archive = self._archive
+                lock = getattr(getattr(archive, "db", None), "operation_lock", None)
+                # Manager actions acquire their own mutation lock BEFORE the
+                # archive lock. Taking them in reverse order would deadlock.
+                if lock is not None and not scope.startswith("db_"):
+                    async with lock:
+                        if generation != getattr(archive, "generation", None):
+                            # The old UI may have queued a message/media ID
+                            # before Load completed. Those IDs belong to the
+                            # old archive; a fresh history request is already
+                            # issued by the DB-change event. Never reuse them
+                            # against a coincidentally equal new row ID.
+                            coro.close()
+                            return
+                        await coro
+                else:
+                    await coro
             except Exception as exc:                  # noqa: BLE001
                 log.warning("archive %s failed: %s", scope, exc)
                 self.history_error.emit(scope, str(exc))
@@ -2034,25 +2100,35 @@ class Bridge(QObject):
         """Run one DB action and record it as a single undo entry."""
         manager = self.db_manager
         manager.attach(self._archive)
+        self._db_actions_pending = getattr(self, "_db_actions_pending", 0) + 1
 
         async def work():
-            result = await runner(manager)
-            result = dict(result or {})
-            result["op"] = result.get("op", op)
-            if result.get("ok") and not result.get("unchanged"):
-                self._push_global("dbconn", {
-                    "op": result["op"],
-                    "path": result.get("path", ""),
-                    "before_path": result.get("before_path", ""),
-                    "backup": result.get("backup", ""),
-                })
-                self.log_message.emit(success.format(**{
-                    "path": result.get("path", ""),
-                    "name": os.path.basename(result.get("path", "")),
-                }), "success")
-            elif result.get("error"):
-                self.log_message.emit("⚠ " + str(result["error"]), "warn")
-            self._emit_db_change(op, result)
+            try:
+                try:
+                    result = await runner(manager)
+                except Exception as exc:
+                    log.exception("database action %s failed", op)
+                    result = {"ok": False, "error": str(exc)}
+                result = dict(result or {})
+                result["op"] = result.get("op", op)
+                if result.get("ok") and not result.get("unchanged"):
+                    self._push_global("dbconn", {
+                        "op": result["op"],
+                        "command_id": uuid.uuid4().hex,
+                        "was_active": bool(result.get("was_active", op == "clean")),
+                        "path": result.get("path", ""),
+                        "before_path": result.get("before_path", ""),
+                        "backup": result.get("backup", ""),
+                    })
+                    self.log_message.emit(success.format(**{
+                        "path": result.get("path", ""),
+                        "name": os.path.basename(result.get("path", "")),
+                    }), "success")
+                elif result.get("error"):
+                    self.log_message.emit("⚠ " + str(result["error"]), "warn")
+                self._emit_db_change(op, result)
+            finally:
+                self._db_actions_pending -= 1
         self._run_async("db_" + op, work())
         return True
 
@@ -2060,7 +2136,7 @@ class Bridge(QObject):
     def db_create(self, name):
         return self._db_action(
             "create", lambda m: m.create(name),
-            "🆕 New database {name} created and connected")
+            "🆕 New database {name} created. Click Load to connect; the active archive is unchanged.")
 
     @Slot(str, result=bool)
     def db_load(self, path):

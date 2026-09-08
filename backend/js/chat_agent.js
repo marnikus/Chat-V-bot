@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 9;
+  var VERSION = 10;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -287,6 +287,7 @@
 
   var cache = new Map();     // node → parsed fields
   var stats = { parsed: 0, cached: 0, walks: 0 };
+  var contentRevision = 0; // changes INSIDE existing lines, not tail appends
 
   /** The media URL the browser is actually rendering right now.
    *
@@ -299,6 +300,23 @@
                  img.getAttribute('data-src') || '');
   }
 
+  /** Preserve line breaks and nested link/emoji text, without sender/time. */
+  function messageText(span) {
+    if (!span) return '';
+    function visit(node) {
+      if (node.nodeType === 3 || node.nodeType === 4) return node.nodeValue || '';
+      var tag = String(node.tagName || '').toLowerCase();
+      if (tag === 'br') return '\n';
+      if (tag === 'img') return (node.getAttribute && node.getAttribute('alt')) || '';
+      var kids = node.childNodes;
+      if (!kids || !kids.length) return String(node.textContent || '');
+      var text = '';
+      for (var i = 0; i < kids.length; i++) text += visit(kids[i]);
+      return text + (tag === 'div' || tag === 'p' ? '\n' : '');
+    }
+    return clean(visit(span));
+  }
+
   function parseNode(node) {
     stats.parsed++;
     var dir = node.classList && node.classList.contains('my-message-background')
@@ -308,18 +326,19 @@
     if (body) {
       from = clean(ownText(qs(body, 'span.from')) ||
                    (qs(body, 'span.from') || {}).textContent);
+      var span = qs(body, 'span.message');
+      text = messageText(span); // captions and media may coexist
       var img = qs(body, 'app-chat-image img') || qs(body, 'img');
+      if (img && span && isAncestor(span, img)) img = null; // inline emoji
       if (img) {
         var url = liveMediaUrl(img);
         kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
         media = { url: url, kind: kind };
-      } else {
-        var span = qs(body, 'span.message');
-        text = clean(span ? span.textContent : '');
       }
     }
     var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
     return { dir: dir, from: from, kind: kind, text: text, media: media,
+             capture_pending: (!text && !(media && media.url)) || !!(media && !media.url),
              time: clean(stamp ? stamp.textContent : '') };
   }
 
@@ -338,6 +357,8 @@
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       var fields = cache.get(node);
+      var previous = fields;
+      if (fields && (fields.dirty || fields.capture_pending)) fields = null;
       if (fields) {
         // a lazy <img> may have gained its real src after the first parse;
         // do not keep the empty-url record in the cache forever
@@ -348,6 +369,8 @@
         if (liveUrl !== cachedUrl) fields = null;
       }
       if (!fields) fields = parseNode(node);
+      if (previous && (keyOf(previous) !== keyOf(fields) || previous.text !== fields.text))
+        contentRevision++;
       next.set(node, fields);
       var key = keyOf(fields);
       var occ = counts[key] === undefined ? 0 : counts[key] + 1;
@@ -361,7 +384,8 @@
       }
       out.push({ fp: fields.fp, dir: fields.dir, from: fields.from,
                  kind: fields.kind, text: fields.text, media: fields.media,
-                 time: fields.time, occ: occ, idx: i, node: node });
+                 time: fields.time, occ: occ, idx: i, node: node,
+                 capture_pending: fields.capture_pending });
     }
     cache = next;                       // rebuilding prunes removed nodes
     stats.cached = cache.size;
@@ -371,7 +395,8 @@
   function strip(record) {
     return { fp: record.fp, dir: record.dir, from: record.from,
              kind: record.kind, text: record.text, media: record.media,
-             time: record.time, occ: record.occ, idx: record.idx };
+             time: record.time, occ: record.occ, idx: record.idx,
+             capture_pending: !!record.capture_pending };
   }
 
   /** distinct nicks per direction — the private-chat gate reads these */
@@ -398,7 +423,13 @@
   var pushTimer = null;
 
   function bufferRecord(record) {
-    buffer.push(strip(record));
+    for (var i = 0; i < buffer.length; i++) {
+      if (buffer[i].node === record.node) {
+        buffer[i].record = strip(record);
+        return;
+      }
+    }
+    buffer.push({ node: record.node, record: strip(record) });
     while (buffer.length > BUFFER_MAX) { buffer.shift(); dropped++; }
   }
 
@@ -414,7 +445,14 @@
     var hook = window.__cvbPush;
     if (typeof hook !== 'function') return;
     var summary = describe();
-    var authors = authorsOf(walk());
+    var records = walk();
+    var authors = authorsOf(records);
+    // A pending payload can finish rendering during the debounce window.
+    records.forEach(function (record) {
+      for (var b = 0; b < buffer.length; b++) {
+        if (buffer[b].node === record.node) buffer[b].record = strip(record);
+      }
+    });
     try {
       hook(JSON.stringify({
         kind: kind || 'append',
@@ -429,34 +467,54 @@
         authors: authors.all,
         pending: buffer.length,
         dropped: dropped,
-        items: buffer.slice(-BUFFER_MAX),
+        items: buffer.slice(-BUFFER_MAX).map(function (b) { return b.record; }),
       }));
     } catch (e) { /* the page must never break because we cannot push */ }
   }
 
+  function messageOf(node) {
+    for (var p = node; p; p = p.parentElement || p.parentNode) {
+      if (p.classList && p.classList.contains('message-container')) return p;
+    }
+    return null;
+  }
+
   function onMutations(mutations) {
-    var added = [];
+    var affected = new Set();
+    var changed = false;
     for (var i = 0; i < mutations.length; i++) {
-      var nodes = mutations[i].addedNodes || [];
+      var mutation = mutations[i];
+      var owner = messageOf(mutation.target);
+      if (owner) {
+        affected.add(owner);
+        var cached = cache.get(owner);
+        if (cached) cached.dirty = true;
+        changed = true;
+      }
+      var nodes = mutation.addedNodes || [];
       for (var j = 0; j < nodes.length; j++) {
         var node = nodes[j];
         if (!node || typeof node.querySelectorAll !== 'function') continue;
         if (node.classList && node.classList.contains('message-container')) {
-          added.push(node);
+          affected.add(node);
         } else {
-          added = added.concat(qsa(node, 'div.message-container'));
+          qsa(node, 'div.message-container').forEach(function (n) { affected.add(n); });
         }
       }
+      if ((mutation.removedNodes || []).length) {
+        // Replacing a whole virtualized window can change its middle while
+        // head/tail stay equal. Force a re-read, not an append-only shortcut.
+        contentRevision++;
+        changed = true;
+      }
     }
-    if (!added.length) return;
+    if (!affected.size && !changed) return;
     var records = walk();
-    var byNode = new Map();
-    for (var k = 0; k < records.length; k++) byNode.set(records[k].node, records[k]);
-    var tail = true;
-    for (var a = 0; a < added.length; a++) {
-      var record = byNode.get(added[a]);
-      if (!record) continue;
-      if (record.idx < records.length - added.length) tail = false;
+    var tail = !changed;
+    for (var k = 0; k < records.length; k++) {
+      var record = records[k];
+      if (!affected.has(record.node)) continue;
+      if (record.idx < records.length - affected.size) tail = false;
       bufferRecord(record);
     }
     schedulePush(records.length, tail ? 'append' : 'change');
@@ -467,7 +525,8 @@
     if (!root || typeof MutationObserver !== 'function') return false;
     if (observer) observer.disconnect();
     observer = new MutationObserver(onMutations);
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(root, { childList: true, subtree: true, characterData: true,
+                             attributes: true, attributeFilter: ['src', 'data-src', 'class'] });
     observedRoot = root;
     return true;
   }
@@ -676,6 +735,9 @@
       me: summary.me,
       participants: summary.participants,
       count: records.length,
+      incomplete: records.filter(function (r) { return r.capture_pending; }).length,
+      content_revision: contentRevision,
+      content_sig: hex8(fnv1a(fps.join(SEP), 0x811c9dc5)),
       authors: authors.all,
       in_authors: authors.inbound,
       out_authors: authors.outbound,
@@ -699,7 +761,7 @@
   }
 
   function drain() {
-    var items = buffer;
+    var items = buffer.map(function (b) { return b.record; });
     var lost = dropped;
     buffer = [];
     dropped = 0;

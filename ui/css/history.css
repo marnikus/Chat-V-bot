@@ -472,3 +472,6 @@
   padding: 1px 4px;
   font-size: 11px;
 }
+
+/* Old incomplete captures are honest placeholders, never blank bubbles. */
+.msg-text-missing { opacity: .7; font-style: italic; }

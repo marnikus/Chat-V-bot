@@ -160,13 +160,24 @@ class TestInfo(DbCase):
 
 
 class TestLifecycle(DbCase):
-    async def test_create_makes_a_new_empty_database_and_connects(self):
+    async def test_create_makes_an_independent_empty_database_without_connecting(self):
         await self.seed()
+        original = self.service.db
+        before_settings = self.service.settings()
         result = await self.manager.create("work")
         self.assertTrue(result["ok"], result.get("error"))
         self.assertTrue(os.path.exists(result["path"]))
-        self.assertEqual(await self.messages(), 0, "a new DB starts empty")
-        self.assertEqual(self.manager.active_path(), result["path"])
+        self.assertIs(self.service.db, original)
+        self.assertEqual(await self.messages(), 4)
+        self.assertEqual(self.service.settings(), before_settings)
+        from backend.history_db import HistoryDB
+        created = HistoryDB(result["path"])
+        try:
+            await created.init(allow_create=False)
+            await created.validate()
+            self.assertEqual(await created.scalar("SELECT COUNT(*) FROM messages"), 0)
+        finally:
+            await created.close()
 
     async def test_create_refuses_to_overwrite(self):
         first = await self.manager.create("work")
@@ -178,6 +189,9 @@ class TestLifecycle(DbCase):
     async def test_load_switches_back_with_the_data_intact(self):
         await self.seed(count=4)
         made = await self.manager.create("work")
+        self.assertEqual(await self.messages(), 4)
+        loaded = await self.manager.load(made["path"])
+        self.assertTrue(loaded["ok"])
         self.assertEqual(await self.messages(), 0)
         back = await self.manager.load(self.db_path)
         self.assertTrue(back["ok"], back.get("error"))
@@ -192,8 +206,11 @@ class TestLifecycle(DbCase):
         self.assertEqual(self.manager.active_path(), before)
         self.assertTrue(self.service.db.is_open, "we stay connected")
 
-    async def test_the_chosen_database_is_remembered_in_the_config(self):
+    async def test_only_an_explicit_load_changes_the_configured_active_path(self):
+        before = self.cfg.get("history", "db_path")
         made = await self.manager.create("work")
+        self.assertEqual(self.cfg.get("history", "db_path"), before)
+        await self.manager.load(made["path"])
         self.assertEqual(self.cfg.get("history", "db_path"), made["path"])
 
     async def test_delete_moves_the_file_to_the_trash(self):
@@ -208,7 +225,8 @@ class TestLifecycle(DbCase):
 
     async def test_deleting_the_connected_database_reconnects_elsewhere(self):
         await self.seed()
-        other = await self.manager.create("work")     # now connected to work
+        other = await self.manager.create("work")
+        await self.manager.load(other["path"])
         result = await self.manager.delete(other["path"])
         self.assertTrue(result["ok"], result.get("error"))
         self.assertTrue(self.service.db.is_open,
@@ -245,7 +263,8 @@ class TestLifecycle(DbCase):
 
     async def test_the_archive_keeps_working_after_a_switch(self):
         await self.seed(count=4)
-        await self.manager.create("work")
+        made = await self.manager.create("work")
+        await self.manager.load(made["path"])
         await self.seed(nick="Other", count=2)
         self.assertEqual(await self.messages(), 2,
                          "collecting continues into the new database")
@@ -308,6 +327,11 @@ class TestDbBridge(DbCase):
     async def test_undoing_a_load_reconnects_the_previous_database(self):
         await self.seed(count=4)
         self.assertTrue(self.bridge.db_create("work"))
+        await wait_for(self.changes)
+        self.assertEqual(await self.messages(), 4)
+        created = self.changes[-1]["path"]
+        self.changes.clear()
+        self.bridge.db_load(created)
         await wait_for(self.changes)
         self.assertEqual(await self.messages(), 0)
         result = json.loads(self.bridge.undo())

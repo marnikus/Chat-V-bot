@@ -100,6 +100,14 @@ class CollectHistory(BaseAction):
             return ActionResult.FAIL
 
         repo = getattr(service, "repo", None)
+        if repo is None or getattr(service, "parser", None) is None:
+            report("❌ Collect Message History: the archive service is incomplete", "error")
+            return ActionResult.FAIL
+        async with repo.db.operation_lock:
+            return await self._collect(user_nick, cdp, engine, service, report)
+
+    async def _collect(self, user_nick, cdp, engine, service, report):
+        repo = getattr(service, "repo", None)
         parser = getattr(service, "parser", None)
         if repo is None or parser is None:
             report("❌ Collect Message History: the archive service is "
@@ -153,7 +161,7 @@ class CollectHistory(BaseAction):
         stopping = getattr(engine, "is_stopping", None)
         result = await sync_conversation(
             parser, repo, nick, my_nick=my_nick,
-            require_private=self.require_private, verify_partner=verify,
+            require_private=self.require_private, verify_partner=True,
             max_messages=self.max_messages or None,
             chunk_pause_ms=self.chunk_pause_ms,
             should_stop=stopping, on_progress=progress, now=self.now(),

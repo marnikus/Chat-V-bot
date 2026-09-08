@@ -16,9 +16,12 @@ import logging
 import os
 from typing import Optional
 
+from backend.archive_lock import db_operation
+from backend.db_paths import (PROTECTED_DATABASE, in_trash, protected_database,
+                              same_database)
 from backend.chat_parser import ChatParser
 from backend.collector import Collector, DEFAULTS as COLLECTOR_DEFAULTS
-from backend.history_db import HistoryDB
+from backend.history_db import HistoryDB, inspect_archive
 from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.media_store import MediaStore
@@ -97,6 +100,7 @@ class HistoryService:
                                    memory=self.memory)
         self._task: Optional[asyncio.Task] = None
         self._binding = False
+        self.generation = 0
 
     # ── settings ─────────────────────────────────────────────────
     def _stored(self, section: str) -> dict:
@@ -141,6 +145,8 @@ class HistoryService:
     def apply_settings(self, patch: dict) -> dict:
         """Merge a UI patch into the history settings and apply it live."""
         patch = dict(patch or {})
+        # Changing a setting must not bypass validated Load.
+        patch.pop("db_path", None)
         collector_patch = patch.pop("collector", None)
         self._settings = _merge(self._settings, patch)
         media_cfg = self._settings["media"]
@@ -166,7 +172,7 @@ class HistoryService:
 
     # ── lifecycle ────────────────────────────────────────────────
     async def init(self) -> "HistoryService":
-        await self.db.init()
+        await self._open_initial_db()
         folder = self._settings["media"].get("cache_dir")
         if folder:
             try:
@@ -198,6 +204,67 @@ class HistoryService:
         log.info("Message archive ready: %s (fts=%s)", self.db.path,
                  self.db.fts_enabled)
         return self
+
+    async def _open_initial_db(self) -> None:
+        """Recover availability after an older build persisted a bad DB path.
+
+        A broken original is NEVER overwritten or 'fixed' with empty columns.
+        Prefer an existing valid archive. If none exists, create a separately
+        named, validated archive so the application has a working writer.
+        """
+        requested = os.path.abspath(self.db.path)
+        folder = os.path.dirname(requested)
+        if in_trash(requested):
+            folder = os.path.dirname(os.path.abspath(getattr(self.config, "_path", "config.json")))
+        default = os.path.join(folder, "history.db")
+        try:
+            self._check_target(requested)
+            if not os.path.exists(requested) and not same_database(requested, default) and inspect_archive(default):
+                raise FileNotFoundError(f"configured archive is missing: {requested}")
+            await self.db.init()
+            return
+        except Exception as exc:
+            log.warning("Configured chat archive unavailable (%s): %s", requested,
+                        getattr(exc, "detail", str(exc)))
+        candidates = [default]
+        if self.config is not None:
+            recent = self.config.get_state("db_recent", [])
+            if isinstance(recent, list):
+                candidates += [p for p in recent if isinstance(p, str)]
+        if os.path.isdir(folder):
+            candidates += [os.path.join(folder, n) for n in sorted(os.listdir(folder))
+                           if n.lower().endswith(".db") and not n.startswith(".cvb-")]
+        for path in candidates:
+            fresh = None
+            try:
+                self._check_target(path)
+                if same_database(path, requested) or not inspect_archive(path):
+                    continue
+                fresh = HistoryDB(path, use_fts=bool(self._settings.get("use_fts", True)))
+                await fresh.init(allow_create=False)
+                self._rebind_db(fresh)
+                self._persist_db_path(path)
+                log.warning("Recovered chat connection using %s; original file left untouched", path)
+                return
+            except Exception as exc:
+                if fresh is not None:
+                    await fresh.close()
+                log.warning("Startup fallback refused %s: %s", path, getattr(exc, "detail", str(exc)))
+        from backend.db_manager import DbManager
+        manager = DbManager(config=self.config, service=self, root=folder)
+        name = "history.db"
+        number = 0
+        while os.path.lexists(os.path.join(folder, name)) or self._protected_startup_name(os.path.join(folder, name)):
+            number += 1
+            name = f"history-recovery-{number}.db"
+        made = await manager.create(os.path.join(folder, name))
+        if not made.get("ok"):
+            raise RuntimeError(made.get("error") or "Cannot initialize a working chat archive")
+        await self.switch_db(made["path"])
+        log.warning("Created recovery archive %s; existing files left untouched", made["path"])
+
+    def _protected_startup_name(self, path: str) -> bool:
+        return protected_database(path, memory=self.memory)
 
     async def _install_push_binding(self) -> None:
         """Let the in-page agent hand us new lines without polling."""
@@ -243,101 +310,75 @@ class HistoryService:
             except (asyncio.CancelledError, Exception):   # noqa: BLE001
                 pass
             self._task = None
-        await self.db.close()
+        async with self.db.operation_lock:
+            await self.db.close()
 
     # ── swapping the database file (DB Connection window) ────────
-    async def _stop_collector(self) -> dict:
-        """Park the collector so the file can be closed.
-
-        Returns what was live, so the exact same state can be restored:
-        the background loop AND the collector's own running flag (a tick
-        driven by the app or a test does not need a task).
-        """
-        state = {
-            "task": bool(self._task and not self._task.done()),
-            "collector": bool(getattr(self.collector, "running", False)),
-        }
-        self.collector.stop()
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except (asyncio.CancelledError, Exception):   # noqa: BLE001
-                pass
-            self._task = None
-        return state
-
-    def _restart_collector(self, state) -> None:
-        """Put the collector back exactly as `_stop_collector` found it."""
-        if not state:
-            return
-        if state.get("task"):
-            self.start()                 # background loop + running flag
-        elif state.get("collector"):
-            self.collector.start()       # flag only: ticks stay manual
+    def _check_target(self, path: str) -> None:
+        root = os.path.dirname(os.path.abspath(self.db.path))
+        if protected_database(path, root=root, memory=self.memory) or in_trash(path):
+            raise ValueError(PROTECTED_DATABASE)
 
     def _rebind_db(self, db: HistoryDB) -> None:
-        """Point every collaborator at the new connection (one DB per process)."""
+        """No await between assignments: every collaborator changes together."""
+        db.operation_lock = self.db.operation_lock
         self.db = db
         self.repo.db = db
         self.query.db = db
         self.media.db = db
+        self.generation += 1
 
-    async def detach_db(self) -> bool:
-        """Close the archive file without losing the service (used by delete)."""
-        self._detached_running = await self._stop_collector()
-        await self.db.close()
-        return True
-
-    async def switch_db(self, path: str) -> dict:
-        """Open another database file, keeping the app connected either way.
-
-        The collector is parked first (it writes), then the current file is
-        closed and the new one opened. If the new file cannot be opened the
-        previous one is re-opened before the error is raised — a failed swap
-        must never leave the app without an archive.
-        """
-        target = str(path or "").strip()
-        if not target:
-            raise ValueError("no database path given")
-        previous = self.db.path
-        parked = getattr(self, "_detached_running", None)
-        if parked is None:
-            parked = await self._stop_collector()
-        self._detached_running = None
-        if self.db.is_open:
-            await self.db.close()
-        fresh = HistoryDB(target, use_fts=bool(self._settings.get("use_fts", True)))
-        try:
-            await fresh.init()
-        except Exception as exc:                          # noqa: BLE001
-            log.warning("cannot open %s (%s) — reopening %s", target, exc,
-                        previous)
-            fallback = HistoryDB(
-                previous, use_fts=bool(self._settings.get("use_fts", True)))
-            try:
-                await fallback.init()
-                self._rebind_db(fallback)
-            except Exception as inner:                    # noqa: BLE001
-                log.error("reopening %s failed too: %s", previous, inner)
-            self._restart_collector(parked)
-            raise
-        self._rebind_db(fresh)
-        self._settings["db_path"] = target
+    def _persist_db_path(self, path: str) -> None:
+        self._settings["db_path"] = path
         if self.config is not None:
-            stored = {k: v for k, v in self._settings.items()
-                      if k not in ("collector",)}
+            stored = {k: v for k, v in self._settings.items() if k != "collector"}
             self.config.set("history", stored)
             self.config.save()
+
+    async def switch_db(self, path: str) -> dict:
+        """Validate the candidate while the original stays open and usable.
+
+        The stable operation lock drains in-flight tick/push/manual reads and
+        downloads. There is no stop/cancel/restart of collection and thus no
+        loss of paused, running or throttled state. Failed opening never needs
+        a dangerous 'reopen the old DB' recovery.
+        """
+        target = os.path.abspath(str(path or "").strip()) if path else ""
+        if not target:
+            raise ValueError("no database path given")
+        self._check_target(target)
+        lock = self.db.operation_lock
+        if same_database(target, self.db.path) and self.db.is_open:
+            async with lock:
+                if same_database(target, self.db.path) and self.db.is_open:
+                    await self.db.validate()
+                    return self.settings()
+        fresh = HistoryDB(target, use_fts=bool(self._settings.get("use_fts", True)))
+        adopted = False
         try:
-            self.collector.reset_state()
-        except Exception:                                 # noqa: BLE001
-            pass
-        self._restart_collector(parked)
+            await fresh.init(allow_create=False)
+            async with lock:
+                previous = self.db
+                self._rebind_db(fresh)
+                adopted = True
+                self._persist_db_path(target)
+                self.collector.reset_state()
+                # A queued push belongs to the previous archive/gate and will
+                # be refused until the next tick verifies the on-screen chat.
+                try:
+                    await previous.close()
+                except Exception as exc:
+                    # Adoption already succeeded. A cleanup error is not a
+                    # failed Load and must not falsely report the old path.
+                    log.warning("Archive switched; closing previous connection failed: %s", exc)
+        finally:
+            if not adopted:
+                await fresh.close()
         log.info("Message archive switched to %s", target)
         return self.settings()
 
     # ── convenience used by the bridge ───────────────────────────
+    @db_operation
     async def page(self, nick: str, **kwargs) -> dict:
         payload = await self.query.page(nick, **kwargs)
         payload["stats"] = await self.query.person_stats(nick)

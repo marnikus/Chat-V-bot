@@ -26,9 +26,10 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
+from backend.archive_lock import db_operation
 from backend import chat_agent_js
-from backend.chat_parser import (ChatParser, _signature, sync_conversation,
-                                 verify_private)
+from backend.chat_parser import (ChatParser, parse_records, state_signatures,
+                                 sync_conversation, verify_private)
 from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.user_memory import UserMemory, UserRecord
@@ -120,6 +121,8 @@ class Collector(QObject):
         self._last_sync_count = 0
         self._last_media_repaired = 0
         self._last_media_requeued = 0
+        self._last_text_repaired = 0
+        self._last_capture_missing = 0
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
@@ -200,6 +203,10 @@ class Collector(QObject):
         self._last_sync_reason = ""
         self._last_sync_added = 0
         self._last_sync_count = 0
+        self._last_text_repaired = 0
+        self._last_capture_missing = 0
+        self._last_media_repaired = 0
+        self._last_media_requeued = 0
         self._backfill_pending = False
         self._force_backfill = False
         self._last_emitted = ()
@@ -247,6 +254,7 @@ class Collector(QObject):
                 pass
 
     # ── the heartbeat ────────────────────────────────────────────
+    @db_operation
     async def tick(self) -> str:
         if not self._running:
             return self._set(CollectorState.OFF, "Collector stopped")
@@ -284,6 +292,11 @@ class Collector(QObject):
             self._log(f"Re-installed the in-page agent "
                       f"(v{int(state.get('agent') or 0)})", "info")
         self._agent = int(state.get("agent") or 0)
+        if self._agent < chat_agent_js.AGENT_VERSION:
+            self._verified = False
+            self._error = "The current text-capture agent could not be installed. Retrying on the next tick."
+            self._log(self._error, "error")
+            return self._set(CollectorState.ERROR, self._error)
         self._error = ""
         self._last_probe = {
             "count": int(state.get("count") or 0),
@@ -368,10 +381,15 @@ class Collector(QObject):
             self._added = 0
 
         cursor = await self.repo.get_cursor(person_id)
-        head_sig = _signature(state.get("head"))
-        tail_sig = _signature(state.get("tail"))
+        head_sig, tail_sig = state_signatures(state)
         count = int(state.get("count") or 0)
-        unchanged = (cursor["bootstrapped"] and count == cursor["dom_count"]
+        repair_text = await self.repo.has_missing_text(person_id)
+        repair_media = self.media is not None and await self.repo.has_repairable_media(person_id)
+        want_backfill = (bool(self._settings.get("auto_backfill", True))
+                         and not cursor.get("full_scan_complete")) or self._force_backfill
+        unchanged = (not want_backfill and not repair_text and not repair_media
+                     and not state.get("incomplete") and cursor["bootstrapped"]
+                     and count == cursor["dom_count"]
                      and tail_sig and tail_sig == cursor["tail_sig"]
                      and head_sig == cursor["head_sig"])
         person = await self.repo.get_person_by_id(person_id) or {}
@@ -394,11 +412,6 @@ class Collector(QObject):
             return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
-        full_scan_complete = bool(cursor.get("full_scan_complete"))
-        want_backfill = ((bool(self._settings.get("auto_backfill", True))
-                          and not full_scan_complete
-                          and not self._backfill_pending)
-                         or self._force_backfill)
         self._force_backfill = False
         self._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
@@ -412,6 +425,13 @@ class Collector(QObject):
         self._last_sync_count = int(result.count or 0)
         self._added = result.added
         self._total = result.total
+        self._last_text_repaired = result.text_repaired
+        self._last_capture_missing = result.capture_missing
+        if result.capture_missing:
+            self._warning = f"[text not captured] for {result.capture_missing} line(s); retrying capture"
+            self._log(self._warning, "warn", nick)
+        if result.text_repaired:
+            self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success", nick)
         if result.media_repaired or result.media_requeued:
             self._last_media_repaired = int(result.media_repaired or 0)
             self._last_media_requeued = int(result.media_requeued or 0)
@@ -426,9 +446,12 @@ class Collector(QObject):
                 log.debug("media caching skipped: %s", e)
 
         suffix = " (throttled — a run is active)" if self._throttled else ""
+        repaired = bool(result.text_repaired or result.media_repaired or result.media_requeued or result.backfilled)
+        if repaired and not result.added:
+            await self._notify_appended(nick, [], 0, result.total, refresh=True)
         if result.added:
             await self._notify_appended(nick, list(result.records[:200]),
-                                        result.added, result.total)
+                                        result.added, result.total, refresh=repaired)
             self._log(f"Archived {result.added} new message(s) "
                       f"(total {result.total})", "success", nick)
             return self._set(CollectorState.COLLECTED,
@@ -454,6 +477,7 @@ class Collector(QObject):
                       backfill_older=backfill_older,
                       backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
                       now=self.now(),
+                      should_stop=lambda: not self._running or self._paused,
                       media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
             async with self.lease.low():
@@ -523,6 +547,7 @@ class Collector(QObject):
         except Exception as e:                       # noqa: BLE001
             log.debug("people_changed emit failed: %s", e)
 
+    @db_operation
     async def backfill_older(self) -> str:
         """Force one scroll-to-top full-history pass for the current person."""
         if not self._nick:
@@ -570,9 +595,10 @@ class Collector(QObject):
         return (CollectorState.NOT_PRIVATE, "Not in private tab now")
 
     # ── the live push channel ────────────────────────────────────
+    @db_operation
     async def handle_push(self, payload) -> int:
         """Store what the in-page observer pushed. Never raises."""
-        if not self._nick or not self.enabled or self._paused:
+        if not self._running or not self._nick or not self.enabled or self._paused:
             return 0
         data = self._payload(payload)
         items = self._records(data)
@@ -591,19 +617,33 @@ class Collector(QObject):
         if not check.ok:
             self._refuse(*self._gate_status(check, self._nick))
             return 0
+        records = parse_records(items)
+        missing = sum(r.incomplete for r in records)
+        if missing:
+            self._last_capture_missing = missing
+            self._log(f"Text/payload not captured for {missing} line(s); retrying from the chat on the next tick", "warn")
+            await self.repo.reset_cursor(self._nick)
+        captured = [r for r in records if not r.incomplete]
+        if not captured:
+            return 0
         try:
-            result = await self.repo.append(self._nick, items,
+            result = await self.repo.append(self._nick, captured,
                                             my_nick=self.my_nick,
                                             align=False, now=self.now())
         except Exception as e:                        # noqa: BLE001
             log.warning("push append failed: %s", e)
             return 0
+        if result.text_repaired and not result.added:
+            self._last_text_repaired = result.text_repaired
+            await self._notify_appended(self._nick, [], 0, result.total, refresh=True)
+            self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success")
         if result.added:
             self._added = result.added
             self._total = result.total
             await self._notify_appended(self._nick,
                                         list(result.records[:200]),
-                                        result.added, result.total)
+                                        result.added, result.total,
+                                        refresh=bool(result.text_repaired))
             self._set(CollectorState.COLLECTED,
                       f"Collected {result.added} new "
                       f"message{'s' if result.added != 1 else ''} "
@@ -634,7 +674,7 @@ class Collector(QObject):
         return [item for item in items if isinstance(item, dict)]
 
     async def _notify_appended(self, nick: str, items: list, added: int,
-                               total: int) -> None:
+                               total: int, *, refresh: bool = False) -> None:
         """Emit UI-shaped rows, never the raw parser records.
 
         The UI rows need `ord`, `day`, `time` and the joined media fields;
@@ -654,7 +694,7 @@ class Collector(QObject):
         try:
             self.history_appended.emit(json.dumps(
                 {"nick": nick, "my_nick": self.my_nick, "items": live,
-                 "added": added, "total": total}, ensure_ascii=False))
+                 "added": added, "total": total, "refresh": refresh}, ensure_ascii=False))
         except Exception as e:                        # noqa: BLE001
             log.debug("history_appended emit failed: %s", e)
 
@@ -679,6 +719,8 @@ class Collector(QObject):
             "sync_count": self._last_sync_count,
             "media_repaired": self._last_media_repaired,
             "media_requeued": self._last_media_requeued,
+            "text_repaired": self._last_text_repaired,
+            "capture_missing": self._last_capture_missing,
             "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,

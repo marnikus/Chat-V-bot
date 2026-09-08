@@ -28,6 +28,7 @@ from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 from backend import chat_agent_js
+from backend.archive_lock import db_operation
 from backend.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
@@ -200,6 +201,7 @@ class MediaStore:
         return self.now().strftime("%Y-%m-%d")
 
     # ── registration ─────────────────────────────────────────────
+    @db_operation
     async def register(self, url: str, kind: Optional[str] = None,
                        nick: str = "", day: str = "") -> Optional[int]:
         """Remember a media URL. Returns its id (existing rows are reused).
@@ -230,11 +232,13 @@ class MediaStore:
                                      (clean,))
         return int(row[0]) if row else None
 
+    @db_operation
     async def get(self, media_id) -> Optional[dict]:
         row = await self.db.fetchone("SELECT * FROM media WHERE id=?",
                                      (self._as_id(media_id),))
         return dict(row) if row else None
 
+    @db_operation
     async def get_by_url(self, url: str) -> Optional[dict]:
         row = await self.db.fetchone("SELECT * FROM media WHERE url=?",
                                      (str(url or "").strip(),))
@@ -248,6 +252,7 @@ class MediaStore:
             return -1
 
     # ── downloading ──────────────────────────────────────────────
+    @db_operation
     async def process_pending(self, limit: int = 25) -> int:
         """Cache up to `limit` pending files. Returns how many were stored."""
         if not self.enabled or self.paused or self.cdp is None:
@@ -538,6 +543,7 @@ class MediaStore:
                 return row["cache_path"]
         return ""
 
+    @db_operation
     async def migrate_layout(self) -> int:
         """Move an older flat `<sha256>.<ext>` cache into the person tree."""
         rows = await self.db.fetchdicts(
@@ -579,6 +585,7 @@ class MediaStore:
             (reason[:300], media_id))
         await self.db.commit()
 
+    @db_operation
     async def retry_failed(self) -> int:
         """Explicitly give up-front failures another chance (user action)."""
         cur = await self.db.execute(
@@ -589,6 +596,7 @@ class MediaStore:
         await self.db.commit()
         return int(cur.rowcount or 0)
 
+    @db_operation
     async def requeue(self, media_id, reason: str = "retry") -> bool:
         """Re-queue one failed/skipped media row for another download.
 
@@ -609,6 +617,7 @@ class MediaStore:
         await self.db.commit()
         return True
 
+    @db_operation
     async def download_one(self, media_id) -> dict:
         """Force a single media row through the downloader and return its state.
 
@@ -636,6 +645,7 @@ class MediaStore:
             await self._fetch_one(row)
         return await self.path_for(media_id)
 
+    @db_operation
     async def retry_failed_uncached(self) -> int:
         """Re-queue failed rows that have no local file.
 
@@ -652,6 +662,7 @@ class MediaStore:
         return int(cur.rowcount or 0)
 
     # ── serving ──────────────────────────────────────────────────
+    @db_operation
     async def path_for(self, media_id) -> dict:
         row = await self.get(media_id)
         if not row:
@@ -666,6 +677,7 @@ class MediaStore:
                 "url": row.get("url") or "", "kind": row.get("kind") or "image",
                 "bytes": int(row.get("bytes") or 0)}
 
+    @db_operation
     async def clipboard_payload(self, media_id) -> dict:
         """What the UI should put on the clipboard for a left click."""
         row = await self.get(media_id)
@@ -682,6 +694,7 @@ class MediaStore:
                 "url": url, "error": ""}
 
     # ── housekeeping ─────────────────────────────────────────────
+    @db_operation
     async def cache_usage(self) -> dict:
         row = await self.db.fetchone(
             "SELECT COUNT(*) AS files, COALESCE(SUM(bytes),0) AS bytes "
@@ -696,6 +709,7 @@ class MediaStore:
                 "failed": failed, "dir": self.cache_dir,
                 "enabled": self.enabled, "paused": self.paused}
 
+    @db_operation
     async def evict_if_needed(self) -> int:
         """Drop least-recently-used files until we are under the cap."""
         removed = 0
@@ -730,6 +744,7 @@ class MediaStore:
             "UPDATE media SET state='evicted', bytes=0 WHERE id=?", (media_id,))
         await self.db.commit()
 
+    @db_operation
     async def clear_cache(self) -> int:
         rows = await self.db.fetchdicts(
             "SELECT id FROM media WHERE state='cached'")

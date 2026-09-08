@@ -24,6 +24,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from backend.chat_agent_js import AGENT_VERSION
 from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
@@ -121,7 +122,7 @@ class FakeChatPage:
                     ins.append(nick)
             fps = [m["fp"] for m in msgs]
             return json.dumps({
-                "ok": True, "agent": 9, "tab": self.tab,
+                "ok": True, "agent": AGENT_VERSION, "tab": self.tab,
                 "partner": self.partner, "me": self.me, "title": self.title,
                 "participants": self.participants,
                 "in_authors": ins, "out_authors": outs, "authors": ins + outs,
@@ -275,7 +276,8 @@ class TestLateRenderedMedia(E2ECase):
         empties = [r for r in rows
                    if r["kind"] == "text" and not r["text"]
                    and r["media_id"] is None]
-        self.assertEqual(len(empties), 3, "the parse artefact exists")
+        self.assertEqual(len(empties), 0, "new collection must defer incomplete bodies")
+        self.assertEqual(len(rows), 6)
 
         page.rendered = True             # the images are in the DOM now
         await col.tick()                 # an ordinary heartbeat, no backfill
@@ -405,7 +407,7 @@ class TestRecoveryScoping(E2ECase):
         empties = await self.db.fetchall(
             "SELECT id FROM messages WHERE kind='text' AND text='' "
             "AND media_id IS NULL")
-        self.assertEqual(len(empties), 3)
+        self.assertEqual(len(empties), 0, "incomplete bodies are deferred, not archived")
 
         # phase 2: the images render; scrolling to the top drops the newest
         # two lines from the DOM (the virtualiser keeps a window) while older

@@ -64,6 +64,16 @@ def _signature(value) -> str:
     return str(value or "")
 
 
+def state_signatures(state: dict) -> tuple[str, str]:
+    """Include middle-of-chat payload changes without shipping every body."""
+    head, tail = _signature(state.get("head")), _signature(state.get("tail"))
+    if "content_revision" in state:
+        head += "#rev:" + str(state["content_revision"])
+    if state.get("content_sig"):
+        tail += "#content:" + str(state["content_sig"])
+    return head, tail
+
+
 def _norm(nick: str) -> str:
     return " ".join(str(nick or "").split()).strip().lower()
 
@@ -256,7 +266,7 @@ class ChatParser:
         """Install the agent if the page lost it (SPA re-render, navigation)."""
         state = await self.state()
         version = int(state.get("agent") or 0)
-        if version:
+        if version >= chat_agent_js.AGENT_VERSION:
             return version
         return await self.install()
 
@@ -295,7 +305,8 @@ class ChatParser:
                                wait_ms: int = 300,
                                stable_polls: int = 3,
                                max_wait_s: float = 6.0,
-                               minimum_count: int = 0) -> dict:
+                               minimum_count: int = 0,
+                               should_stop=None) -> dict:
         """Poll until the pane is at the top and older lines stopped arriving.
 
         The chat loads older history asynchronously when it is scrolled up, so
@@ -313,6 +324,10 @@ class ChatParser:
         deadline = asyncio.get_event_loop().time() + max_wait_s
         state = first_state
         while stable < stable_polls:
+            if should_stop and should_stop():
+                state["_settled"] = False
+                state["_stopped"] = True
+                return state
             state = await self.state()
             state = state if isinstance(state, dict) else {}
             scroll = state.get("scroll") or {}
@@ -339,6 +354,18 @@ class ChatParser:
 
 
 async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
+                            my_nick: str = "", **kwargs) -> SyncResult:
+    """Hold one archive generation across every chunk and media recovery."""
+    async with repo.db.operation_lock:
+        try:
+            return await _sync_conversation(parser, repo, nick, my_nick, **kwargs)
+        except BaseException:
+            if repo.db.is_open:
+                await repo.db.conn.rollback()
+            raise
+
+
+async def _sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             my_nick: str = "",
                             require_private: bool = False,
                             verify_partner: bool = False,
@@ -363,9 +390,12 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     result = SyncResult(ok=True, nick=nick, my_nick=my_nick)
 
     state = await parser.state()
-    if not int(state.get("agent") or 0):
+    if int(state.get("agent") or 0) < chat_agent_js.AGENT_VERSION:
         await parser.install()
         state = await parser.state()
+    if int(state.get("agent") or 0) < chat_agent_js.AGENT_VERSION:
+        result.ok, result.reason = False, "agent_unavailable"
+        return result
     if not state.get("ok", True):
         result.ok = False
         result.reason = state.get("reason") or "no_agent"
@@ -376,7 +406,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     if verify_partner and _norm(state.get("partner")) != _norm(nick):
         result.ok, result.reason = False, "partner_mismatch"
         return result
-    if verify_partner:
+    if verify_partner or require_private:
         # The two-step gate: nothing is written unless the pane holds only
         # the two of us AND the active tab names this person.
         check = verify_private(state, nick, my_nick,
@@ -397,9 +427,11 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 state = await parser.settle_after_top(
                     state, wait_ms=300, stable_polls=3,
                     max_wait_s=max(float(backfill_wait_s or 2.0), 4.0),
-                    minimum_count=before_count)
+                    minimum_count=before_count, should_stop=should_stop)
             except Exception:                        # noqa: BLE001
                 state = await parser.state()
+            if state.get("_stopped"):
+                result.stopped = True
             after = state.get("scroll") or {}
             post_count = int(state.get("count") or 0)
             settled = bool(after.get("atTop")) and \
@@ -428,8 +460,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
 
     count = int(state.get("count") or 0)
     result.count = count
-    head_sig = _signature(state.get("head"))
-    tail_sig = _signature(state.get("tail"))
+    head_sig, tail_sig = state_signatures(state)
 
     person_id = await repo.ensure_person(nick)
     cursor = await repo.get_cursor(person_id)
@@ -451,19 +482,29 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 await repo.mark_backfilled(person_id)
             except Exception as e:                   # noqa: BLE001
                 log.debug("could not mark %s fully backfilled: %s", nick, e)
-        result.reason = "empty"
+        if restored_top is not None:
+            await parser.restore_scroll(restored_top)
+        result.reason = "stopped" if result.stopped else "empty"
         return result
 
-    # ── nothing moved: the whole point of the design ──────────────
-    if (cursor["bootstrapped"] and count == cursor["dom_count"]
+    repair_text = await repo.has_missing_text(person_id, force=bool(backfill_older))
+    repair_media = media is not None and await repo.has_repairable_media(
+        person_id, include_failed=bool(backfill_older))
+
+    # A stable cursor is not proof that all bodies were captured. Manual
+    # backfill and pending legacy repairs must get past the idle shortcut.
+    if (not backfill_older and not repair_text and not repair_media
+            and not state.get("incomplete") and cursor["bootstrapped"]
+            and count == cursor["dom_count"]
             and tail_sig and tail_sig == cursor["tail_sig"]
             and head_sig == cursor["head_sig"]):
         result.reason = "unchanged"
         return result
 
-    delta = (cursor["bootstrapped"] and cursor["dom_count"]
+    delta = (not backfill_older and not repair_text and not state.get("incomplete")
+             and cursor["bootstrapped"] and cursor["dom_count"]
              and head_sig == cursor["head_sig"]
-             and count >= cursor["dom_count"])
+             and count > cursor["dom_count"])
     start = int(cursor["dom_count"]) if delta else 0
 
     if max_messages and (count - start) > int(max_messages):
@@ -486,32 +527,53 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
             break
         end = min(count, position + parser.chunk_size)
         records = []
+        best = []
         for _attempt in range(SLICE_RETRIES):
-            records = await parser.slice(position, end)
-            if records:
+            if should_stop and should_stop():
+                result.stopped = True
                 break
-            # The settle probe reported count=count, then the DOM lost the
-            # nodes between probes (a virtualised pane re-rendering). Do not
-            # give up and save nothing: restore the viewport, take the state
-            # again, and retry the same range a few times.
-            if (position == start and backfill_older and
-                    not result.backfilled and before_count > 0 and
-                    _attempt == 0):
-                try:
-                    await parser.restore_scroll(old_top)
-                except Exception:                    # noqa: BLE001
-                    pass
+            records = await parser.slice(position, end)
+            if verify_partner or require_private:
+                live_state = await parser.state()
+                gate = verify_private(live_state, nick, my_nick,
+                                      require_private=require_private)
+                if gate.ok:
+                    gate = verify_private(live_state, nick, my_nick, items=records,
+                                          require_private=require_private)
+                if not gate.ok:
+                    result.ok, result.reason = False, gate.reason
+                    # Do not scroll the different chat the user switched to.
+                    return result
+            captured = [r for r in records if not r.incomplete]
+            if len(captured) > len(best):
+                best = captured
+            missing = max(0, end - position - len(captured))
+            if records and not missing:
+                best = captured
+                break
+            if _attempt == 0:
+                log.warning("Text/payload extraction incomplete for %s at DOM %d:%d; retrying", nick, position, end)
+            if _attempt == SLICE_RETRIES - 1:
+                break
+            if (not records and position == start and backfill_older and
+                    not result.backfilled and before_count > 0 and _attempt == 0):
+                await parser.restore_scroll(old_top)
                 fallback = await parser.state()
                 if int(fallback.get("count") or 0) > 0:
                     state = fallback
                     count = int(state.get("count") or 0)
                     result.count = count
                     end = min(count, position + parser.chunk_size)
-                    head_sig = _signature(state.get("head"))
-                    tail_sig = _signature(state.get("tail"))
+                    head_sig, tail_sig = state_signatures(state)
                     result.backfill_pending = True
             else:
                 await asyncio.sleep(0.2)
+        records = best
+        missing = max(0, end - position - len(records))
+        if missing:
+            result.capture_missing += missing
+            result.backfill_pending = True
+            log.warning("Text/payload not captured for %s: %d line(s); deferred for retry", nick, missing)
         if not records:
             break
         scanned += len(records)
@@ -523,6 +585,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                 else None,
                 now=now)
             result.added += appended.added
+            result.text_repaired += appended.text_repaired
             result.gap = result.gap or appended.gap
             _merge_live(result, appended, live_baseline)
         else:
@@ -552,6 +615,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         appended = await repo.append(nick, collected, my_nick=my_nick,
                                      align=True, now=now)
         result.added += appended.added
+        result.text_repaired += appended.text_repaired
         result.gap = result.gap or appended.gap
         _merge_live(result, appended, live_baseline)
         # anything that appeared ABOVE the part we already knew
@@ -562,6 +626,7 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                                          my_nick=my_nick, prepend=True,
                                          now=now)
             result.added += backfill.added
+            result.text_repaired += backfill.text_repaired
             _merge_live(result, backfill, live_baseline)
         if backfill_older and media is not None and collected:
             try:
@@ -579,34 +644,45 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         except Exception:                            # noqa: BLE001
             log.debug("could not restore scroll position for %s", nick)
 
-    # ── the newest messages' media (Bug #2, 2026-09-07) ───────────
-    # A scroll-to-top pass (and any virtualised pane) drops the newest nodes
-    # from the DOM, so a broken media line at the BOTTOM of the chat never
-    # met its DOM record during the reads above. If anything is still
-    # repairable, read the newest window — after the viewport was put back —
-    # and run one more recovery pass over it. This also runs on ordinary
-    # ticks, which is how a media line that rendered after its first parse
-    # is repaired within one heartbeat instead of never.
-    if media is not None and not (should_stop and should_stop()):
-        try:
-            if await repo.has_repairable_media(
-                    person_id, include_failed=bool(backfill_older)):
-                tail_state = await parser.state()
-                tail_count = int(tail_state.get("count") or 0)
-                if tail_count > 0:
-                    window = max(parser.chunk_size, 80)
-                    tail_records = await parser.slice(
-                        max(0, tail_count - window), tail_count)
-                    if tail_records:
+    # Re-read the newest window AFTER restoring a virtualized viewport. It
+    # can contain text/media that disappeared during the scroll-to-top pass.
+    if not (should_stop and should_stop()) and not result.stopped:
+        needs_text = await repo.has_missing_text(person_id, force=bool(backfill_older))
+        needs_media = media is not None and await repo.has_repairable_media(
+            person_id, include_failed=bool(backfill_older))
+        if needs_text or needs_media or (backfill_older and restored_top is not None):
+            tail_state = await parser.state()
+            tail_count = int(tail_state.get("count") or 0)
+            if tail_count > 0:
+                tail_records = await parser.slice(max(0, tail_count - max(parser.chunk_size, 80)), tail_count)
+                safe = True
+                if verify_partner or require_private:
+                    live_state = await parser.state()
+                    safe = (verify_private(live_state, nick, my_nick,
+                                           require_private=require_private).ok and
+                            verify_private(live_state, nick, my_nick, items=tail_records,
+                                           require_private=require_private).ok)
+                if safe:
+                    captured = [r for r in tail_records if not r.incomplete]
+                    if backfill_older and captured:
+                        appended = await repo.append(nick, captured, my_nick=my_nick,
+                                                     prepend=True, now=now)
+                        result.added += appended.added
+                        result.text_repaired += appended.text_repaired
+                        _merge_live(result, appended, live_baseline)
+                    missing = sum(r.incomplete for r in tail_records)
+                    if missing:
+                        result.capture_missing += missing
+                        result.backfill_pending = True
+                        log.warning("Tail text/payload not captured for %s; retrying %d line(s)", nick, missing)
+                    stats = await repo.recover_text(person_id, tail_records, now=now)
+                    result.text_repaired += stats["repaired"]
+                    if media is not None:
                         stats = await repo.recover_media(
                             person_id, tail_records, media=media, nick=nick,
                             now=now, requeue_failed=bool(backfill_older))
-                        result.media_repaired += int(stats.get("repaired")
-                                                     or 0)
-                        result.media_requeued += int(stats.get("requeued")
-                                                     or 0)
-        except Exception as e:                        # noqa: BLE001
-            log.debug("tail media recovery for %s failed: %s", nick, e)
+                        result.media_repaired += int(stats.get("repaired") or 0)
+                        result.media_requeued += int(stats.get("requeued") or 0)
 
     if result.backfilled and not result.stopped and not result.backfill_pending:
         try:
@@ -614,10 +690,10 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
         except Exception as e:                       # noqa: BLE001
             log.debug("could not mark %s fully backfilled: %s", nick, e)
 
-    complete = (not result.stopped) and position >= count
+    complete = (not result.stopped) and not result.capture_missing and position >= count
     await repo.append(nick, [], my_nick=my_nick,
                       dom_count=position if not complete else count,
-                      head_sig=head_sig,
+                      head_sig=head_sig if complete else "",
                       tail_sig=tail_sig if complete else "",
                       now=now)
 
@@ -626,5 +702,6 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     result.scanned = scanned
     if not result.reason:
         result.reason = "stopped" if result.stopped else (
-            "added" if result.added else "no_new")
+            "capture_pending" if result.capture_missing else (
+                "added" if result.added else "repaired" if result.text_repaired else "no_new"))
     return result

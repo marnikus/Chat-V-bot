@@ -207,6 +207,10 @@ const HistoryStore = {
     try { payload = JSON.parse(json); } catch (e) { return; }
     if (!payload || !this.model) return;
     if (payload.nick !== this.nick) return;
+    if (payload.refresh) {
+      this.reloadCurrent();
+      return;
+    }
     const added = this.model.appendLive(payload.items || []);
     if (payload.total != null) {
       const total = Number(payload.total);

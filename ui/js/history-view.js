@@ -130,7 +130,12 @@ var HistoryView = (function () {
     }
     wrap.appendChild(head);
     const body = el('div', 'msg-text');
-    if (row.text) appendHighlighted(body, row.text, opts.query);
+    if (String(row.text || '').trim()) appendHighlighted(body, row.text, opts.query);
+    else if (!row.media) {
+      body.classList.add('msg-text-missing');
+      body.appendChild(document.createTextNode('[text not captured]'));
+      body.title = 'Use Backfill older in the open private chat to retry capture.';
+    }
     wrap.appendChild(body);
     const media = mediaNode(row, opts);
     if (media) wrap.appendChild(media);

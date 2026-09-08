@@ -17,6 +17,7 @@ import os
 import re
 from typing import Optional
 
+from backend.archive_lock import db_operation
 from backend.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
@@ -121,6 +122,7 @@ class HistoryQuery:
                     "deleted_at=''")
 
     # ── paging ───────────────────────────────────────────────────
+    @db_operation
     async def page(self, nick: str, before_ord: Optional[int] = None,
                    after_ord: Optional[int] = None,
                    limit: int = DEFAULT_LIMIT) -> dict:
@@ -175,6 +177,7 @@ class HistoryQuery:
             "my_nicks": self._my_nicks(person),
         }
 
+    @db_operation
     async def around(self, nick: str, ord_: int, radius: int = 25) -> dict:
         person = await self._person_row(nick)
         if not person:
@@ -202,6 +205,7 @@ class HistoryQuery:
             "gaps": await self.gaps(pid),
         }
 
+    @db_operation
     async def gaps(self, person_id: int) -> list[dict]:
         rows = await self.db.fetchdicts(
             "SELECT after_ord, reason, detail, created_at FROM gaps "
@@ -211,6 +215,7 @@ class HistoryQuery:
                  "at": r["created_at"]} for r in rows]
 
     # ── search ───────────────────────────────────────────────────
+    @db_operation
     async def search_person(self, nick: str, query: str,
                             limit: int = DEFAULT_LIMIT,
                             offset: int = 0) -> dict:
@@ -229,6 +234,7 @@ class HistoryQuery:
                 "total": total,
                 "has_more": total > (int(offset or 0) + len(items))}
 
+    @db_operation
     async def search_global(self, query: str, limit: int = 200,
                             per_person: int = 20) -> dict:
         rows, total = await self._search(None, query, self._clamp(limit), 0)
@@ -309,6 +315,7 @@ class HistoryQuery:
         except Exception:                             # noqa: BLE001
             return []
 
+    @db_operation
     async def list_persons(self, q: str = "", limit: int = DEFAULT_LIMIT,
                            offset: int = 0, sort: str = "recent",
                            include_deleted: bool = False) -> dict:
@@ -357,6 +364,7 @@ class HistoryQuery:
                 "has_more": total > offset + len(items),
                 "offset": offset, "limit": limit, "query": q, "sort": sort}
 
+    @db_operation
     async def db_stats(self) -> dict:
         persons = int(await self.db.scalar(
             "SELECT COUNT(*) FROM persons WHERE deleted_at IS NULL", (), 0))
@@ -384,6 +392,7 @@ class HistoryQuery:
             "path": self.db.path,
         }
 
+    @db_operation
     async def person_stats(self, nick: str) -> dict:
         person = await self._person_row(nick)
         if not person:

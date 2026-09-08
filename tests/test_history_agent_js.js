@@ -405,6 +405,126 @@ t('text is never interpreted as html', () => {
   eq(env.agent.slice(0, 1).items[0].text, '<img src=x onerror=alert(1)>');
 });
 
+// ── late text / caption extraction (2026-09-08 incident) ─────────
+
+t('an empty text cache is retried even without an observer notification', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const before = env.agent.slice(0, 1).items[0];
+  ok(before.capture_pending);
+  env.document.querySelector('span.message').textContent = 'Поздний текст\n😊';
+  const after = env.agent.slice(0, 1).items[0];
+  eq(after.text, 'Поздний текст\n😊');
+  ok(!after.capture_pending);
+  ok(after.fp !== before.fp, 'fingerprint follows the captured payload');
+  const parses = env.agent.stats().parsed;
+  env.agent.state(); env.agent.slice(0, 1);
+  eq(env.agent.stats().parsed, parses, 'complete unchanged text remains cached');
+});
+
+function mutate(env, mutation) {
+  env.observers.filter((o) => o.target).forEach((o) => o.cb([mutation], o));
+}
+
+t('characterData changes invalidate and push an existing message', () => {
+  const env = load({ messages: [msg(0)] });
+  env.agent.state();
+  const span = env.document.querySelector('span.message');
+  span.textContent = 'Новый текст';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  env.flushTimers();
+  const payload = JSON.parse(env.pushes.pop());
+  eq(payload.kind, 'change');
+  eq(payload.items.length, 1);
+  eq(payload.items[0].text, 'Новый текст');
+  eq(env.agent.slice(0, 1).items[0].text, 'Новый текст');
+});
+
+t('replacing a text subtree reparses only the affected message', () => {
+  const env = load({ messages: many(60) });
+  env.agent.state();
+  const before = env.agent.stats().parsed;
+  const body = env.document.querySelectorAll('p.message')[25];
+  body.querySelector('span.message').textContent = 'nested link text';
+  mutate(env, { type: 'childList', target: body, addedNodes: [] });
+  eq(env.agent.slice(25, 26).items[0].text, 'nested link text');
+  eq(env.agent.stats().parsed, before + 1);
+});
+
+t('a middle message change is visible even if head and tail stay identical', () => {
+  const env = load({ messages: many(150) });
+  const before = env.agent.state();
+  const span = env.document.querySelectorAll('span.message')[70];
+  span.textContent = 'changed in the middle';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const after = env.agent.state();
+  eq(after.head, before.head);
+  eq(after.tail, before.tail);
+  ok(after.content_revision > before.content_revision);
+  ok(after.content_sig !== before.content_sig);
+  eq(after.count, before.count);
+});
+
+t('text and a media URL are both captured, not either-or', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/a.gif' })] });
+  const { el } = require('./dom_stub');
+  const body = env.document.querySelector('p.message');
+  body.append(el('span', { class: 'message', text: 'Подпись 😊' }));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Подпись 😊');
+  eq(record.media.url, 'https://example.test/a.gif');
+  eq(record.kind, 'gif');
+  ok(!record.capture_pending);
+});
+
+t('caption changes increment revision even though the media fingerprint is unchanged', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/a.gif' })] });
+  const { el } = require('./dom_stub');
+  const body = env.document.querySelector('p.message');
+  const span = el('span', { class: 'message', text: 'first caption' });
+  body.append(span);
+  const before = env.agent.state();
+  span.textContent = 'full caption';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const after = env.agent.state();
+  eq(after.head, before.head, 'media identity remains the URL');
+  ok(after.content_revision > before.content_revision);
+});
+
+t('line breaks and nested links preserve all text without sender metadata', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const span = env.document.querySelector('span.message');
+  span.childNodes = [
+    { nodeType: 3, nodeValue: 'Первый ряд' },
+    { tagName: 'BR', childNodes: [], textContent: '' },
+    { tagName: 'A', childNodes: [{ nodeType: 3, nodeValue: 'ссылка' }] },
+    { nodeType: 3, nodeValue: ' 😊' },
+  ];
+  eq(env.agent.slice(0, 1).items[0].text, 'Первый ряд\nссылка 😊');
+});
+
+t('updated payload replaces an earlier empty record in the push buffer', () => {
+  const env = load({ messages: [] });
+  env.append(msg(0, { text: '' }));
+  const span = env.document.querySelector('span.message');
+  span.textContent = 'ready';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const pending = env.agent.drain();
+  eq(pending.items.length, 1);
+  eq(pending.items[0].text, 'ready');
+  ok(!pending.items[0].capture_pending);
+});
+
+t('src attribute changes repair a lazy media record without a new container', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/preview.png' })] });
+  env.agent.state();
+  const img = env.document.querySelector('app-chat-image img');
+  img.setAttribute('src', 'https://example.test/full.gif');
+  mutate(env, { type: 'attributes', attributeName: 'src', target: img });
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.media.url, 'https://example.test/full.gif');
+  eq(record.kind, 'gif');
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');
