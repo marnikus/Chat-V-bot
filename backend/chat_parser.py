@@ -153,6 +153,10 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
     partner = " ".join(str(state.get("partner") or "").split()).strip()
     title = str(state.get("title") or state.get("partner") or "")
     me_cfg = " ".join(str(my_nick or "").split()).strip()
+    # the pane's own user list is the authoritative "me": a configured My
+    # Nick can go stale when the user renames themselves on the site, and
+    # the stale value must not make this gate refuse the chat (2026-09-08)
+    me_state = " ".join(str(state.get("me") or "").split()).strip()
 
     if require_private and str(state.get("tab") or "") != "private":
         return PrivateCheck(False, "not_private",
@@ -168,7 +172,9 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
             False, "title_mismatch",
             f"the active tab is “{' '.join(str(title).split())}”, "
             f"not “{target}”", me_cfg, partner)
-    if me_cfg and _norm(me_cfg) == _norm(target):
+    effective_me = me_cfg or me_state
+    if (effective_me and _norm(effective_me) == _norm(target)
+            and (not me_state or _norm(me_state) == _norm(target))):
         return PrivateCheck(False, "self_chat",
                             "the partner is my own nick", me_cfg, partner)
 
@@ -181,18 +187,21 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
         outs = _distinct(state.get("out_authors"))
         if not ins and not outs:
             everyone = _distinct(state.get("authors"))
-            ins = [a for a in everyone if _norm(a) != _norm(me_cfg or target)]
-            outs = [a for a in everyone if _norm(a) == _norm(me_cfg)]
+            ins = [a for a in everyone
+                   if _norm(a) != _norm(effective_me or target)]
+            outs = [a for a in everyone if _norm(a) == _norm(effective_me)]
     else:
         return PrivateCheck(False, "no_author_data",
                             "this page cannot tell me who wrote what",
                             me_cfg, partner)
 
-    me = me_cfg or (outs[0] if len(outs) == 1 else "")
+    me = me_cfg or me_state or (outs[0] if len(outs) == 1 else "")
     strangers = [a for a in ins if _norm(a) != _norm(target)]
     if me:
         strangers += [a for a in outs
-                      if _norm(a) != _norm(me) and _norm(a) != _norm(target)]
+                      if _norm(a) != _norm(me)
+                      and _norm(a) != _norm(me_state)
+                      and _norm(a) != _norm(target)]
     elif len(outs) > 1:
         strangers += list(outs)
     strangers = _distinct(strangers)
@@ -430,6 +439,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     result.count = count
     head_sig = _signature(state.get("head"))
     tail_sig = _signature(state.get("tail"))
+    head_any = _signature(state.get("head_any"))
+    tail_any = _signature(state.get("tail_any"))
 
     person_id = await repo.ensure_person(nick)
     cursor = await repo.get_cursor(person_id)
@@ -439,7 +450,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
 
     if count == 0:
         await repo.append(nick, [], my_nick=my_nick, dom_count=0,
-                          head_sig=head_sig, tail_sig=tail_sig, now=now)
+                          head_sig=head_sig, tail_sig=tail_sig,
+                          head_any=head_any, tail_any=tail_any, now=now)
         scroll = state.get("scroll") or {}
         # A truly empty conversation has no scrollable body. If the pane still
         # reports height there were (or could be) messages that the current
@@ -619,6 +631,8 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                       dom_count=position if not complete else count,
                       head_sig=head_sig,
                       tail_sig=tail_sig if complete else "",
+                      head_any=head_any,
+                      tail_any=tail_any if complete else "",
                       now=now)
 
     person = await repo.get_person_by_id(person_id) or {}

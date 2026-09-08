@@ -184,10 +184,46 @@ const CollectorPanel = {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
     if (!payload) return;
+    // "Added this session" is PER PARTNER: a counter that silently adds
+    // every partner and every database together once showed "Added 25"
+    // next to "In archive 0" — nobody could tell where those messages went
+    // (bug report 2026-09-08). Resets: DB switch, clear/purge/delete of
+    // that person (see onDbChanged / onPeopleChanged).
+    const nick = String(payload.nick || '').trim();
+    if (nick) this._appendedByNick = this._appendedByNick || {};
+    if (nick) {
+      this._appendedByNick[nick] =
+        (this._appendedByNick[nick] || 0) + (payload.added || 0);
+    }
     this._appended = (this._appended || 0) + (payload.added || 0);
     if (typeof HistoryDb !== 'undefined' && HistoryDb.rows &&
         HistoryDb.rows.length) HistoryDb._requestStats();
     this.renderRows(this._last || {});
+  },
+
+  /** The archive database changed: every per-partner counter restarts. */
+  onDbChanged() {
+    this._appended = 0;
+    this._appendedByNick = {};
+    this.renderRows(this._last || {});
+  },
+
+  /** A person's archive rows changed (cleared / purged / deleted). */
+  onPeopleChanged(json) {
+    let payload = null;
+    try { payload = JSON.parse(json); } catch (e) { return; }
+    if (!payload) return;
+    const action = String(payload.action || '');
+    if (['cleared', 'purged', 'deleted', 'message_deleted']
+        .indexOf(action) < 0) return;
+    const nick = String(payload.nick || '').trim();
+    if (nick && this._appendedByNick) delete this._appendedByNick[nick];
+    this.renderRows(this._last || {});
+  },
+
+  _addedFor(nick) {
+    if (!nick) return this._appended || 0;
+    return (this._appendedByNick || {})[nick] || 0;
   },
 
   _row(host, key, value) {
@@ -227,7 +263,10 @@ const CollectorPanel = {
     else this._row(host, 'Partner', '');
     this._row(host, 'My nick', this.myNick || (payload.settings || {}).my_nick);
     this._row(host, 'In archive', payload.total);
-    this._row(host, 'Added this session', this._appended || payload.added || 0);
+    // The counter of the partner shown above — what this conversation
+    // received this session, exactly what "In archive" grows by.
+    this._row(host, 'Added this session',
+              this._addedFor(partner) || payload.added || 0);
     this._row(host, 'Check every',
               payload.interval_ms ? payload.interval_ms + ' ms' : '');
     if (payload.throttled)

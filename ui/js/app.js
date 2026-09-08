@@ -407,8 +407,11 @@ function setupBridgeListeners() {
   if (b.userdb_page_ready)
     b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
   if (b.userdb_changed) {
-    b.userdb_changed.connect(() => {
+    b.userdb_changed.connect((json) => {
       HistoryDb.onChanged();
+      if (typeof CollectorPanel !== 'undefined' &&
+          CollectorPanel.onPeopleChanged)
+        CollectorPanel.onPeopleChanged(json);
       if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
         HistoryStore.reloadCurrent();
       if (typeof DbPanel !== 'undefined') DbPanel.refresh();
@@ -424,6 +427,8 @@ function setupBridgeListeners() {
     b.db_changed.connect((json) => {
       DbPanel.onChanged(json);
       HistoryDb.onChanged();
+      if (typeof CollectorPanel !== 'undefined' && CollectorPanel.onDbChanged)
+        CollectorPanel.onDbChanged();
       if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
         HistoryStore.reloadCurrent();
     });

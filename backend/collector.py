@@ -213,6 +213,23 @@ class Collector(QObject):
         self._throttled = False
         self._emit()
 
+    def person_cleared(self, nick: str) -> None:
+        """The archive history of `nick` was just cleared in the UI.
+
+        The cursor is already reset on the write path, so the next tick
+        re-reads the conversation from scratch; here we only stop showing
+        the old totals in the Radar window (Bug 4, 2026-09-08).
+        """
+        clean = " ".join(str(nick or "").split()).strip()
+        if not clean or self._nick != clean:
+            return
+        self._total = 0
+        self._added = 0
+        self._last_sync_reason = "history_cleared"
+        self._last_sync_added = 0
+        self._last_sync_count = 0
+        self._emit()
+
     def note_probe_duration(self, seconds: float) -> None:
         """Back off when the page answers slowly (a busy or huge chat)."""
         try:
@@ -323,9 +340,9 @@ class Collector(QObject):
         # the single outbound author IS me, so we adopt it for this session
         # (it is not persisted to config.json unless the user saves it).
         detected_me = " ".join(str(state.get("me") or "").split()).strip()
+        outs = [str(o or "").strip() for o in
+                (state.get("out_authors") or [])]
         if not detected_me:
-            outs = [str(o or "").strip() for o in
-                    (state.get("out_authors") or [])]
             singles = [o for o in outs if o]
             if len(singles) == 1 and singles[0].lower() != nick.lower():
                 detected_me = singles[0]
@@ -333,6 +350,22 @@ class Collector(QObject):
             self.configure(my_nick=detected_me)
             self._detected_my_nick = detected_me
             self._log(f"Detected My Nick as “{detected_me}”", "info", nick)
+        elif (self.my_nick and detected_me
+                and detected_me.lower() != self.my_nick.lower()
+                and self.my_nick.lower() not in
+                {o.lower() for o in outs if o}):
+            # A saved My Nick can go stale: the user renames themselves on
+            # the site, and from then on every tick would refuse the chat
+            # because the pane's outbound author looks like a "stranger".
+            # When the pane self-reports a DIFFERENT nick and the configured
+            # one is not among the outbound authors, the pane wins for this
+            # session (bug report 2026-09-08, "user now uses a diff name").
+            previous = self.my_nick
+            self.configure(my_nick=detected_me)
+            self._detected_my_nick = detected_me
+            self._log(f"My Nick changed from “{previous}” to "
+                      f"“{detected_me}” — adopted from the page", "info",
+                      nick)
 
         my_nick = self.my_nick or detected_me
         if my_nick and nick.lower() == my_nick.lower():
@@ -340,6 +373,27 @@ class Collector(QObject):
                       nick)
             return self._refuse(CollectorState.NOT_PRIVATE,
                                 "Partner is ambiguous (same as My Nick)")
+
+        head_sig = _signature(state.get("head"))
+        tail_sig = _signature(state.get("tail"))
+        head_any = _signature(state.get("head_any"))
+        tail_any = _signature(state.get("tail_any"))
+
+        # The partner may have RENAMED themselves: identical pane content
+        # under a new title is the same conversation, so the archive
+        # continues under the new nick instead of forking an empty person
+        # (bug report 2026-09-08, "diff name as Person").
+        if self._nick and nick != self._nick:
+            try:
+                if await self.repo.rename_if_same_conversation(
+                        self._nick, nick, head_sig, tail_sig,
+                        head_any=head_any, tail_any=tail_any,
+                        dom_count=int(state.get("count") or 0),
+                        pane_same=bool(state.get("pane_same"))):
+                    self._log(f"Partner “{self._nick}” is now “{nick}” — "
+                              "the history continues", "info", nick)
+            except Exception as e:                    # noqa: BLE001
+                log.debug("rename check for %s failed: %s", nick, e)
 
         # A verified private tab (active tab = private, 2 participants, title
         # names the partner) is enough to create the person in BOTH stores.
@@ -368,8 +422,6 @@ class Collector(QObject):
             self._added = 0
 
         cursor = await self.repo.get_cursor(person_id)
-        head_sig = _signature(state.get("head"))
-        tail_sig = _signature(state.get("tail"))
         count = int(state.get("count") or 0)
         unchanged = (cursor["bootstrapped"] and count == cursor["dom_count"]
                      and tail_sig and tail_sig == cursor["tail_sig"]

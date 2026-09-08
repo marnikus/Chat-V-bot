@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 9;
+  var VERSION = 10;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -257,13 +257,14 @@
       }
     }
     var chosen = selectPane(nodes, groups);
+    var sameAsLast = !!(chosen && chosen.pane && chosen.pane === lastPane);
     if (chosen && chosen.pane) {
       lastPane = chosen.pane;
       lastPartner = currentPartner;
     }
     return { pane: chosen ? chosen.pane : null,
              nodes: chosen ? chosen.nodes : nodes,
-             panes: groups.length };
+             panes: groups.length, sameAsLast: sameAsLast };
   }
 
   function containers() {
@@ -323,6 +324,39 @@
              time: clean(stamp ? stamp.textContent : '') };
   }
 
+  /** The parse-relevant fields of a node, re-read cheaply.
+   *
+   * Angular renders a message in passes: the container can exist long
+   * before `span.message` (or the lazy `app-chat-image`) carries its
+   * payload. Caching the first parse would burn `text:''` into the archive
+   * forever — the exact "only nicks, no message text" bug — so every walk
+   * compares these fields against the cache and re-parses on ANY change
+   * (text, nick, time, media url). */
+  function liveFields(node) {
+    var body = qs(node, 'p.message');
+    var img = body ? (qs(body, 'app-chat-image img') || qs(body, 'img'))
+                   : null;
+    var span = body ? qs(body, 'span.message') : null;
+    var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
+    return {
+      from: body ? clean(ownText(qs(body, 'span.from')) ||
+                         (qs(body, 'span.from') || {}).textContent) : '',
+      text: span ? clean(span.textContent) : '',
+      hasMedia: !!img,
+      mediaUrl: img ? liveMediaUrl(img) : '',
+      time: clean(stamp ? stamp.textContent : '')
+    };
+  }
+
+  function fieldsStale(fields, live) {
+    if (!fields) return true;
+    if (fields.from !== live.from || fields.time !== live.time) return true;
+    if (live.hasMedia) {
+      return !fields.media || fields.media.url !== live.mediaUrl;
+    }
+    return !!fields.media || fields.text !== live.text;
+  }
+
   function keyOf(fields) {
     return [fields.dir, fields.from, fields.time, fields.kind,
             fields.media ? fields.media.url : fields.text].join(SEP);
@@ -338,28 +372,35 @@
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       var fields = cache.get(node);
-      if (fields) {
-        // a lazy <img> may have gained its real src after the first parse;
-        // do not keep the empty-url record in the cache forever
-        var img = qs(node, 'p.message app-chat-image img') ||
-                  qs(node, 'p.message img');
-        var liveUrl = liveMediaUrl(img);
-        var cachedUrl = fields.media ? fields.media.url : '';
-        if (liveUrl !== cachedUrl) fields = null;
+      if (fields && fieldsStale(fields, liveFields(node))) {
+        // the node changed after its first parse (lazy media, or the text
+        // span rendered late) — never keep the stale payload-less fields
+        fields = null;
       }
       if (!fields) fields = parseNode(node);
       next.set(node, fields);
       var key = keyOf(fields);
       var occ = counts[key] === undefined ? 0 : counts[key] + 1;
       counts[key] = occ;
-      if (fields.fp === undefined || fields.occ !== occ) {
+      if (fields.fp === undefined || fields.fpAny === undefined ||
+          fields.occ !== occ) {
         fields.occ = occ;
         fields.fp = fingerprint(fields.dir, fields.from, fields.time,
                                 fields.kind,
                                 fields.media ? fields.media.url : fields.text,
                                 occ);
+        // the same fingerprint WITHOUT the author: a partner renaming
+        // themselves re-renders every line under the new nick, which changes
+        // `fp` for all of them — `fpAny` still matches the conversation the
+        // cursor ended with, so the rename continues the same person
+        fields.fpAny = fingerprint(fields.dir, '', fields.time,
+                                   fields.kind,
+                                   fields.media ? fields.media.url
+                                                : fields.text,
+                                   occ);
       }
-      out.push({ fp: fields.fp, dir: fields.dir, from: fields.from,
+      out.push({ fp: fields.fp, fpAny: fields.fpAny, dir: fields.dir,
+                 from: fields.from,
                  kind: fields.kind, text: fields.text, media: fields.media,
                  time: fields.time, occ: occ, idx: i, node: node });
     }
@@ -664,6 +705,7 @@
     }
     var records = walk();
     var fps = records.map(function (r) { return r.fp; });
+    var anyFps = records.map(function (r) { return r.fpAny || ''; });
     var summary = describe();
     var authors = authorsOf(records);
     var pv = visiblePane();
@@ -681,8 +723,11 @@
       out_authors: authors.outbound,
       panes: pv.panes,
       pane_source: pv.source || '',
+      pane_same: !!pv.sameAsLast,
       head: fps.slice(0, HEAD_FPS),
       tail: fps.slice(Math.max(0, fps.length - TAIL_FPS)),
+      head_any: anyFps.slice(0, HEAD_FPS),
+      tail_any: anyFps.slice(Math.max(0, anyFps.length - TAIL_FPS)),
       pending: buffer.length,
       dropped: dropped,
       scroll: scrollInfo(),

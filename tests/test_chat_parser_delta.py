@@ -69,6 +69,10 @@ class FakePage:
         self.participants = participants
         self.agent_version = AGENT_VERSION if agent else 0
         self.installs = 0
+        # mirrors the agent's pane_same: True only while the collector keeps
+        # watching the SAME pane element (a rename happens in one pane;
+        # switching conversations swaps panes). Tests for renames set it.
+        self.pane_same = False
         self.slice_calls = []
         self.queue = []
         self.evaluates = 0
@@ -108,6 +112,17 @@ class FakePage:
         for i, m in enumerate(self.messages):
             m["idx"] = i
 
+    @staticmethod
+    def _any_fp(message):
+        """The fingerprint of one record without its author (agent v10)."""
+        from backend.history_models import fingerprint
+        media = message.get("media")
+        payload = media["url"] if media else message.get("text") or ""
+        return fingerprint(message.get("dir") or "in", "",
+                           message.get("time") or "",
+                           message.get("kind") or "text", payload,
+                           message.get("occ") or 0)
+
     async def evaluate(self, expression):
         self.evaluates += 1
         if "/*CVB_INSTALL*/" in expression:
@@ -130,6 +145,12 @@ class FakePage:
                 "count": len(msgs),
                 "head": msgs[0]["fp"] if msgs else "",
                 "tail": msgs[-1]["fp"] if msgs else "",
+                # author-agnostic fingerprints (agent v10): the same fp
+                # WITHOUT the nick, so a partner rename still recognises
+                # the conversation
+                "head_any": self._any_fp(msgs[0]) if msgs else "",
+                "tail_any": self._any_fp(msgs[-1]) if msgs else "",
+                "pane_same": self.pane_same,
                 "pending": len(self.queue),
                 "scroll": {"top": self.scroll_top,
                            "height": self.scroll_height,

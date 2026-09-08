@@ -588,12 +588,22 @@ appending the missing ids as a bottom row.
 
 ## 10. Database Schema
 
-### Archive (`history.db`) — schema v4 soft delete
+### Archive (`history.db`) — schema v5, person identity + soft delete
 
-Since 2026-09-07 the archive is at `SCHEMA_VERSION = "4"`: `messages` and
-`persons` carry a nullable `deleted_at` tombstone (added in place by
-`LATE_COLUMNS`, indexed by `idx_messages_alive`, which is created in
-`init()` — never in the `CREATE TABLE` script, or opening a v3 file fails).
+Since 2026-09-08 the archive is at `SCHEMA_VERSION = "5"`. Messages carry a
+durable **person identity** (`person_id` → `persons`, `from_nick` denormalised
+for display) and a **content identity** `dup_key` = `fingerprint(payload)`
+(recomputed by `history_models.dedupe_key`; legacy rows are backfilled by
+`_migrate_dup_keys` on open, visible rows only). The messages table carries
+**no UNIQUE constraint** (`TABLE_CONSTRAINTS = {}`); on open,
+`_rebuild_messages_constraint()` drops the legacy
+`UNIQUE(person_id, fp, day)` auto-index that silently ate re-collected lines
+after a history clear. `messages` and `persons` keep a nullable `deleted_at`
+tombstone (added in place by `LATE_COLUMNS`, indexed by `idx_messages_alive`,
+created in `init()` — never in the `CREATE TABLE` script, or opening a v3
+file fails). Clearing a history releases the rows' `dup_key` (set to `''`)
+and that release survives app restarts — `_migrate_dup_keys` backfills only
+`deleted_at = ''` rows, so hidden tombstones never re-arm.
 
 * Every read path (`page`, `around`, `search_*`, `list_persons`, `db_stats`,
   `person_stats`) filters on `deleted_at IS NULL` and reports the hidden
@@ -602,6 +612,10 @@ Since 2026-09-07 the archive is at `SCHEMA_VERSION = "4"`: `messages` and
   operation token (`new_op_token()`); undo clears exactly the rows carrying
   that token (`restore_deleted(nick, token)`), so nothing is lost and no
   unrelated row comes back. `purge_deleted(nick)` is the only real DELETE.
+* `_verify_schema()` runs after every open/migration: required tables,
+  required columns (incl. `person_id`, `dup_key`) and constraint shape must
+  match, else the DB is rejected with an explicit error instead of failing
+  later with "no such column".
 
 ### Users Table
 

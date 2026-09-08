@@ -15,8 +15,11 @@ import os
 
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
-#: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 9
+#: re-installs instead — see backend/collector.py. v10 (2026-09-08): the
+#: node cache is invalidated whenever ANY parsed field changed live, not
+#: only the media URL — a text span that rendered after the first parse no
+#: longer stays an empty '' forever (Bug 2 of 2026-09-08).
+AGENT_VERSION = 10
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")

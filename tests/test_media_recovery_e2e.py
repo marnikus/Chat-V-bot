@@ -442,8 +442,11 @@ class TestRecoveryScoping(E2ECase):
         pid = await self.repo.ensure_person(PARTNER)
         self.assertTrue(await self.repo.has_repairable_media(
             pid, include_failed=False))
+        # real "now" (not the frozen NOW): the scan marker must land inside
+        # the grace window relative to the REAL clock the check compares
+        # against, whatever day this test runs on
         stats = await self.repo.recover_media(
-            pid, [], media=self.store, nick=PARTNER, now=NOW,
+            pid, [], media=self.store, nick=PARTNER,
             requeue_failed=False)
         self.assertEqual(stats["scanned"], 1)
         self.assertFalse(await self.repo.has_repairable_media(

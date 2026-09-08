@@ -1867,6 +1867,11 @@ class Bridge(QObject):
             repo = self._archive.repo
             token = await repo.soft_delete_history(clean)
             if not token:
+                # Nothing to hide — still re-arm the collector: the resume
+                # cursor can outlive the messages (they may have been purged
+                # earlier), and the chat must be re-read from scratch.
+                if await repo.get_person(clean):
+                    await repo.reset_cursor(clean)
                 self.log_message.emit(
                     f"ℹ “{clean}” has no messages to clear", "info")
             else:
@@ -1874,7 +1879,14 @@ class Bridge(QObject):
                     "op": "clear_history", "nick": clean, "token": token})
                 self.log_message.emit(
                     f"🧹 History of “{clean}” cleared — the person stays in "
-                    "the database (Ctrl+Z restores the messages)", "warn")
+                    "the database and the chat is re-collected from scratch "
+                    "(Ctrl+Z restores the messages)", "warn")
+            collector = getattr(self._archive, "collector", None)
+            if collector is not None:
+                try:
+                    collector.person_cleared(clean)
+                except Exception:                  # noqa: BLE001
+                    pass
             self.userdb_changed.emit(json.dumps(
                 {"action": "cleared", "nick": clean, "ok": bool(token)},
                 ensure_ascii=False))
