@@ -84,18 +84,8 @@ class ScrollParse(BaseAction):
         self.filter_registered = normalize(filter_registered, NO)
         self.filter_guest = normalize(filter_guest, YES)
         self.filter_anonymous = normalize(filter_anonymous, NO)
-        #: last pipeline result, read by the engine to build its queue.
-        #: Underscored on purpose: to_dict() serialises every public
-        #: attribute and the stack snapshot goes through json.dumps
-        #: (bridge/stack_bridge.get_stack_json), so a CollectResult on a
-        #: public attribute made the whole stack unsavable after any run
-        #: (BUG-05). Runtime state is not a setting.
-        self._last_result: Optional[CollectResult] = None
-
-    @property
-    def last_result(self) -> Optional[CollectResult]:
-        """The result of the last pipeline run (runtime state, not saved)."""
-        return self._last_result
+        #: last pipeline result, read by the engine to build its queue
+        self.last_result: Optional[CollectResult] = None
 
     # ── collaborators ────────────────────────────────────────────
     def build_filter(self, panel_criteria=None) -> PersonFilter:
@@ -208,7 +198,7 @@ class ScrollParse(BaseAction):
         result = await parser.collect(min_new_users=self.min_new_users,
                                       known_messaged=known_messaged or set(),
                                       seek_nicks=seek_nicks)
-        self._last_result = result
+        self.last_result = result
 
         if result.seeking:
             if result.found is not None:

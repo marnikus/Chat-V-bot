@@ -184,10 +184,12 @@ class TestBridgeSurface(unittest.TestCase):
     def test_bridge_no_longer_builds_a_scroll_parser(self):
         """The block owns its own parser now; the bridge must not rebuild one."""
         import inspect
-        from backend.bridge import Bridge
-        src = inspect.getsource(Bridge.run_stack)
+        from bridge.stack_bridge import StackBridge
+        # the router forwards run_stack to the domain bridge — inspect
+        # the real implementation, not the generated forwarder
+        src = inspect.getsource(StackBridge.run_stack)
         self.assertNotIn("ScrollParser(", src)
-        self.assertIn("self._engine.execute()", src)
+        self.assertIn("engine.execute()", src)
 
     def test_engine_execute_is_called_without_a_parser(self):
         import inspect

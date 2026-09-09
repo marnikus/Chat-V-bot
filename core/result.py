@@ -1,72 +1,105 @@
-"""Result[T] — typed success / failure container for layer boundaries.
+"""Result[T] — the only shape domain errors cross a layer boundary in.
 
-Services return Result; bridges translate it to Qt signals. No exceptions
-cross the bridge/services boundary.
+Services return ``Result`` instead of raising: a domain failure (a preset
+name that does not exist, a person already deleted, a database that cannot
+be opened) is an EXPECTED, typed outcome, not an exception. Bridges
+translate a Result into the JS wire format; stores keep raising only for
+programmer errors.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, TypeVar, Callable, Optional
+from typing import Any, Callable, Generic, TypeVar, Union
 
 T = TypeVar("T")
-E = TypeVar("E")
 
 
-@dataclass(frozen=True)
-class Result(Generic[T]):
-    """Immutable result. One of ok(value) or err(message)."""
+class _ErrKind:
+    """Sentinel so `is_err` checks never depend on truthiness."""
 
-    _ok: bool
-    _value: Optional[T] = None
-    _error: Optional[str] = None
+    __slots__ = ()
 
-    @staticmethod
-    def ok(value: T) -> "Result[T]":
-        return Result(True, value, None)
 
-    @staticmethod
-    def err(error: str, value: Optional[T] = None) -> "Result[T]":
-        return Result(False, value, str(error))
+ERR = _ErrKind()
+
+
+@dataclass(frozen=True, slots=True)
+class Ok(Generic[T]):
+    value: T
 
     @property
     def is_ok(self) -> bool:
-        return self._ok
+        return True
 
     @property
     def is_err(self) -> bool:
-        return not self._ok
-
-    @property
-    def value(self) -> Optional[T]:
-        return self._value
-
-    @property
-    def error(self) -> Optional[str]:
-        return self._error
+        return False
 
     def unwrap(self) -> T:
-        if not self._ok:
-            raise ValueError(f"Result is err: {self._error}")
-        return self._value  # type: ignore[return-value]
+        return self.value
 
-    def unwrap_or(self, default: T) -> T:
-        return self._value if self._ok and self._value is not None else default  # type: ignore[return-value]
+    def unwrap_or(self, default: Any) -> T:
+        return self.value
 
-    def map(self, fn: Callable[[T], E]) -> "Result[E]":
-        if self._ok:
-            try:
-                return Result.ok(fn(self._value))  # type: ignore[arg-type]
-            except Exception as exc:  # noqa: BLE001
-                return Result.err(str(exc))
-        return Result.err(self._error or "unknown", None)  # type: ignore[return-value]
+    def map(self, fn: Callable[[T], Any]) -> "Ok":
+        return Ok(fn(self.value))
 
-    def to_dict(self) -> dict:
-        if self._ok:
-            return {"ok": True, "value": self._value}
-        return {"ok": False, "error": self._error}
+    def err(self) -> None:
+        return None
 
-    def __repr__(self) -> str:
-        if self._ok:
-            return f"Result.ok({self._value!r})"
-        return f"Result.err({self._error!r})"
+
+@dataclass(frozen=True, slots=True)
+class Err(Generic[T]):
+    code: str                 # machine-readable, stable — e.g. "preset_not_found"
+    detail: str = ""          # human-readable context for logs / the UI
+
+    @property
+    def is_ok(self) -> bool:
+        return False
+
+    @property
+    def is_err(self) -> bool:
+        return True
+
+    def unwrap(self) -> Any:
+        raise RuntimeError(f"unwrap() on Err({self.code!r}): {self.detail}")
+
+    def unwrap_or(self, default: Any) -> Any:
+        return default
+
+    def map(self, fn: Callable[[Any], Any]) -> "Err":
+        return self
+
+    def err(self) -> "Err":
+        return self
+
+
+#: Result[T] = Ok(value: T) | Err(code: str, detail: str)
+Result = Union[Ok[T], Err[T]]
+
+
+def ok(value: T = None) -> Ok[T]:
+    return Ok(value)
+
+
+def err(code: str, detail: str = "") -> Err[T]:
+    return Err(code, detail)
+
+
+def of(fn: Callable[[], T], code: str = "unexpected_error") -> Result[T]:
+    """Run `fn`, catching any Exception into an Err — the bridge seam rule
+    ("no bare exception crosses a layer boundary") in one helper."""
+    try:
+        return Ok(fn())
+    except Exception as exc:                      # noqa: BLE001
+        return Err(code, f"{type(exc).__name__}: {exc}")
+
+
+async def aof(coro_fn: Callable[[], T],
+              code: str = "unexpected_error") -> Result[T]:
+    """Async `of`: awaits a zero-arg coroutine factory."""
+    try:
+        return Ok(await coro_fn())
+    except Exception as exc:                      # noqa: BLE001
+        return Err(code, f"{type(exc).__name__}: {exc}")

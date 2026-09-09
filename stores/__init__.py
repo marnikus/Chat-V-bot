@@ -1,17 +1,10 @@
-"""Stores package — pure I/O, one file each, atomic save."""
+"""stores — pure I/O: one file per store, atomic saves, no business logic.
 
-from .atomic import AtomicJsonStore
-from .settings_store import SettingsStore
-from .bookmark_store import BookmarkStore
-from .block_store import BlockStore
-from .session_store import SessionStore
-from .undo_store import UndoStore
+Dependency rule: a store never imports a service or a bridge. Config-file
+stores are synchronous; the SQLite stores (history_db, history_repo,
+media_store) are await-only.
+"""
 
-__all__ = [
-    "AtomicJsonStore",
-    "SettingsStore",
-    "BookmarkStore",
-    "BlockStore",
-    "SessionStore",
-    "UndoStore",
-]
+from stores.jsonio import load_json, save_json, config_dir_for
+
+__all__ = ["load_json", "save_json", "config_dir_for"]

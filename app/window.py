@@ -1,28 +1,26 @@
-"""MainWindow — Qt window with geometry + close flush ( <150 )."""
+from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtCore import QTimer, QUrl, Signal
+from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import QTimer, Signal
-
-from backend.config_manager import ConfigManager
+from PySide6.QtWidgets import QMainWindow
 
 log = logging.getLogger("chatbot")
+UI_PATH = Path(__file__).resolve().parent.parent / "ui" / "index.html"
 
 
 class MainWindow(QMainWindow):
-    """Window with geometry persisted in config state."""
-
     closing = Signal()
 
-    def __init__(self, config: ConfigManager | None = None):
+    def __init__(self, config=None):
         super().__init__()
         self._config = config
         self._bridge = None
-        self._close_requested = False
-        self._close_finished = False
+        self._close_requested = self._close_finished = False
         self._layout_flush_pending = False
         self.setWindowTitle("🤖 ChatBot Automator")
         self.resize(1400, 900)
@@ -38,13 +36,13 @@ class MainWindow(QMainWindow):
         self._layout_flush_timer.setInterval(1000)
         self._layout_flush_timer.timeout.connect(self._on_layout_flush_timeout)
 
-    def set_bridge(self, bridge):
+    def set_bridge(self, bridge) -> None:
         self._bridge = bridge
-        persisted = getattr(bridge, "grid_layout_persisted", None)
-        if persisted is not None:
-            persisted.connect(self._on_grid_layout_persisted)
+        signal = getattr(bridge, "grid_layout_persisted", None)
+        if signal is not None:
+            signal.connect(self._on_grid_layout_persisted)
 
-    def _restore_window_geometry(self):
+    def _restore_window_geometry(self) -> None:
         if not self._config:
             return
         saved = self._config.get_state("window_geometry", None)
@@ -52,59 +50,49 @@ class MainWindow(QMainWindow):
             return
         try:
             x, y = int(saved["x"]), int(saved["y"])
-            width, height = int(saved["width"]), int(saved["height"])
+            w, h = int(saved["width"]), int(saved["height"])
         except (KeyError, TypeError, ValueError):
             return
-        if width > 0 and height > 0:
-            self.setGeometry(x, y, width, height)
+        if w > 0 and h > 0:
+            self.setGeometry(x, y, w, h)
 
-    def _save_window_geometry(self):
+    def _save_window_geometry(self) -> None:
         if not self._config:
             return
-        geometry = self.geometry()
-        self._config.set_state(window_geometry={
-            "x": int(geometry.x()), "y": int(geometry.y()),
-            "width": int(geometry.width()), "height": int(geometry.height()),
-        })
+        g = self.geometry()
+        self._config.set_state(window_geometry={"x": int(g.x()), "y": int(g.y()),
+                                                "width": int(g.width()),
+                                                "height": int(g.height())})
 
-    def _request_grid_flush(self):
+    def _request_grid_flush(self) -> None:
         if not self._bridge or not self._view or not self._view.page():
-            self._finish_close()
-            return
+            self._finish_close(); return
         self._layout_flush_pending = True
         self._layout_flush_timer.start()
-        script = """
-            (function () {
-                try { if (window.StackDnD && typeof window.StackDnD.flushPersistence === 'function') window.StackDnD.flushPersistence(); } catch (e) {}
-                try { if (window.SashGrid && typeof window.SashGrid.flushPersistence === 'function') return !!window.SashGrid.flushPersistence(); } catch (e) {}
-                return false;
-            })();
-        """
+        script = """(function(){try{if(window.StackDnD&&typeof window.StackDnD.flushPersistence==='function')window.StackDnD.flushPersistence();}catch(e){}try{if(window.SashGrid&&typeof window.SashGrid.flushPersistence==='function')return !!window.SashGrid.flushPersistence();}catch(e){}return false;})();"""
         try:
             self._view.page().runJavaScript(script, self._on_grid_flush_dispatched)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("Grid close flush could not be dispatched: %s", exc)
             self._finish_close()
 
-    def _on_grid_flush_dispatched(self, expects_ack):
-        if self._close_finished or not self._layout_flush_pending:
-            return
-        if expects_ack is not True:
+    def _on_grid_flush_dispatched(self, expects_ack) -> None:
+        if not self._close_finished and self._layout_flush_pending and expects_ack is not True:
             self._finish_close()
 
-    def _on_grid_layout_persisted(self, success):
+    def _on_grid_layout_persisted(self, success) -> None:
         if not self._layout_flush_pending:
             return
         if not success:
             log.warning("Final grid layout was rejected while closing")
         self._finish_close()
 
-    def _on_layout_flush_timeout(self):
+    def _on_layout_flush_timeout(self) -> None:
         if self._layout_flush_pending:
             log.warning("Timed out waiting for final grid layout save; closing safely")
             self._finish_close()
 
-    def _finish_close(self):
+    def _finish_close(self) -> None:
         if self._close_finished:
             return
         self._layout_flush_pending = False
@@ -114,19 +102,27 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self._close_finished:
-            event.accept()
-            log.info("Main window closed — shutting down")
-            self.closing.emit()
-            self._watchdog.start()
-            return
+            event.accept(); log.info("Main window closed — shutting down")
+            self.closing.emit(); self._watchdog.start(); return
         if self._close_requested:
-            event.ignore()
-            return
+            event.ignore(); return
         self._close_requested = True
         self._save_window_geometry()
-        event.ignore()
-        self._request_grid_flush()
+        event.ignore(); self._request_grid_flush()
 
-    def _force_quit(self):
+    def _force_quit(self) -> None:
         log.warning("Shutdown watchdog fired — forcing process exit")
         os._exit(0)
+
+
+def create_window(config, bridge, ui_path: str | os.PathLike | None = None) -> MainWindow:
+    window = MainWindow(config=config)
+    window.set_bridge(bridge)
+    channel = QWebChannel(window)
+    channel.registerObject("bridge", bridge)
+    window._channel = channel
+    window._view.page().setWebChannel(channel)
+    path = Path(ui_path or UI_PATH).resolve()
+    window._view.load(QUrl.fromLocalFile(str(path)))
+    window.show()
+    return window

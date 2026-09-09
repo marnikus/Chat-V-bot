@@ -21,7 +21,7 @@ from backend.cdp_client import CDPClient
 from backend.dom_highlight import COLOR_COLLECT, build_highlight_probe
 from backend.dom_probe import MATCH_EXACT
 from backend.person_filter import PersonFilter, sort_people
-from backend.user_memory import UserRecord
+from stores.user_memory import UserRecord
 
 log = logging.getLogger("chatbot")
 

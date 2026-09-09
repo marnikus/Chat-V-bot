@@ -57,26 +57,19 @@ const UrlToolbar = {
     if (!el) return;
     el.innerHTML = '';
     this.presets.forEach((url) => {
-      const chip = document.createElement('span');
       const isSel = url === this.selectedUrl;
-      chip.className = 'chip' + (isSel ? ' chip-selected' : '');
-      chip.title = (isSel ? '✓ last bookmark — ' : 'Parse & connect: ') + url;
-      const t = document.createElement('span');
-      t.className = 'chip-title';
-      t.textContent = (isSel ? '🔖 ' : '🔗 ') + this.shortUrl(url);
-      const x = document.createElement('span');
-      x.className = 'chip-x';
-      x.textContent = '×';
-      x.title = 'Remove preset';
-      chip.appendChild(t);
-      chip.appendChild(x);
-      chip.addEventListener('click', () => this.selectBookmark(url, { connect: true }));
-      x.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        if (this.selectedUrl === url) this.selectedUrl = '';
-        if (App.bridge) App.bridge.remove_url_preset(url);
-      });
-      el.appendChild(chip);
+      // one chip implementation for every panel (js/core/ui-helpers.js)
+      el.appendChild(window.UIHelpers.chip({
+        title: (isSel ? '🔖 ' : '🔗 ') + this.shortUrl(url),
+        tooltip: (isSel ? '✓ last bookmark — ' : 'Parse & connect: ') + url,
+        selected: isSel,
+        deleteTitle: 'Remove preset',
+        onLoad: () => this.selectBookmark(url, { connect: true }),
+        onDelete: () => {
+          if (this.selectedUrl === url) this.selectedUrl = '';
+          if (App.bridge) App.bridge.remove_url_preset(url);
+        },
+      }));
     });
     if (!this.presets.length) {
       el.innerHTML = '<span class="preset-row-empty">no URL presets — type a URL above and press +</span>';
@@ -170,4 +163,5 @@ const UrlToolbar = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => UrlToolbar.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => UrlToolbar.init());

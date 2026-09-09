@@ -1,11 +1,5 @@
-"""Services — async, return Result[T]; bridges use @asyncSlot.
+"""services — business logic.
 
-Each service <150 LOC, single responsibility, reusable without Qt.
+Every method at a NEW service seam returns Result[T] (core/result); no bare
+exception crosses a layer boundary upward. Services never import a bridge.
 """
-
-from .collector_service import CollectorService  # noqa: F401
-from .history_service import HistoryService  # noqa: F401
-from .media_service import MediaService  # noqa: F401
-from .db_service import DbService  # noqa: F401
-
-__all__ = ["CollectorService", "HistoryService", "MediaService", "DbService"]

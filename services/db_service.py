@@ -294,15 +294,7 @@ class DbManager:
         The fresh world is seeded with the app-template settings (D9) —
         nothing is copied from the world being left.
         """
-        # A NEW world always lands next to the active one, under a name
-        # `safe_db_name` made un-escapable. `resolve()`'s absolute-path
-        # passthrough stays legal for load() (the file dialog), but a
-        # user-typed create name ("../evil") must never leave the app
-        # folder — safe_db_name exists precisely to prevent that.
-        safe = safe_db_name(name)
-        path = os.path.join(
-            os.path.dirname(os.path.abspath(self.active_path()))
-            or self.root, safe)
+        path = self.resolve(name)
         if not path:
             return {"ok": False, "error": "give the database a name"}
         if os.path.exists(path):

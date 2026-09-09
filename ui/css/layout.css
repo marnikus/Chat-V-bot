@@ -94,7 +94,7 @@ button {
 }
 button:disabled { opacity: .35; cursor: default; }
 .btn-primary {
-  background: var(--accent); color: var(--color-white); border-radius: var(--radius-sm);
+  background: var(--accent); color: var(--text-on-accent); border-radius: var(--radius-sm);
   padding: 6px 14px; display: flex; align-items: center; gap: 4px;
   font-weight: 500; transition: background .15s;
 }
@@ -105,7 +105,7 @@ button:disabled { opacity: .35; cursor: default; }
   border-radius: var(--radius-sm); padding: 4px 8px;
   display: flex; align-items: center;
 }
-.btn-success:hover { background: var(--color-bg-hover-success); }
+.btn-success:hover { background: var(--success-hover); }
 .btn-warning {
   background: var(--yellow-dim); color: var(--yellow);
   border-radius: var(--radius-sm); padding: 4px 8px;
@@ -270,7 +270,7 @@ button:disabled { opacity: .35; cursor: default; }
   border-radius: var(--radius-sm); padding: 3px 10px;
   font-size: var(--font-size-xs); cursor: pointer;
 }
-.preset-picker .pp-load:hover { background: var(--color-bg-hover-success); }
+.preset-picker .pp-load:hover { background: var(--success-hover); }
 .preset-picker .pp-del {
   color: var(--text-muted); cursor: pointer; padding: 2px 4px;
   border-radius: var(--radius-sm);
@@ -290,7 +290,7 @@ button:disabled { opacity: .35; cursor: default; }
 .name-modal #nameModalInput:focus { border-color: var(--border-focus); }
 .confirm-text { color: var(--text-secondary); font-size: var(--font-size-md); line-height: 1.5; }
 .btn-danger-solid { background: var(--red-dim); color: var(--red); border-radius: var(--radius-sm); padding: 6px 14px; font-weight: 500; }
-.btn-danger-solid:hover { background: var(--color-bg-hover-danger); }
+.btn-danger-solid:hover { background: var(--danger-hover); }
 
 /* — Custom blocks row + chip states (FEATURE) — */
 .chip-selected {

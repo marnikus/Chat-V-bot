@@ -1,42 +1,71 @@
-// ui-helpers.js — shared chip / pill / sort helpers
+/* UIHelpers — the small DOM builders that were copy-pasted across panels.
 
-export function chipRender(container, items, { onRemove, onClick, labelKey } = {}) {
-  if (!container) return;
-  container.innerHTML = '';
-  (items || []).forEach(item => {
-    const label = labelKey ? (item[labelKey] ?? item) : item;
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.textContent = label;
-    if (onClick) chip.addEventListener('click', () => onClick(item));
-    if (onRemove) {
-      const x = document.createElement('button');
-      x.className = 'chip-remove';
-      x.textContent = '×';
-      x.addEventListener('click', e => { e.stopPropagation(); onRemove(item); });
-      chip.appendChild(x);
+  esc(s)            HTML-escape any user text before it lands in markup
+  el(tag, cls, text)  one element, no ceremony
+  chip(opts)        the standard chip: [icon+title][meta][×]
+                    used by the URL bookmarks and both preset pickers
+  sortArrow(active, dir)  the ▲▼ / ▲ / ▼ header indicator
+
+  Everything builds DOM nodes and sets textContent — user text never
+  becomes markup (RULE 8).
+*/
+'use strict';
+
+window.UIHelpers = {
+  esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null && text !== '') {
+      node.textContent = String(text);
     }
-    container.appendChild(chip);
-  });
-}
+    return node;
+  },
 
-export function pillRender(container, items, opts = {}) {
-  // Alias for chipRender with pill styling
-  chipRender(container, items, opts);
-}
+  /**
+   * The standard removable chip.
+   * opts: { title, meta, icon, selected, tooltip, onLoad, onDelete,
+   *         deleteTitle }
+   */
+  chip(opts) {
+    const o = opts || {};
+    const node = this.el('span',
+      'chip' + (o.selected ? ' chip-selected' : ''));
+    if (o.tooltip) node.title = o.tooltip;
+    const title = this.el('span', 'chip-title',
+      (o.icon ? o.icon + ' ' : '') + (o.title || ''));
+    title.title = o.title || '';
+    node.appendChild(title);
+    if (o.meta) {
+      const meta = this.el('span', 'chip-meta', o.meta);
+      node.appendChild(meta);
+    }
+    const x = this.el('span', 'chip-x', '×');
+    x.title = o.deleteTitle || 'Delete';
+    node.appendChild(x);
+    if (typeof o.onLoad === 'function') {
+      node.addEventListener('click', o.onLoad);
+    }
+    if (typeof o.onDelete === 'function') {
+      x.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        o.onDelete(ev);
+      });
+    }
+    return node;
+  },
 
-export function sortArrows(th, order, key) {
-  th.querySelectorAll('.sort-arrow').forEach(el => el.remove());
-  const arrow = document.createElement('span');
-  arrow.className = 'sort-arrow';
-  arrow.textContent = order === 'asc' ? ' ▲' : ' ▼';
-  const active = th.dataset.sortKey === key;
-  arrow.style.opacity = active ? '1' : '0.3';
-  th.appendChild(arrow);
-}
-
-export function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
+  /** ▲▼ idle · ▲ ascending · ▼ descending */
+  sortArrow(active, direction) {
+    if (!active) return '▲▼';
+    return direction > 0 ? '▲' : '▼';
+  },
+};

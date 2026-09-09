@@ -42,8 +42,8 @@
   font-size: var(--font-size-xs); font-weight: 500;
   padding: 2px 6px; border-radius: var(--radius-sm);
 }
-.gender-badge.female { background: rgba(173,20,87,.15); color: var(--color-pink-female); }
-.gender-badge.male   { background: rgba(25,118,210,.15); color: var(--color-blue-male); }
+.gender-badge.female { background: rgba(173,20,87,.15); color: var(--gender-female); }
+.gender-badge.male   { background: rgba(25,118,210,.15); color: var(--gender-male); }
 .gender-badge.unknown { background: var(--bg-card); color: var(--text-muted); }
 
 /* Status badges */
@@ -94,7 +94,7 @@
 #deleteSelectedBtn:not(:disabled) {
   border-color: var(--red); background: var(--red-dim);
 }
-#deleteSelectedBtn:not(:disabled):hover { background: var(--color-bg-hover-danger); }
+#deleteSelectedBtn:not(:disabled):hover { background: var(--danger-hover); }
 #clearMemBtn:hover { background: var(--red-dim); border-color: var(--red); }
 
 /* selection column */
@@ -141,5 +141,5 @@ tr.row-flash {
 }
 
 tr.row-flash td:first-child {
-  box-shadow: inset 3px 0 0 var(--green, #00c853);
+  box-shadow: inset 3px 0 0 var(--green);
 }

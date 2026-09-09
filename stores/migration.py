@@ -1,103 +1,117 @@
-"""Migration — split legacy single-file config.json into new stores.
+"""One-time migration: the single legacy config.json → config/*.json.
 
-Idempotent: if the new layout already exists, nothing is overwritten.
-Legacy file is backed up to config.json.bak.<timestamp> before mutation.
+Runs on first start after the split. Idempotent and fail-safe:
+
+* no legacy file, or config/ already has store files → nothing to do;
+* unreadable legacy JSON → nothing is written or renamed;
+* every written file is atomic, and the legacy file is only RENAMED
+  (``config.json.migrated-<ts>``), never deleted — the user's data is
+  always recoverable by hand.
 """
 
 from __future__ import annotations
 
-import os
 import json
-import copy
-import shutil
+import logging
+import os
 from datetime import datetime
-from typing import Any
 
-from stores.atomic import AtomicJsonStore
+from stores.jsonio import save_json
 
-# legacy defaults mirrored from backend/config_manager.py
-LEGACY_DEFAULTS: dict[str, Any] = {
-    "chrome": {"host": "127.0.0.1", "port": 9222},
-    "scroll": {"scroll_delta_y": 300},
-    "delays": {"global_pre_action_ms": 500},
-    "ui": {"theme": "dark"},
-    "url_presets": ["https://ru.virt-chat.com/chat"],
-    "history": {"enabled": True, "db_path": "history.db"},
-    "collector": {"enabled": True, "my_nick": ""},
-    "labels": {"defs": [], "assign": {}, "filter": {"include": [], "exclude": []}, "next_id": 0},
-    "stack_presets": {},
-    "template_presets": {},
-    "custom_blocks": [],
-    "state": {"undo_history": [], "undo_history_index": -1, "grid_layout": None},
-}
+log = logging.getLogger("chatbot")
 
-# new per-file mapping (still sharing one JSON file in phase 1; future: separate files)
-SLICE_KEYS = {
-    "settings": ["chrome", "scroll", "delays", "ui", "history", "collector", "labels"],
-    "bookmarks": ["url_presets"],
-    "blocks": ["stack_presets", "template_presets", "custom_blocks"],
-    "session": ["state"],
-}
+#: top-level keys of the legacy file claimed by a dedicated store
+CLAIMED_SECTIONS = frozenset({
+    "url_presets", "stack_presets", "template_presets",
+    "custom_blocks", "labels", "state",
+})
 
 
-def migrate(path: str = "config.json", dry_run: bool = False) -> dict[str, Any]:
-    """Migrate legacy config.json to new store layout.
+def _store_files_present(config_dir: str) -> bool:
+    if not os.path.isdir(config_dir):
+        return False
+    names = {"settings.json", "presets.json", "bookmarks.json",
+             "blocks.json", "labels.json", "session.json", "undo.json"}
+    return any(os.path.exists(os.path.join(config_dir, n))
+               for n in names)
 
-    Returns {"migrated": bool, "backup": str | None, "added": list[str]}.
+
+def migrate_legacy_config(legacy_path: str, config_dir: str) -> bool:
+    """Split `legacy_path` into the seven store files under `config_dir`.
+
+    Returns True when the legacy file was consumed (renamed away).
     """
-    if not os.path.exists(path):
-        # create fresh file with defaults so new installs start clean
-        atomic = AtomicJsonStore(path)
-        if not atomic.data():
-            atomic._data = copy.deepcopy(LEGACY_DEFAULTS)
-            if not dry_run:
-                atomic.save()
-            return {"migrated": True, "backup": None, "added": ["fresh_defaults"]}
-        return {"migrated": False, "backup": None, "added": []}
+    if not legacy_path or not os.path.exists(legacy_path):
+        return False
+    if _store_files_present(config_dir):
+        return False              # already migrated (or user-provided)
+    try:
+        with open(legacy_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("legacy config %s unreadable (%s) — starting fresh",
+                    legacy_path, exc)
+        return False
+    if not isinstance(data, dict):
+        log.warning("legacy config %s is not an object — starting fresh",
+                    legacy_path)
+        return False
 
-    with open(path, "r", encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError:
-            return {"migrated": False, "backup": None, "added": [], "error": "invalid json"}
+    os.makedirs(config_dir, exist_ok=True)
+    state = data.get("state") if isinstance(data.get("state"), dict) else {}
 
-    # backup
-    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    backup = f"{path}.bak.{stamp}"
-    added: list[str] = []
-    migrated = False
+    # 1 — settings: every dict section nobody else claims
+    settings = {key: value for key, value in data.items()
+                if key not in CLAIMED_SECTIONS}
+    save_json(os.path.join(config_dir, "settings.json"), settings)
 
-    # Ensure each top-level key exists (no data loss: missing keys are added, existing ones kept)
-    for key, default in LEGACY_DEFAULTS.items():
-        if key not in data:
-            data[key] = copy.deepcopy(default)
-            added.append(key)
-            migrated = True
+    # 2 — presets
+    presets = {
+        "stack_presets": data.get("stack_presets")
+        if isinstance(data.get("stack_presets"), dict) else {},
+        "template_presets": data.get("template_presets")
+        if isinstance(data.get("template_presets"), dict) else {},
+    }
+    save_json(os.path.join(config_dir, "presets.json"), presets)
 
-    # Ensure state sub-keys
-    state = data.get("state", {})
-    if isinstance(state, dict):
-        for k, v in LEGACY_DEFAULTS["state"].items():
-            if k not in state:
-                state[k] = copy.deepcopy(v)
-                added.append(f"state.{k}")
-                migrated = True
-        data["state"] = state
+    # 3 — bookmarks
+    bookmarks = (data.get("url_presets")
+                 if isinstance(data.get("url_presets"), list) else [])
+    save_json(os.path.join(config_dir, "bookmarks.json"), bookmarks)
 
-    if migrated and not dry_run:
-        try:
-            shutil.copy2(path, backup)
-        except OSError:
-            backup = None
-        atomic = AtomicJsonStore(path)
-        atomic._data = data
-        atomic.save()
-    else:
-        backup = None
+    # 4 — custom blocks
+    blocks = (data.get("custom_blocks")
+              if isinstance(data.get("custom_blocks"), list) else [])
+    save_json(os.path.join(config_dir, "blocks.json"), blocks)
 
-    return {"migrated": migrated, "backup": backup, "added": added}
+    # 5 — labels (legacy config-backed section; live labels live in the
+    #     world DB since the unified-DB redesign — this file is the
+    #     migration source and the offline fallback)
+    labels = data.get("labels")
+    save_json(os.path.join(config_dir, "labels.json"),
+              labels if isinstance(labels, dict) else {})
 
+    # 6 — session state (everything except the undo timeline)
+    session = {key: value for key, value in state.items()
+               if key not in ("undo_history", "undo_history_index")}
+    save_json(os.path.join(config_dir, "session.json"), session)
 
-def needs_migration(path: str = "config.json") -> bool:
-    res = migrate(path, dry_run=True)
-    return bool(res.get("migrated"))
+    # 7 — the undo timeline
+    undo = {
+        "history": state.get("undo_history")
+        if isinstance(state.get("undo_history"), list) else [],
+        "index": state.get("undo_history_index", -1)
+        if isinstance(state.get("undo_history_index"), int) else -1,
+    }
+    save_json(os.path.join(config_dir, "undo.json"), undo)
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    archived = f"{legacy_path}.migrated-{stamp}"
+    try:
+        os.replace(legacy_path, archived)
+    except OSError as exc:
+        log.warning("legacy config could not be renamed (%s) — it stays "
+                    "next to config/ and is ignored from now on", exc)
+    log.info("config.json split into config/ (original archived as %s)",
+             os.path.basename(archived))
+    return True

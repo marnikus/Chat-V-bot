@@ -12,10 +12,10 @@ const PresetsUI = {
   customBlocks: [],
 
   // ── escaping / tiny helpers ─────────────────────────────────
+  // the implementations live in js/core/ui-helpers.js; these thin
+  // delegates keep every historical PresetsUI.esc(...) call site
   esc(s) {
-    const d = document.createElement('div');
-    d.textContent = (s === null || s === undefined) ? '' : String(s);
-    return d.innerHTML;
+    return window.UIHelpers.esc(s);
   },
 
   _date(iso) {
@@ -213,28 +213,8 @@ const PresetsUI = {
 
   // ── shared ──────────────────────────────────────────────────
   _makeChip(title, meta, onLoad, onDelete) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    const t = document.createElement('span');
-    t.className = 'chip-title';
-    t.textContent = title;
-    t.title = title;
-    const m = document.createElement('span');
-    m.className = 'chip-meta';
-    m.textContent = meta || '';
-    const x = document.createElement('span');
-    x.className = 'chip-x';
-    x.textContent = '×';
-    x.title = 'Delete';
-    chip.appendChild(t);
-    chip.appendChild(m);
-    chip.appendChild(x);
-    chip.addEventListener('click', onLoad);
-    x.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      onDelete();
-    });
-    return chip;
+    // one chip implementation for every panel (js/core/ui-helpers.js)
+    return window.UIHelpers.chip({ title, meta, onLoad, onDelete });
   },
 
   _placePicker(picker, anchorBtn) {
@@ -258,65 +238,20 @@ const PresetsUI = {
   },
 
   // ── modals (Qt WebEngine doesn't support prompt()/confirm()) ──
+  // The implementation lives in js/core/dialog.js; these delegates
+  // keep the historical PresetsUI.confirm(...) call sites working.
   promptName(title, placeholder, okLabel, onOk) {
-    const modal = document.getElementById('nameModal');
-    const input = document.getElementById('nameModalInput');
-    const ok = document.getElementById('nameModalOk');
-    document.getElementById('nameModalTitle').textContent = title || 'Preset name';
-    input.placeholder = placeholder || 'Enter a name…';
-    input.value = '';
-    ok.textContent = okLabel || 'Save';
-    modal.classList.remove('hidden');
-    input.focus();
-
-    const cleanup = () => {
-      modal.classList.add('hidden');
-      ok.onclick = null;
-      document.getElementById('nameModalCancel').onclick = null;
-      input.onkeydown = null;
-    };
-    ok.onclick = () => {
-      const name = input.value.trim();
-      if (!name) { input.focus(); return; }
-      cleanup();
-      onOk(name);
-    };
-    document.getElementById('nameModalCancel').onclick = cleanup;
-    input.onkeydown = (e) => {
-      if (e.key === 'Enter') ok.click();
-      else if (e.key === 'Escape') cleanup();
-    };
+    window.Dialog.promptName(title, placeholder, okLabel, onOk);
   },
 
   confirmDelete(kindLabel, name, onYes) {
-    this.confirm(`Delete ${kindLabel}?`,
+    window.Dialog.confirm(`Delete ${kindLabel}?`,
       `“${name}” will be permanently removed.`, 'Delete', onYes);
   },
 
-  /** Generic in-app confirmation (Qt WebEngine has no usable confirm()). */
+  /** Generic in-app confirmation (delegates to the shared Dialog). */
   confirm(title, text, okLabel, onYes) {
-    const modal = document.getElementById('confirmModal');
-    const yes = document.getElementById('confirmModalYes');
-    const no = document.getElementById('confirmModalNo');
-    document.getElementById('confirmModalTitle').textContent = title || 'Confirm';
-    document.getElementById('confirmModalText').textContent = text || '';
-    yes.textContent = okLabel || 'Delete';
-    modal.classList.remove('hidden');
-
-    const cleanup = () => {
-      modal.classList.add('hidden');
-      yes.onclick = null;
-      no.onclick = null;
-      document.removeEventListener('keydown', onKey, true);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); cleanup(); }
-      else if (e.key === 'Enter') { e.preventDefault(); cleanup(); onYes(); }
-    };
-    yes.onclick = () => { cleanup(); onYes(); };
-    no.onclick = cleanup;
-    document.addEventListener('keydown', onKey, true);
-    yes.focus();
+    window.Dialog.confirm(title, text, okLabel, onYes);
   },
 };
 

@@ -89,12 +89,14 @@ const DbPanel = mod.exports;
 
 const calls = [];
 const confirms = [];
-global.PresetsUI = {
+// the shared modal seam lives in js/core/dialog.js now
+global.window.Dialog = {
   confirm(title, text, okLabel, onYes) {
     confirms.push({ title, text, okLabel });
     onYes();                       // the user says yes
   },
 };
+global.PresetsUI = global.window.Dialog;   // historical name kept wired
 global.App = {
   bridge: {
     db_info: (id) => calls.push(['db_info', id]),

@@ -1,57 +1,85 @@
-"""Undo store — global undo history (state.undo_history + index)."""
+"""undo_store — the app-level half of the global undo timeline
+(config/undo.json).
+
+The timeline itself (push, truncation, pointer movement, command
+application) is service logic and lives in services/undo_service. This
+store is pure I/O: it persists {"history": [...], "index": N} atomically,
+which also makes it the one file that must never be written non-atomically
+— a torn undo.json would lose a user's last edits on a crash.
+"""
 
 from __future__ import annotations
 
 import copy
+import logging
+import os
 from typing import Any
 
-from core.result import Result
-from stores.atomic import AtomicJsonStore
+from stores.jsonio import load_json, save_json
 
-MAX_STACK_HISTORY = 100
+log = logging.getLogger("chatbot")
 
 
 class UndoStore:
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    """{"history": [...], "index": N} — one file, atomic saves."""
 
-    def get(self) -> tuple[list[Any], int]:
-        hist = self._atomic.get("state", "undo_history", default=[])
-        idx = self._atomic.get("state", "undo_history_index", default=-1)
-        if not isinstance(hist, list):
-            hist = []
-        if not isinstance(idx, int):
-            idx = len(hist) - 1
-        hist = copy.deepcopy(hist)
-        return hist, int(idx)
-
-    def set(self, history: list[Any], index: int) -> Result[None]:
-        # enforce cap
-        if len(history) > MAX_STACK_HISTORY:
-            overflow = len(history) - MAX_STACK_HISTORY
-            history = history[overflow:]
-            index = max(-1, index - overflow)
-        # never persist an (history, index) pair no reader can use
-        index = max(-1, min(int(index), len(history) - 1))
-        # atomic set of both keys in one save
-        state = self._atomic.get("state", default={})
-        if not isinstance(state, dict):
-            state = {}
+    def __init__(self, path: str, data: dict | None = None):
+        self._path = path
+        self._data: dict[str, Any] = {"history": [], "index": -1}
+        self._dirty = False
+        if data is not None:
+            self._data = dict(data)
         else:
-            state = copy.deepcopy(state)
-        state["undo_history"] = copy.deepcopy(history)
-        state["undo_history_index"] = int(index)
-        self._atomic.set("state", state)
-        return self._atomic.save()
+            self.reload()
 
-    def push(self, kind: str, value: Any) -> Result[tuple[list[Any], int]]:
-        hist, idx = self.get()
-        entry = {"kind": kind, "value": copy.deepcopy(value)}
-        if idx < len(hist) - 1:
-            hist = hist[: idx + 1]
-        hist.append(entry)
-        idx = len(hist) - 1
-        res = self.set(hist, idx)
-        if res.is_ok:
-            return Result.ok((hist, idx))
-        return Result.err(res.error or "save failed")
+    # ── persistence ──────────────────────────────────────────────
+    def reload(self) -> None:
+        raw = load_json(self._path, default={})
+        if isinstance(raw, dict):
+            history = raw.get("history")
+            index = raw.get("index", -1)
+            self._data = {
+                "history": history if isinstance(history, list) else [],
+                "index": index if isinstance(index, int) else -1,
+            }
+
+    def flush(self) -> bool:
+        """Write the current state to disk (atomic)."""
+        if not self._dirty:
+            return True
+        ok = save_json(self._path, self._data)
+        if ok:
+            self._dirty = False
+        return ok
+
+    @property
+    def dirty(self) -> bool:
+        return self._dirty
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    # ── API ──────────────────────────────────────────────────────
+    def history(self) -> list[dict]:
+        return copy.deepcopy(self._data["history"])
+
+    def index(self) -> int:
+        return int(self._data["index"])
+
+    def load_state(self) -> tuple[list[dict], int]:
+        return self.history(), self.index()
+
+    def save_state(self, history: list, index: int,
+                   save_now: bool = True) -> None:
+        if not isinstance(history, list):
+            history = []
+        index = int(index)
+        if history:
+            index = max(-1, min(index, len(history) - 1))
+        else:
+            index = -1
+        self._data = {"history": copy.deepcopy(history), "index": index}
+        self._dirty = True
+        if save_now:
+            self.flush()

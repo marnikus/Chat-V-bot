@@ -76,4 +76,5 @@ const Composer = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => Composer.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => Composer.init());

@@ -1,7 +1,11 @@
-"""Core contracts: Result, EventBus, Protocols, DI container."""
+"""core — zero-dependency contracts shared by every layer.
 
-from .result import Result
-from .events import EventBus
-from .di import Container
+Nothing in this package imports from backend/, bridge/, services/, stores/
+or actions/: the dependency arrows flow DOWN only (core is the bottom).
+"""
 
-__all__ = ["Result", "EventBus", "Container"]
+from core.result import Result, Ok, Err
+from core.events import EventBus
+from core.di import Container
+
+__all__ = ["Result", "Ok", "Err", "EventBus", "Container"]

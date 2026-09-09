@@ -27,7 +27,7 @@ config panel and saved as a reusable preset.
 
 import logging
 from typing import Optional
-from actions.base_action import BaseAction, resolve_nick
+from actions.base_action import BaseAction
 from actions.find_click_runner import find_and_click
 from backend.cdp_client import CDPClient
 from backend.dom_probe import MATCH_CONTAINS
@@ -57,32 +57,30 @@ class CustomFind(BaseAction):
         self.confirm_pause_ms = max(0, int(confirm_pause_ms or 0))
         self.highlight_ms = max(0, int(highlight_ms or 0))
 
-    def _label(self, match_text: str = "") -> str:
+    def _label(self) -> str:
         """Human-readable search description used in logs."""
         parts = [f"element '{self.selector}'"]
         if self.label_selector:
             parts.append(f"text inside '{self.label_selector}'")
-        if match_text:
-            parts.append(f"matching \"{match_text}\"")
+        if self.match_text:
+            parts.append(f"matching \"{self.match_text}\"")
         return " ".join(parts)
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
         await self.pre_delay()
-        # The config panel promises "{{nick}} = selected user" (BUG-04).
-        match_text = resolve_nick(self.match_text, user_nick, engine)
         return await find_and_click(
             cdp,
             selector=self.selector,
             label_selector=self.label_selector,
-            match_text=match_text,
+            match_text=self.match_text,
             match_mode=MATCH_CONTAINS,
             click_enabled=self.click_enabled,
             click_selector=self.click_selector,
             highlight_enabled=self.highlight_enabled,
             confirm_pause_ms=self.confirm_pause_ms,
             highlight_ms=self.highlight_ms,
-            label=self._label(match_text),
+            label=self._label(),
             engine=engine,
         )
 

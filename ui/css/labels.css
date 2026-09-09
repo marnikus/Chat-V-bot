@@ -26,7 +26,7 @@
   background: none; border: 0; cursor: pointer; padding: 0 1px;
   color: rgba(255, 255, 255, .55); font-size: 10px; line-height: 1;
 }
-.label-pill-x:hover { color: var(--color-white); transform: scale(1.2); }
+.label-pill-x:hover { color: var(--text-on-accent); transform: scale(1.2); }
 .label-empty { color: var(--text-muted); font-size: var(--font-size-xs); }
 
 /* ── Label Manager window ─────────────────────────────────────── */
@@ -76,7 +76,7 @@
   outline: 1px solid var(--accent); outline-offset: 1px;
 }
 .label-pill-check {
-  font-size: 9px; font-weight: 700; line-height: 1; color: var(--color-white);
+  font-size: 9px; font-weight: 700; line-height: 1; color: var(--text-on-accent);
 }
 /* Zone 2 — "edit": deliberately small and muted, so it can never be
    mistaken for the badge itself. */
@@ -108,7 +108,7 @@
   width: 16px; height: 16px; flex: 0 0 auto; border-radius: 50%;
   border: 1px solid var(--border-light); cursor: pointer;
 }
-.label-edit-color:hover { border-color: var(--color-white); }
+.label-edit-color:hover { border-color: var(--text-on-accent); }
 .label-edit-row .btn-small { padding: 2px 8px; font-size: 10px; line-height: 1.4; }
 
 /* The quick-assign target chip in the Active Labels title. */
@@ -158,9 +158,9 @@ tr.userdb-row.row-label-target { background: rgba(108, 140, 255, .09); }
 .label-color-btn {
   width: 26px; height: 26px; flex: 0 0 auto; cursor: pointer;
   border-radius: 50%; border: 2px solid var(--border-light);
-  background: var(--color-red-label);
+  background: var(--danger-solid);
 }
-.label-color-btn:hover { border-color: var(--color-white); }
+.label-color-btn:hover { border-color: var(--text-on-accent); }
 
 .label-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
 .label-inc.active {
@@ -296,7 +296,7 @@ tr.userdb-row.row-label-target { background: rgba(108, 140, 255, .09); }
 }
 .cp-dot:hover { transform: scale(1.12); }
 .cp-dot.selected {
-  border-color: var(--color-white); box-shadow: 0 0 0 2px rgba(255, 255, 255, .35);
+  border-color: var(--text-on-accent); box-shadow: 0 0 0 2px rgba(255, 255, 255, .35);
 }
 .cp-foot {
   display: flex; align-items: center; justify-content: space-between;

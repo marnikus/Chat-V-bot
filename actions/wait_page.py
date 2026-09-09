@@ -45,10 +45,6 @@ class WaitPageLoad(BaseAction):
             try:
                 raw = await cdp.evaluate(build_probe(selector=self.target_selector))
                 res = json.loads(raw) if raw else None
-                # Anything that is not an object (a stray list/scalar from the
-                # page) is "no data", never an AttributeError mid-wait - the
-                # same guard click_user._read_tabs already applies.
-                res = res if isinstance(res, dict) else None
                 last_res = res
             except Exception as exc:
                 if engine and attempt % 5 == 1:

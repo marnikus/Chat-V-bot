@@ -1,31 +1,73 @@
-// bridge-ready.js — shared QWebChannel ready helper (ES module, no bundler)
-// Usage: import { bridgeReady } from './core/bridge-ready.js'; bridgeReady(b => { ... });
-let _bridge = null;
-let _queue = [];
-let _ready = false;
+/* BridgeReady — the ONE QWebChannel handshake + boot queue.
 
-function _flush() {
-  _ready = true;
-  const q = _queue.slice();
-  _queue = [];
-  q.forEach(fn => { try { fn(_bridge); } catch (e) { console.error(e); } });
-}
+  Before: app.js owned the handshake and every panel wired its own
+  `DOMContentLoaded` init; panels could boot before the bridge existed
+  and had to null-check App.bridge everywhere.
 
-export function bridgeReady(cb) {
-  if (_ready && _bridge) { cb(_bridge); return; }
-  _queue.push(cb);
-  if (_queue.length > 1) return;
-  // Qt WebChannel is injected as qrc:///qtwebchannel/qwebchannel.js
-  function tryInit() {
-    if (typeof QWebChannel === 'undefined') { setTimeout(tryInit, 30); return; }
-    // eslint-disable-next-line no-undef
-    new QWebChannel(qt.webChannelTransport, channel => {
-      _bridge = channel.objects.bridge || channel.objects.chatflow;
-      if (!_bridge) { console.warn('bridge object not found'); return; }
-      _flush();
-    });
+  After: index.html loads this file first; it performs the single
+  handshake and exposes
+
+      BridgeReady.ready(fn)   // run fn(bridge) once the bridge exists
+                              // (immediately if it already does; on
+                              // plain DOM ready when running standalone
+                              // in node tests)
+      BridgeReady.bridge      // the live bridge object or null
+
+  App.bridge / App.ready stay assigned for every existing consumer.
+*/
+'use strict';
+
+window.BridgeReady = (function () {
+  const queue = [];
+  let bridge = null;
+  let connected = false;
+
+  function flush() {
+    while (queue.length) {
+      try {
+        queue.shift()(bridge);
+      } catch (e) {
+        console.error('BridgeReady handler failed:', e);
+      }
+    }
   }
-  tryInit();
-}
 
-export function getBridge() { return _bridge; }
+  function onChannel(channel) {
+    bridge = channel.objects.bridge;
+    connected = true;
+    // `App` is declared as a top-level `const` in app.js — a classic
+    // script's top-level const/let lives in the global LEXICAL scope,
+    // NOT on window, so window.App is undefined in the real page. Resolve
+    // the binding itself; fall back to window.App for environments that
+    // publish it there (node harnesses). Without this the page boots in
+    // "standalone mode" and every bridge call no-ops (looked like all
+    // data was gone — 2026-09-09 incident).
+    const app = (typeof App !== 'undefined') ? App : window.App;
+    if (app) {
+      app.bridge = bridge;
+      app.ready = true;
+    }
+    console.log('QWebChannel connected');
+    flush();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof QWebChannel !== 'undefined' &&
+        typeof qt !== 'undefined' && qt.webChannelTransport) {
+      new QWebChannel(qt.webChannelTransport, onChannel);
+    } else {
+      console.warn('QWebChannel not available — running in standalone mode');
+      connected = true;       // nothing to wait for: boot on DOM ready
+      flush();
+    }
+  });
+
+  return {
+    ready(fn) {
+      if (connected) fn(bridge);
+      else queue.push(fn);
+    },
+    get bridge() { return bridge; },
+    get connected() { return connected; },
+  };
+})();

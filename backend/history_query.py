@@ -17,7 +17,7 @@ import os
 import re
 from typing import Optional
 
-from backend.history_db import HistoryDB
+from stores.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
 
