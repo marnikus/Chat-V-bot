@@ -1200,4 +1200,5 @@ const SashGrid = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => SashGrid.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => SashGrid.init());

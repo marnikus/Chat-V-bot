@@ -181,8 +181,8 @@ const UserTable = {
     document.querySelectorAll('#userTable th[data-sort]').forEach((th) => {
       const active = th.dataset.sort === this.sort.key;
       const arrow = th.querySelector('.sort-arrow');
-      if (arrow) arrow.textContent = active
-        ? (this.sort.direction > 0 ? '▲' : '▼') : '▲▼';
+      if (arrow) arrow.textContent =
+        window.UIHelpers.sortArrow(active, this.sort.direction);
       th.setAttribute('aria-sort', active
         ? (this.sort.direction > 0 ? 'ascending' : 'descending') : 'none');
       th.classList.toggle('sort-active', active);
@@ -442,4 +442,5 @@ const UserTable = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => UserTable.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => UserTable.init());

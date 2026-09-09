@@ -1227,4 +1227,5 @@ const StackDnD = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => StackDnD.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => StackDnD.init());

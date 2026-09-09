@@ -391,6 +391,15 @@ def _set_global_history(self, history, index):
     ctx.undo.set_history(history, index)
 
 
+def _undo_pendings(self):
+    """Pending world-undo save tasks (compat: tests drain them)."""
+    ctx, _b = self._ensure_ctx()
+    return getattr(ctx.undo, "_undo_pendings", [])
+
+
+_ROUTER_METHODS["_undo_pendings"] = property(_undo_pendings)
+
+
 @_router_method
 def _push_global(self, kind, value):
     ctx, _b = self._ensure_ctx()

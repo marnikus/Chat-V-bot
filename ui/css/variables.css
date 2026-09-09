@@ -63,6 +63,16 @@
   --gap-md:  12px;
   --gap-lg:  16px;
   --gap-xl:  24px;
+
+  /* semantic fills (2026-09-09 token completion — every remaining
+     hard-coded colour now maps to one of these) */
+  --text-on-accent: #ffffff;   /* text/icons on accent or solid fills  */
+  --danger-solid:   #ff3b30;   /* destructive ✕ (Label Manager)        */
+  --success-hover:  #1f4a30;   /* hover of solid success buttons       */
+  --danger-hover:   #4a1e1e;   /* hover of solid danger buttons        */
+  --accent-soft:    #a9c0ff;   /* light accent stop for gradients      */
+  --gender-female:  #e91e8c;
+  --gender-male:    #4dabf5;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -77,8 +87,47 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-::selection { background: var(--accent); color: #fff; }
+::selection { background: var(--accent); color: var(--text-on-accent); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── light theme (opt-in via <html data-theme="light">) ──────────
+   Only the core palette flips; every component already reads these
+   tokens, so the switch is one attribute. Dark stays the default. */
+[data-theme="light"] {
+  --bg-app:         #f3f4f8;
+  --bg-panel:       #ffffff;
+  --bg-panel-hover: #eceef5;
+  --bg-input:       #e9ebf2;
+  --bg-card:        #ffffff;
+  --bg-card-hover:  #f0f2f8;
+  --bg-header:      #e6e8f0;
+  --bg-modal:       rgba(0,0,0,.35);
+
+  --text-primary:   #1c2030;
+  --text-secondary: #5a6070;
+  --text-muted:     #8a8f9e;
+  --text-inverse:   #ffffff;
+
+  --accent:         #3f5fd7;
+  --accent-hover:   #2f4cbe;
+  --accent-dim:     #b9c6ee;
+  --accent-soft:    #8fa7f2;
+
+  --green:          #1d9a52;
+  --green-dim:      #d3f0dd;
+  --red:            #d64545;
+  --red-dim:        #f6dcdc;
+  --yellow:         #b8860b;
+  --yellow-dim:     #f6ecc8;
+
+  --border:         #d4d8e4;
+  --border-light:   #c3c9da;
+  --border-focus:   #3f5fd7;
+
+  --shadow-sm:  0 1px 3px rgba(20,24,40,.12);
+  --shadow-md:  0 4px 12px rgba(20,24,40,.16);
+  --shadow-lg:  0 8px 30px rgba(20,24,40,.22);
+}

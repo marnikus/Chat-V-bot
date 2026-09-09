@@ -156,6 +156,8 @@ class LayoutBridge(QObject):
         last_stack = (normalize_blocks(raw_last_stack)
                       if isinstance(raw_last_stack, list) else raw_last_stack)
         payload = {
+            "theme": str(self.ctx.config.get("ui", "theme",
+                                             default="dark") or "dark"),
             "url_presets": self.ctx.config.bookmarks.all(),
             "labels": self.ctx.label_store().state(),
             "custom_blocks": self.ctx.config.blocks.all(),

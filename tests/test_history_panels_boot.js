@@ -218,12 +218,14 @@ global.CollectorPanel = load('js/collector-panel.js', 'CollectorPanel');
 global.ColorPicker = load('js/color-picker.js', 'ColorPicker');
 global.Labels = load('js/labels.js', 'Labels');
 global.DbPanel = load('js/db-panel.js', 'DbPanel');
-global.PresetsUI = {
+// the shared modal seam lives in js/core/dialog.js now
+global.Dialog = {
   confirm(title, text, okLabel, onYes) {
     calls.push({ name: 'confirm', args: [title, text] });
     onYes();
   },
 };
+global.PresetsUI = global.Dialog;          // historical name kept wired
 
 // ── assertion kit ────────────────────────────────────────────────
 
