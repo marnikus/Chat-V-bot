@@ -80,16 +80,20 @@
 
 | Module | Lines | Functions | Status | Existing Tests | Design Target | Priority |
 |---|---|---|---|---|---|---|
-| `bridge/router.py` | 330 | 25 | 🟡 | `test_bridge_router.py` | Integration — rules, fallback, cycle | **P0** |
-| `bridge/stack_bridge.py` | 245 | 20 | 🟡 | `test_stack_dnd_migration.js` (JS) | Integration — push/pop/undo/state sync | **P1** |
-| `bridge/undo_bridge.py` | 130 | 10 | 🔴 | `test_merge_undo_enabled.py` (indirect) | Unit — command, redo, empty | **P1** |
-| `bridge/history_bridge.py` | 300 | 20 | 🟡 | `test_history_bridge.py` | Integration — sync, lazy, refresh | **P1** |
-| `bridge/label_bridge.py` | 125 | 10 | 🔴 | `test_labels_ui_js.js` (JS only) | Integration — assign/edit/delete contract | **P2** |
-| `bridge/layout_bridge.py` | 145 | 12 | 🔴 | None | Integration — layout sync, resize | **P2** |
-| `bridge/people_bridge.py` | 120 | 10 | 🔴 | `test_people_undo.py` (indirect) | Integration — people sync, undo | **P2** |
-| `bridge/cdp_bridge.py` | 95 | 8 | 🔴 | `test_cdp_events.py` (indirect) | Unit — event, disconnect | **P2** |
-| `bridge/db_bridge.py` | 110 | 8 | 🔴 | `test_db_bridge` missing | Integration — DB sync, transaction | **P2** |
-| `bridge/collector_bridge.py` | 55 | 5 | 🔴 | `test_collector_state.py` (indirect) | Integration — collector state | **P2** |
+| `bridge/router.py` | 330 | 25 | ✅ | `test_bridge_router.py`, `test_bridge_router_rules.py` | Integration — rules, fallback, cycle | **P0** |
+| `bridge/stack_bridge.py` | 245 | 20 | ✅ | `test_stack_dnd_migration.js` (JS), `test_stack_bridge_contract.py` | Integration — push/pop/undo/state sync | **P1** |
+| `bridge/undo_bridge.py` | 130 | 10 | ✅ | `test_merge_undo_enabled.py` (indirect), `test_undo_bridge.py` | Unit — command, redo, empty | **P1** |
+| `bridge/history_bridge.py` | 300 | 20 | ✅ | `test_history_bridge.py`, `test_history_bridge_wire.py` | Integration — sync, lazy, refresh | **P1** |
+| `bridge/label_bridge.py` | 125 | 10 | ✅ | `test_labels_ui_js.js` (JS), `test_label_bridge.py` | Integration — assign/edit/delete contract | **P2** |
+| `bridge/layout_bridge.py` | 145 | 12 | ✅ | `test_layout_bridge.py` | Integration — layout sync, resize | **P2** |
+| `bridge/people_bridge.py` | 120 | 10 | ✅ | `test_people_undo.py` (indirect), `test_people_bridge.py` | Integration — people sync, undo | **P2** |
+| `bridge/cdp_bridge.py` | 95 | 8 | ✅ | `test_cdp_events.py` (indirect), `test_cdp_bridge.py` | Unit — event, disconnect | **P2** |
+| `bridge/db_bridge.py` | 110 | 8 | ✅ | `test_db_bridge.py` | Integration — DB sync, transaction | **P2** |
+| `bridge/collector_bridge.py` | 55 | 5 | ✅ | `test_collector_state.py` (indirect), `test_collector_bridge.py` | Integration — collector state | **P2** |
+
+> Section D completed 2026-09-09: 109 new tests per
+> `docs/plans/BRIDGE_TESTS_DESIGN_2026-09-09.md`; 5 wire bugs found and
+> fixed (run_stack non-list wipe, 4 signal self-echo families).
 
 ---
 

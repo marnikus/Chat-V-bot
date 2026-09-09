@@ -29,6 +29,7 @@ class CdpBridge(QObject):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
+        self._publishing = None          # bookmark self-echo guard
         ctx.bus.subscribe(TabsReceived,
                           lambda e: self.tabs_received.emit(e.payload))
         ctx.bus.subscribe(ConnectionChanged,
@@ -41,6 +42,8 @@ class CdpBridge(QObject):
 
     def _on_presets(self, event) -> None:
         if event.kind == "urls":
+            if self._publishing and (event.payload or "[]") == self._publishing:
+                return                  # our own echo — already announced
             self.url_presets_updated.emit(event.payload or "[]")
 
     # ── tab discovery / connection ───────────────────────────────
@@ -105,7 +108,13 @@ class CdpBridge(QObject):
         payload = json.dumps(self.ctx.config.bookmarks.all(),
                              ensure_ascii=False)
         self.url_presets_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="urls", payload=payload))
+        # publish for the other listeners WITHOUT re-consuming our own
+        # event (the bus is synchronous — a re-entrancy guard suffices)
+        self._publishing = payload or "[]"
+        try:
+            self.ctx.bus.emit(PresetsChanged(kind="urls", payload=payload))
+        finally:
+            self._publishing = None
 
     @Slot(str)
     def set_last_url_preset(self, url):

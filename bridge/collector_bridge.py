@@ -27,6 +27,7 @@ class CollectorBridge(QObject):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
+        self._announcing = None           # see _forward_status/_announce
         ctx.bus.subscribe(MyNickChanged,
                           lambda e: self.my_nick_changed.emit(e.nick))
 
@@ -35,7 +36,7 @@ class CollectorBridge(QObject):
         if service is None:
             return
         try:
-            service.collector.status_changed.connect(self.collector_status.emit)
+            service.collector.status_changed.connect(self._forward_status)
             service.collector.collector_log.connect(self.collector_log.emit)
             service.collector.history_appended.connect(
                 self.history_appended.emit)
@@ -44,6 +45,21 @@ class CollectorBridge(QObject):
                 lambda *_a: self._refresh_people())
         except Exception as exc:                         # noqa: BLE001
             log.warning("collector signals not connected: %s", exc)
+
+    def _forward_status(self, payload: str) -> None:
+        """The @Slot commands announce the state themselves after acting;
+        a status_changed fired synchronously INSIDE the command is the
+        same announcement — suppress that echo. Async ticks run outside
+        the announce window and pass through."""
+        if self._announcing:
+            return
+        self.collector_status.emit(payload)
+
+    def _announce(self) -> None:
+        payload = json.dumps(self.ctx.archive.collector.state_payload(),
+                             ensure_ascii=False)
+        self.collector_status.emit(payload)
+        self._announcing = False
 
     def _refresh_people(self) -> None:
         from core.events import PeopleChanged
@@ -82,16 +98,18 @@ class CollectorBridge(QObject):
             return
         if not isinstance(patch, dict):
             return
-        applied = self.ctx.archive.collector.configure(**patch)
-        stored = self.ctx.config.get_copy("collector", default={})
-        if not isinstance(stored, dict):
-            stored = {}
-        stored.update({k: v for k, v in applied.items()})
-        self.ctx.config.set("collector", stored)
-        self.ctx.config.save()
-        self.collector_status.emit(json.dumps(
-            self.ctx.archive.collector.state_payload(),
-            ensure_ascii=False))
+        self._announcing = True
+        try:
+            applied = self.ctx.archive.collector.configure(**patch)
+            stored = self.ctx.config.get_copy("collector", default={})
+            if not isinstance(stored, dict):
+                stored = {}
+            stored.update({k: v for k, v in applied.items()})
+            self.ctx.config.set("collector", stored)
+            self.ctx.config.save()
+            self._announce()
+        finally:
+            self._announcing = False
 
     @Slot(str)
     def collector_command(self, command):
@@ -100,23 +118,28 @@ class CollectorBridge(QObject):
             return
         collector = self.ctx.archive.collector
         action = str(command or "").strip().lower()
-        if action == "pause":
-            collector.pause()
-        elif action == "resume":
-            collector.resume()
-        elif action == "start":
-            collector.start()
-            self.ctx.archive.start()
-        elif action == "stop":
-            collector.stop()
-        elif action == "tick":
-            self._run_async("collector_tick", collector.tick())
-        elif action in ("backfill_older", "backfill"):
-            self._run_async("collector_backfill", collector.backfill_older())
-        else:
+        if action not in ("pause", "resume", "start", "stop", "tick",
+                          "backfill_older", "backfill"):
             return
-        self.collector_status.emit(json.dumps(collector.state_payload(),
-                                              ensure_ascii=False))
+        self._announcing = True
+        try:
+            if action == "pause":
+                collector.pause()
+            elif action == "resume":
+                collector.resume()
+            elif action == "start":
+                collector.start()
+                self.ctx.archive.start()
+            elif action == "stop":
+                collector.stop()
+            elif action == "tick":
+                self._run_async("collector_tick", collector.tick())
+            else:
+                self._run_async("collector_backfill",
+                                collector.backfill_older())
+            self._announce()
+        finally:
+            self._announcing = False
 
     # ── My Nick (pinned header) ──────────────────────────────────
     @Slot(result=str)
@@ -140,7 +163,8 @@ class CollectorBridge(QObject):
         self.ctx.config.set_state(my_nick_recent=recent[:10])
         if self.ctx.archive is not None:
             self.ctx.archive.set_my_nick(clean)
-        self.my_nick_changed.emit(clean)
+        # ONE announcement: the bus event (the bridge's own subscription
+        # is the wire path) — a direct emit here doubled every update
         self.ctx.bus.emit(MyNickChanged(nick=clean))
         self.ctx.bus.emit(LogMessage(
             message=f"👤 My Nick set to “{clean}”" if clean else
