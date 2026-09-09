@@ -186,6 +186,8 @@ def build_container(config: ConfigManager | None = None) -> Container:
     """DI container — ~40 lines, no third-party framework.
 
     Arrows down only: main -> bridge/router -> services(Result) -> stores(atomic).
+    Registers 8 keys: config, event_bus, atomic_store, settings_store, cdp,
+    memory, criteria, engine, history_service, bridge (10 with bus).
     """
     c = Container()
     cfg = config or ConfigManager()
@@ -194,7 +196,38 @@ def build_container(config: ConfigManager | None = None) -> Container:
     c.register("atomic_store", lambda cont: AtomicJsonStore(cfg._path if hasattr(cfg, "_path") else "config.json"))
     c.register("settings_store", lambda cont: SettingsStore(cont.resolve("atomic_store")))
     c.register("cdp", lambda cont: CDPClient(host=cont.resolve("config").get("chrome", "host", default="127.0.0.1"), port=cont.resolve("config").get("chrome", "port", default=9222)))
-    # memory/criteria/engine are request-scoped (built in main() after world path known)
+
+    def _memory_factory(cont: Container) -> UserMemory:
+        legacy_queue = "chatbot.db"
+        world_path = str(cont.resolve("config").get("history", "db_path", default="history.db"))
+        queue_path = legacy_queue if os.path.exists(legacy_queue) else world_path
+        return UserMemory(queue_path)
+
+    c.register("memory", _memory_factory)
+    c.register("criteria", lambda cont: CriteriaEngine())
+    c.register("engine", lambda cont: ActionEngine(cdp=cont.resolve("cdp"), memory=cont.resolve("memory"), criteria=cont.resolve("criteria")))
+
+    def _history_factory(cont: Container) -> HistoryService:
+        return HistoryService(cdp=cont.resolve("cdp"), config=cont.resolve("config"),
+                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"), memory=cont.resolve("memory"))
+
+    c.register("history_service", _history_factory)
+
+    def _bridge_factory(cont: Container):  # type: ignore
+        br = Bridge(cdp=cont.resolve("cdp"), memory=cont.resolve("memory"), criteria=cont.resolve("criteria"),
+                    engine=cont.resolve("engine"), config=cont.resolve("config"))
+        hist = cont.resolve("history_service")
+        try:
+            br.attach_history(hist)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            cont.resolve("engine").history = hist
+        except Exception:  # noqa: BLE001
+            pass
+        return br
+
+    c.register("bridge", _bridge_factory)
     return c
 
 
@@ -214,34 +247,16 @@ def main() -> int:
     container = build_container(config)
     log.info("DI container ready: %s", list(container._factories.keys()) + list(container._singletons.keys()))
 
-    # Backend services (resolved via container where possible)
+    # Backend services — all via DI (main.py is DI only, no business logic)
     cdp = container.resolve("cdp")
-    # People queue: since the unified single-DB redesign the queue's
-    # `users` table lives INSIDE the world file. A pre-redesign install
-    # still has a separate chatbot.db — start from it, the startup
-    # migration (HistoryService.migrate_install) merges it into the active
-    # world and renames it out of the way, after which the queue follows
-    # the world on every switch.
-    legacy_queue = "chatbot.db"
-    world_path = str(config.get("history", "db_path", default="history.db"))
-    queue_path = legacy_queue if os.path.exists(legacy_queue) else world_path
-    memory = UserMemory(queue_path)
-    criteria = CriteriaEngine()
-    engine = ActionEngine(cdp=cdp, memory=memory, criteria=criteria)
+    memory = container.resolve("memory")
+    criteria = container.resolve("criteria")
+    engine = container.resolve("engine")
+    history = container.resolve("history_service")
+    bridge = container.resolve("bridge")
 
-    # Message archive: one database, one media cache, one passive collector
-    # shared by the COLLECT_HISTORY block, the history windows and the
-    # Chat Message Collector panel.
-    history = HistoryService(cdp=cdp, config=config,
-                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
-                             memory=memory)
-    engine.history = history
-
-    # Window + bridge
+    # Window (geometry still via config)
     window = MainWindow(config=config)
-    bridge = Bridge(cdp=cdp, memory=memory, criteria=criteria,
-                    engine=engine, config=config)
-    bridge.attach_history(history)
     window.set_bridge(bridge)
     channel = QWebChannel()
     channel.registerObject("bridge", bridge)
