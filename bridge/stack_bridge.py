@@ -160,6 +160,10 @@ class StackBridge(QObject):
         except Exception as exc:                        # noqa: BLE001
             self._log(f"❌ Preset save failed: {exc}", "error")
             return
+        try:
+            self.ctx.presets.save(force=True)
+        except Exception:
+            pass
         self._remember_stack(name, blocks)
         self._emit_presets()
         self._log(
