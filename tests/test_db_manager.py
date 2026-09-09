@@ -514,7 +514,9 @@ class TestUiWiring(unittest.TestCase):
         self.assertIn("Images folder", self.js)
 
     def test_destructive_actions_are_confirmed_and_explained(self):
-        self.assertIn("PresetsUI.confirm", self.js)
+        # the shared in-app modal lives in js/core/dialog.js since the
+        # 2026-09-09 refactor; db-panel must confirm through it
+        self.assertIn("window.Dialog.confirm", self.js)
         self.assertIn("db_trash", self.js)
         # delete is PERMANENT — the dialog says so
         self.assertIn("Delete database PERMANENTLY?", self.js)
