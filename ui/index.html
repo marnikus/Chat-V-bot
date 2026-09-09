@@ -449,5 +449,17 @@
 <script src="js/color-picker.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/db-panel.js"></script>
+<!-- W6: ES modules (no bundler) — core is now live, app.js can import via type="module" -->
+<script type="module">
+  import { bridgeReady } from './js/core/bridge-ready.js';
+  import { EventBus } from './js/core/event-bus.js';
+  import * as Dialog from './js/core/dialog.js';
+  import { fetchUndoHistory } from './js/core/undo-fetch.js';
+  // expose for legacy global App (incremental migration)
+  window.CoreBridge = { bridgeReady, fetchUndoHistory };
+  window.CoreEventBus = EventBus;
+  window.CoreDialog = Dialog;
+  console.log('[core] ES modules loaded — bridgeReady/EventBus/Dialog/undo-fetch live');
+</script>
 </body>
 </html>
