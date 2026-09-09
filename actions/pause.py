@@ -17,7 +17,10 @@ class Pause(BaseAction):
     def __init__(self, duration_ms: int = 1000, **kw):
         kw.pop("pre_delay_ms", None)  # pause manages its own delay
         super().__init__(pre_delay_ms=0, **kw)
-        self.duration_ms = duration_ms
+        # Coerced like every sibling block: a "number" setting can arrive as
+        # a string (or None) from a saved preset, and must pause - not end
+        # the run with a TypeError (BUG-06).
+        self.duration_ms = max(0, int(duration_ms or 0))
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:

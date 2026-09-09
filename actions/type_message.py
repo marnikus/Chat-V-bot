@@ -7,7 +7,7 @@ engine mirrors live (engine.composer_text, fed by Bridge.save_message).
 
 import logging
 from typing import Optional
-from actions.base_action import BaseAction, ActionResult
+from actions.base_action import BaseAction, ActionResult, resolve_nick
 from backend.cdp_client import CDPClient
 from backend.message_injector import type_message
 
@@ -43,10 +43,7 @@ class TypeMessage(BaseAction):
             text = self.message
         # {{nick}} → the remembered selected user (Click User) of this run;
         # falls back to the queued user of this step, as before.
-        nick = user_nick
-        if engine is not None:
-            nick = getattr(engine, "selected_nick", "") or user_nick
-        text = text.replace("{{nick}}", nick)
+        text = resolve_nick(text, user_nick, engine)
         report = engine.report if engine else None
         ok = await type_message(cdp, text, self.typing_speed_ms, report)
         return ActionResult.OK if ok else ActionResult.FAIL

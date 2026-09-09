@@ -7,7 +7,7 @@ click itself — each phase logged separately.
 
 import logging
 from typing import Optional
-from actions.base_action import BaseAction
+from actions.base_action import BaseAction, resolve_nick
 from actions.find_click_runner import find_and_click
 from backend.cdp_client import CDPClient
 
@@ -34,15 +34,17 @@ class ClickBack(BaseAction):
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
         await self.pre_delay()
+        # The config panel promises "{{nick}} = selected user" (BUG-04).
+        tab_name = resolve_nick(self.tab_name, user_nick, engine)
         return await find_and_click(
             cdp,
             selector=self.selector,
             label_selector=self.child_selector,
-            match_text=self.tab_name,
+            match_text=tab_name,
             click_enabled=True,
             highlight_enabled=self.highlight_enabled,
             confirm_pause_ms=self.confirm_pause_ms,
-            label=f"back tab “{self.tab_name}”",
+            label=f"back tab “{tab_name}”",
             engine=engine,
         )
 
