@@ -6,7 +6,7 @@ import copy
 from typing import Any
 from datetime import datetime
 
-from core.result import Result
+from core.result import Result, ok, err
 from stores.atomic import AtomicJsonStore
 
 
@@ -31,11 +31,11 @@ class BlockStore:
     def named_delete(self, section: str, name: str) -> Result[bool]:
         all_items = self.named_all(section)
         if str(name) not in all_items:
-            return Result.ok(False)
+            return ok(False)
         del all_items[str(name)]
         self._atomic.set(section, all_items)
         res = self._atomic.save()
-        return Result.ok(True) if res.is_ok else Result.err(res.error or "save failed")
+        return ok(True) if res.is_ok else err(res.detail or res.code or "save failed")
 
     # custom_blocks is a list
     def custom_blocks(self) -> list[dict[str, Any]]:
@@ -45,7 +45,7 @@ class BlockStore:
     def save_custom_block(self, name: str, block: dict[str, Any]) -> Result[None]:
         name = (name or "").strip()
         if not name or not isinstance(block, dict):
-            return Result.err("name and block required")
+            return err("name and block required")
         items = [b for b in self.custom_blocks() if isinstance(b, dict) and b.get("name") != name]
         items.append({"name": name, "block": block, "updated_at": datetime.now().isoformat(timespec="seconds")})
         self._atomic.set("custom_blocks", items)
@@ -56,7 +56,7 @@ class BlockStore:
         items = self.custom_blocks()
         filtered = [b for b in items if isinstance(b, dict) and b.get("name") != name]
         if len(filtered) == len(items):
-            return Result.ok(False)
+            return ok(False)
         self._atomic.set("custom_blocks", filtered)
         res = self._atomic.save()
-        return Result.ok(True) if res.is_ok else Result.err(res.error or "save failed")
+        return ok(True) if res.is_ok else err(res.detail or res.code or "save failed")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from core.result import Result
+from core.result import Result, ok, err
 from stores.atomic import AtomicJsonStore
 
 MAX_STACK_HISTORY = 100
@@ -53,5 +53,5 @@ class UndoStore:
         idx = len(hist) - 1
         res = self.set(hist, idx)
         if res.is_ok:
-            return Result.ok((hist, idx))
-        return Result.err(res.error or "save failed")
+            return ok((hist, idx))
+        return err(res.detail or res.code or "save failed")

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from core.result import Result
+from core.result import Result, ok, err
 from stores.atomic import AtomicJsonStore
 
 
 DEFAULT_URLS = ["https://ru.virt-chat.com/chat", "https://ru.virt-chat.com/"]
+DEFAULT_BOOKMARKS = DEFAULT_URLS
 
 
 class BookmarkStore:
@@ -22,13 +23,13 @@ class BookmarkStore:
     def add(self, url: str) -> Result[None]:
         url = (url or "").strip()
         if not url:
-            return Result.err("empty url")
+            return err("empty url")
         presets = self.all()
         if url not in presets:
             presets.append(url)
             self._atomic.set("url_presets", presets)
             return self._atomic.save()
-        return Result.ok(None)
+        return ok(None)
 
     def remove(self, url: str) -> Result[None]:
         url = (url or "").strip()  # add() strips on write
@@ -37,7 +38,7 @@ class BookmarkStore:
             presets.remove(url)
             self._atomic.set("url_presets", presets)
             return self._atomic.save()
-        return Result.ok(None)
+        return ok(None)
 
     def set_all(self, urls: list[str]) -> Result[None]:
         self._atomic.set("url_presets", list(urls))

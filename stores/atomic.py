@@ -8,7 +8,7 @@ import copy
 import logging
 from typing import Any
 
-from core.result import Result
+from core.result import Result, ok, err
 
 log = logging.getLogger("chatbot")
 
@@ -43,7 +43,7 @@ class AtomicJsonStore:
                 os.fsync(f.fileno())
             os.replace(tmp, self._path)
             log.info("Store saved %s", self._path)
-            return Result.ok(None)
+            return ok(None)
         except (OSError, TypeError, ValueError) as exc:  # noqa: BLE001
             # TypeError/ValueError: unserialisable in-memory data. A Result,
             # not a raise — and the previous good file is untouched (the
@@ -54,7 +54,7 @@ class AtomicJsonStore:
                     os.remove(tmp)
             except OSError:
                 pass
-            return Result.err(str(exc))
+            return err(str(exc))
 
     # generic nested access helpers
     def get(self, *keys: str, default: Any = None) -> Any:
