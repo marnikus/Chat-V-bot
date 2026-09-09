@@ -289,6 +289,95 @@ t('a handler that throws never blocks the rest of the queue', () => {
   eq(ran, [1]);
 });
 
+// ── THE 2026-09-09 INCIDENT, pinned forever ──────────────────────
+// In the real page app.js declares `const App = {...}` — a classic
+// script's top-level const lives in the global LEXICAL scope, not on
+// window. bridge-ready.js originally assigned via `window.App` (always
+// undefined in the page) → App.bridge was never set → the app ran in
+// standalone mode: no session restore, no DB window, no presets — it
+// looked like every database had been destroyed. This test simulates
+// the REAL condition: App resolvable by name, but NOT a window
+// property.
+t('App is handed the bridge even when it is a lexical const (the incident)', () => {
+  // App passed as a FUNCTION PARAMETER = a binding the code can resolve
+  // by name, while window carries no App at all — exactly the browser.
+  const doml = {};
+  const win = { addEventListener() {}, removeEventListener() {} };  // no App!
+  const sentinel = { bridge: null, ready: false };
+  let channelCb = null;
+  const QWebChannel = function (transport, cb) { channelCb = cb; };
+  const qt = { webChannelTransport: {} };
+  const doc = {
+    getElementById: (id) => byId[id] || null,
+    createElement: mkEl,
+    addEventListener(ev, fn) { (doml[ev] = doml[ev] || []).push(fn); },
+    removeEventListener() {},
+  };
+  new Function('App', 'window', 'document', 'QWebChannel', 'qt',
+               readUi('js/core/bridge-ready.js'))(
+    sentinel, win, doc, QWebChannel, qt);
+  (doml['DOMContentLoaded'] || []).forEach((fn) => fn());
+  const fakeBridge = { get_tabs() {}, db_create() {} };
+  channelCb({ objects: { bridge: fakeBridge } });
+  eq(sentinel.bridge, fakeBridge,
+     'App.bridge MUST be assigned when App is a lexical binding');
+  ok(sentinel.ready, 'App.ready set');
+  eq(win.App, undefined, 'window.App stays untouched (it does not exist)');
+});
+
+// The whole page, in the exact order index.html loads it, evaluated
+// against the REAL global object like a browser does (UMD modules
+// attach to self/window; panels address each other through it).
+t('every script in index.html evaluates cleanly in page order', () => {
+  const html = readUi('index.html');
+  const srcs = [];
+  const re = /<script src="([^"]+)"><\/script>/g;
+  let m;
+  while ((m = re.exec(html))) srcs.push(m[1]);
+  ok(srcs.length >= 20, 'found the script tags (' + srcs.length + ')');
+  const local = srcs.filter((s) => !s.startsWith('qrc:'));
+  ok(local[0].includes('core/bridge-ready.js'),
+     'the handshake module loads before every panel');
+  const combined = local.map((s) => readUi(s)).join('\n;\n');
+
+  // a browser-ish global environment
+  const prevWindow = global.window, prevSelf = global.self,
+        prevDocument = global.document;
+  const doml = {};
+  global.document = {
+    getElementById: (id) => byId[id] || null,
+    createElement: mkEl,
+    querySelectorAll: () => [],
+    addEventListener(ev, fn) { (doml[ev] = doml[ev] || []).push(fn); },
+    removeEventListener() {},
+    documentElement: mkEl('html'),
+  };
+  global.window = global;
+  global.self = global;
+  try {
+    // one shared scope, no module/exports/QWebChannel/qt in reach.
+    // `const App` inside the function is a LEXICAL binding — reachable
+    // by name from every later "script" in the same scope, never a
+    // window property: exactly the browser condition of the incident.
+    new Function('module', 'exports', 'QWebChannel', 'qt',
+                 combined + '\n;globalThis.__pageApp = App;')(
+      undefined, undefined, undefined, undefined);
+    ok(global.BridgeReady, 'core/bridge-ready.js published BridgeReady');
+    ok(global.Dialog, 'core/dialog.js published Dialog');
+    ok(global.UIHelpers, 'core/ui-helpers.js published UIHelpers');
+    ok(global.SashCore, 'sash-core.js published SashCore (UMD self path)');
+    // nothing connected yet: the page is simply waiting for the channel
+    eq(global.__pageApp.bridge, null);
+    eq(global.__pageApp.ready, false);
+  } finally {
+    global.window = prevWindow;
+    global.self = prevSelf;
+    global.document = prevDocument;
+    ['BridgeReady', 'Dialog', 'UIHelpers', 'SashCore', '__pageApp']
+      .forEach((k) => { try { delete global[k]; } catch (e) {} });
+  }
+});
+
 // ═════════════════════════════════════════════════════════════════
 // wiring: index.html loads the core modules before every panel
 // ═════════════════════════════════════════════════════════════════

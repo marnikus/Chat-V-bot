@@ -35,9 +35,17 @@ window.BridgeReady = (function () {
   function onChannel(channel) {
     bridge = channel.objects.bridge;
     connected = true;
-    if (window.App) {
-      window.App.bridge = bridge;
-      window.App.ready = true;
+    // `App` is declared as a top-level `const` in app.js — a classic
+    // script's top-level const/let lives in the global LEXICAL scope,
+    // NOT on window, so window.App is undefined in the real page. Resolve
+    // the binding itself; fall back to window.App for environments that
+    // publish it there (node harnesses). Without this the page boots in
+    // "standalone mode" and every bridge call no-ops (looked like all
+    // data was gone — 2026-09-09 incident).
+    const app = (typeof App !== 'undefined') ? App : window.App;
+    if (app) {
+      app.bridge = bridge;
+      app.ready = true;
     }
     console.log('QWebChannel connected');
     flush();

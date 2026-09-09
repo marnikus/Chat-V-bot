@@ -264,6 +264,13 @@ def main() -> int:
         log.info("Graceful shutdown…")
         try:
             engine.stop()
+            # let in-flight world-undo saves land before the databases
+            # close — a cancelled save would drop the last undo entries
+            pending = list(getattr(bridge, "_undo_pendings", None) or [])
+            if pending:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),
+                    timeout=2.0)
             tasks = [t for t in asyncio.all_tasks()
                      if t is not asyncio.current_task()]
             for t in tasks:
