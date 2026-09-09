@@ -28,7 +28,11 @@ try:
 except Exception:  # noqa: BLE001
     from backend.bridge import Bridge  # type: ignore
     Router = Bridge  # type: ignore
-from backend.history_service import HistoryService
+from backend.history_service import HistoryService as BackendHistoryService
+from services.history_service import HistoryService
+from services.media_service import MediaService
+from services.db_service import DbService
+from services.collector_service import CollectorService
 from core.di import Container
 from core.result import Result
 from core.events import EventBus
@@ -183,11 +187,12 @@ class MainWindow(QMainWindow):
 
 
 def build_container(config: ConfigManager | None = None) -> Container:
-    """DI container — ~40 lines, no third-party framework.
+    """DI container — ~50 lines, no third-party framework.
 
     Arrows down only: main -> bridge/router -> services(Result) -> stores(atomic).
-    Registers 8 keys: config, event_bus, atomic_store, settings_store, cdp,
-    memory, criteria, engine, history_service, bridge (10 with bus).
+    Registers 12 keys: config, event_bus, atomic_store, settings_store, cdp,
+    memory, criteria, engine, history_service, media_service, db_service,
+    collector_service, bridge (13 with bus). Each service <150 LOC, reusable.
     """
     c = Container()
     cfg = config or ConfigManager()
@@ -212,6 +217,9 @@ def build_container(config: ConfigManager | None = None) -> Container:
                              session_id=datetime.now().strftime("%Y%m%d-%H%M%S"), memory=cont.resolve("memory"))
 
     c.register("history_service", _history_factory)
+    c.register("media_service", lambda cont: MediaService(cont.resolve("history_service")))
+    c.register("db_service", lambda cont: DbService(cont.resolve("history_service")))
+    c.register("collector_service", lambda cont: CollectorService(cont.resolve("history_service")))
 
     def _bridge_factory(cont: Container):  # type: ignore
         br = Bridge(cdp=cont.resolve("cdp"), memory=cont.resolve("memory"), criteria=cont.resolve("criteria"),
@@ -296,8 +304,13 @@ def main() -> int:
     async def startup() -> None:
         await memory.init()
         try:
-            await history.init()
-            history.start()
+            res = await history.init()
+            if isinstance(res, Result) and res.is_err:
+                log.warning("Message archive unavailable: %s", res.error)
+            else:
+                start_res = history.start()
+                if isinstance(start_res, Result) and start_res.is_err:
+                    log.warning("Message archive start failed: %s", start_res.error)
         except Exception as exc:                      # noqa: BLE001
             log.warning("Message archive unavailable: %s", exc)
         # rebuild the unified undo timeline from both stores (config's

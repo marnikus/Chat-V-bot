@@ -14,12 +14,17 @@ log = logging.getLogger("chatbot")
 
 
 class CollectorService:
-    """Collector orchestrated through HistoryService (no repo direct)."""
+    """Collector orchestrated through HistoryService — no direct repo.
+
+    Reusable without Qt: only talks to HistoryService.collector, never to
+    HistoryRepo or MediaStore directly. All methods return Result[T].
+    """
 
     def __init__(self, history_service) -> None:
         self._hs = history_service
-        self._collector = getattr(history_service, "collector", None)
-        self._repo = getattr(history_service, "repo", None)
+        # only collector via HistoryService, never repo/media directly
+        inner = getattr(history_service, "inner", None) or getattr(history_service, "_inner", None) or history_service
+        self._collector = getattr(inner, "collector", None) or getattr(history_service, "collector", None)
 
     async def tick(self) -> Result[dict[str, Any]]:
         try:
