@@ -26,9 +26,9 @@ import os
 from typing import Any
 
 from stores.jsonio import config_dir_for
-from stores.migration import migrate_legacy_config
-from stores.settings_store import SettingsStore, SETTINGS_DEFAULTS
-from stores.bookmark_store import BookmarkStore, DEFAULT_BOOKMARKS
+from stores.migration import migrate as migrate_legacy_config
+from stores.settings_store import SettingsStore, DEFAULTS as SETTINGS_DEFAULTS
+from stores.bookmark_store import BookmarkStore, DEFAULT_URLS as DEFAULT_BOOKMARKS
 from stores.block_store import BlockStore
 from stores.session_store import SessionStore
 from stores.undo_store import UndoStore
@@ -212,11 +212,7 @@ class ConfigManager:
 
     def data(self) -> dict[str, Any]:
         """Full JSON-serialisable merged data (for get_app_state etc.)."""
-        # underlay the defaults so a fresh install (no settings.json yet)
-        # still reports the whole documented tree, not just the routed
-        # sections — "merged" must mean the same thing `get()` serves.
-        merged = copy.deepcopy(SETTINGS_DEFAULTS)
-        merged.update(self.settings.data())
+        merged = self.settings.data()
         merged["url_presets"] = self.bookmarks.all()
         merged["custom_blocks"] = self.blocks.all()
         merged["labels"] = self.labels_file.data()
