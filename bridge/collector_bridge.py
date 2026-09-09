@@ -1,90 +1,171 @@
-"""CollectorBridge — passive chat collector controls."""
+"""CollectorBridge — the passive collector window + My Nick.
+
+The collector itself lives inside the archive service
+(services/collector_service.py) and keeps its Qt signals; this bridge
+wires them (at attach_history time, when the archive exists) and adds
+the panel's @Slot controls.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+
 from PySide6.QtCore import QObject, Signal, Slot
+
+from core.events import LogMessage, MyNickChanged
 
 log = logging.getLogger("chatbot")
 
 
 class CollectorBridge(QObject):
-    collector_status = Signal(str)
-    collector_log = Signal(str)
-    history_appended = Signal(str)
-    my_nick_changed = Signal(str)
-    log_message = Signal(str, str)
-    history_error = Signal(str, str)
+    collector_status = Signal(str)           # JSON collector state payload
+    collector_log = Signal(str)              # JSON {ts, level, message, nick}
+    history_appended = Signal(str)           # JSON {nick, items, added}
+    my_nick_changed = Signal(str)            # the configured "my nick"
 
-    def __init__(self, ctx: dict, parent=None):
+    def __init__(self, ctx, parent=None):
         super().__init__(parent)
-        self._history = None
-        self._config = ctx.get("config")
+        self.ctx = ctx
+        self._announcing = None           # see _forward_status/_announce
+        ctx.bus.subscribe(MyNickChanged,
+                          lambda e: self.my_nick_changed.emit(e.nick))
 
-    def attach_history(self, service):
-        self._history = service
-        if service:
+    def attach_archive(self, service) -> None:
+        """Wire the archive's collector signals (called by attach_history)."""
+        if service is None:
+            return
+        try:
+            service.collector.status_changed.connect(self._forward_status)
+            service.collector.collector_log.connect(self.collector_log.emit)
+            service.collector.history_appended.connect(
+                self.history_appended.emit)
+            # a private chat with an unknown partner creates a People row
+            service.collector.people_changed.connect(
+                lambda *_a: self._refresh_people())
+        except Exception as exc:                         # noqa: BLE001
+            log.warning("collector signals not connected: %s", exc)
+
+    def _forward_status(self, payload: str) -> None:
+        """The @Slot commands announce the state themselves after acting;
+        a status_changed fired synchronously INSIDE the command is the
+        same announcement — suppress that echo. Async ticks run outside
+        the announce window and pass through."""
+        if self._announcing:
+            return
+        self.collector_status.emit(payload)
+
+    def _announce(self) -> None:
+        payload = json.dumps(self.ctx.archive.collector.state_payload(),
+                             ensure_ascii=False)
+        self.collector_status.emit(payload)
+        self._announcing = False
+
+    def _refresh_people(self) -> None:
+        from core.events import PeopleChanged
+        self.ctx.bus.emit(PeopleChanged(reason="collector"))
+
+    def _run_async(self, scope: str, coro) -> None:
+        async def guarded():
             try:
-                service.collector.status_changed.connect(self.collector_status.emit)
-                service.collector.collector_log.connect(self.collector_log.emit)
-                service.collector.history_appended.connect(self.history_appended.emit)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("collector signals not connected: %s", exc)
+                await coro
+            except Exception as exc:                     # noqa: BLE001
+                log.warning("collector %s failed: %s", scope, exc)
+        try:
+            import asyncio
+            asyncio.ensure_future(guarded())
+        except RuntimeError:
+            coro.close()
 
+    # ── the collector window ─────────────────────────────────────
     @Slot(result=str)
     def collector_state(self):
-        if self._history is None:
-            return json.dumps({"state":"off","text":"Archive not running","settings":{},"paused":False})
-        return json.dumps(self._history.collector.state_payload(), ensure_ascii=False)
+        if self.ctx.archive is None:
+            return json.dumps({"state": "off",
+                               "text": "Archive not running",
+                               "settings": {}, "paused": False})
+        return json.dumps(self.ctx.archive.collector.state_payload(),
+                          ensure_ascii=False)
 
     @Slot(str)
     def collector_set(self, settings_json):
-        if self._history is None: return
-        try: patch=json.loads(settings_json or "{}")
-        except json.JSONDecodeError: return
-        applied=self._history.collector.configure(**patch)
-        stored=self._config.get_copy("collector", default={}) if self._config else {}
-        stored.update({k:v for k,v in applied.items()})
-        if self._config: self._config.set("collector", stored); self._config.save()
-        self.collector_status.emit(json.dumps(self._history.collector.state_payload(), ensure_ascii=False))
+        """Apply and persist collector settings from the panel."""
+        if self.ctx.archive is None:
+            return
+        try:
+            patch = json.loads(settings_json or "{}")
+        except (TypeError, ValueError):
+            return
+        if not isinstance(patch, dict):
+            return
+        self._announcing = True
+        try:
+            applied = self.ctx.archive.collector.configure(**patch)
+            stored = self.ctx.config.get_copy("collector", default={})
+            if not isinstance(stored, dict):
+                stored = {}
+            stored.update({k: v for k, v in applied.items()})
+            self.ctx.config.set("collector", stored)
+            self.ctx.config.save()
+            self._announce()
+        finally:
+            self._announcing = False
 
     @Slot(str)
     def collector_command(self, command):
-        if self._history is None: return
-        c=self._history.collector; act=str(command or "").strip().lower()
-        if act=="pause": c.pause()
-        elif act=="resume": c.resume()
-        elif act=="start": c.start(); self._history.start()
-        elif act=="stop": c.stop()
-        elif act=="tick": asyncio.ensure_future(c.tick())
-        elif act in ("backfill_older","backfill"): asyncio.ensure_future(c.backfill_older())
-        else: return
-        self.collector_status.emit(json.dumps(c.state_payload(), ensure_ascii=False))
+        """pause / resume / start / stop / tick — anything else is ignored."""
+        if self.ctx.archive is None:
+            return
+        collector = self.ctx.archive.collector
+        action = str(command or "").strip().lower()
+        if action not in ("pause", "resume", "start", "stop", "tick",
+                          "backfill_older", "backfill"):
+            return
+        self._announcing = True
+        try:
+            if action == "pause":
+                collector.pause()
+            elif action == "resume":
+                collector.resume()
+            elif action == "start":
+                collector.start()
+                self.ctx.archive.start()
+            elif action == "stop":
+                collector.stop()
+            elif action == "tick":
+                self._run_async("collector_tick", collector.tick())
+            else:
+                self._run_async("collector_backfill",
+                                collector.backfill_older())
+            self._announce()
+        finally:
+            self._announcing = False
 
+    # ── My Nick (pinned header) ──────────────────────────────────
     @Slot(result=str)
     def get_my_nick(self):
-        return str(self._config.get("collector","my_nick",default="") or "") if self._config else ""
+        value = self.ctx.config.get("collector", "my_nick", default="")
+        return str(value or "")
 
     @Slot(str)
     def set_my_nick(self, nick):
-        clean=" ".join(str(nick or "").split()).strip()
-        if self._config:
-            stored=self._config.get_copy("collector", default={}) or {}
-            stored["my_nick"]=clean; self._config.set("collector", stored)
-            recent=[n for n in (self._config.get_state("my_nick_recent",[]) or []) if isinstance(n,str) and n and n!=clean]
-            if clean: recent.insert(0,clean)
-            self._config.set_state(my_nick_recent=recent[:10])
-        if self._history: self._history.set_my_nick(clean)
-        self.my_nick_changed.emit(clean)
-        self.log_message.emit(f"👤 My Nick set to “{clean}”" if clean else "👤 My Nick cleared","info")
-
-    @Slot(str)
-    def detect_my_nick(self, req_id):
-        if self._history is None: self.history_error.emit("detect_my_nick","archive not running"); return
-        async def work():
-            state=await self._history.parser.state()
-            from PySide6.QtCore import Signal  # noqa: F401
-            self.collector_status.emit(json.dumps(state, ensure_ascii=False))
-        asyncio.ensure_future(work())
+        clean = " ".join(str(nick or "").split()).strip()
+        stored = self.ctx.config.get_copy("collector", default={})
+        if not isinstance(stored, dict):
+            stored = {}
+        stored["my_nick"] = clean
+        self.ctx.config.set("collector", stored)
+        recent = [n for n in
+                  (self.ctx.config.get_state("my_nick_recent", []) or [])
+                  if isinstance(n, str) and n and n != clean]
+        if clean:
+            recent.insert(0, clean)
+        self.ctx.config.set_state(my_nick_recent=recent[:10])
+        if self.ctx.archive is not None:
+            self.ctx.archive.set_my_nick(clean)
+        # ONE announcement: the bus event (the bridge's own subscription
+        # is the wire path) — a direct emit here doubled every update
+        self.ctx.bus.emit(MyNickChanged(nick=clean))
+        self.ctx.bus.emit(LogMessage(
+            message=f"👤 My Nick set to “{clean}”" if clean else
+                    "👤 My Nick cleared", level="info"))

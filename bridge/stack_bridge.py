@@ -34,6 +34,8 @@ class StackBridge(QObject):
         super().__init__(parent)
         self.ctx = ctx
         self._message_text = ""
+        self._publishing = None            # see _publish_presets
+        self._publishing_payload = None
         ctx.bus.subscribe(PresetsChanged, self._on_presets)
         ctx.bus.subscribe(StackLoaded,
                           lambda e: self.stack_loaded.emit(e.name, e.payload))
@@ -57,11 +59,34 @@ class StackBridge(QObject):
 
     def _on_presets(self, event) -> None:
         if event.kind == "stacks":
+            if self._is_own_echo("stacks", event):
+                return
             self.preset_list_updated.emit(event.payload or "[]")
         elif event.kind == "templates":
+            if self._is_own_echo("templates", event):
+                return
             self.template_list_updated.emit(event.payload or "[]")
         elif event.kind == "custom_blocks":
+            if self._is_own_echo("custom_blocks", event):
+                return
             self.custom_blocks_updated.emit(event.payload or "[]")
+
+    def _publish_presets(self, kind: str, payload: str) -> None:
+        """Emit the domain signal once and publish the bus event for the
+        other listeners — WITHOUT re-consuming our own event. The bus is
+        synchronous, so a re-entrancy guard around the publish reliably
+        suppresses the self-echo (undo restores and preset imports still
+        arrive from outside and are re-emitted normally)."""
+        self._publishing = kind
+        self._publishing_payload = payload or "[]"
+        try:
+            self.ctx.bus.emit(PresetsChanged(kind=kind, payload=payload))
+        finally:
+            self._publishing = None
+
+    def _is_own_echo(self, kind: str, event) -> bool:
+        return (self._publishing == kind
+                and (event.payload or "[]") == self._publishing_payload)
 
     @staticmethod
     def _clean_blocks(blocks):
@@ -82,6 +107,10 @@ class StackBridge(QObject):
             blocks = json.loads(stack_json)
         except json.JSONDecodeError:
             self._log("❌ Bad JSON", "error")
+            return
+        if not isinstance(blocks, list):
+            # a dict would silently normalize to [] and WIPE the stack
+            self._log("❌ Bad stack payload (expected a list)", "error")
             return
         blocks = self._clean_blocks(blocks)
         engine.load_stack(blocks)
@@ -141,7 +170,7 @@ class StackBridge(QObject):
         payload = json.dumps(self.ctx.presets.list_stacks(),
                              ensure_ascii=False)
         self.preset_list_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="stacks", payload=payload))
+        self._publish_presets("stacks", payload)
 
     @Slot(str, str)
     def save_stack_preset(self, name, stack_json):
@@ -218,7 +247,7 @@ class StackBridge(QObject):
         payload = json.dumps(self.ctx.presets.list_templates(),
                              ensure_ascii=False)
         self.template_list_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="templates", payload=payload))
+        self._publish_presets("templates", payload)
 
     @Slot(str, str)
     def save_template_preset(self, name, body):
@@ -263,8 +292,7 @@ class StackBridge(QObject):
         payload = json.dumps(self.ctx.config.blocks.all(),
                              ensure_ascii=False)
         self.custom_blocks_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="custom_blocks",
-                                         payload=payload))
+        self._publish_presets("custom_blocks", payload)
 
     @Slot(result=str)
     def list_custom_blocks(self):
