@@ -25,10 +25,10 @@ from datetime import datetime
 from typing import Callable, Iterable, Optional
 
 from backend import chat_agent_js
-from backend.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     MessageRecord,  # noqa: F401
                                     SyncResult)
-from backend.history_repo import HistoryRepo, align_batch
+from stores.history_repo import HistoryRepo, align_batch
 
 log = logging.getLogger("chatbot")
 
