@@ -528,169 +528,6 @@
             "enabled": true,
             "block_id": "REPEAT_LOOP",
             "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "grid",
-        "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"log\"},{\"t\":\"leaf\",\"id\":\"stack\"}],\"sizes\":[24.07987470634299,75.92012529365701]},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[56.38214565387627,43.61785434612373]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[49.27844807191862,50.721551928081375]},{\"t\":\"leaf\",\"id\":\"people\"}],\"sizes\":[35.27799530148786,64.72200469851214]}],\"sizes\":[68.49779379208208,31.502206207917922]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"leaf\",\"id\":\"collector\"}],\"sizes\":[40,35,25]}],\"sizes\":[74,26]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"dbconn\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[50.0,50.0]}],\"sizes\":[82,18]}}"
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": false,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "{{nick}}",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Привееет,  скучаешь ... ?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "gif",
-            "rotation_mode": "sequential",
-            "simulate_dialog": true,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "verify_timeout_ms": 8000,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "duration_ms": 1000,
-            "enabled": true,
-            "block_id": "PAUSE",
-            "pre_delay_ms": 500
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
           },
           {
             "pick_mode": "random_new",
@@ -13686,6 +13523,28 @@
           "before_path": "d:\\google drive\\chat v bot\\chat v bot\\v.db",
           "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260909-021739_deleted_5ac6272c13a0_v.db"
         }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "create",
+          "command_id": "680aa135d34b4c73b45c1fb97270a62b",
+          "was_active": false,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\s.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\c.db",
+          "backup": ""
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "clean",
+          "command_id": "b47039db8ce944e8931f11043cfb96d6",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\c.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\c.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260909-024031_clean_3e739d21da5d_c.db"
+        }
       }
     ],
     "undo_history_index": 99,
@@ -13710,6 +13569,8 @@
       "minimized": []
     },
     "db_recent": [
+      "d:\\google drive\\chat v bot\\chat v bot\\m.db",
+      "d:\\google drive\\chat v bot\\chat v bot\\s.db",
       "d:\\google drive\\chat v bot\\chat v bot\\c.db"
     ]
   },
