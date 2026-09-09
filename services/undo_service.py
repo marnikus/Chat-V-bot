@@ -29,7 +29,7 @@ from core.events import (EventBus, ArchiveUndoApplied, DbChanged,
                          UserDbChanged)
 from core.result import Err, Ok, Result
 from services.layout_service import LayoutService
-from services.run_service import normalize_blocks
+from services.run import normalize_blocks
 
 log = logging.getLogger("chatbot")
 

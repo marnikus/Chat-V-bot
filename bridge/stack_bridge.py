@@ -15,7 +15,7 @@ from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import (LogMessage, PresetsChanged, StackLoaded)
-from services.run_service import normalize_blocks
+from services.run import normalize_blocks
 
 log = logging.getLogger("chatbot")
 

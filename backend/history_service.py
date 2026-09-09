@@ -1,6 +1,6 @@
-"""Compatibility shim — the archive service lives in services/history_service.py."""
+"""Compatibility shim — the archive service lives in services/history/."""
 
-from services.history_service import (  # noqa: F401
+from services.history import (  # noqa: F401
     HistoryService, HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT, OLD_MAX_FILE_MB,
     _merge, _db_stem,
 )

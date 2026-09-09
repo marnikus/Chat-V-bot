@@ -39,7 +39,7 @@ from bridge.stack_bridge import StackBridge
 from bridge.undo_bridge import UndoBridge
 from core.events import LogMessage
 from services.people_service import people_row
-from services.run_service import normalize_blocks
+from services.run import normalize_blocks
 from services.undo_service import UndoService
 from stores.preset_store import PresetStore
 
