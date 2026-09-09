@@ -18,11 +18,13 @@ from qasync import QEventLoop
 from backend.logger import setup_logger
 from backend.config_manager import ConfigManager
 from backend.cdp_client import CDPClient
-from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
-from backend.action_engine import ActionEngine
 from backend.bridge import Bridge
-from backend.history_service import HistoryService
+from services.run_service import ActionEngine
+from services.history_service import HistoryService
+from stores.user_memory import UserMemory
+from core.di import Container
+from core.events import EventBus
 
 log = logging.getLogger("chatbot")
 
@@ -171,6 +173,55 @@ class MainWindow(QMainWindow):
         os._exit(0)
 
 
+def build_container() -> Container:
+    """The ONLY place objects are constructed and wired (the composition
+    root). Every factory resolves its dependencies from the container;
+    nothing else in the app reaches for a global singleton."""
+    container = Container()
+    container.register("config", lambda _c: ConfigManager())
+    container.register("bus", lambda _c: EventBus())
+    container.register(
+        "cdp",
+        lambda c: CDPClient(
+            host=c.get("config").get("chrome", "host", default="127.0.0.1"),
+            port=c.get("config").get("chrome", "port", default=9222)))
+    container.register(
+        "memory",
+        lambda c: UserMemory(_queue_path(c.get("config"))))
+    container.register("criteria", lambda _c: CriteriaEngine())
+    container.register(
+        "engine",
+        lambda c: ActionEngine(cdp=c.get("cdp"), memory=c.get("memory"),
+                               criteria=c.get("criteria")))
+    # Message archive: one database, one media cache, one passive collector
+    # shared by the COLLECT_HISTORY block, the history windows and the
+    # Chat Message Collector panel.
+    container.register(
+        "history",
+        lambda c: HistoryService(
+            cdp=c.get("cdp"), config=c.get("config"),
+            session_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
+            memory=c.get("memory")))
+    container.register(
+        "bridge",
+        lambda c: Bridge(cdp=c.get("cdp"), memory=c.get("memory"),
+                         criteria=c.get("criteria"), engine=c.get("engine"),
+                         config=c.get("config")))
+    return container
+
+
+def _queue_path(config: ConfigManager) -> str:
+    """People queue: since the unified single-DB redesign the queue's
+    `users` table lives INSIDE the world file. A pre-redesign install
+    still has a separate chatbot.db — start from it, the startup
+    migration (HistoryService.migrate_install) merges it into the active
+    world and renames it out of the way, after which the queue follows
+    the world on every switch."""
+    legacy_queue = "chatbot.db"
+    world_path = str(config.get("history", "db_path", default="history.db"))
+    return legacy_queue if os.path.exists(legacy_queue) else world_path
+
+
 def main() -> int:
     app = QApplication(sys.argv)
     # We drive shutdown ourselves from MainWindow.closeEvent so that async
@@ -181,39 +232,18 @@ def main() -> int:
     asyncio.set_event_loop(loop)
 
     setup_logger()
-    config = ConfigManager()
+    container = build_container()
+    config = container.get("config")
     log.info("Starting ChatBot Automator")
 
-    # Backend services
-    cdp = CDPClient(
-        host=config.get("chrome", "host", default="127.0.0.1"),
-        port=config.get("chrome", "port", default=9222),
-    )
-    # People queue: since the unified single-DB redesign the queue's
-    # `users` table lives INSIDE the world file. A pre-redesign install
-    # still has a separate chatbot.db — start from it, the startup
-    # migration (HistoryService.migrate_install) merges it into the active
-    # world and renames it out of the way, after which the queue follows
-    # the world on every switch.
-    legacy_queue = "chatbot.db"
-    world_path = str(config.get("history", "db_path", default="history.db"))
-    queue_path = legacy_queue if os.path.exists(legacy_queue) else world_path
-    memory = UserMemory(queue_path)
-    criteria = CriteriaEngine()
-    engine = ActionEngine(cdp=cdp, memory=memory, criteria=criteria)
-
-    # Message archive: one database, one media cache, one passive collector
-    # shared by the COLLECT_HISTORY block, the history windows and the
-    # Chat Message Collector panel.
-    history = HistoryService(cdp=cdp, config=config,
-                             session_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
-                             memory=memory)
-    engine.history = history
+    cdp = container.get("cdp")
+    memory = container.get("memory")
+    engine = container.get("engine")
+    history = container.get("history")
 
     # Window + bridge
     window = MainWindow(config=config)
-    bridge = Bridge(cdp=cdp, memory=memory, criteria=criteria,
-                    engine=engine, config=config)
+    bridge = container.get("bridge")
     bridge.attach_history(history)
     window.set_bridge(bridge)
     channel = QWebChannel()
