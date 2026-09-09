@@ -225,7 +225,16 @@ function restoreSession(json) {
 
   const state = payload.state || {};
 
-  // 0) restore the one global history first (persisted across sessions)
+  // 0) restore the Block Config pin FIRST, before any history/stack step
+  // below that could throw and abort the tail of this restore. Applying it
+  // early is safe: setStack()/loadStack() below respect the pin and will
+  // keep a pinned (empty) panel open rather than closing it.
+  if (typeof state.block_config_pinned === 'boolean' &&
+      typeof StackDnD.applyConfigPin === 'function') {
+    StackDnD.applyConfigPin(state.block_config_pinned);
+  }
+
+  // 0b) restore the one global history (persisted across sessions)
   App.loadGlobalHistory(state);
   // Keep StackDnD's legacy projection populated for old integrations; its
   // buttons and keyboard shortcuts delegate to App's global history below.
@@ -250,15 +259,6 @@ function restoreSession(json) {
     PresetsUI.loadStack(lastPreset);
   } else {
     StackDnD.refreshPresets();
-  }
-
-  // Block Config pin is persisted in the same session state (config.json) so
-  // a pinned panel reopens (empty state) after an app restart. Applied AFTER
-  // the stack restore so a pinned-but-deselected panel is reopened even when
-  // setStack() cleared the selection.
-  if (typeof state.block_config_pinned === 'boolean' &&
-      typeof StackDnD.applyConfigPin === 'function') {
-    StackDnD.applyConfigPin(state.block_config_pinned);
   }
 
   // 2) restore the last bookmark + try auto-connect with its URL
