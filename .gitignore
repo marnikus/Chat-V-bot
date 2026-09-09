@@ -11,3 +11,8 @@ logs/*.jsonl
 media_cache/
 saved_media/
 history.db*
+
+# Runtime config (split stores — migrated from the old single config.json)
+config/
+config.json
+config.json.migrated-*
