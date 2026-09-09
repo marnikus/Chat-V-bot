@@ -841,7 +841,11 @@ class ActionEngine(QObject):
         if enabled_count == 0:
             self.debug_msg.emit("⚠ All blocks are disabled — nothing to run", "warn")
             self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
-            return True
+            # BUG FIX: this used to return True, which made the cycle mark
+            # every queued person "messaged" (Done) even though nothing ran —
+            # silently emptying the New queue. "Nothing ran" must not consume
+            # the queue: report the user as not completed so no mark happens.
+            return False
         for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
                 return False
