@@ -3,6 +3,11 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+from backend.chat_parser import sync_conversation
+from backend.user_memory import UserRecord
+
+log = logging.getLogger("chatbot")
+
 class CollectorMixin3d:
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
                     backfill_older: bool = False):

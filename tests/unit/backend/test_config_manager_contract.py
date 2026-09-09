@@ -258,7 +258,14 @@ class TestCopyIsolation(ConfigCase):
         unrelated save()). One API, two aliasing rules. Pinned with
         expectedFailure: if get() is fixed to always copy, this flips to
         "unexpected success" — then drop the decorator.
+
+        NOTE: the aliasing only manifests for values resident in the
+        overlay (defaults-fallback reads are copies by design, so the
+        shipped tree can never be corrupted). The set() below puts the
+        section in the overlay first — without it the detector passes
+        vacuously on a fresh manager.
         """
+        self.cm.set("history", "media", "cache_dir", "saved_media")
         value = self.cm.get("history", "media")
         if isinstance(value, dict):
             value["injected"] = True

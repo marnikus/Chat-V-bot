@@ -3,6 +3,8 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+from backend.collector_parts.base import DEFAULTS
+
 class CollectorMixin1:
     def configure(self, **kwargs) -> dict:
         for key, value in (kwargs or {}).items():

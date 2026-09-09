@@ -1,4 +1,8 @@
-"""Session store — last-session state (state.*)."""
+"""Session store — one file (session.json) holding last-session state.
+
+The file is a flat dict (no "state" wrapper); missing keys fall back to
+DEFAULT_STATE below.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import copy
 from typing import Any
 
 from core.result import Result
-from stores.atomic import AtomicJsonStore
+from stores.jsonio import load_json, save_json
 
 
 DEFAULT_STATE: dict[str, Any] = {
@@ -24,32 +28,32 @@ DEFAULT_STATE: dict[str, Any] = {
 
 
 class SessionStore:
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    def __init__(self, path: str = "session.json") -> None:
+        self._path = path
+        self._data: dict[str, Any] = {}
+        self.load()
+
+    def load(self) -> None:
+        data = load_json(self._path, {})
+        self._data = data if isinstance(data, dict) else {}
+
+    def save(self) -> Result[None]:
+        if save_json(self._path, self._data):
+            return Result.ok(None)
+        return Result.err(f"session save failed: {self._path}")
 
     def get(self, key: str, default: Any = None) -> Any:
-        state = self._atomic.get("state", default={})
-        if not isinstance(state, dict):
-            return default
-        if key in state:
-            return copy.deepcopy(state[key])
+        if key in self._data:
+            return copy.deepcopy(self._data[key])
         if key in DEFAULT_STATE:
             return copy.deepcopy(DEFAULT_STATE[key])
         return default
 
-    def set(self, save: bool = True, **updates: Any) -> Result[None]:
-        state = self._atomic.get("state", default={})
-        if not isinstance(state, dict):
-            state = {}
-        else:
-            state = copy.deepcopy(state)
+    def set(self, save_now: bool = True, **updates: Any) -> None:
         for k, v in updates.items():
-            state[k] = v
-        self._atomic.set("state", state)
-        if save:
-            return self._atomic.save()
-        return Result.ok(None)
+            self._data[k] = v
+        if save_now:
+            self.save()
 
     def data(self) -> dict[str, Any]:
-        raw = self._atomic.get("state", default={})
-        return copy.deepcopy(raw) if isinstance(raw, dict) else {}
+        return copy.deepcopy(self._data)

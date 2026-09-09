@@ -77,18 +77,11 @@ class TestPaletteApi(RegistryIsolation):
         """
         self.assertIs(actions.get_action_class("PAUSE"), Pause)
 
-    @unittest.expectedFailure  # BUG-02: see docs/ACTIONS_TEST_DESIGN_2026-09-09.md §12
     def test_all_action_ids_contains_every_declared_block(self):
         """REG-02: the palette lists every block the package declares.
 
-        BLOCKED by BUG-02, not by the registry: `actions/collect_history.py`
-        imports `backend.chat_parser`, which dies with
-        `NameError: name 'TABLE_ORDER' is not defined` inside
-        `backend/history_db_parts/helpers.py` (the schema constants were lost
-        in the <150-LOC split and exist nowhere in the repo). Until they are
-        restored, COLLECT_HISTORY cannot be imported and therefore cannot
-        register. `unittest.expectedFailure` keeps the contract pinned: this
-        turns into an "unexpected success" the day the schema is back.
+        Was BLOCKED by BUG-02 (`actions/collect_history.py` could not
+        import `backend.chat_parser`); now a plain contract assertion.
         """
         declared = set(declared_block_ids())
         self.assertTrue(declared, "no block ids were discovered in actions/")

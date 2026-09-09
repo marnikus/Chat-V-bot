@@ -1,62 +1,75 @@
-"""Block store — stack_presets, template_presets, custom_blocks."""
+"""Block store — one file (blocks.json) holding custom blocks.
+
+The file is a bare list of {"name", "block", "updated_at"} entries.
+Named stack/template presets live in PresetStore, not here.
+"""
 
 from __future__ import annotations
 
 import copy
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 from core.result import Result
-from stores.atomic import AtomicJsonStore
+from stores.jsonio import load_json, save_json
 
 
 class BlockStore:
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    """Custom Find & Click block presets. Autosave-only: every mutation
+    persists immediately (the facade never calls load/save on blocks)."""
 
-    # generic named section helpers
-    def named_all(self, section: str) -> dict[str, Any]:
-        raw = self._atomic.get(section, default={})
-        return copy.deepcopy(raw) if isinstance(raw, dict) else {}
+    def __init__(self, path: str = "blocks.json") -> None:
+        self._path = path
+        self._data: list[dict[str, Any]] = []
+        self.load()
 
-    def named_get(self, section: str, name: str, default: Any = None) -> Any:
-        return self.named_all(section).get(name, default)
+    def load(self) -> None:
+        data = load_json(self._path, None)
+        self._data = list(data) if isinstance(data, list) else []
 
-    def named_set(self, section: str, name: str, value: Any) -> Result[None]:
-        all_items = self.named_all(section)
-        all_items[str(name)] = value
-        self._atomic.set(section, all_items)
-        return self._atomic.save()
+    def save(self) -> Result[None]:
+        if save_json(self._path, self._data):
+            return Result.ok(None)
+        return Result.err(f"blocks save failed: {self._path}")
 
-    def named_delete(self, section: str, name: str) -> Result[bool]:
-        all_items = self.named_all(section)
-        if str(name) not in all_items:
-            return Result.ok(False)
-        del all_items[str(name)]
-        self._atomic.set(section, all_items)
-        res = self._atomic.save()
-        return Result.ok(True) if res.is_ok else Result.err(res.error or "save failed")
+    def all(self) -> list[dict[str, Any]]:
+        return copy.deepcopy(self._data)
 
-    # custom_blocks is a list
-    def custom_blocks(self) -> list[dict[str, Any]]:
-        raw = self._atomic.get("custom_blocks", default=[])
-        return copy.deepcopy(raw) if isinstance(raw, list) else []
+    def save_block(self, name: str, block: dict[str, Any]) -> bool:
+        if not isinstance(name, str):
+            raise TypeError(f"name must be a str, got {type(name).__name__}")
+        if not isinstance(block, dict):
+            raise TypeError(
+                f"block must be a dict, got {type(block).__name__}")
+        name = name.strip()
+        if not name:
+            return False
+        entry = {"name": name, "block": copy.deepcopy(block),
+                 "updated_at": datetime.now().isoformat(timespec="seconds")}
+        for i, existing in enumerate(self._data):
+            if isinstance(existing, dict) and existing.get("name") == name:
+                self._data[i] = entry
+                break
+        else:
+            self._data.append(entry)
+        save_json(self._path, self._data)
+        return True
 
-    def save_custom_block(self, name: str, block: dict[str, Any]) -> Result[None]:
-        name = (name or "").strip()
-        if not name or not isinstance(block, dict):
-            return Result.err("name and block required")
-        items = [b for b in self.custom_blocks() if isinstance(b, dict) and b.get("name") != name]
-        items.append({"name": name, "block": block, "updated_at": datetime.now().isoformat(timespec="seconds")})
-        self._atomic.set("custom_blocks", items)
-        return self._atomic.save()
+    def delete(self, name: str) -> bool:
+        if not isinstance(name, str):
+            raise TypeError(f"name must be a str, got {type(name).__name__}")
+        name = name.strip()
+        for i, existing in enumerate(self._data):
+            if isinstance(existing, dict) and existing.get("name") == name:
+                del self._data[i]
+                save_json(self._path, self._data)
+                return True
+        return False
 
-    def delete_custom_block(self, name: str) -> Result[bool]:
-        name = (name or "").strip()  # save_custom_block strips on write
-        items = self.custom_blocks()
-        filtered = [b for b in items if isinstance(b, dict) and b.get("name") != name]
-        if len(filtered) == len(items):
-            return Result.ok(False)
-        self._atomic.set("custom_blocks", filtered)
-        res = self._atomic.save()
-        return Result.ok(True) if res.is_ok else Result.err(res.error or "save failed")
+    def set_all(self, blocks: list[dict[str, Any]]) -> bool:
+        if not isinstance(blocks, list):
+            raise TypeError(
+                f"blocks must be a list, got {type(blocks).__name__}")
+        self._data = copy.deepcopy(blocks)
+        save_json(self._path, self._data)
+        return True

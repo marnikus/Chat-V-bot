@@ -3,6 +3,10 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+from backend.collector_parts.base import CollectorState
+
+log = logging.getLogger("chatbot")
+
 class CollectorMixin4a:
     def _notify_people(self, nick: str, kind: str) -> None:
         try:

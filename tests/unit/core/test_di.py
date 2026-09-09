@@ -4,8 +4,9 @@ Every assertion verifies a real path: lazy build, cache, cycle, missing, clear.
 No pass-through.
 """
 import unittest
+import os
 import sys
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core.di import Container
 
 

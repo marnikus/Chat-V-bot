@@ -14,6 +14,9 @@ from datetime import datetime
 from typing import Any
 
 from stores.atomic import AtomicJsonStore
+from stores.bookmark_store import DEFAULT_BOOKMARKS
+from stores.jsonio import save_json
+from stores.labels_file_store import LABELS_DEFAULT
 
 # legacy defaults mirrored from backend/config_manager.py
 LEGACY_DEFAULTS: dict[str, Any] = {
@@ -101,3 +104,77 @@ def migrate(path: str = "config.json", dry_run: bool = False) -> dict[str, Any]:
 def needs_migration(path: str = "config.json") -> bool:
     res = migrate(path, dry_run=True)
     return bool(res.get("migrated"))
+
+
+# ── phase 2: legacy single file → 7 split files ──────────────────────
+# Sections owned by settings.json (mirrors SettingsStore.DEFAULTS slices).
+_SETTINGS_SECTIONS = ("chrome", "scroll", "delays", "ui", "history",
+                      "collector")
+
+
+def migrate_legacy_config(legacy_abspath: str,
+                          config_dir: str) -> dict[str, Any]:
+    """Split a legacy single-file config.json into the 7 store files.
+
+    Idempotent: once ``settings.json`` exists the legacy file is left
+    untouched (stores win). A missing/unreadable legacy file is a fresh
+    install (nothing written); a corrupt one is kept for repair. On
+    success the legacy file is renamed to
+    ``config.json.migrated-<UTC-stamp>`` — archived, never deleted.
+
+    Returns ``{"migrated": bool, "archived": str | None}``.
+    """
+    done = {"migrated": False, "archived": None}
+    if os.path.exists(os.path.join(config_dir, "settings.json")):
+        return done  # already migrated — stores win, legacy untouched
+    try:
+        with open(legacy_abspath, "r", encoding="utf-8") as fh:
+            legacy = json.load(fh)
+    except (OSError, ValueError, UnicodeDecodeError):
+        return done  # missing or corrupt — fresh defaults, file kept
+    if not isinstance(legacy, dict):
+        legacy = {}
+
+    settings = {k: legacy[k] for k in _SETTINGS_SECTIONS if k in legacy}
+    bookmarks = legacy.get("url_presets")
+    if not isinstance(bookmarks, list):
+        bookmarks = list(DEFAULT_BOOKMARKS)
+    blocks = legacy.get("custom_blocks")
+    if not isinstance(blocks, list):
+        blocks = []
+    stack = legacy.get("stack_presets")
+    template = legacy.get("template_presets")
+    presets = {"stack_presets": stack if isinstance(stack, dict) else {},
+               "template_presets": (template if isinstance(template, dict)
+                                    else {})}
+    labels = legacy.get("labels")
+    labels = {**copy.deepcopy(LABELS_DEFAULT),
+              **(labels if isinstance(labels, dict) else {})}
+    state = legacy.get("state")
+    state = state if isinstance(state, dict) else {}
+    session = {k: v for k, v in state.items()
+               if k not in ("undo_history", "undo_history_index")}
+    history = state.get("undo_history")
+    try:
+        index = int(state.get("undo_history_index", -1))
+    except (TypeError, ValueError):
+        index = -1
+    undo = {"history": list(history) if isinstance(history, list) else [],
+            "index": index}
+
+    save_json(os.path.join(config_dir, "settings.json"), settings)
+    save_json(os.path.join(config_dir, "bookmarks.json"), bookmarks)
+    save_json(os.path.join(config_dir, "blocks.json"), blocks)
+    save_json(os.path.join(config_dir, "presets.json"), presets)
+    save_json(os.path.join(config_dir, "labels.json"), labels)
+    save_json(os.path.join(config_dir, "session.json"), session)
+    save_json(os.path.join(config_dir, "undo.json"), undo)
+
+    stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    archived = os.path.join(os.path.dirname(os.path.abspath(legacy_abspath)),
+                            f"config.json.migrated-{stamp}")
+    try:
+        os.rename(legacy_abspath, archived)
+    except OSError:
+        archived = None
+    return {"migrated": True, "archived": archived}

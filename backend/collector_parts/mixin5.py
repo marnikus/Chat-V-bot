@@ -3,6 +3,8 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+log = logging.getLogger("chatbot")
+
 class CollectorMixin5:
     def state_payload(self) -> dict:
         return {

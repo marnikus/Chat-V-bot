@@ -4,8 +4,9 @@ Every method on every protocol is called; runtime_checkable verified.
 No pass-through.
 """
 import unittest
+import os
 import sys
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core.interfaces import (
     SettingsStoreProto, PresetStoreProto, BookmarkStoreProto,
     BlockStoreProto, SessionStoreProto, UndoStoreProto,
@@ -25,6 +26,8 @@ class FakeSettings:
         self.data[section] = value
     def section(self, name):
         return self.data.get(name, {})
+    def save(self):
+        return True
 
 
 class FakePreset:
@@ -71,7 +74,7 @@ class FakeBlock:
         self.blocks = {}
     def all(self):
         return list(self.blocks.values())
-    def save(self, name, block):
+    def save_block(self, name, block):
         self.blocks[name] = block
         return True
     def delete(self, name):
@@ -146,7 +149,7 @@ class TestProtocolsRealPaths(unittest.TestCase):
     def test_block_store_protocol_methods(self):
         f = FakeBlock()
         self.assertTrue(isinstance(f, BlockStoreProto))
-        f.save("blk", {"name": "blk"})
+        f.save_block("blk", {"name": "blk"})
         self.assertEqual(len(f.all()), 1)
         self.assertTrue(f.delete("blk"))
         self.assertFalse(f.delete("blk"))

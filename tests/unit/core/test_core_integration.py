@@ -3,8 +3,9 @@ core/ integration — Container + EventBus + Result + Protocols together.
 Real assertions, no pass-through.
 """
 import unittest
+import os
 import sys
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core.result import Ok, Err, ok, err
 from core.events import EventBus, PeopleChanged
 from core.di import Container

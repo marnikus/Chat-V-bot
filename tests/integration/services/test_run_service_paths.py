@@ -7,9 +7,17 @@ import os
 import tempfile
 import sys
 import types
-sys.path.insert(0, "/home/user/Chat-V-bot")
-# Stub missing PySide6 so run_service import succeeds for path testing
-if "PySide6" not in sys.modules:
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Stub PySide6 ONLY when the real one is unavailable, so run_service
+# import succeeds for path testing. An unconditional stub would shadow a
+# working Qt for the whole session (every module collected after this one
+# would bind the fake QObject and die in super().__init__()).
+try:
+    import PySide6  # noqa: F401
+    _HAVE_QT = True
+except ImportError:
+    _HAVE_QT = False
+if not _HAVE_QT and "PySide6" not in sys.modules:
     import types
     pyside = types.ModuleType("PySide6")
     pyside.QtCore = types.ModuleType("PySide6.QtCore")

@@ -3,6 +3,11 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+from backend.collector_parts.base import (CollectorState, IDLE_STATES,
+                                          MAX_PROBE_PENALTY)
+
+log = logging.getLogger("chatbot")
+
 class CollectorMixin3a:
     def note_probe_duration(self, seconds: float) -> None:
         """Back off when the page answers slowly (a busy or huge chat)."""

@@ -49,15 +49,18 @@ def test_bookmark_store_add_remove():
     assert "https://example.com" not in b.all()
 
 
-def test_block_store_named():
+def test_block_store_custom_blocks():
     import tempfile
     d = tempfile.mkdtemp()
-    p = os.path.join(d, "cfg.json")
+    p = os.path.join(d, "blocks.json")
     blk = BlockStore(path=p)
-    blk.named_set("stack_presets", "my", {"blocks": [1, 2]})
-    assert blk.named_get("stack_presets", "my") == {"blocks": [1, 2]}
-    blk.named_delete("stack_presets", "my")
-    assert blk.named_get("stack_presets", "my") is None
+    # named stack/template presets live in PresetStore now; the block
+    # store owns custom blocks only (bare list on disk)
+    assert blk.save_block("my", {"blocks": [1, 2]}) is True
+    assert blk.all()[0]["block"] == {"blocks": [1, 2]}
+    assert blk.delete("my") is True
+    assert blk.delete("my") is False
+    assert blk.all() == []
 
 
 def test_session_store():

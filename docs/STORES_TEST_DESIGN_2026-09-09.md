@@ -98,45 +98,59 @@ Test-file map (new files only):
 
 ## 3. `stores/block_store.py` — P2 (target: block, persist)
 
+> Split redefinition (`docs/BLOCKERS_FIX_DESIGN_2026-09-09.md` §3): the
+> store owns one file (`blocks.json`, a bare list); `named_*` moved to
+> `PresetStore`; vocabulary is `all`/`save_block`/`delete`/`set_all`.
+
 | ID | Case | Expected path |
 |---|---|---|
-| BLK-01 | `named_set/get/delete` round-trip in `stack_presets` | set → get returns value; delete → get returns default |
-| BLK-02 | `named_all(unknown_section)` | `{}` (or empty), never `KeyError` |
-| BLK-03 | `named_get` on an unknown name | the passed `default`, never `KeyError` |
-| BLK-04 | sections are isolated: same name in `stack_presets` and `template_presets` | two independent values |
-| 🔴 BLK-05 | `save_custom_block(name, block)` then `custom_blocks()` | block present with its content |
-| BLK-06 | overwrite a custom block with the same name | in-place replacement, listed once |
-| BLK-07 | `delete_custom_block(unknown)` | no raise |
-| BLK-08 | persist: new `BlockStore` over the same file | named sections + custom blocks survive a reopen |
-| BLK-09 | hostile names: `""`, `"  "`, `"a/b"`, `"../../x"`, 500-char, emoji/Cyrillic | stored and retrievable verbatim (a name is a dict key, not a path); never a file escape, never a crash |
-| BLK-10 | `save_custom_block` with a non-dict block (`None`, list, str) | loud error or stored verbatim — but `custom_blocks()` + reopen must never corrupt the file |
+| BLK-01 | `save_block(name, block)` then `all()` | entry present with name/block/`updated_at` (parseable ISO stamp) |
+| BLK-02 | overwrite a custom block with the same name | in-place replacement, listed once, new content |
+| 🔴 BLK-03 | `delete(present)` / `delete(missing)` | True / False; strip-symmetric with save (the §F strip fix, formerly BLK-05b) |
+| BLK-04 | `set_all([...])` replaces wholesale; non-list | exact round-trip / `TypeError`, old list kept |
+| BLK-05 | `all()` hands out copies | mutating the result never reaches the store |
+| BLK-06 | `save_block` with non-dict block / non-str name | `TypeError`; store usable after |
+| BLK-07 | blank/whitespace name | False (soft refusal), nothing stored |
+| BLK-08 | persist: new `BlockStore` over the same file | blocks survive a reopen |
+| BLK-09 | hostile names: `a/b`, `../../x`, 500-char, emoji/Cyrillic | plain keys, deletable verbatim; nothing escapes the single file |
+| BLK-10 | corrupt file | reads `[]`, no raise; recovers on next save |
 
 ## 4. `stores/bookmark_store.py` — P2 (target: bookmark, list)
+
+> Split contract (`docs/BLOCKERS_FIX_DESIGN_2026-09-09.md` §3): one file
+> (`bookmarks.json`, a bare list); `add`/`remove`/`set_all` return bool.
 
 | ID | Case | Expected path |
 |---|---|---|
 | BMK-01 | `add(url)` then `all()` | url present exactly once |
 | BMK-02 | `add` the same url twice | listed once (dedup — existing suite asserts this; our test pins ordering: first position kept) |
-| 🔴 BMK-03 | `remove(unknown)` | no raise, list unchanged |
+| 🔴 BMK-03 | `remove(unknown)` | False, list unchanged (strip-symmetric with add — the §F strip fix) |
 | BMK-04 | `set_all([...])` replaces wholesale | exact list equality, order preserved |
 | BMK-05 | `set_all([])` | empty list |
-| BMK-06 | hostile urls: `""`, whitespace, 2000-char, unicode, `javascript:…` | stored verbatim or refused with no crash; `all()` round-trips through a reopen |
+| BMK-06 | hostile urls: `""`, whitespace, 2000-char, unicode, `javascript:…` | `""`/whitespace → False; the rest stored verbatim; `all()` round-trips through a reopen |
 | BMK-07 | `set_all` with non-list (`None`, str) | loud error, previous list intact |
 | BMK-08 | persist across reopen | identical list |
 
 ## 5. `stores/session_store.py` — P2 (target: session, expire)
+
+> Split contract: one file (`session.json`, a flat dict); `set` takes
+> `save_now=` (renamed from `save=` per the facade).
 
 | ID | Case | Expected path |
 |---|---|---|
 | SES-01 | `set(a=1)` then `get("a")` | `1` |
 | SES-02 | `get(unknown, default=X)` | `X` |
 | SES-03 | `set` merges: `set(a=1)` then `set(b=2)` | both keys present |
-| SES-04 | `set(save=False, …)` | in-memory visible via `data()`/`get()` but NOT on disk (reopen loses it) |
+| SES-04 | `set(save_now=False, …)` | in-memory visible via `data()`/`get()` but NOT on disk (reopen loses it) |
 | SES-05 | `data()` returns the session mapping | a dict; mutating the returned object must not corrupt the store (copy) or must be documented — test pins whichever, file survives |
 | 🔴 SES-06 | expire: there is NO `expire/clear` method in the signature | SPEC GAP confirmed — test documents that stale keys can only be overwritten, never expired |
 | SES-07 | hostile keys/values: unicode keys, nested dicts, `None` | round-trip through save/reopen |
 
 ## 6. `stores/settings_store.py` — P2 (target: settings, merge)
+
+> Split contract: one file (`settings.json`, the overlay dict); `set`
+> returns None (protocol); `history.media.max_file_mb` default is 25
+> (was a stale 2 — BLOCKERS ledger #1).
 
 | ID | Case | Expected path |
 |---|---|---|
@@ -461,6 +475,12 @@ These sit outside section F but break the repo around it:
 1. `backend/history_db.py` does not import (`NameError: TABLE_ORDER` in `backend/history_db_parts/helpers.py`) — ~15 existing suites fail at collection, including every `backend.history_db` consumer.
 2. `backend/config_manager.py` (imported by `main.py`) needs `stores.migration.migrate_legacy_config`, `stores.settings_store.SETTINGS_DEFAULTS` and `stores.bookmark_store.DEFAULT_BOOKMARKS` — none of which exist in `stores/` (it has `migrate`, `DEFAULTS`, `DEFAULT_URLS`). The 7-file split the facade was written against was never implemented on the `stores/` side.
 3. `tests/test_stores_split.py` imports the same missing `migrate_legacy_config` and is therefore red at import.
+
+> **Resolved 2026-09-09** (`docs/BLOCKERS_FIX_DESIGN_2026-09-09.md`):
+> the backend cluster is now re-export shims over `stores/` (blocker 1),
+> and the split-stores API + `migrate_legacy_config` are implemented
+> (blockers 2–3). BLK/BMK/SES/SET rows above were redefined to the split
+> contracts; the §F ledger stays as the historical record.
 
 ## 16. Implementation order (P1 first, then P2)
 

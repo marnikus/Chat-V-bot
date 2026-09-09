@@ -6,7 +6,7 @@ import unittest
 import os
 import tempfile
 import sys
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import after path setup; may import stores that need dirs — use temp override if needed
 from backend.config_manager import ConfigManager, DEFAULTS, MAX_STACK_HISTORY
@@ -16,10 +16,15 @@ class TestConfigPaths(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         os.environ.setdefault("CHAT_V_BOT_CONFIG_DIR", self.tmp.name)
-        # ConfigManager uses stores that may look in config_dir; we'll use default behavior
+        # Default construction resolves against the CWD: run it inside the
+        # tmp dir so the repo's own config.json can never be migrated or
+        # shadowed as a side effect of the suite.
+        self._cwd = os.getcwd()
+        os.chdir(self.tmp.name)
         self.cm = ConfigManager()
 
     def tearDown(self):
+        os.chdir(self._cwd)
         self.tmp.cleanup()
 
     # Path: get/set/get_copy works; save writes; get_state returns copy

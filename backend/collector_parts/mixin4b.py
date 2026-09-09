@@ -3,6 +3,12 @@ import asyncio, json, logging
 from datetime import datetime
 from typing import Optional
 
+from backend.chat_parser import verify_private
+from backend.collector_parts.base import CollectorState
+from backend.history_query import HistoryQuery
+
+log = logging.getLogger("chatbot")
+
 class CollectorMixin4b:
     async def handle_push(self, payload) -> int:
         """Store what the in-page observer pushed. Never raises."""

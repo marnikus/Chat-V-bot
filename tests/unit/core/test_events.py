@@ -4,8 +4,9 @@ Verifies subscribe/unsubscribe/emit/exception isolation/typed events/handlers co
 """
 import unittest
 import logging
+import os
 import sys
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core.events import EventBus, PeopleChanged, LogMessage, GridLayoutChanged
 
 

@@ -36,8 +36,36 @@ class SettingsStoreProto(Protocol):
 @runtime_checkable
 class BookmarkStoreProto(Protocol):
     def all(self) -> list[str]: ...  # noqa: D102
-    def add(self, url: str) -> Result[None]: ...  # noqa: D102
-    def remove(self, url: str) -> Result[None]: ...  # noqa: D102
+    def add(self, url: str) -> bool: ...  # noqa: D102
+    def remove(self, url: str) -> bool: ...  # noqa: D102
+
+
+@runtime_checkable
+class PresetStoreProto(Protocol):
+    def save_stack(self, name: str, blocks: Any) -> None: ...  # noqa: D102
+    def load_stack(self, name: str) -> Any: ...  # noqa: D102
+    def list_stacks(self) -> list: ...  # noqa: D102
+    def delete_stack(self, name: str) -> bool: ...  # noqa: D102
+    def save_template(self, name: str, body: Any) -> None: ...  # noqa: D102
+    def load_template(self, name: str) -> Any: ...  # noqa: D102
+    def list_templates(self) -> list: ...  # noqa: D102
+    def delete_template(self, name: str) -> bool: ...  # noqa: D102
+
+
+@runtime_checkable
+class BlockStoreProto(Protocol):
+    def all(self) -> list: ...  # noqa: D102
+    def save_block(self, name: str, block: Any) -> bool: ...  # noqa: D102
+    def delete(self, name: str) -> bool: ...  # noqa: D102
+
+
+@runtime_checkable
+class SessionStoreProto(Protocol):
+    def get(self, key: str, default: Any = None) -> Any:  # noqa: D102
+        ...
+
+    def set(self, *args: Any, **kwargs: Any) -> None:  # noqa: D102
+        ...
 
 
 @runtime_checkable
@@ -95,8 +123,34 @@ class CollectorServiceProto(Protocol):
 
 @runtime_checkable
 class UndoStoreProto(Protocol):
-    def push(self, kind: str, value: Any) -> Result[None]: ...  # noqa: D102
-    def history(self) -> tuple[list[Any], int]: ...  # noqa: D102
+    def load_state(self) -> tuple[list[Any], int]: ...  # noqa: D102
+    def save_state(self, history: list[Any], index: int) -> Any: ...  # noqa: D102
+
+
+@runtime_checkable
+class PeopleRepoProto(Protocol):
+    """Async people reads. Methods only — data members would break
+    runtime_checkable isinstance()."""
+
+    async def get_all(self) -> list: ...  # noqa: D102
+    async def get_queue(self) -> list: ...  # noqa: D102
+    async def get_stats(self) -> dict: ...  # noqa: D102
+
+
+class UserRecordProto(Protocol):
+    """Documented user-record fields (typing only, never isinstance)."""
+
+    nick: str
+    gender: str
+    registered: bool
+    anonymous: bool
+    guest: bool
+    first_seen: str
+    last_seen: str
+    messaged: bool
+    message_count: int
+    last_messaged: Any
+    notes: str
 
 
 EventHandler = Callable[[Any], None]

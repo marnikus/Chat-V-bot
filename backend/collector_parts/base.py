@@ -77,6 +77,11 @@ MAX_PROBE_PENALTY = 4.0
 
 
 class CollectorBase(QObject):
+    status_changed = Signal(str)             # JSON collector state payload
+    collector_log = Signal(str)              # JSON {ts, level, message, nick}
+    history_appended = Signal(str)           # JSON {nick, items, added}
+    people_changed = Signal(str)             # JSON people-list refresh hint
+
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
                  lease=None, memory=None, parent=None):

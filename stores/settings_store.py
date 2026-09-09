@@ -1,4 +1,9 @@
-"""Settings store — chrome, scroll, delays, ui, history, collector slices."""
+"""Settings store — one file (settings.json) holding the settings overlay.
+
+The file stores ONLY what the user changed; every read falls back to the
+shipped DEFAULTS below. `SETTINGS_DEFAULTS` is the six settings slices
+(chrome … collector) for `backend/config_manager.py`.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import copy
 from typing import Any
 
 from core.result import Result
-from stores.atomic import AtomicJsonStore
+from stores.jsonio import load_json, save_json
 
 
 DEFAULTS: dict[str, Any] = {
@@ -16,7 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "ui": {"theme": "dark", "language": "ru"},
     "history": {
         "enabled": True, "db_path": "history.db", "use_fts": True,
-        "media": {"enabled": True, "download": True, "cache_dir": "saved_media", "max_file_mb": 2, "max_cache_mb": 200},
+        "media": {"enabled": True, "download": True, "cache_dir": "saved_media", "max_file_mb": 25, "max_cache_mb": 200},
         "preview": {"preload_rows": 40, "page_size": 50, "max_rows": 400, "show_images": True},
     },
     "collector": {"enabled": True, "my_nick": "", "heartbeat_ms": 1500, "idle_ms": 3000, "throttle_factor": 3, "require_private": True, "download_media": True, "chunk_size": 80, "chunk_pause_ms": 40, "bootstrap_max": 2000},
@@ -30,19 +35,41 @@ DEFAULTS: dict[str, Any] = {
     },
 }
 
+SETTINGS_DEFAULTS: dict[str, Any] = {
+    key: DEFAULTS[key]
+    for key in ("chrome", "scroll", "delays", "ui", "history", "collector")
+}
+
 
 class SettingsStore:
     """Pure I/O for global settings (no presets, no session)."""
 
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    def __init__(self, path: str = "settings.json") -> None:
+        self._path = path
+        self._data: dict[str, Any] = {}
+        self.load()
+
+    def load(self) -> None:
+        data = load_json(self._path, {})
+        self._data = data if isinstance(data, dict) else {}
+
+    def save(self) -> Result[None]:
+        if save_json(self._path, self._data):
+            return Result.ok(None)
+        return Result.err(f"settings save failed: {self._path}")
 
     def get(self, *keys: str, default: Any = None) -> Any:
-        val = self._atomic.get(*keys, default=None)
-        if val is not None:
-            return val
-        # fallback to defaults
-        node: Any = DEFAULTS
+        node: Any = self._data
+        for k in keys:
+            if isinstance(node, dict) and k in node:
+                node = node[k]
+            else:
+                node = None
+                break
+        if node is not None:
+            return node
+        # fallback to defaults (a copy — the shipped tree is shared)
+        node = DEFAULTS
         for k in keys:
             if isinstance(node, dict) and k in node:
                 node = node[k]
@@ -53,12 +80,24 @@ class SettingsStore:
     def get_copy(self, *keys: str, default: Any = None) -> Any:
         return copy.deepcopy(self.get(*keys, default=default))
 
-    def set(self, *keys_and_value: Any) -> Result[None]:
-        self._atomic.set(*keys_and_value)
-        return self._atomic.save()
+    def set(self, *keys_and_value: Any) -> None:
+        if len(keys_and_value) < 2:
+            raise ValueError("set() needs at least a key and a value")
+        *keys, value = keys_and_value
+        node = self._data
+        for k in keys[:-1]:
+            child = node.get(k)
+            if not isinstance(child, dict):
+                # A scalar left by a malformed set() (CF#6) must not make
+                # the next legitimate deep set crash — repair the path.
+                child = {}
+                node[k] = child
+            node = child
+        node[keys[-1]] = value
+        self.save()
 
     def data(self) -> dict[str, Any]:
-        return self._atomic.data()
+        return copy.deepcopy(self._data)
 
     def validate(self) -> list[str]:
         errors: list[str] = []

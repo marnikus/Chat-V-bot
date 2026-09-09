@@ -7,13 +7,14 @@ Target: 100% branch + mutation-resistant assertions for both modules.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import types
 import unittest
 from unittest.mock import patch, MagicMock
 
 # Ensure repo root in path
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ── core/result ──────────────────────────────────────────────────────────
 from core.result import Ok, Err, ok, err, of, aof, ERR, Result

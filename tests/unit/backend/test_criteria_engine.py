@@ -4,10 +4,11 @@ Verifies evaluate, filter, load_json, to_json, DB save/load, disabled skip.
 """
 import unittest
 import asyncio
+import os
 import sqlite3
 import sys
 import types
-sys.path.insert(0, "/home/user/Chat-V-bot")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # Mock missing aiosqlite so criteria_engine import succeeds for path testing
 if "aiosqlite" not in sys.modules:
     mock_aiosqlite = types.ModuleType("aiosqlite")

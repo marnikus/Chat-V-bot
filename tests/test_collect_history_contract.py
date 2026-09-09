@@ -10,17 +10,14 @@ house rules the module docstring quotes:
   * RULE 7 — a stop is reported as stopped, never as a failure.
 
 `tests/test_collect_history_block.py` covers the same block END-TO-END
-against a real sqlite HistoryDB + ChatParser; it cannot run at all right now,
-because importing the block fails (BUG-02, see §12 of the design doc):
-`backend/history_db_parts/helpers.py` uses `TABLE_ORDER` /
-`TABLE_COLUMNS` / `TABLE_CONSTRAINTS`, which exist nowhere in the repo, so
-`import backend.chat_parser` raises NameError and COLLECT_HISTORY never
-registers.
+against a real sqlite HistoryDB + ChatParser.
 
-This file therefore stubs ONE module — `backend.chat_parser`, the I/O
-boundary — so the block's own branching can be covered while the DB layer is
-broken. Everything else is real: the real `SyncResult` from
-`backend.history_models`, the real `ActionResult`, the real block code.
+This file isolates the block's own branching instead: the ONE I/O call the
+block makes — `backend.chat_parser.sync_conversation` — is replaced per
+test with the `SyncRecorder` below (via `BlockCase.setUp`, so no other
+test in the session ever sees the recorder). Everything else is real: the
+real `SyncResult` from `backend.history_models`, the real `ActionResult`,
+the real block code.
 
 Run with:  python3 tests/test_collect_history_contract.py
 """
@@ -29,7 +26,6 @@ import asyncio
 import importlib
 import os
 import sys
-import types
 import unittest
 from datetime import datetime
 from unittest import mock
@@ -65,25 +61,8 @@ class SyncRecorder:
 
 SYNC = SyncRecorder()
 
-#: `backend.chat_parser` cannot be imported at HEAD (BUG-02). The stub is
-#: installed only for the duration of the block import, then sys.modules is
-#: restored, so no other test in the session sees a fake chat_parser.
-_stub = types.ModuleType("backend.chat_parser")
-_stub.sync_conversation = SYNC
-
-from actions import base_action as _base  # noqa: E402
-
-_palette_before = set(_base._REGISTRY)
-with mock.patch.dict(sys.modules, {"backend.chat_parser": _stub}):
-    importlib.import_module("actions.collect_history")
-    from actions.collect_history import CollectHistory  # noqa: E402
-
-# Un-register what the stubbed import just added: the module is NOT really
-# importable at HEAD, so the palette must keep saying so (otherwise this file
-# would silently "fix" tests/test_action_registry.py::REG-02 for the rest of
-# the session, depending only on collection order).
-for _added in set(_base._REGISTRY) - _palette_before:
-    del _base._REGISTRY[_added]
+from actions.collect_history import CollectHistory  # noqa: E402
+import actions.collect_history as _ch_module  # noqa: E402
 
 
 def run(coro):
@@ -170,6 +149,11 @@ class BlockCase(unittest.TestCase):
         SYNC.result = SyncResult(ok=True, added=1, total=5)
         SYNC.side_effect = None
         SYNC.calls.clear()
+        # The block bound the real sync_conversation at module import;
+        # point its module-global at the recorder for this test only.
+        patcher = mock.patch.object(_ch_module, "sync_conversation", SYNC)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def block(self, **kw):
         kw.setdefault("pre_delay_ms", 0)
@@ -185,15 +169,12 @@ class BlockCase(unittest.TestCase):
 class TestImportGate(unittest.TestCase):
     """CH-00."""
 
-    @unittest.expectedFailure  # BUG-02: docs/ACTIONS_TEST_DESIGN_2026-09-09.md §12
     def test_the_block_import_dependency_is_healthy(self):
         """The block imports backend.chat_parser at module scope.
 
-        That import dies at HEAD with
-        `NameError: name 'TABLE_ORDER' is not defined`, so the whole block —
-        and `tests/test_collect_history_block.py` with it — is dead code.
-        Pinned as an expected failure so the day the schema constants come
-        back this reports "unexpected success" instead of passing unnoticed.
+        Health pin (was BUG-02): the import must succeed, otherwise the
+        whole block — and `tests/test_collect_history_block.py` with
+        it — is dead code.
         """
         if "backend.chat_parser" in sys.modules:
             del sys.modules["backend.chat_parser"]
