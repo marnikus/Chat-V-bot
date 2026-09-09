@@ -19,6 +19,8 @@ from pathlib import Path
 import aiosqlite
 
 from backend.archive_lock import ArchiveLock
+from backend.db_inventory import (ALIAS_DATABASE, LAST_DATABASE, SUFFIXES,
+                                  existing_group, group_size, inventory, path_key)
 from backend.db_paths import (PROTECTED_DATABASE, canonical_path, in_trash,
                               protected_database, same_database)
 from backend.history_db import (HistoryDB, INCOMPATIBLE_SCHEMA, SCHEMA_VERSION,
@@ -26,9 +28,7 @@ from backend.history_db import (HistoryDB, INCOMPATIBLE_SCHEMA, SCHEMA_VERSION,
 
 log = logging.getLogger("chatbot")
 TRASH_DIR = "db_trash"
-SUFFIXES = ("", "-wal", "-shm", "-journal")
 _SAFE = re.compile(r"[^0-9A-Za-z._-]+")
-LAST_DATABASE = "Cannot delete the last database. Create a new one first."
 CREATE_SCHEMA_ERROR = "Failed to create database. Schema error."
 
 
@@ -36,7 +36,11 @@ def mutation(method):
     @wraps(method)
     async def guarded(self, *args, **kwargs):
         async with self._mutations:
-            return await method(self, *args, **kwargs)
+            result = await method(self, *args, **kwargs)
+            # A completion/error carries the same inventory as ordinary reads.
+            # The panel need not wait for a separate, potentially stale stats RPC.
+            result.update(self.snapshot())
+            return result
     return guarded
 
 
@@ -67,13 +71,7 @@ def folder_size(path: str) -> tuple[int, int]:
 
 def file_group_size(path: str) -> int:
     """Size of a SQLite file including its WAL siblings."""
-    total = 0
-    for suffix in SUFFIXES:
-        try:
-            total += os.path.getsize(path + suffix)
-        except OSError:
-            continue
-    return total
+    return group_size(path)
 
 
 class DbManager:
@@ -103,15 +101,20 @@ class DbManager:
         stored = stored if isinstance(stored, str) and stored else "history.db"
         return os.path.abspath(stored if os.path.isabs(stored) else os.path.join(self.root, stored))
 
-    def resolve(self, name_or_path: str) -> str:
+    def location(self, name_or_path: str) -> str:
+        """Requested filename, preserving links so existence checks cannot escape it."""
         text = str(name_or_path or "").strip()
         if not text:
             return ""
         if os.path.isabs(text):
-            return canonical_path(text)
+            return os.path.abspath(text)
         if os.sep in text or "/" in text:
-            return canonical_path(os.path.join(self.root, text))
-        return canonical_path(os.path.join(os.path.dirname(self.active_path()), safe_db_name(text)))
+            return os.path.abspath(os.path.join(self.root, text))
+        return os.path.join(os.path.dirname(self.active_path()), safe_db_name(text))
+
+    def resolve(self, name_or_path: str) -> str:
+        path = self.location(name_or_path)
+        return canonical_path(path) if path else ""
 
     def trash_dir(self) -> str:
         return os.path.join(os.path.dirname(self.active_path()), TRASH_DIR)
@@ -123,8 +126,10 @@ class DbManager:
         return str((media or {}).get("cache_dir") or "saved_media")
 
     def _protected(self, path: str) -> bool:
-        return protected_database(path, root=self.root,
-                                  memory=getattr(self.service, "memory", None)) or in_trash(path)
+        return (protected_database(path, root=self.root,
+                                   memory=getattr(self.service, "memory", None)) or in_trash(path) or
+                any(os.path.basename(p).lower().startswith(".cvb-")
+                    for p in (path, canonical_path(path))))
 
     def _eligible(self, path: str) -> bool:
         return not self._protected(path) and inspect_archive(path, full=True)
@@ -138,40 +143,63 @@ class DbManager:
         if self._config is not None and self.known_paths() != paths:
             self._config.set_state(db_recent=paths)
 
+    def _present(self, path: str) -> bool:
+        return not self._protected(path) and bool(existing_group(path))
+
     def _remember(self, path: str) -> None:
-        self._set_recent(([canonical_path(path)] + [p for p in self.known_paths()
-                            if not same_database(p, path) and self._eligible(p)])[:12])
+        paths = [os.path.abspath(path)] + [p for p in self.known_paths()
+                                         if path_key(p) != path_key(path)]
+        self._set_recent([p for p in paths if self._present(p)][:12])
 
     def _forget(self, path: str) -> None:
         self._set_recent([p for p in self.known_paths()
-                          if not same_database(p, path) and self._eligible(p)])
+                          if path_key(p) != path_key(path) and self._present(p)])
 
-    def list_dbs(self) -> list[dict]:
-        """Only existing chat archives; missing recents are not UI entities."""
-        active = self.active_path()
-        paths = [active] + self.known_paths()
-        folder = os.path.dirname(active)
-        try:
-            paths += [os.path.join(folder, n) for n in sorted(os.listdir(folder))
-                      if n.lower().endswith(".db") and not n.startswith(".cvb-")]
-        except OSError as exc:
-            log.debug("cannot list archives in %s: %s", folder, exc)
-        found = []
-        for path in paths:
-            path = canonical_path(path)
-            if any(same_database(path, old["path"]) for old in found) or not self._eligible(path):
-                continue
-            found.append({"path": path, "name": os.path.basename(path),
-                          "bytes": file_group_size(path), "exists": True,
-                          "active": same_database(path, active)})
-        self._set_recent([canonical_path(p) for p in self.known_paths()
-                          if any(same_database(p, i["path"]) for i in found)])
-        for item in found:
-            item["can_load"] = not item["active"]
-            item["can_delete"] = len(found) > 1
-            item["delete_reason"] = "" if item["can_delete"] else LAST_DATABASE
-        found.sort(key=lambda i: (not i["active"], i["name"].lower()))
+    def list_dbs(self, *, extra=()) -> list[dict]:
+        """All present user-file groups; loadability is a capability, not visibility."""
+        found = inventory(self.active_path(), self.known_paths(),
+                          protected=self._protected, extra=extra)
+        visible = {path_key(item["path"]) for item in found}
+        self._set_recent([p for p in self.known_paths() if path_key(p) in visible])
         return found
+
+    def snapshot(self) -> dict:
+        payload = {"active_path": self.active_path(),
+                   "inventory_folder": os.path.dirname(self.active_path())}
+        try:
+            payload["items"] = self.list_dbs()
+        except Exception as exc:
+            # Failure to refresh must not turn an already committed operation
+            # into a fake failure or remove its global undo entry.
+            log.warning("database inventory unavailable: %s", exc)
+            payload["inventory_error"] = str(exc)
+        return payload
+
+    def _conflict(self, path: str) -> dict | None:
+        items = self.list_dbs(extra=[path])
+        entry = next((i for i in items if path_key(i["path"]) == path_key(path)), None)
+        if entry is None:
+            return None
+        self._remember(path)  # retain external conflicts on the next refresh
+        if entry["main_exists"]:
+            error = f"{entry['name']} already exists. See its entry in Databases."
+        else:
+            names = ", ".join(os.path.basename(p) for p in entry["files"])
+            error = (f"Cannot create {entry['name']}: SQLite sidecar files already exist ({names}). "
+                     "The database file itself is missing. See its entry in Databases.")
+        return {"ok": False, "error": error, "path": path, "conflict": entry,
+                "detail": entry["detail"], "items": items, "active_changed": False}
+
+    def reveal_target(self, path: str) -> dict:
+        """A visible inventory file, not an arbitrary URL or an implicit Load."""
+        target = self.location(path)
+        item = next((i for i in self.list_dbs() if target and path_key(i["path"]) == path_key(target)), None)
+        if item is None or not item.get("can_reveal"):
+            return {"ok": False, "error": "That database file is no longer in the list. Refresh Databases."}
+        actual = item["reveal_path"]
+        if not os.path.lexists(actual):
+            return {"ok": False, "error": "That file no longer exists. Refresh Databases."}
+        return {"ok": True, "path": item["path"], "reveal_path": actual}
 
     async def info(self) -> dict:
         async with self._archive_lock:
@@ -194,6 +222,7 @@ class DbManager:
             "persons": 0, "messages": 0, "messages_hidden": 0, "media": 0,
             "connected": False,
             "trash_dir": self.trash_dir(),
+            **self.snapshot(),
         }
         service = self._service
         if service is None or not getattr(service.db, "is_open", False):
@@ -246,19 +275,22 @@ class DbManager:
     def _publish(stage: str, destination: str) -> None:
         # Same-folder hardlink is atomic and refuses overwrite even if another
         # creator wins after the initial existence check (also on NTFS).
+        if existing_group(destination):
+            raise FileExistsError(f"{os.path.basename(destination)} is reserved by existing files")
         os.link(stage, destination)
         os.unlink(stage)
 
     @mutation
     async def create(self, name: str) -> dict:
         """Initialize an independent file. NEVER touch the active pipeline."""
-        path = self.resolve(name)
+        path = self.location(name)
         if not path:
             return {"ok": False, "error": "give the database a name"}
         if self._protected(path):
             return {"ok": False, "error": PROTECTED_DATABASE}
-        if any(os.path.lexists(path + s) for s in SUFFIXES):
-            return {"ok": False, "error": f"{os.path.basename(path)} already exists"}
+        conflict = self._conflict(path)
+        if conflict:
+            return conflict
         before = self.active_path()
         stage, fresh = "", None
         phase = "file"
@@ -280,6 +312,10 @@ class DbManager:
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
             log.warning("create %s failed (%s): %s", path, phase, detail)
+            if phase == "publish":
+                conflict = self._conflict(path)
+                if conflict:
+                    return conflict
             error = CREATE_SCHEMA_ERROR if phase == "schema" else str(exc)
             return {"ok": False, "error": error, "detail": detail}
         finally:
@@ -289,11 +325,16 @@ class DbManager:
 
     @mutation
     async def load(self, path: str) -> dict:
+        requested = self.location(path)
         target = self.resolve(path)
         if not target:
             return {"ok": False, "error": "no database selected"}
-        if self._protected(target):
+        if self._protected(requested) or self._protected(target):
             return {"ok": False, "error": PROTECTED_DATABASE}
+        entry = next((i for i in self.list_dbs(extra=[requested])
+                      if path_key(i["path"]) == path_key(requested)), None)
+        if entry and entry["status"] in ("alias", "broken_link"):
+            return {"ok": False, "error": ALIAS_DATABASE}
         if not os.path.isfile(target):
             return {"ok": False, "error": f"{target} does not exist"}
         before = self.active_path()
@@ -321,7 +362,14 @@ class DbManager:
     @mutation
     async def delete(self, path: str) -> dict:
         async with self._archive_lock:
+            requested = self.location(path)
             target = self.resolve(path)
+            if requested and (self._protected(requested) or self._protected(target)):
+                return {"ok": False, "error": PROTECTED_DATABASE}
+            items = self.list_dbs(extra=[requested] if requested else [])
+            entry = next((i for i in items if requested and path_key(i["path"]) == path_key(requested)), None)
+            if entry and entry["status"] in ("alias", "broken_link"):
+                return {"ok": False, "error": ALIAS_DATABASE}
             if not target or not os.path.isfile(target):
                 if target:
                     self._forget(target)
@@ -332,8 +380,8 @@ class DbManager:
                 return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
             before = self.active_path()
             was_active = same_database(target, before)
-            alternatives = [i["path"] for i in self.list_dbs()
-                            if not same_database(i["path"], target)]
+            alternatives = [i["path"] for i in items
+                            if i["manageable"] and not same_database(i["path"], target)]
             if not alternatives:
                 return {"ok": False, "error": LAST_DATABASE}
             if was_active:
@@ -396,9 +444,14 @@ class DbManager:
     async def restore_backup(self, backup: str, target: str = "", *, activate: bool = False) -> dict:
         """Validate a snapshot before restoration; inactive restores stay inactive."""
         source = str(backup or "")
-        destination = self.resolve(target) or self.active_path()
-        if self._protected(destination):
+        requested = self.location(target) or self.active_path()
+        destination = canonical_path(requested)
+        if self._protected(requested) or self._protected(destination):
             return {"ok": False, "error": PROTECTED_DATABASE}
+        entry = next((i for i in self.list_dbs(extra=[requested])
+                      if path_key(i["path"]) == path_key(requested)), None)
+        if entry and entry["status"] in ("alias", "broken_link"):
+            return {"ok": False, "error": ALIAS_DATABASE}
         if not source or not os.path.isfile(source):
             return {"ok": False, "error": "the backup is gone"}
         if not in_trash(source) or not inspect_archive(source):
@@ -480,7 +533,7 @@ class DbManager:
         moved = []
         try:
             for suffix in SUFFIXES:
-                if os.path.exists(source + suffix):
+                if os.path.lexists(source + suffix):
                     os.rename(source + suffix, destination + suffix)
                     moved.append(suffix)
         except OSError:

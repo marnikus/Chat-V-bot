@@ -451,10 +451,20 @@ colour wears a white ring; picking one closes the popup, so do `Cancel`, the
 
 ### The database window
 
-**DB Connection** is a normal grid window. It lists only existing, compatible
-chat-history databases beside the active file or in recent locations. The
-People queue (`chatbot.db`), undo/internal stores, backups and missing files
-are not manageable here. The global undo timeline remains in `config.json`.
+**DB Connection** is a normal grid window. One filesystem inventory lists
+archives **and the real files that reserve database names** beside the active
+file or in recent locations. An empty, incompatible or locked `m.db` is visible
+with its reason; orphan `m.db-wal` / `-shm` / `-journal` files get a **Sidecar files
+only** row instead of an invisible “already exists” error. These diagnostic rows
+are read-only, not loadable archives. Missing recent entries disappear when no
+file or sidecar remains. The People queue (`chatbot.db`), undo/internal stores
+and backups are not manageable here; aliases never count as extra fallback
+archives. The global undo timeline remains in `config.json`.
+
+Click a **database filename** to reveal its file in Explorer/Finder (or its
+containing folder on other desktops). A sidecar-only row selects the actual
+blocking file. This does **not** connect to the database or launch its file
+association. The panel shows the creation folder and full-path tooltips.
 
 | Reading | Meaning |
 |---|---|
@@ -464,11 +474,13 @@ are not manageable here. The global undo timeline remains in `config.json`.
 
 * **＋ Create** builds and validates an independent empty archive. It does **not**
   connect to it, reset history, or interrupt collection. Click **Load** explicitly
-  when you want to switch.
+  when you want to switch. Creation and duplicate-name results include the fresh
+  list immediately. Existing files are never overwritten or silently repaired.
 * **Load** validates the target before swapping connections. In-flight writes,
   queries and downloads finish in their original database. An incompatible
   target is refused; the working connection stays open.
-* **Delete** moves the file to `db_trash/` and removes it from the list and recents.
+* **Delete** moves a valid archive and its sidecars to `db_trash/`, removing the
+  original files, list row and recent entry immediately.
   Deleting the active archive first connects to another valid archive. The last
   valid archive cannot be deleted: create another one first.
 * **Clean DB** first takes a consistent SQLite backup, then empties the active
@@ -479,6 +491,14 @@ file, not a connection switch. Restoring an inactive deleted file keeps the
 current connection; undoing an active deletion reconnects the restored archive.
 Undo/redo waits while a database action is in flight. Settings/undo JSON is
 published atomically so a failed save cannot truncate the previous timeline.
+
+If a name is occupied by a read-only diagnostic file, reveal it to inspect and
+preserve it, or choose another name. Do not discard an orphan WAL to clear the
+error: it may contain recoverable messages. The app does not delete unknown
+files or let them unlock deletion of the last working archive.
+
+Diagnosis, design and regression coverage:
+[`docs/DB_INVENTORY_AND_NAME_CONFLICT_DESIGN_2026-09-09.md`](docs/DB_INVENTORY_AND_NAME_CONFLICT_DESIGN_2026-09-09.md).
 
 ### Recovering missing message text
 
@@ -620,6 +640,8 @@ Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 │   ├── media_store.py       # Image/GIF cache (url + sha256 + bytes on disk)
 │   ├── label_store.py       # Person labels: defs, per-person tags, filter rule
 │   ├── db_manager.py        # DB Connection: create/load/delete/clean + sizes
+│   ├── db_inventory.py      # Real file groups, visible conflicts and safe capabilities
+│   ├── file_reveal.py       # Native file selection; never load/execute a database
 │   ├── js/chat_agent.js     # The in-page agent (fingerprints, slices, push)
 │   ├── preset_store.py      # JSON-backed stack/template presets (same file)
 │   ├── dom_probe.py         # DOM probe JS + result interpreter (debugger)
