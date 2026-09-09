@@ -42,6 +42,18 @@ def _values_equal(a, b) -> bool:
         return a == b
 
 
+def _same_entry(a: dict, b: dict) -> bool:
+    """Two timeline entries carry the same edit (kind + value).
+
+    ``seq``/timestamps are bookkeeping, not part of the edit identity:
+    comparing them made an identical re-push look different (the fresh entry
+    has no seq yet) and grew the timeline with duplicates.
+    """
+    return (isinstance(a, dict) and isinstance(b, dict)
+            and a.get("kind") == b.get("kind")
+            and _values_equal(a.get("value"), b.get("value")))
+
+
 def emit_db_change(bus: EventBus, action: str, result) -> None:
     """Format a DbManager result as the db_changed wire payload."""
     payload = dict(result or {})
@@ -172,6 +184,21 @@ class UndoService:
     def _history_entry(kind, value):
         return {"kind": kind, "value": copy.deepcopy(value)}
 
+    def _migrated_entry(self, source: dict, kind: str, value) -> dict:
+        """Rebuild a stored timeline entry, PRESERVING its seq.
+
+        seq is the identity used to merge the app-level config half with the
+        active world's ``undo_history`` table on startup. Dropping it (as a
+        plain rebuild did) pushed every app entry ahead of the world entries
+        in the merged timeline and could issue duplicate seqs — the global
+        undo order was wrong after a restart.
+        """
+        entry = self._history_entry(kind, value)
+        seq = source.get("seq")
+        if isinstance(seq, int) and seq > 0:
+            entry["seq"] = seq
+        return entry
+
     # ── seq ──────────────────────────────────────────────────────
     def _next_seq(self) -> int:
         next_seq = self._seq_next
@@ -189,25 +216,26 @@ class UndoService:
                     continue
                 if entry.get("kind") == "stack" and \
                         isinstance(entry.get("value"), list):
-                    history.append(self._history_entry("stack",
-                                                       entry["value"]))
+                    history.append(self._migrated_entry(entry, "stack",
+                                                        entry["value"]))
                 elif entry.get("kind") == "grid" and \
                         isinstance(entry.get("value"), str):
                     canonical, err = LayoutService.canonical_grid_payload(
                         entry["value"])
                     if not err:
-                        history.append(self._history_entry("grid",
-                                                           canonical))
+                        history.append(self._migrated_entry(entry, "grid",
+                                                            canonical))
                 elif entry.get("kind") == "people" and \
                         isinstance(entry.get("value"), dict):
                     value = entry["value"]
                     if isinstance(value.get("before"), list) and \
                             isinstance(value.get("after"), list):
-                        history.append(self._history_entry("people", value))
+                        history.append(self._migrated_entry(entry, "people",
+                                                            value))
                 elif (entry.get("kind") in ("labels", "archive", "dbconn")
                         and isinstance(entry.get("value"), dict)):
-                    history.append(self._history_entry(entry["kind"],
-                                                       entry["value"]))
+                    history.append(self._migrated_entry(entry, entry["kind"],
+                                                        entry["value"]))
             index = self._config.get_state("undo_history_index",
                                            len(history) - 1)
             index = index if isinstance(index, int) else len(history) - 1
@@ -359,16 +387,25 @@ class UndoService:
 
     # ── push ─────────────────────────────────────────────────────
     def push(self, kind: str, value) -> Result[tuple]:
-        """Append one entry; returns (history, index) on success."""
+        """Append one entry; returns (history, index) on success.
+
+        Re-committing the value already at the pointer is a no-op (grid /
+        stack autosaves must not grow the timeline), and committing anything
+        after an undo first truncates the redo branch — including the
+        same-value case, so a stale tail cannot survive a re-commit.
+        """
         if kind not in self.HISTORY_KINDS:
             return Err("unknown_kind", f"unknown history kind: {kind}")
         history, index = self.history()
         entry = self._history_entry(kind, value)
-        if 0 <= index < len(history) and \
-                _values_equal(history[index], entry):
-            return Ok((history, index))
         if index < len(history) - 1:
             history = history[:index + 1]
+        if 0 <= index < len(history) and \
+                _same_entry(history[index], entry):
+            if index < len(history) - 1:
+                self.set_history(history, index)
+                self._bus.emit(UndoHistoryChanged())
+            return Ok((history, index))
         entry["seq"] = self._next_seq()
         history.append(entry)
         index = len(history) - 1

@@ -60,13 +60,14 @@ class CdpService:
     async def fetch_tabs(self) -> Result[list]:
         try:
             tabs = await self._cdp.fetch_tabs()
+            payload = json.dumps(
+                [{"id": t.id, "title": t.title, "url": t.url,
+                  "ws_url": t.ws_url} for t in tabs], ensure_ascii=False)
         except Exception as exc:                        # noqa: BLE001
             log.error("Tab fetch failed: %s", exc)
             self._log(f"❌ Tab discovery failed: {exc}", "error")
             return Err("tab_fetch_failed", str(exc))
-        self._bus.emit(TabsReceived(payload=json.dumps(
-            [{"id": t.id, "title": t.title, "url": t.url, "ws_url": t.ws_url}
-             for t in tabs], ensure_ascii=False)))
+        self._bus.emit(TabsReceived(payload=payload))
         return Ok(tabs)
 
     async def connect(self, ws_url: str) -> Result[bool]:
