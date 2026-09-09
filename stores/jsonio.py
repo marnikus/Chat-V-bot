@@ -8,6 +8,7 @@ they are different files.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -19,7 +20,7 @@ log = logging.getLogger("chatbot")
 def load_json(path: str, default: Any = None) -> Any:
     """Read `path`; on missing file or bad JSON return `default` (a copy)."""
     if not os.path.exists(path):
-        return default
+        return copy.deepcopy(default)
     try:
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
@@ -30,7 +31,7 @@ def load_json(path: str, default: Any = None) -> Any:
         # it used to escape and crash ConfigManager construction.
         log.warning("config read failed for %s (%s) — using default",
                     path, exc)
-        return default
+        return copy.deepcopy(default)
 
 
 def save_json(path: str, data: Any) -> bool:
@@ -44,7 +45,11 @@ def save_json(path: str, data: Any) -> bool:
             os.fsync(fh.fileno())
         os.replace(tmp, path)
         return True
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
+        # TypeError/ValueError: unserialisable data (a set, a tuple key, a
+        # circular ref). The docstring promises False-on-failure and the
+        # target must keep its previous good content — the dump happens
+        # into the tmp file, so nothing below has touched the target yet.
         log.error("config save failed for %s: %s", path, exc)
         try:
             if os.path.exists(tmp):

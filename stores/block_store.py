@@ -52,6 +52,7 @@ class BlockStore:
         return self._atomic.save()
 
     def delete_custom_block(self, name: str) -> Result[bool]:
+        name = (name or "").strip()  # save_custom_block strips on write
         items = self.custom_blocks()
         filtered = [b for b in items if isinstance(b, dict) and b.get("name") != name]
         if len(filtered) == len(items):

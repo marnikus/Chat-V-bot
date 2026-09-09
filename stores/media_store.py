@@ -148,7 +148,13 @@ class MediaStore:
         slug = slugify_nick(key)
         folder = os.path.join(root, slug)
         owner = self._marker(folder)
-        if owner and owner != key:
+        claimed = any(path == folder for other, path in self._dirs.items()
+                      if other != key)
+        if (owner and owner != key) or (not owner and claimed):
+            # A late-comer gets a hashed variant — via the on-disk marker
+            # once bytes have landed, or via the in-process claim map
+            # before the first write (MED-04). The digest is per-nick, so
+            # the mapping is stable across restarts for a fixed ask order.
             digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:4]
             folder = os.path.join(root, f"{slug}_{digest}")
         self._dirs[key] = folder
@@ -252,9 +258,12 @@ class MediaStore:
         """Cache up to `limit` pending files. Returns how many were stored."""
         if not self.enabled or self.paused or self.cdp is None:
             return 0
+        limit = int(limit)
+        if limit <= 0:
+            return 0
         rows = await self.db.fetchdicts(
             "SELECT id, url, kind, owner, day FROM media WHERE "
-            "state='pending' ORDER BY id LIMIT ?", (max(1, int(limit)),))
+            "state='pending' ORDER BY id LIMIT ?", (limit,))
         stored = 0
         for row in rows:
             if not self.enabled or self.paused:
@@ -322,6 +331,9 @@ class MediaStore:
             data = base64.b64decode(payload.get("b64") or "")
         except Exception as e:                        # noqa: BLE001
             await self._fail(row["id"], f"undecodable payload: {e}")
+            return False
+        if not data:
+            await self._fail(row["id"], "empty payload")
             return False
         if len(data) > self.max_file_bytes:
             await self._skip(row["id"], "too large (%d bytes, cap %d)"

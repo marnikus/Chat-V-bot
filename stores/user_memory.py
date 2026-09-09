@@ -51,6 +51,8 @@ class UserMemory:
         return self._db is not None
 
     async def init(self) -> None:
+        if self._db is not None:
+            await self.close()
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
@@ -66,13 +68,23 @@ class UserMemory:
         target = str(path or "").strip()
         if not target:
             raise ValueError("no database path given")
+        # Connect FIRST: when the target is corrupt the old world stays
+        # connected instead of stranding the queue on a broken handle.
+        new_db = await aiosqlite.connect(target)
+        try:
+            await new_db.executescript(_SCHEMA)
+            await new_db.commit()
+        except Exception:
+            try:
+                await new_db.close()
+            except Exception:                        # noqa: BLE001
+                pass
+            raise
         if self._db is not None:
             await self._db.close()
             self._db = None
         self._db_path = target
-        self._db = await aiosqlite.connect(target)
-        await self._db.executescript(_SCHEMA)
-        await self._db.commit()
+        self._db = new_db
         log.info("UserMemory switched to %s", target)
 
     async def close(self) -> None:
@@ -215,26 +227,32 @@ class UserMemory:
         """
         await self._db.execute("DELETE FROM users")
         count = 0
-        for row in rows or []:
-            nick = str(row.get("nick", "")).strip()
-            if not nick:
-                continue
-            await self._db.execute(
-                "INSERT INTO users(nick,gender,registered,anonymous,guest,"
-                "first_seen,last_seen,messaged,message_count,last_messaged,"
-                "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (nick,
-                 str(row.get("gender") or "unknown"),
-                 1 if row.get("registered") else 0,
-                 1 if row.get("anonymous") else 0,
-                 1 if row.get("guest") else 0,
-                 row.get("first_seen") or "",
-                 row.get("last_seen") or "",
-                 1 if row.get("messaged") else 0,
-                 int(row.get("message_count") or 0),
-                 row.get("last_messaged"),
-                 str(row.get("notes") or "")))
-            count += 1
+        try:
+            for row in rows or []:
+                nick = str(row.get("nick", "")).strip()
+                if not nick:
+                    continue
+                await self._db.execute(
+                    "INSERT INTO users(nick,gender,registered,anonymous,guest,"
+                    "first_seen,last_seen,messaged,message_count,last_messaged,"
+                    "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (nick,
+                     str(row.get("gender") or "unknown"),
+                     1 if row.get("registered") else 0,
+                     1 if row.get("anonymous") else 0,
+                     1 if row.get("guest") else 0,
+                     row.get("first_seen") or "",
+                     row.get("last_seen") or "",
+                     1 if row.get("messaged") else 0,
+                     int(row.get("message_count") or 0),
+                     row.get("last_messaged"),
+                     str(row.get("notes") or "")))
+                count += 1
+        except Exception:
+            # All-or-nothing: a garbage row must never leave the table
+            # half-replaced (the DELETE above is still uncommitted).
+            await self._db.rollback()
+            raise
         await self._db.commit()
         log.info("replace_all → %d rows restored", count)
         return count
