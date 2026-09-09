@@ -44,7 +44,10 @@ class AtomicJsonStore:
             os.replace(tmp, self._path)
             log.info("Store saved %s", self._path)
             return Result.ok(None)
-        except OSError as exc:  # noqa: BLE001
+        except (OSError, TypeError, ValueError) as exc:  # noqa: BLE001
+            # TypeError/ValueError: unserialisable in-memory data. A Result,
+            # not a raise — and the previous good file is untouched (the
+            # dump failed before os.replace).
             log.error("Store save failed: %s", exc)
             try:
                 if os.path.exists(tmp):
@@ -67,6 +70,8 @@ class AtomicJsonStore:
         return copy.deepcopy(self.get(*keys, default=default))
 
     def set(self, *keys_and_value: Any) -> None:
+        if len(keys_and_value) < 2:
+            raise ValueError("set() needs at least a key and a value")
         *keys, value = keys_and_value
         node = self._data
         for k in keys[:-1]:

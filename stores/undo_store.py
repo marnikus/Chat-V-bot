@@ -31,6 +31,8 @@ class UndoStore:
             overflow = len(history) - MAX_STACK_HISTORY
             history = history[overflow:]
             index = max(-1, index - overflow)
+        # never persist an (history, index) pair no reader can use
+        index = max(-1, min(int(index), len(history) - 1))
         # atomic set of both keys in one save
         state = self._atomic.get("state", default={})
         if not isinstance(state, dict):

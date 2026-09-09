@@ -31,6 +31,7 @@ class BookmarkStore:
         return Result.ok(None)
 
     def remove(self, url: str) -> Result[None]:
+        url = (url or "").strip()  # add() strips on write
         presets = self.all()
         if url in presets:
             presets.remove(url)

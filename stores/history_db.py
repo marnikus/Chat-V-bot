@@ -284,16 +284,20 @@ class HistoryDB:
         return self._conn
 
     async def init(self) -> "HistoryDB":
+        if self._conn is not None:
+            # Re-init reconnects cleanly instead of leaking the old handle
+            # (and close() commits first, so pending writes survive).
+            await self.close()
         folder = os.path.dirname(os.path.abspath(self.path))
         if folder:
             os.makedirs(folder, exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
-        await self._conn.execute("PRAGMA journal_mode=WAL")
-        await self._conn.execute("PRAGMA synchronous=NORMAL")
-        await self._conn.execute("PRAGMA foreign_keys=ON")
         stored_version = None
         try:
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA synchronous=NORMAL")
+            await self._conn.execute("PRAGMA foreign_keys=ON")
             # Validate/repair BEFORE the script below: a legacy `messages`
             # table (no person_id) would make the index statements inside
             # `SCHEMA` fail and abort the whole open (Bug 1, 2026-09-08).
@@ -311,11 +315,14 @@ class HistoryDB:
             # A file the repair could not fix fails ONE open with a clear
             # message — never a different "no such column: …" on every
             # later query (Bug 1, 2026-09-08). Non-schema failures keep
-            # their original error.
+            # their original error. Either way the broken handle is closed
+            # so the instance is not left half-open (HDB-09).
             try:
                 await self._verify_schema()
             except Exception as schema_error:        # noqa: BLE001
+                await self.close()
                 raise RuntimeError(str(schema_error)) from exc
+            await self.close()
             raise
         if self._want_fts:
             self.fts_enabled = await self._try_fts()
