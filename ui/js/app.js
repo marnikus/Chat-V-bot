@@ -169,20 +169,11 @@ const App = {
   },
 };
 
-// ── QWebChannel init ──────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof QWebChannel !== 'undefined') {
-    new QWebChannel(qt.webChannelTransport, (channel) => {
-      App.bridge = channel.objects.bridge;
-      App.ready = true;
-      console.log('QWebChannel connected');
-      initApp();
-    });
-  } else {
-    console.warn('QWebChannel not available — running in standalone mode');
-    initApp();
-  }
-});
+// ── boot ───────────────────────────────────────────────────────
+// the QWebChannel handshake lives in js/core/bridge-ready.js now;
+// it assigns App.bridge / App.ready and runs the queued boots
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => initApp());
 
 function initApp() {
   setupHeader();
@@ -213,6 +204,14 @@ function initApp() {
 function restoreSession(json) {
   let payload = {};
   try { payload = JSON.parse(json); } catch (e) { payload = {}; }
+
+  // theme first — every later paint uses the right tokens
+  // (dark is the default; "light" flips the core palette in
+  //  ui/css/variables.css via <html data-theme="light">)
+  if (payload.theme === 'light')
+    document.documentElement.setAttribute('data-theme', 'light');
+  else
+    document.documentElement.removeAttribute('data-theme');
 
   // seed chips from the single store
   PresetsUI.setStackPresets(JSON.stringify(payload.stack_presets || []));

@@ -166,8 +166,8 @@ def interpret(result, label: str = "element") -> tuple[str, str]:
     Levels: success (element found/clicked), warn (found but not clickable),
     error (search failed/probe error).
     """
-    if not result:
-        return f"❌ Probe returned no data for “{label}”", "error"
+    if not isinstance(result, dict):
+        return f"❌ Probe returned no usable data for “{label}”", "error"
     total = int(result.get("total", 0) or 0)
     found = bool(result.get("found"))
     if result.get("error"):
@@ -202,8 +202,8 @@ def interpret(result, label: str = "element") -> tuple[str, str]:
 
 def interpret_wait(result, label: str = "element") -> tuple[str, str]:
     """Variant for wait-for-element style probes (no click attempted)."""
-    if not result:
-        return f"❌ Probe returned no data for “{label}”", "error"
+    if not isinstance(result, dict):
+        return f"❌ Probe returned no usable data for “{label}”", "error"
     if result.get("error"):
         return f"❌ Probe error while waiting for {label}: {result['error']}", "error"
     if not result.get("found"):

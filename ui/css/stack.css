@@ -166,7 +166,7 @@
   border: 1px solid var(--border); border-radius: 999px;
   font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
-.stack-item.active .block-pos { background: var(--accent); color: #fff; border-color: var(--accent); }
+.stack-item.active .block-pos { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 
 /* ── Feature #2: Enable/Disable Toggle Bar ─────────────────────── */
 .stack-item.disabled {
@@ -236,7 +236,7 @@
 }
 .toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(16px);
-  background: #fff;
+  background: var(--text-on-accent);
 }
 .toggle-switch input:not(:checked) + .toggle-slider {
   background: var(--bg-input);

@@ -180,7 +180,8 @@ class TestPersistence(unittest.TestCase):
                     "block_config_pinned", "window_geometry"):
             self.assertIn(key, cm.DEFAULTS["state"], key)
         import inspect
-        src = inspect.getsource(Bridge.get_app_state)
+        from bridge.layout_bridge import LayoutBridge
+        src = inspect.getsource(LayoutBridge.get_app_state)
         self.assertIn("undo_history", src)
         self.assertIn("grid_layout", src)
         self.assertIn("block_config_pinned", src)

@@ -1,27 +1,15 @@
 """Actions package.
 
-Importing this package (or `actions.base_action`) registers every action
-block in the action registry via `__init_subclass__`. Without these imports
-the engine would never resolve any block_id — this used to silently produce
-an empty stack at runtime.
+Importing this package scans every module via pkgutil and registers each
+action block in the ActionRegistry through ``__init_subclass__`` — a new
+block is a new file in actions/, with no central import list to edit
+(previously this module hand-imported 17 modules; forgetting one silently
+produced an empty stack at runtime).
+
+Run ``ActionRegistry.scan()`` again after dynamically creating modules
+(e.g. in tests).
 """
 
-from actions.base_action import BaseAction, ActionResult  # noqa: F401
-from actions import (  # noqa: F401
-    attach_image,
-    click_back,
-    click_main_tab,
-    click_send,
-    click_user,
-    collect_history,
-    conditional_skip,
-    custom_find,
-    mark_messaged,
-    pause,
-    repeat_loop,
-    scroll_parse,
-    search_users,
-    take_person,
-    type_message,
-    wait_page,
-)
+from actions.registry import ActionRegistry  # noqa: F401
+
+ActionRegistry.scan()

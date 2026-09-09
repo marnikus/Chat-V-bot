@@ -174,7 +174,7 @@ const DbPanel = {
         '.', true);
       return;
     }
-    PresetsUI.confirm(
+    window.Dialog.confirm(
       'Delete database PERMANENTLY?',
       '“' + this.baseName(path) + '” is a complete world: its messages, ' +
       'people, labels, undo history and its images folder will be deleted ' +
@@ -191,7 +191,7 @@ const DbPanel = {
     const bridge = this._bridge('db_clean');
     if (!bridge) return;
     const name = this.baseName(this.activePath) || 'the current database';
-    PresetsUI.confirm(
+    window.Dialog.confirm(
       'Clean database?',
       'Every message, person, queue entry and media record in “' + name +
       '” is removed. A full backup goes to db_trash first (along with the ' +

@@ -180,13 +180,22 @@ class TestStandaloneRun(unittest.TestCase):
 
 class TestSavedTabMainConfig(unittest.TestCase):
     def test_saved_tab_main_preset_is_user_independent(self):
-        """The exact block saved in config.json must now be runnable."""
+        """The exact block saved in the block store must now be runnable.
+
+        Since the 2026-09-09 config split the custom blocks live in
+        config/blocks.json (runtime data, not tracked). The test keeps its
+        regression value on any machine that has run the app (or migrated
+        a legacy config.json) and skips on a pristine clone.
+        """
         import json
 
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(root, "config.json"), encoding="utf-8") as fh:
-            cfg = json.load(fh)
-        saved = next(c["block"] for c in cfg.get("custom_blocks", [])
+        blocks_path = os.path.join(root, "config", "blocks.json")
+        if not os.path.exists(blocks_path):
+            self.skipTest("config/blocks.json not present on this clone")
+        with open(blocks_path, encoding="utf-8") as fh:
+            stored = json.load(fh)
+        saved = next(c["block"] for c in stored
                      if c.get("name") == "Tab Main")
         self.assertEqual(saved["block_id"], "CUSTOM_FIND")
         self.assertNotIn(saved["block_id"], USER_SCOPED_BLOCKS)

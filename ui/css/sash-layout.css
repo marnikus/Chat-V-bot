@@ -171,7 +171,7 @@ body.sash-dragging * {
   z-index: 170;
   pointer-events: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 11px;
   font-weight: 500;
   padding: 3px 9px;
@@ -255,7 +255,7 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 /* Block Config empty state — shown when no block is selected. */
 .config-empty {
   padding: 14px 12px;
-  color: var(--text-dim, #8a8f98);
+  color: var(--text-secondary);
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -315,7 +315,7 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 /* close keeps the familiar destructive hover tint */
 .win-controls .win-btn.win-close:hover {
   background: var(--red-dim, rgba(248,113,113,.16));
-  color: var(--red, #f87171);
+  color: var(--red);
 }
 /* minimize/restore hover tint matches the window-manager accent */
 .win-controls .win-btn.win-toggle:hover {
@@ -407,7 +407,7 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
 }
 .sash-min-chip .win-btn.win-close:hover {
   background: var(--red-dim, rgba(248,113,113,.16));
-  color: var(--red, #f87171);
+  color: var(--red);
 }
 
 /* when a window is closed via closedWindows set, wrapper hidden */
@@ -468,9 +468,9 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   font-weight: 700;
   line-height: 1;
 }
-.wm-state-icon.open { color: var(--green, #4ade80); }
+.wm-state-icon.open { color: var(--green); }
 .wm-state-icon.closed { color: var(--text-muted); }
-.wm-state-icon.minimized { color: var(--yellow, #facc15); }
+.wm-state-icon.minimized { color: var(--yellow); }
 .wm-title {
   flex: 1;
   white-space: nowrap;
@@ -488,9 +488,9 @@ body.sash-resizing-col, body.sash-resizing-col * { cursor: row-resize; user-sele
   color: var(--text-muted);
   flex-shrink: 0;
 }
-.wm-badge.b-open { background: rgba(74,222,128,.12); color: var(--green, #4ade80); }
+.wm-badge.b-open { background: rgba(74,222,128,.12); color: var(--green); }
 .wm-badge.b-closed { background: var(--bg-card); color: var(--text-muted); }
-.wm-badge.b-min { background: rgba(250,204,21,.12); color: var(--yellow, #facc15); }
+.wm-badge.b-min { background: rgba(250,204,21,.12); color: var(--yellow); }
 .wm-actions {
   display: inline-flex;
   gap: 1px;

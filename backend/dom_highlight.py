@@ -454,6 +454,8 @@ def interpret_click(result, label: str = "element") -> tuple[str, str]:
 
 def interpret_click_target(result) -> tuple[str, str]:
     """Message emitted right after the orange outline, before the click."""
+    if not isinstance(result, dict):
+        return "⚠ CLICK target unknown — no data returned", "warn"
     target = result.get("target_desc") or "the found element"
     if result.get("clickable"):
         msg = f"✅ CLICK target is clickable: {target}"

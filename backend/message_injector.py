@@ -164,7 +164,10 @@ def _same_text(actual: Optional[str], expected: str) -> bool:
         return False
     norm = lambda s: (s or "").replace("\r\n", "\n").replace("\r", "\n")
     a, b = norm(actual), norm(expected)
-    return a == b or a.rstrip("\n") == b.rstrip("\n")
+    # exactly ONE trailing newline of difference is tolerated (editors
+    # append one on paste) — rstrip() used to forgive ANY number, so a
+    # page that ATE a blank line at the end still verified as "typed".
+    return a == b or a == b + "\n" or a + "\n" == b
 
 
 async def _focus_and_select_all(cdp: CDPClient, sel: str) -> bool:

@@ -301,8 +301,13 @@ t('the current colour wears the white ring', () => {
     .filter((d) => d.classList.contains('selected'));
   eq(ringed.length, 1);
   eq(ringed[0].dataset.color, '#0a84ff');
-  ok(/\.cp-dot\.selected[^}]*border-color:\s*#fff/i.test(css),
-     'the ring is white in the CSS');
+  // since the 2026-09-09 token completion the ring colour is the
+  // --text-on-accent token — assert it resolves to white
+  ok(/\.cp-dot\.selected[^}]*border-color:\s*(#fff|var\(--text-on-accent\))/i
+     .test(css), 'the ring is the on-accent colour in the CSS');
+  const vars = readUi('css/variables.css');
+  ok(/--text-on-accent:\s*#ffffff/.test(vars),
+     'and --text-on-accent is white');
   ColorPicker.close();
 });
 

@@ -108,7 +108,7 @@ body.dnd-active * {
   flex: 1; height: 4px; border-radius: 2px;
   background: linear-gradient(90deg,
     rgba(108, 140, 255, .25), var(--accent) 18%,
-    #a9c0ff 50%, var(--accent) 82%, rgba(108, 140, 255, .25));
+    var(--accent-soft) 50%, var(--accent) 82%, rgba(108, 140, 255, .25));
   animation: dnd-bar-pulse .85s ease-in-out infinite;
 }
 .dnd-insert-bar .dnd-insert-cap {
@@ -137,7 +137,7 @@ body.dnd-active * {
   z-index: 10000;
   pointer-events: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-family: var(--font);
   font-size: var(--font-size-xs);
   font-weight: 700;

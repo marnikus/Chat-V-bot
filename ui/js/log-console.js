@@ -34,4 +34,5 @@ const LogConsole = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => LogConsole.init());
+(window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
+  .ready(() => LogConsole.init());

@@ -9,6 +9,7 @@
 const fs = require('fs');
 const vm = require('vm');
 
+global.window = global;
 global.document = { addEventListener() {} };
 global.SashCore = {};
 vm.runInThisContext(
