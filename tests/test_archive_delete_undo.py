@@ -133,23 +133,24 @@ class TestSoftDeletes(ArchiveCase):
 
     async def test_a_cleared_chat_comes_back_whole(self):
         await self.seed(count=5)
-        token = await self.repo.soft_delete_history("Nick")
-        await self.repo.restore_deleted("Nick", token)
+        result = await self.service.reset_conversation("Nick")
+        self.assertEqual(await self.stored_rows(), 0)
+        await self.service.undo_conversation_reset("Nick", result["snapshot"])
         self.assertEqual(len(await self.visible()), 5)
 
-    async def test_deleting_a_person_hides_them_and_their_messages(self):
+    async def test_deleting_a_person_erases_them_and_their_message_tracking(self):
         await self.seed(count=5)
         token = self.repo.new_op_token()
         await self.repo.delete_person("Nick", hard=False, token=token)
         listed = await self.query.list_persons(limit=50)
         self.assertNotIn("Nick", [p["nick"] for p in listed["items"]])
-        self.assertEqual(await self.stored_rows(), 5, "nothing was erased")
+        self.assertEqual(await self.stored_rows(), 0, "the active archive must forget the messages")
+        self.assertIsNone(await self.repo.get_person("Nick"))
 
     async def test_restoring_a_person_restores_their_messages_too(self):
         await self.seed(count=5)
-        token = self.repo.new_op_token()
-        await self.repo.delete_person("Nick", hard=False, token=token)
-        await self.repo.restore_person("Nick", token=token)
+        result = await self.service.reset_conversation("Nick", delete_person=True)
+        await self.service.undo_conversation_reset("Nick", result["snapshot"])
         listed = await self.query.list_persons(limit=50)
         self.assertIn("Nick", [p["nick"] for p in listed["items"]])
         self.assertEqual(len(await self.visible()), 5)
@@ -171,10 +172,10 @@ class TestSoftDeletes(ArchiveCase):
         await self.seed(count=5)
         stats = await self.query.person_stats("Nick")
         self.assertEqual(stats["messages"], 5)
-        token = await self.repo.soft_delete_history("Nick")
+        result = await self.service.reset_conversation("Nick")
         stats = await self.query.person_stats("Nick")
         self.assertEqual(stats["messages"], 0)
-        await self.repo.restore_deleted("Nick", token)
+        await self.service.undo_conversation_reset("Nick", result["snapshot"])
         stats = await self.query.person_stats("Nick")
         self.assertEqual(stats["messages"], 5)
 
@@ -189,7 +190,8 @@ class TestSoftDeletes(ArchiveCase):
 
     async def test_purging_finally_erases_the_hidden_rows(self):
         await self.seed(count=5)
-        await self.repo.soft_delete_history("Nick")
+        for row in (await self.query.page("Nick"))["items"]:
+            await self.repo.soft_delete_message("Nick", row["id"])
         gone = await self.repo.purge_deleted("Nick")
         self.assertEqual(gone, 5)
         self.assertEqual(await self.stored_rows(), 0)

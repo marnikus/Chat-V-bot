@@ -258,11 +258,21 @@ window, and any window that can be shown while empty needs an empty state
 filter"* and may shrink at any time — filters purge it, People-list edits
 delete from it, undo rewrites it.
 
-`persons` / `messages` (history.db) answer *"what was actually said"* and are
-append-only. No filter, purge, undo or People-list edit may delete archived
-messages, and no collector may add anyone to the queue. Deleting a person in
-the Full User Database writes a tombstone (`deleted_at`) that Undelete
-reverses; only an explicit hard delete erases rows.
+`persons` / `messages` (history.db) answer *"what was actually said"*. Ordinary
+collection is append-only/idempotent; unrelated People-list/filter edits must
+not erase history. Explicit **Clear History / Delete Person** are authorized
+clean-slate commands (2026-09-09 requirement): they physically remove messages,
+all per-person tracking and, for Delete, the person row. They must use the
+service reset boundary, not a bulk tombstone. The same chat is re-collected on
+the next scan. Individual-message deletion remains a separate operation.
+
+Undo snapshots belong outside the active archive (`db_trash/history_undo`).
+The collector/parser/normal repository matching path MUST NEVER read those
+snapshots or use undo history as an already-seen registry. Only explicit undo
+or legacy storage conversion can read that store. Undo merges with current
+rows without duplicates; it does not restore obsolete DOM/full-scan pointers.
+Runtime caches, session counters and stale push/UI epochs must be invalidated
+at a reset without touching unrelated conversations or pause/run preferences.
 
 The two stores are joined **by nick at read time only** — clicking a nick in
 User Memory looks the person up in the archive; it never copies data between
@@ -284,7 +294,33 @@ nothing, and a refused check disarms the push channel until a tick verifies
 the conversation again. Never “save it anyway and clean up later” — a
 polluted history cannot be un-mixed.
 
+Historical-name clarification (2026-09-08): the two **participant identities**
+may include previous spellings of the user's own nickname. Only previously
+declared My Nick values / archived self-nickname metadata are trusted as self
+aliases; arbitrary author strings and push-supplied alias lists are not. A
+current browser self override requires scoped two-member roster evidence.
+Unknown authors, other peers and real third participants still fail closed.
+Normalize a known historical self's direction before dedupe without rewriting
+the original sender name. The optional numeric counter hint never disables
+actual author/roster validation. Already trusted self names may be retained as
+independent identity preferences across a clean-slate reset; they are not
+message hashes/counts/pointers. Explicit undo of an isolated archive snapshot
+is not permission to collect from an unverified chat.
+
 Media follows the same ownership rule: bytes are filed under the
 conversation they belong to (`saved_media/<Latin nick>/images|gifs/
 YYYY-MM-DD_NNN.ext`), never in an anonymous global pile, and the UI shows
 the saved file rather than the remote URL.
+
+Attachment components (`app-chat-image` / `.image-wrapper`) can be nested
+inside `.message-text`, `span.message` or `[data-message-text]`. Never exclude
+all images merely because they descend from a text payload. Keep attachment
+classification separate from caption/emoji extraction, and defer an attachment
+whose image/URL has not rendered. Text-selector changes must be tested against
+both legacy media markup and the supplied `tests/fixtures/person_media.html`.
+
+Committed cache-state changes must reach the open history window, including
+idle-batch completions; new live rows must not retain pre-download media DTOs.
+Use one truthful media-info shape with local path/state/error and generation
+checks on bridge/UI replies. Missing or failed previews must not silently look
+cached, and a renderer callback failure must not break media storage.

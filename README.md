@@ -352,6 +352,21 @@ on the clipboard (plus the path as text), so it can be pasted straight into
 a chat. Older flat `media_cache/<sha256>.<ext>` files are moved into the new
 tree automatically on the first start.
 
+**Media capture and live previews (agent v14):** attachments inside
+`.message-body .message-text` are captured as images/GIFs, including captions;
+avatars and inline emoji are not attachments. A lazy attachment whose image or
+URL has not rendered yet is retried instead of becoming an empty text row.
+Completed downloads update the open Person History window automatically—even
+when no new message arrives. Download failures show the actual reason next to
+the restore control, and stale replies from before Clear/Delete/Load are ignored.
+
+After upgrading, restart the app and confirm **Capture agent v14** in the
+collector. With media downloads enabled, use **Collect now** in the same private
+chat; there is no need to clear history first. For an existing failed/missing
+file, click its **restore** marker. A source no longer available from the chat or
+image host cannot be reconstructed. The diagnosis and regression results are in
+[`docs/PERSON_HISTORY_MEDIA_CAPTURE_DESIGN_2026-09-09.md`](docs/PERSON_HISTORY_MEDIA_CAPTURE_DESIGN_2026-09-09.md).
+
 ### How collection works (and why it does not freeze the UI)
 
 A tiny agent is injected into the page. Every heartbeat it returns only a
@@ -436,24 +451,117 @@ colour wears a white ring; picking one closes the popup, so do `Cancel`, the
 
 ### The database window
 
-**DB Connection** is also a normal grid window. It shows the connected file,
-its measurements and every `*.db` next to it:
+**DB Connection** is a normal grid window. It lists only existing, compatible
+chat-history databases beside the active file or in recent locations. The
+People queue (`chatbot.db`), undo/internal stores, backups and missing files
+are not manageable here. The global undo timeline remains in `config.json`.
 
 | Reading | Meaning |
 |---|---|
-| **Full DB size** | `history.db` on disk, including its `-wal` / `-shm` companions. |
+| **Full DB size** | The active SQLite file, including its `-wal` / `-shm` companions. |
 | **Text size** | How many bytes of the messages are actual text. |
 | **Images folder** | Size *and* file count of `saved_media/`. |
 
-Buttons: `Load` (connect to another database — the collector is parked and
-restarted around the switch), `＋ Create` (a fresh empty database, named
-safely, and connect to it), `🗑` (remove a database) and `🧹 Clean DB` (empty
-the connected one). **Delete and Clean never unlink anything**: the file is
-moved to `db_trash/` first, the path is stored in the undo entry, and Ctrl+Z
-brings the database back and reconnects it.
+* **＋ Create** builds and validates an independent empty archive. It does **not**
+  connect to it, reset history, or interrupt collection. Click **Load** explicitly
+  when you want to switch.
+* **Load** validates the target before swapping connections. In-flight writes,
+  queries and downloads finish in their original database. An incompatible
+  target is refused; the working connection stays open.
+* **Delete** moves the file to `db_trash/` and removes it from the list and recents.
+  Deleting the active archive first connects to another valid archive. The last
+  valid archive cannot be deleted: create another one first.
+* **Clean DB** first takes a consistent SQLite backup, then empties the active
+  archive transactionally. A failed backup aborts the operation.
 
-Design document:
+Ctrl+Z uses the existing global history. Undo/redo of **Create** concerns the
+file, not a connection switch. Restoring an inactive deleted file keeps the
+current connection; undoing an active deletion reconnects the restored archive.
+Undo/redo waits while a database action is in flight. Settings/undo JSON is
+published atomically so a failed save cannot truncate the previous timeline.
+
+### Recovering missing message text
+
+The collector retries partially rendered messages instead of saving timestamps
+alone. Text and media captions are captured together. Historical empty rows are
+repaired in place when the private chat can supply the text; unknown or
+ambiguous content is never invented. If neither text nor media is available,
+Person History shows **`[text not captured]`** instead of a blank bubble.
+
+To retry older captures:
+
+1. Open that person's original **private chat** in the connected browser.
+2. Ensure the collector is enabled/resumed and your own nick is correct.
+3. Click **Backfill older** in Chat Message Collector and keep the chat open.
+4. Check the **Text capture** status/log. Successful repairs refresh Person
+   History even when no new message was inserted.
+
+**Clear History now means a full clean slate.** The active database physically
+removes that person's messages (including hidden rows), IDs/hashes, cursor,
+full-scan flags, gap/recovery state and message-derived counters/dates. It keeps
+the contact/note. **Delete Person** removes the contact too. The next scan treats
+the same visible chat as new and collects it again; no Restore cleared button
+or deleted-person denylist is involved. If the private chat remains open, the
+next automatic scan may refill history immediately—pause collection first if
+you want it to stay empty.
+
+**Undo is isolated from collection.** Per-person snapshots and cached-media
+copies are stored under `db_trash/history_undo/` with a non-archive storage
+identity. They are never attached to or queried by the collector. Ctrl+Z is the
+only way to explicitly read one back. Undo merges with any messages already
+freshly re-collected, without duplicates; redo performs another clean reset.
+Shared media and other people's history are preserved. Individual-message
+Delete remains separate until a whole-history/person reset removes every row
+for that person.
+
+Agent **v14** retains the full reset of parsed-node caches, queued pushes, and its capture epoch.
+A delayed pre-reset push cannot reinsert old data after a fresh gate has been
+verified. Radar's per-person session count and visible history/paging cache are
+reset, and stale-generation UI replies are ignored. Browser reset failures are
+retried safely after reconnect, without accepting old buffered messages.
+
+The capture agent also handles structurally identifiable plain text without
+requiring exactly `span.message`, and saves the visible chat before backfill
+scrolling. Read errors are errors, not a false “No new messages” success.
+**Capture agent**, **Last read**, and **Text source** remain available for
+diagnostics. Genuine third-party authors and invalid private-chat scopes stay
+blocked.
+
+Trusted former self nicknames remain independent identity preferences, not
+message-seen markers. A reset preserves these declarations outside per-chat
+message metadata, so re-collection after a nickname change still works. The
+collector never learns identities from an undo snapshot or an untrusted push.
+If a former nickname was never declared, use the existing My Nick field to
+register it, then return to your current name; only declare names that were yours.
+
+Recovery also works with media downloads disabled. Messages no longer exposed
+by the website cannot be reconstructed from timestamps alone. If an older build
+saved an unusable active path, startup prefers another valid archive; if none
+exists, it creates a separately named recovery archive without overwriting the
+original files. This startup recovery is not the **Create** button's behavior.
+
+Design and verification:
+`docs/DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md`.
+Capture-after-clear follow-up design and verification:
+`docs/CAPTURE_PENDING_AFTER_CLEAR_DESIGN_2026-09-08.md`.
+Historical self-identity work (its hide/Restore behavior is superseded):
+`docs/HISTORICAL_SELF_IDENTITY_AND_CLEAR_RESTORE_DESIGN_2026-09-08.md`.
+Current clean-slate reset design and verification:
+`docs/CLEAN_SLATE_COLLECTION_RESET_DESIGN_2026-09-09.md`.
+Labels design:
 `docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
+
+The DOM/protocol regression tests have a development-only dependency; the
+**desktop app does not require Node/jsdom**. To include these tests:
+
+```sh
+npm ci --prefix tests
+REQUIRE_DOM_TESTS=1 python -m unittest discover -s tests -p 'test_*.py'
+```
+
+These tests execute the shipped expressions in a DOM implementation and feed
+real protocol-shaped responses through the Python capture/storage path. They
+are not a substitute for testing a live Chrome session.
 
 ### Settings (config.json)
 

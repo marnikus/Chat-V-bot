@@ -395,1804 +395,6 @@
             "filter_guest": "any",
             "filter_anonymous": "any",
             "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          },
-          {
-            "message": "",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "{{nick}}",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Приветик Милая, хочешь пошалить может?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "people",
-        "value": {
-          "before": [
-            {
-              "nick": "1мимишная",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:05",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "37би",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:05",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "•feel me slowly•",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:04",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "💋Сладкая_Порочность🖤",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:04",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "*alina",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:03",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "*жена",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:03",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "-милф@",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:02",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "\"Светтик\"",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:02",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_ШепотНочи_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:01",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "-irina-",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:01",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_глория_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:00",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Сучка",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:00",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Kira_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:59",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Angel_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:58",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_50лет_в_обед(т)_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:57",
-              "last_seen": "2026-09-06T12:58:44",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_AleXandrA_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:57",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "__Юлия",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:56",
-              "last_seen": "2026-09-06T12:58:26",
-              "messaged": true,
-              "message_count": 1,
-              "last_messaged": "2026-09-06T12:58:37",
-              "notes": ""
-            }
-          ],
-          "after": [
-            {
-              "nick": "1мимишная",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:05",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "37би",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:05",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "•feel me slowly•",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:04",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "💋Сладкая_Порочность🖤",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:04",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "*alina",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:03",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "*жена",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:03",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "-милф@",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:02",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "\"Светтик\"",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:02",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_ШепотНочи_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:01",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "-irina-",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:01",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_глория_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:00",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Сучка",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:28:00",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Kira_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:59",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_Angel_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:58",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "_50лет_в_обед(т)_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:57",
-              "last_seen": "2026-09-06T12:58:44",
-              "messaged": true,
-              "message_count": 0,
-              "last_messaged": "2026-09-06T12:59:24",
-              "notes": ""
-            },
-            {
-              "nick": "_AleXandrA_",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:57",
-              "last_seen": "2026-09-06T12:28:06",
-              "messaged": false,
-              "message_count": 0,
-              "last_messaged": null,
-              "notes": ""
-            },
-            {
-              "nick": "__Юлия",
-              "gender": "female",
-              "registered": false,
-              "anonymous": true,
-              "guest": true,
-              "first_seen": "2026-09-06T12:27:56",
-              "last_seen": "2026-09-06T12:58:26",
-              "messaged": true,
-              "message_count": 1,
-              "last_messaged": "2026-09-06T12:58:37",
-              "notes": ""
-            }
-          ]
-        }
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "{{nick}}",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Привееет,  скучаешь ... ?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": false,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "{{nick}}",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Привееет,  скучаешь ... ?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
-            "enabled": false,
-            "block_id": "SCROLL_PARSE"
-          },
-          {
-            "custom_name": "Search Bar",
-            "selector": "mat-form-field",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "{{nick}}",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "user-item",
-            "label_selector": ".primary-text",
-            "click_selector": ".user-container",
-            "tab_selector": "div[role='tab'].tab-item",
-            "tab_title_selector": "p.chat-title",
-            "verify_new_tab": true,
-            "tab_pause_ms": 200,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 100,
-            "respect_order": false,
-            "pre_delay_ms": 200,
-            "enabled": true,
-            "block_id": "CLICK_USER"
-          },
-          {
-            "custom_name": "Text Area MSG",
-            "selector": "textarea",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "message": "Привееет,  скучаешь ... ?)",
-            "use_composer": false,
-            "typing_speed_ms": 30,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "TYPE_MESSAGE"
-          },
-          {
-            "selector": "button[type='submit']",
-            "fallback_selector": "button:has(mat-icon)",
-            "fallback_text": "send",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 300,
-            "enabled": true,
-            "block_id": "CLICK_SEND"
-          },
-          {
-            "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
-            "file_pattern": "*.jpg",
-            "rotation_mode": "sequential",
-            "simulate_dialog": true,
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "verify_timeout_ms": 8000,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "ATTACH_IMAGE"
-          },
-          {
-            "custom_name": "Close Tab",
-            "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
-            "label_selector": "p.chat-title",
-            "match_text": "{{nick}}",
-            "click_enabled": true,
-            "click_selector": "button.tab-close-button",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "selector": "div[role='tab'].tab-item",
-            "child_selector": "p.chat-title",
-            "tab_name": "Гостиная",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "pre_delay_ms": 800,
-            "enabled": true,
-            "block_id": "CLICK_BACK"
-          },
-          {
-            "custom_name": "cdk-virtual-scroll-viewport",
-            "selector": "cdk-virtual-scroll-viewport",
-            "label_selector": "",
-            "match_text": "",
-            "click_enabled": true,
-            "click_selector": "",
-            "highlight_enabled": true,
-            "confirm_pause_ms": 700,
-            "highlight_ms": 1200,
-            "pre_delay_ms": 500,
-            "enabled": true,
-            "block_id": "CUSTOM_FIND"
-          },
-          {
-            "repeat_count": 20,
-            "enabled": true,
-            "block_id": "REPEAT_LOOP",
-            "pre_delay_ms": 500
-          },
-          {
-            "duration_ms": 1000,
-            "enabled": true,
-            "block_id": "PAUSE",
-            "pre_delay_ms": 500
-          }
-        ]
-      },
-      {
-        "kind": "stack",
-        "value": [
-          {
-            "max_scrolls": 1000,
-            "scroll_pause_ms": 1000,
-            "scroll_delta_y": 1500,
-            "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-            "load_timeout_ms": 2500,
-            "stall_threshold": 100,
-            "min_new_users": 150,
-            "person_selector": "user-item",
-            "nick_selector": ".primary-text",
-            "highlight_enabled": true,
-            "highlight_ms": 900,
-            "confirm_pause_ms": 500,
-            "purge_rejected": true,
-            "scroll_only": true,
-            "filter_female": "yes",
-            "filter_registered": "no",
-            "filter_guest": "any",
-            "filter_anonymous": "any",
-            "pre_delay_ms": 300,
             "enabled": false,
             "block_id": "SCROLL_PARSE"
           },
@@ -15131,44 +13333,474 @@
       {
         "kind": "archive",
         "value": {
+          "op": "delete_person",
+          "nick": "РозоваяБурлянка",
+          "token": "2026-09-08T22:27:22#5a688a7f",
+          "people": {
+            "before": [
+              {
+                "nick": "РозоваяБурлянка",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T21:41:44",
+                "last_seen": "2026-09-08T22:27:20",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Катя462",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T21:41:19",
+                "last_seen": "2026-09-08T21:41:34",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ],
+            "after": [
+              {
+                "nick": "Катя462",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T21:41:19",
+                "last_seen": "2026-09-08T21:41:34",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "load",
+          "command_id": "fa4c5bd3242d41e4955d7fa3b4037276",
+          "was_active": false,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\nedbv3.db",
+          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
+          "backup": ""
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "delete",
+          "command_id": "9d65bcecd28f47edb1ee9b79a1b6c759",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\nedbv3.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\nedbv3.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260908-222804_deleted_6146ef3fd8b6_nedbv3.db"
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "clean",
+          "command_id": "a03a99599ce9449e9eeb9033e62e1320",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260908-222830_clean_9f2e4611848a_history.db"
+        }
+      },
+      {
+        "kind": "archive",
+        "value": {
+          "op": "delete_person",
+          "nick": "Катя462",
+          "token": "2026-09-08T22:28:51#11d7f682",
+          "people": {
+            "before": [
+              {
+                "nick": "_замужняя киса_",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:28:10",
+                "last_seen": "2026-09-08T22:28:40",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "РозоваяБурлянка",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:27:25",
+                "last_seen": "2026-09-08T22:28:05",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Катя462",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T21:41:19",
+                "last_seen": "2026-09-08T22:28:50",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ],
+            "after": [
+              {
+                "nick": "_замужняя киса_",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:28:10",
+                "last_seen": "2026-09-08T22:28:40",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "РозоваяБурлянка",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:27:25",
+                "last_seen": "2026-09-08T22:28:05",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "grid",
+        "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"log\"},{\"t\":\"leaf\",\"id\":\"stack\"}],\"sizes\":[24.07987470634299,75.92012529365701]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"config\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[48.371723590150914,51.628276409849086]}],\"sizes\":[50,50]}],\"sizes\":[50.4698512137823,49.5301487862177]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[49.27844807191862,50.721551928081375]},{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[35.278281985871274,39.05452806122449,25.66718995290424]}],\"sizes\":[51.33205757550545,48.66794242449455]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"leaf\",\"id\":\"collector\"}],\"sizes\":[58.333333333333336,41.66666666666667]}],\"sizes\":[66.09240407204385,33.907595927956145]}}"
+      },
+      {
+        "kind": "archive",
+        "value": {
           "op": "clear_history",
           "nick": "_замужняя киса_",
-          "token": "2026-09-08T21:27:36#90aa562e"
+          "token": "clear:2026-09-08T23:49:59#32e33658",
+          "db_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db"
+        }
+      },
+      {
+        "kind": "archive",
+        "value": {
+          "op": "restore_cleared",
+          "nick": "_замужняя киса_",
+          "db_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
+          "groups": [
+            {
+              "token": "clear:2026-09-08T23:49:59#32e33658",
+              "ids": [
+                5,
+                6,
+                7,
+                8
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "kind": "archive",
+        "value": {
+          "op": "clear_history",
+          "nick": "_замужняя киса_",
+          "token": "clear:2026-09-08T23:50:20#b419eb2d",
+          "db_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db"
+        }
+      },
+      {
+        "kind": "archive",
+        "value": {
+          "op": "delete_person",
+          "nick": "_замужняя киса_",
+          "token": "2026-09-08T23:50:32#aa1e4a95",
+          "people": {
+            "before": [
+              {
+                "nick": "Замужем37",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:28:49",
+                "last_seen": "2026-09-08T23:31:20",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "РозоваяБурлянка",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:12:50",
+                "last_seen": "2026-09-08T23:49:40",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Svetik25❤️",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:11:45",
+                "last_seen": "2026-09-08T23:49:44",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Катя462",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:28:55",
+                "last_seen": "2026-09-08T23:31:25",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "_замужняя киса_",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:28:10",
+                "last_seen": "2026-09-08T23:50:30",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ],
+            "after": [
+              {
+                "nick": "Замужем37",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:28:49",
+                "last_seen": "2026-09-08T23:31:20",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "РозоваяБурлянка",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:12:50",
+                "last_seen": "2026-09-08T23:49:40",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Svetik25❤️",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T23:11:45",
+                "last_seen": "2026-09-08T23:49:44",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              },
+              {
+                "nick": "Катя462",
+                "gender": "unknown",
+                "registered": false,
+                "anonymous": false,
+                "guest": false,
+                "first_seen": "2026-09-08T22:28:55",
+                "last_seen": "2026-09-08T23:31:25",
+                "messaged": false,
+                "message_count": 0,
+                "last_messaged": null,
+                "notes": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "people",
+        "value": {
+          "before": [
+            {
+              "nick": "_замужняя киса_",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:50:33",
+              "last_seen": "2026-09-08T23:50:59",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "Замужем37",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:28:49",
+              "last_seen": "2026-09-08T23:31:20",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "РозоваяБурлянка",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:12:50",
+              "last_seen": "2026-09-08T23:49:40",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "Svetik25❤️",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:11:45",
+              "last_seen": "2026-09-08T23:49:44",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "Катя462",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T22:28:55",
+              "last_seen": "2026-09-08T23:31:25",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            }
+          ],
+          "after": [
+            {
+              "nick": "Замужем37",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:28:49",
+              "last_seen": "2026-09-08T23:31:20",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "РозоваяБурлянка",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:12:50",
+              "last_seen": "2026-09-08T23:49:40",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "Svetik25❤️",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T23:11:45",
+              "last_seen": "2026-09-08T23:49:44",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            },
+            {
+              "nick": "Катя462",
+              "gender": "unknown",
+              "registered": false,
+              "anonymous": false,
+              "guest": false,
+              "first_seen": "2026-09-08T22:28:55",
+              "last_seen": "2026-09-08T23:31:25",
+              "messaged": false,
+              "message_count": 0,
+              "last_messaged": null,
+              "notes": ""
+            }
+          ]
         }
       },
       {
         "kind": "dbconn",
         "value": {
           "op": "create",
-          "path": "neDBv3.db",
-          "before_path": "history.db",
-          "backup": ""
-        }
-      },
-      {
-        "kind": "dbconn",
-        "value": {
-          "op": "load",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat.db",
-          "before_path": "neDBv3.db",
-          "backup": ""
-        }
-      },
-      {
-        "kind": "dbconn",
-        "value": {
-          "op": "load",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
-          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat.db",
-          "backup": ""
-        }
-      },
-      {
-        "kind": "dbconn",
-        "value": {
-          "op": "load",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\neDBv3.db",
-          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
+          "command_id": "1c9b712c773c424d8f658b25ea77677d",
+          "was_active": false,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
           "backup": ""
         }
       },
@@ -15176,35 +13808,187 @@
         "kind": "dbconn",
         "value": {
           "op": "delete",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat.db",
-          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat.db",
-          "backup": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\db_trash\\20260908-212936_deleted_chat.db"
+          "command_id": "788144a0c18b4c40b1c210d7e3f0fa78",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\history.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260909-012714_deleted_79dd142d5401_history.db"
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "clean",
+          "command_id": "0db7719227a64dffab0bcdc735b7e60f",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260909-015348_clean_12bc6916c109_b.db"
+        }
+      },
+      {
+        "kind": "dbconn",
+        "value": {
+          "op": "create",
+          "command_id": "2906e1805c8a48109d6d0014daaa71c8",
+          "was_active": false,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\v.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "backup": ""
         }
       },
       {
         "kind": "dbconn",
         "value": {
           "op": "delete",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat2.db",
-          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat2.db",
-          "backup": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\db_trash\\20260908-212938_deleted_chat2.db"
+          "command_id": "3ab6b644524e4d2182f003de7a7a9303",
+          "was_active": true,
+          "path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "before_path": "d:\\google drive\\chat v bot\\chat v bot\\b.db",
+          "backup": "d:\\google drive\\chat v bot\\chat v bot\\db_trash\\20260909-015400_deleted_dee288750f4f_b.db"
         }
       },
       {
-        "kind": "dbconn",
+        "kind": "labels",
         "value": {
-          "op": "delete",
-          "path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
-          "before_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
-          "backup": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\db_trash\\20260908-212944_deleted_history.db"
+          "before": {
+            "defs": [
+              {
+                "id": "lbl_1",
+                "name": "no responding",
+                "color": "#38bdf8",
+                "created_at": "2026-09-07T18:27:31"
+              },
+              {
+                "id": "lbl_2",
+                "name": "rude",
+                "color": "#ff9500",
+                "created_at": "2026-09-08T16:05:38"
+              }
+            ],
+            "assign": {
+              "Аналочка_": [
+                "lbl_1"
+              ]
+            },
+            "filter": {
+              "include": [],
+              "exclude": []
+            },
+            "next_id": 2
+          },
+          "after": {
+            "defs": [
+              {
+                "id": "lbl_1",
+                "name": "no responding",
+                "color": "#38bdf8",
+                "created_at": "2026-09-07T18:27:31"
+              },
+              {
+                "id": "lbl_2",
+                "name": "rude",
+                "color": "#ff9500",
+                "created_at": "2026-09-08T16:05:38"
+              },
+              {
+                "id": "lbl_3",
+                "name": "Spam",
+                "color": "#ff375f",
+                "created_at": "2026-09-09T01:54:45"
+              }
+            ],
+            "assign": {
+              "Аналочка_": [
+                "lbl_1"
+              ]
+            },
+            "filter": {
+              "include": [],
+              "exclude": []
+            },
+            "next_id": 3
+          }
+        }
+      },
+      {
+        "kind": "labels",
+        "value": {
+          "before": {
+            "defs": [
+              {
+                "id": "lbl_1",
+                "name": "no responding",
+                "color": "#38bdf8",
+                "created_at": "2026-09-07T18:27:31"
+              },
+              {
+                "id": "lbl_2",
+                "name": "rude",
+                "color": "#ff9500",
+                "created_at": "2026-09-08T16:05:38"
+              },
+              {
+                "id": "lbl_3",
+                "name": "Spam",
+                "color": "#ff375f",
+                "created_at": "2026-09-09T01:54:45"
+              }
+            ],
+            "assign": {
+              "Аналочка_": [
+                "lbl_1"
+              ]
+            },
+            "filter": {
+              "include": [],
+              "exclude": []
+            },
+            "next_id": 3
+          },
+          "after": {
+            "defs": [
+              {
+                "id": "lbl_1",
+                "name": "no responding",
+                "color": "#38bdf8",
+                "created_at": "2026-09-07T18:27:31"
+              },
+              {
+                "id": "lbl_2",
+                "name": "rude",
+                "color": "#ff9500",
+                "created_at": "2026-09-08T16:05:38"
+              },
+              {
+                "id": "lbl_3",
+                "name": "Spam",
+                "color": "#ff375f",
+                "created_at": "2026-09-09T01:54:45"
+              }
+            ],
+            "assign": {
+              "Аналочка_": [
+                "lbl_1"
+              ],
+              "БархатнаяВспышка": [
+                "lbl_3"
+              ]
+            },
+            "filter": {
+              "include": [],
+              "exclude": []
+            },
+            "next_id": 3
+          }
         }
       }
     ],
     "undo_history_index": 99,
-    "grid_layout": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"log\"},{\"t\":\"leaf\",\"id\":\"stack\"}],\"sizes\":[24.07987470634299,75.92012529365701]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"config\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[48.371723590150914,51.628276409849086]}],\"sizes\":[50,50]}],\"sizes\":[50.4698512137823,49.5301487862177]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[49.27844807191862,50.721551928081375]},{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[35.278281985871274,39.05452806122449,25.66718995290424]}],\"sizes\":[51.33205757550545,48.66794242449455]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"leaf\",\"id\":\"collector\"}],\"sizes\":[58.333333333333336,41.66666666666667]}],\"sizes\":[81.83241973375098,18.16758026624902]}}",
+    "grid_layout": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"log\"},{\"t\":\"leaf\",\"id\":\"stack\"}],\"sizes\":[24.07987470634299,75.92012529365701]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"config\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[48.371723590150914,51.628276409849086]}],\"sizes\":[50,50]}],\"sizes\":[50.4698512137823,49.5301487862177]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[50,50]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[49.27844807191862,50.721551928081375]},{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[35.278281985871274,39.05452806122449,25.66718995290424]}],\"sizes\":[51.33205757550545,48.66794242449455]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"leaf\",\"id\":\"collector\"}],\"sizes\":[58.333333333333336,41.66666666666667]}],\"sizes\":[66.09240407204385,33.907595927956145]}}",
     "window_geometry": {
-      "x": -2560,
-      "y": 23,
+      "x": -2572,
+      "y": 31,
       "width": 2560,
       "height": 1377
     },
@@ -15219,13 +14003,11 @@
         "stats",
         "filters"
       ],
-      "minimized": []
+      "minimized": [],
+      "maximized": null
     },
     "db_recent": [
-      "D:\\Google Drive\\Chat V Bot\\Chat V bot\\neDBv3.db",
-      "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db",
-      "D:\\Google Drive\\Chat V Bot\\Chat V bot\\chat.db",
-      "neDBv3.db"
+      "d:\\google drive\\chat v bot\\chat v bot\\v.db"
     ]
   },
   "custom_blocks": [
@@ -15360,22 +14142,31 @@
         "name": "rude",
         "color": "#ff9500",
         "created_at": "2026-09-08T16:05:38"
+      },
+      {
+        "id": "lbl_3",
+        "name": "Spam",
+        "color": "#ff375f",
+        "created_at": "2026-09-09T01:54:45"
       }
     ],
     "assign": {
       "Аналочка_": [
         "lbl_1"
+      ],
+      "БархатнаяВспышка": [
+        "lbl_3"
       ]
     },
     "filter": {
       "include": [],
       "exclude": []
     },
-    "next_id": 2
+    "next_id": 3
   },
   "history": {
     "enabled": true,
-    "db_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\neDBv3.db",
+    "db_path": "d:\\google drive\\chat v bot\\chat v bot\\v.db",
     "use_fts": true,
     "media": {
       "enabled": true,

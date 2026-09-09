@@ -190,6 +190,13 @@
   color: var(--text-muted);
 }
 
+.msg-media-restore { flex-wrap: wrap; max-width: 100%; }
+.msg-media-restore-error {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+  color: var(--yellow);
+}
+
 .msg-media-restore:hover .msg-media-restore-label {
   color: var(--accent);
 }
@@ -472,3 +479,9 @@
   padding: 1px 4px;
   font-size: 11px;
 }
+
+/* Old incomplete captures are honest placeholders, never blank bubbles. */
+.msg-text-missing { opacity: .7; font-style: italic; }
+
+/* Incomplete capture is active work, not a successful idle/no-new state. */
+.state-capture-pending { color: var(--yellow); background: var(--yellow-dim); }

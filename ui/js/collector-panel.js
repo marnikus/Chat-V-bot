@@ -13,12 +13,15 @@ const CollectorPanel = {
   paused: false,
   myNick: '',
   _els: {},
+  _generation: 0,
+  _sessionTotals: new Map(),
 
   STATE_CLASS: {
     collecting: 'state-collecting',
     bootstrapping: 'state-collecting',
     collected: 'state-collected',
     no_new: 'state-idle',
+    capture_pending: 'state-capture-pending',
     not_private: 'state-idle',
     group_tab: 'state-idle',
     paused: 'state-idle',
@@ -129,6 +132,7 @@ const CollectorPanel = {
     if (!message && !nick) return;
     const entry = document.createElement('div');
     entry.className = 'collector-log-entry ' + level;
+    entry.dataset.nick = nick;
     const ts = document.createElement('span');
     ts.className = 'collector-log-ts';
     ts.textContent = '[' + (payload.ts || '') + '] ';
@@ -152,10 +156,40 @@ const CollectorPanel = {
     this._els.log.replaceChildren();
   },
 
+  _acceptGeneration(payload) {
+    if (typeof payload.generation !== 'number') return true;
+    if (payload.generation < this._generation) return false;
+    this._generation = payload.generation;
+    return true;
+  },
+
+  onReset(json) {
+    let payload;
+    try { payload = typeof json === 'string' ? JSON.parse(json) : json; } catch (_) { return; }
+    if (!payload || !this._acceptGeneration(payload)) return;
+    const nick = payload.nick;
+    if (nick == null) this._sessionTotals.clear();
+    else this._sessionTotals.delete(nick);
+    if (this._els.log) {
+      Array.from(this._els.log.children).forEach((entry) => {
+        if (nick == null || entry.dataset.nick === nick) entry.remove();
+      });
+    }
+    if (!this._last || !this._last.nick || nick == null || this._last.nick === nick) {
+      this._last = { nick: nick || '', my_nick: this.myNick, added: 0, session_added: 0,
+        total: 0, state: 'no_new', text: 'History reset — next scan starts fresh',
+        generation: this._generation };
+      if (this._els.status) this._els.status.textContent = this._last.text;
+    }
+    this.renderRows(this._last || {});
+  },
+
   onStatus(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload) return;
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick && payload.session_added !== undefined)
+      this._sessionTotals.set(payload.nick, Number(payload.session_added) || 0);
     this._last = payload;
     this.state = payload.state || 'off';
     this.paused = !!payload.paused;
@@ -183,8 +217,12 @@ const CollectorPanel = {
   onAppended(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload) return;
-    this._appended = (this._appended || 0) + (payload.added || 0);
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick) {
+      const total = payload.session_added !== undefined ? Number(payload.session_added)
+        : (this._sessionTotals.get(payload.nick) || 0) + (Number(payload.added) || 0);
+      this._sessionTotals.set(payload.nick, total || 0);
+    }
     if (typeof HistoryDb !== 'undefined' && HistoryDb.rows &&
         HistoryDb.rows.length) HistoryDb._requestStats();
     this.renderRows(this._last || {});
@@ -225,17 +263,30 @@ const CollectorPanel = {
     const partner = String(payload.nick || payload.partner || '').trim();
     if (partner) this._rowLink(host, 'Partner', partner);
     else this._row(host, 'Partner', '');
-    this._row(host, 'My nick', this.myNick || (payload.settings || {}).my_nick);
+    const currentSelf = payload.my_nick || this.myNick || (payload.settings || {}).my_nick;
+    this._row(host, 'My nick', currentSelf);
+    if (payload.configured_my_nick && payload.configured_my_nick !== currentSelf)
+      this._row(host, 'Configured nick', payload.configured_my_nick);
+    const ownNames = Array.isArray(payload.known_self_nicks) ? payload.known_self_nicks : [];
+    const previous = ownNames.filter((n) => n !== currentSelf);
+    if (previous.length) this._row(host, 'My previous nicks', previous.join(', '));
+    if (payload.identity_source) this._row(host, 'Identity source', payload.identity_source);
     this._row(host, 'In archive', payload.total);
-    this._row(host, 'Added this session', this._appended || payload.added || 0);
+    this._row(host, 'Added this session', this._sessionTotals.get(partner) || 0);
     this._row(host, 'Check every',
               payload.interval_ms ? payload.interval_ms + ' ms' : '');
     if (payload.throttled)
       this._row(host, 'Throttled', 'yes — an Action Stack run is in progress');
     if (payload.self_heals) this._row(host, 'Re-syncs', payload.self_heals);
+    if (typeof payload.agent === 'number')
+      this._row(host, 'Capture agent', payload.agent ? 'v' + payload.agent : 'not installed');
     if (payload.last_probe) {
       const p = payload.last_probe;
       this._row(host, 'Page count', p.count);
+      if (p.page_self) this._row(host, 'Browser self', p.page_self);
+      if ((p.in_authors || []).length || (p.out_authors || []).length)
+        this._row(host, 'Message authors', 'in: ' + (p.in_authors || []).join(', ') +
+          ' · out: ' + (p.out_authors || []).join(', '));
       this._row(host, 'People',
                 String(p.participants) + ' · ' + String(p.panes) +
                 ' pane(s) · ' + (p.pane_source || 'n/a'));
@@ -247,6 +298,23 @@ const CollectorPanel = {
       if (payload.sync_added !== undefined)
         sync += ' · added ' + payload.sync_added;
       this._row(host, 'Sync', sync);
+    }
+    if (payload.text_repaired || payload.capture_missing || payload.capture_errors) {
+      this._row(host, 'Text capture',
+        'repaired ' + (payload.text_repaired || 0) +
+        ' · awaiting retry ' + (payload.capture_missing || 0) +
+        ' · read errors ' + (payload.capture_errors || 0));
+    }
+    const reads = payload.capture_diagnostics || [];
+    if (reads.length) {
+      const read = reads[reads.length - 1];
+      this._row(host, 'Last read',
+        '[' + read.from + ':' + read.to + '] · ' + (read.ready || 0) +
+        '/' + (read.returned || 0) + ' ready · ' + (read.reason || 'unknown') +
+        (read.error ? ' · ' + read.error : ''));
+      const sources = read.sources || {};
+      if (Object.keys(sources).length)
+        this._row(host, 'Text source', Object.keys(sources).map((s) => s + ': ' + sources[s]).join(', '));
     }
     if (payload.media_repaired || payload.media_requeued) {
       this._row(host, 'Media recovery',

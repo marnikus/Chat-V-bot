@@ -1,0 +1,8 @@
+{
+  "name": "chat-v-bot-dom-regressions",
+  "private": true,
+  "description": "Development-only DOM/protocol tests; not part of the desktop runtime",
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

@@ -113,7 +113,7 @@ class FakePage:
         if "/*CVB_INSTALL*/" in expression:
             self.installs += 1
             self.agent_version = AGENT_VERSION
-            return 3
+            return AGENT_VERSION
         if "/*CVB_STATE*/" in expression:
             self._reindex()
             msgs = self.messages
@@ -267,7 +267,7 @@ class TestParserProbes(unittest.IsolatedAsyncioTestCase):
     async def test_agent_is_installed_only_when_missing(self):
         page = FakePage([], agent=False)
         parser = ChatParser(page)
-        self.assertEqual(await parser.ensure_agent(), 3)
+        self.assertEqual(await parser.ensure_agent(), AGENT_VERSION)
         self.assertEqual(page.installs, 1)
         await parser.ensure_agent()
         self.assertEqual(page.installs, 1)      # already there → no re-inject

@@ -75,6 +75,14 @@ class MessageRecord:
     ts_display: str = ""            # HH:MM as the site shows it
     occ: int = 0
     idx: int = 0                    # position in the DOM at parse time
+    capture_pending: bool = False   # agent saw a line before its payload rendered
+    capture_reason: str = ""        # structural diagnosis, never message contents
+    text_source: str = ""
+
+    @property
+    def incomplete(self) -> bool:
+        return (self.capture_pending or not self.from_nick.strip() or
+                (not self.text.strip() and not self.media_url.strip()))
 
     @property
     def payload(self) -> str:
@@ -102,7 +110,7 @@ class MessageRecord:
         data = data or {}
         media = data.get("media") or {}
         rec = cls(
-            fp=str(data.get("fp", "")),
+            fp=str(data.get("fp") or ""),
             direction=str(data.get("dir") or data.get("direction") or "in"),
             from_nick=str(data.get("from") or data.get("from_nick") or ""),
             kind=str(data.get("kind") or "text"),
@@ -112,6 +120,9 @@ class MessageRecord:
             ts_display=str(data.get("time") or data.get("ts_display") or ""),
             occ=int(data.get("occ") or 0),
             idx=int(data.get("idx") or 0),
+            capture_pending=bool(data.get("capture_pending")),
+            capture_reason=str(data.get("capture_reason") or ""),
+            text_source=str(data.get("text_source") or ""),
         )
         rec.ensure_fp()
         return rec
@@ -122,6 +133,7 @@ class AppendResult:
     """What one `HistoryRepo.append()` did."""
 
     added: int = 0
+    text_repaired: int = 0
     skipped: int = 0
     gap: bool = False
     first_ord: int = 0
@@ -178,6 +190,11 @@ class SyncResult:
     #: downloads were re-queued for the downloader.
     media_repaired: int = 0
     media_requeued: int = 0
+    text_repaired: int = 0
+    capture_missing: int = 0
+    capture_errors: int = 0
+    error: str = ""
+    capture_diagnostics: list = field(default_factory=list)
     chunks: list = field(default_factory=list)
     records: list = field(default_factory=list)
 

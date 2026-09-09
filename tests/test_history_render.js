@@ -357,6 +357,23 @@ t('the collector status has a style per state', () => {
   }
 });
 
+t('missing text gets an explicit placeholder rather than an empty bubble', () => {
+  for (const text of ['', null, '  \n\t ']) {
+    const host = mkEl('div');
+    V.renderRows(host, [HistoryModel.toRow({ ord: 1, text, from: 'Nick', time: '18:00' }, ctx())], ctx());
+    eq(host.querySelector('.msg-text').textContent, '[text not captured]');
+    ok(host.querySelector('.msg-text-missing'));
+  }
+});
+
+t('media-only rows show their media affordance without a missing-text warning', () => {
+  const host = mkEl('div');
+  V.renderRows(host, [HistoryModel.toRow({ ord: 1, text: '', kind: 'gif',
+    media: { id: 1, kind: 'gif', state: 'failed', url: 'https://example.test/a.gif' } }, ctx())], ctx());
+  ok(host.querySelector('.msg-media-restore'));
+  ok(!host.textContent.includes('[text not captured]'));
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_render: ' + passed + ' passed, ' + failed + ' failed');

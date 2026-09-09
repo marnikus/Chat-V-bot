@@ -5,6 +5,7 @@ import copy
 import json
 import logging
 import os
+import uuid
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot
 from backend.cdp_client import CDPClient
@@ -13,6 +14,7 @@ from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine, normalize_blocks
 from backend.config_manager import ConfigManager, MAX_STACK_HISTORY
 from backend.db_manager import DbManager
+from backend.db_paths import same_database
 from backend.label_store import LabelStore
 from backend.preset_store import PresetStore
 from backend.tab_matcher import best_matches
@@ -52,6 +54,7 @@ class Bridge(QObject):
     collector_status = Signal(str)           # JSON collector state payload
     collector_log = Signal(str)              # JSON {ts, level, message, nick}
     history_appended = Signal(str)           # JSON {nick, items, added}
+    history_reset = Signal(str)        # reset boundary, no old message data
     my_nick_changed = Signal(str)            # the configured "my nick"
     history_error = Signal(str, str)         # scope, message
     # ── person labels / database management ──
@@ -810,85 +813,191 @@ class Bridge(QObject):
             return self._apply_db_command(value, forward)
         return False
 
-    def _apply_archive_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a message, chat or person deletion.
+    def _update_archive_command(self, original: dict, patch: dict) -> None:
+        history, index = self._get_global_history()
+        for entry in history:
+            value = entry.get("value") or {}
+            matches = (value.get("command_id") == original.get("command_id")
+                       if original.get("command_id") else (self._values_equal(value, original) or
+                       (original.get("token") and value.get("token") == original["token"] and
+                        value.get("nick") == original.get("nick"))))
+            if entry.get("kind") == "archive" and matches:
+                value.update(patch)
+                self._set_global_history(history, index)
+                return
 
-        Deletions are soft: rows are stamped with one operation token, so the
-        reversal is a single UPDATE and the undo entry never has to carry a
-        message body (see docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN).
-        """
+    def _emit_archive_change(self, action: str, nick: str, **extra) -> None:
+        payload = {"action": action, "nick": nick, "ok": True,
+                   "generation": self._archive.generation, **extra}
+        if payload.get("reset"):
+            self.history_reset.emit(json.dumps(payload, ensure_ascii=False))
+        self.userdb_changed.emit(json.dumps(payload, ensure_ascii=False))
+
+    def _apply_archive_command(self, value: dict, forward: bool) -> bool:
+        """Explicit undo/redo owns snapshots; ordinary collection cannot read them."""
         archive = self._archive
-        op = str(value.get("op") or "")
-        nick = str(value.get("nick") or "")
-        token = str(value.get("token") or "")
-        people = value.get("people") if isinstance(value.get("people"), dict) else None
-        if people is not None:
-            rows = people.get("after" if forward else "before")
-            if isinstance(rows, list):
-                self._apply_people(rows)
         if archive is None:
-            if op:
-                self.history_error.emit(
-                    "archive_undo", "the message archive is not running")
-            return people is not None
+            self.history_error.emit("archive_undo", "the message archive is not running")
+            return False
+        op, nick = str(value.get("op") or ""), str(value.get("nick") or "")
+        if value.get("db_path") and not same_database(value["db_path"], archive.db.path):
+            self.history_error.emit("archive_undo", "Load the original database before undoing this archive edit")
+            return False
+        original = copy.deepcopy(value)
+        _, previous_index = self._get_global_history()
 
         async def work():
-            repo = archive.repo
-            if forward:
-                if op == "delete_message":
-                    await repo.soft_delete_message(
-                        nick, int(value.get("message_id") or 0), token=token)
-                elif op == "clear_history":
-                    await repo.soft_delete_history(nick, token=token)
-                elif op == "delete_person":
-                    await repo.delete_person(nick, hard=False, token=token)
-            else:
-                if op == "delete_person":
-                    await repo.restore_person(nick, token=token)
+            command = dict(value)
+            reset = False
+            try:
+                # Old stored command references are converted only here/startup,
+                # never by the collector's already-seen logic.
+                if op in ("clear_history", "delete_person") and not command.get("snapshot"):
+                    await archive._migrate_bulk_tombstones(archive.db)
+                    history, _ = self._get_global_history()
+                    for entry in history:
+                        candidate = entry.get("value") or {}
+                        if (entry.get("kind") == "archive" and candidate.get("nick") == nick
+                                and candidate.get("token") == command.get("token") and candidate.get("snapshot")):
+                            command = candidate
+                            break
+                kind = command.get("op")
+                if kind in ("reset_history", "reset_person", "clear_history", "delete_person"):
+                    deleting = kind in ("reset_person", "delete_person")
+                    if forward:
+                        result = await archive.reset_conversation(nick, delete_person=deleting)
+                        patch = {"op": "reset_person" if deleting else "reset_history", "snapshot": result["snapshot"],
+                                 "legacy_token": "", "legacy_person": False, "db_path": archive.db.path}
+                        self._update_archive_command(original, patch)
+                        if deleting and self._memory is not None:
+                            await self._memory.delete_user(nick)
+                    else:
+                        if not command.get("snapshot"):
+                            raise ValueError("This legacy deletion has no recoverable undo snapshot")
+                        await archive.undo_conversation_reset(nick, command["snapshot"],
+                            legacy_token=command.get("legacy_token") or "",
+                            legacy_person=bool(command.get("legacy_person")))
+                        queue = command.get("queue_before")
+                        if queue and self._memory is not None:
+                            await self._memory.restore_user(queue)
+                        elif deleting and isinstance(command.get("people"), dict) and self._memory is not None:
+                            for row in command["people"].get("before", []):
+                                if row.get("nick") == nick:
+                                    await self._memory.restore_user(row)
+                    reset = True
+                elif kind == "restore_cleared":
+                    # Compatibility with v12's explicit restoration command.
+                    # Its reverse now physically removes those rows and resets
+                    # the cursor, rather than restoring an active denylist.
+                    if forward:
+                        snapshots = command.get("legacy_snapshots") or []
+                        if not snapshots:
+                            raise ValueError("This old restoration has no isolated snapshot")
+                        for item in snapshots:
+                            await archive.undo_conversation_reset(nick, item["snapshot"], only_ids=item.get("ids"))
+                    else:
+                        ids = [rid for group in command.get("groups", []) for rid in group.get("ids", [])]
+                        result = await archive.reset_conversation(nick, message_ids=ids)
+                        self._update_archive_command(original, {"legacy_snapshots": [{"snapshot": result["snapshot"]}]})
+                    reset = True
+                elif kind == "delete_message":
+                    if forward:
+                        await archive.repo.soft_delete_message(nick, int(command.get("message_id") or 0), token=command.get("token") or "")
+                    else:
+                        await archive.repo.restore_deleted(nick, command.get("token") or "")
+                    await archive.collector.archive_edited(nick)
                 else:
-                    await repo.restore_deleted(nick, token)
-            self.userdb_changed.emit(json.dumps(
-                {"action": "undo" if not forward else "redo", "op": op,
-                 "nick": nick}, ensure_ascii=False))
+                    raise ValueError("Unknown archive undo command")
+            except Exception:
+                history, index = self._get_global_history()
+                if index == previous_index + (1 if forward else -1):
+                    self._set_global_history(history, previous_index)
+                    self.history_changed.emit()
+                raise
+            if op in ("reset_person", "delete_person"):
+                await self._refresh_users()
+            self._emit_archive_change("redo" if forward else "undo", nick, op=op, reset=reset)
         self._run_async("archive_undo", work())
         return True
 
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a DB Connection action."""
+        """Reverse the file operation, not an implicit Create→Load switch."""
+        if getattr(self, "_db_command_pending", False):
+            return False
+        self._db_command_pending = True
         op = str(value.get("op") or "")
         path = str(value.get("path") or "")
         before_path = str(value.get("before_path") or "")
         backup = str(value.get("backup") or "")
         manager = self.db_manager
+        _history, previous_index = self._get_global_history()
 
         async def work():
-            if forward:
-                if op in ("create", "load"):
-                    result = await manager.load(path, create=(op == "create"))
-                elif op == "delete":
-                    result = await manager.delete(path)
-                elif op == "clean":
-                    result = await manager.clean()
-                else:
-                    return
-            else:
-                if op in ("create", "load"):
-                    result = await manager.load(before_path)
-                elif op in ("delete", "clean"):
-                    result = await manager.restore_backup(backup, path)
-                else:
-                    return
-            self._emit_db_change(op, result)
+            try:
+                try:
+                    if forward:
+                        if op == "create":
+                            result = (await manager.restore_backup(backup, path)
+                                      if backup else await manager.create(path))
+                        elif op == "load":
+                            result = await manager.load(path)
+                        elif op == "delete":
+                            result = await manager.delete(path)
+                        elif op == "clean":
+                            result = await manager.clean()
+                        else:
+                            result = {"ok": False, "error": "Unknown database operation"}
+                    elif op == "create":
+                        result = await manager.delete(path)
+                    elif op == "load":
+                        result = await manager.load(before_path)
+                    elif op in ("delete", "clean"):
+                        result = await manager.restore_backup(
+                            backup, path, activate=bool(value.get("was_active", op == "clean")))
+                    else:
+                        result = {"ok": False, "error": "Unknown database operation"}
+                except Exception as exc:
+                    log.exception("database undo/redo %s failed", op)
+                    result = {"ok": False, "error": str(exc)}
+                history, index = self._get_global_history()
+                if result.get("ok"):
+                    # Redo can make a NEW backup. Keep the matching command's
+                    # reference current, so repeated undo/redo never restores
+                    # an older snapshot or re-creates an empty file over data.
+                    for entry in history:
+                        old = entry.get("value") or {}
+                        matches = (old.get("command_id") == value.get("command_id")
+                                   if value.get("command_id") else self._values_equal(old, value))
+                        if entry.get("kind") == "dbconn" and matches:
+                            if result.get("backup"):
+                                old["backup"] = result["backup"]
+                            if op == "delete" and forward:
+                                old["was_active"] = result.get("was_active", False)
+                            self._set_global_history(history, index)
+                            break
+                elif index == previous_index + (1 if forward else -1):
+                    # A refused last-DB undo is NOT a successful timeline step.
+                    self._set_global_history(history, previous_index)
+                self.history_changed.emit()
+                self._emit_db_change(op, result)
+            finally:
+                self._db_command_pending = False
         self._run_async("db_undo", work())
         return True
 
     def _emit_db_change(self, action: str, result) -> None:
         payload = dict(result or {})
         payload["action"] = action
+        payload["active_path"] = self.db_manager.active_path()
         self.db_changed.emit(json.dumps(payload, ensure_ascii=False))
-        self.userdb_changed.emit(json.dumps(
-            {"action": "db_" + action, "ok": bool(payload.get("ok"))},
-            ensure_ascii=False))
+        # Independent create/delete and failed loads must not clear the
+        # working Person History window or invalidate its pending reads.
+        if payload.get("ok") and payload.get("active_changed"):
+            if self._archive is not None:
+                self.history_reset.emit(json.dumps({"reset": True, "nick": None,
+                                                    "generation": self._archive.generation}))
+            self.userdb_changed.emit(json.dumps(
+                {"action": "db_" + action, "ok": True}, ensure_ascii=False))
         if payload.get("error"):
             self.log_message.emit("⚠ " + str(payload["error"]), "warn")
 
@@ -925,6 +1034,11 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def undo(self):
+        if (getattr(self, "_db_command_pending", False) or
+                getattr(self, "_db_actions_pending", 0) or
+                getattr(self, "_archive_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the archive operation to finish", "warn")
+            return "null"
         history, index = self._get_global_history()
         if not history or index < 0 or index >= len(history):
             self.log_message.emit("⚠ Nothing to undo", "warn")
@@ -963,6 +1077,11 @@ class Bridge(QObject):
 
     @Slot(result=str)
     def redo(self):
+        if (getattr(self, "_db_command_pending", False) or
+                getattr(self, "_db_actions_pending", 0) or
+                getattr(self, "_archive_actions_pending", 0)):
+            self.log_message.emit("⚠ Wait for the archive operation to finish", "warn")
+            return "null"
         history, index = self._get_global_history()
         if not history or index >= len(history) - 1:
             self.log_message.emit("⚠ Nothing to redo", "warn")
@@ -1610,8 +1729,9 @@ class Bridge(QObject):
         self.db_manager.attach(service)
         if service is None:
             return
+        service.media.on_change = lambda info: self._emit_media_info(service, info)
         try:
-            service.collector.status_changed.connect(self.collector_status.emit)
+            service.collector.status_changed.connect(self._on_collector_status)
             service.collector.collector_log.connect(self.collector_log.emit)
             service.collector.history_appended.connect(self._on_history_appended)
             # a private chat with an unknown partner creates a People row:
@@ -1627,8 +1747,15 @@ class Bridge(QObject):
             except Exception:                         # noqa: BLE001
                 pass
 
+    def _on_collector_status(self, payload: str) -> None:
+        data = json.loads(payload)
+        data["generation"] = self._archive.generation
+        self.collector_status.emit(json.dumps(data, ensure_ascii=False))
+
     def _on_history_appended(self, payload: str) -> None:
-        self.history_appended.emit(payload)
+        data = json.loads(payload)
+        data["generation"] = self._archive.generation
+        self.history_appended.emit(json.dumps(data, ensure_ascii=False))
 
     @property
     def _archive(self):
@@ -1636,14 +1763,43 @@ class Bridge(QObject):
 
     def _run_async(self, scope: str, coro) -> None:
         """Run an archive coroutine, reporting failures on history_error."""
+        generation = getattr(self._archive, "generation", None)
+        mutation = scope in {"history_clear_person", "history_restore_cleared",
+                             "history_delete_message", "history_delete_person", "archive_undo"}
+        if mutation:
+            self._archive_actions_pending = getattr(self, "_archive_actions_pending", 0) + 1
+
         async def guarded():
             try:
-                await coro
+                archive = self._archive
+                lock = getattr(getattr(archive, "db", None), "operation_lock", None)
+                # Manager actions acquire their own mutation lock BEFORE the
+                # archive lock. Taking them in reverse order would deadlock.
+                if lock is not None and not scope.startswith("db_"):
+                    async with lock:
+                        if generation != getattr(archive, "generation", None):
+                            # The old UI may have queued a message/media ID
+                            # before Load completed. Those IDs belong to the
+                            # old archive; a fresh history request is already
+                            # issued by the DB-change event. Never reuse them
+                            # against a coincidentally equal new row ID.
+                            coro.close()
+                            return
+                        await coro
+                else:
+                    await coro
             except Exception as exc:                  # noqa: BLE001
                 log.warning("archive %s failed: %s", scope, exc)
                 self.history_error.emit(scope, str(exc))
-        if not self._schedule(guarded()):
+            finally:
+                if mutation:
+                    self._archive_actions_pending -= 1
+        runner = guarded()
+        if not self._schedule(runner):
+            runner.close()
             coro.close()
+            if mutation:
+                self._archive_actions_pending -= 1
 
     @staticmethod
     def _schedule(coro) -> bool:
@@ -1712,6 +1868,7 @@ class Bridge(QObject):
                            if opts.get("after_ord") is not None else None),
                 limit=limit)
         payload["req_id"] = req_id
+        payload["generation"] = service.generation
         payload["preview"] = service.preview_settings()
         self.history_page_ready.emit(req_id, json.dumps(payload,
                                                         ensure_ascii=False))
@@ -1737,6 +1894,7 @@ class Bridge(QObject):
             payload = await service.query.search_global(query, limit=limit)
             payload["scope"] = "global"
         payload["req_id"] = req_id
+        payload["generation"] = service.generation
         self.history_search_ready.emit(req_id, json.dumps(payload,
                                                           ensure_ascii=False))
 
@@ -1747,6 +1905,7 @@ class Bridge(QObject):
 
         async def work():
             payload = await self._archive.query.person_stats(nick)
+            payload["generation"] = self._archive.generation
             payload["req_id"] = req_id
             self.history_stats_ready.emit(req_id, json.dumps(
                 payload, ensure_ascii=False))
@@ -1802,84 +1961,53 @@ class Bridge(QObject):
     # ── deleting from the archive (all reversible, RULE 12) ──────
     @Slot(str, bool, result=bool)
     def history_delete_person(self, nick, hard=False):
-        """Remove a person WITH their whole history.
-
-        Soft (the default) tombstones the person, hides every message under
-        one operation token and drops the People-list row — all three halves
-        travel in ONE history entry, so a single Ctrl+Z brings the person
-        back. `hard=True` erases the rows and is NOT reversible; it is only
-        reachable from an explicit purge.
-        """
+        """Remove the person and ALL message knowledge; undo is isolated."""
         clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self._archive is None:
-            self.history_error.emit("history_delete_person",
-                                    "the message archive is not running")
+        if not clean or not self._need_archive("history_delete_person"):
             return False
 
         async def work():
-            repo = self._archive.repo
-            token = repo.new_op_token()
-            # The People list is a separate database; when it is present the
-            # row travels inside the SAME undo entry, so one Ctrl+Z restores
-            # the person, their messages and their queue position together.
-            people_before = await self._people_snapshot()
-            ok = await repo.delete_person(clean, hard=bool(hard), token=token)
-            if people_before is not None:
-                try:
-                    await self._memory.delete_user(clean)
-                except Exception as exc:              # noqa: BLE001
-                    log.debug("people row for %s not removed: %s", clean, exc)
-            people_after = await self._people_snapshot()
-            if ok and not hard:
-                entry = {"op": "delete_person", "nick": clean, "token": token}
-                if people_before is not None and people_after is not None:
-                    entry["people"] = {"before": people_before,
-                                       "after": people_after}
-                self._push_global("archive", entry)
-                self.log_message.emit(
-                    f"🗑 “{clean}” and their history removed — Ctrl+Z restores "
-                    "both", "warn")
-            elif ok and hard:
+            queue_before = None
+            if self._memory is not None:
+                user = await self._memory.get_user(clean)
+                queue_before = self._people_row(user) if user else None
+            result = await self._archive.reset_conversation(clean, delete_person=True, with_undo=not hard)
+            if self._memory is not None:
+                await self._memory.delete_user(clean)
+            if result["changed"] and not hard:
+                self._push_global("archive", {"op": "reset_person", "command_id": uuid.uuid4().hex,
+                    "nick": clean, "snapshot": result["snapshot"], "db_path": self._archive.db.path,
+                    "queue_before": queue_before})
+            elif hard:
                 self.label_store.forget(clean)
-                self.log_message.emit(
-                    f"🔥 “{clean}” erased permanently (not undoable)", "warn")
-            self.userdb_changed.emit(json.dumps(
-                {"action": "deleted", "nick": clean, "hard": bool(hard),
-                 "ok": ok}, ensure_ascii=False))
+            self.log_message.emit(f"🗑 “{clean}” removed with all message tracking — the next scan starts fresh", "info")
             await self._refresh_users()
+            self._emit_archive_change("deleted", clean, reset=True, hard=bool(hard))
         self._run_async("history_delete_person", work())
         return True
 
     @Slot(str, result=bool)
     def history_clear_person(self, nick):
-        """Remove the whole conversation but KEEP the person in the database."""
+        """Keep the contact, erase all of its messages and tracking state."""
         clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self._archive is None:
-            self.history_error.emit("history_clear_person",
-                                    "the message archive is not running")
+        if not clean or not self._need_archive("history_clear_person"):
             return False
 
         async def work():
-            repo = self._archive.repo
-            token = await repo.soft_delete_history(clean)
-            if not token:
-                self.log_message.emit(
-                    f"ℹ “{clean}” has no messages to clear", "info")
-            else:
-                self._push_global("archive", {
-                    "op": "clear_history", "nick": clean, "token": token})
-                self.log_message.emit(
-                    f"🧹 History of “{clean}” cleared — the person stays in "
-                    "the database (Ctrl+Z restores the messages)", "warn")
-            self.userdb_changed.emit(json.dumps(
-                {"action": "cleared", "nick": clean, "ok": bool(token)},
-                ensure_ascii=False))
+            result = await self._archive.reset_conversation(clean)
+            if result["changed"]:
+                self._push_global("archive", {"op": "reset_history", "command_id": uuid.uuid4().hex,
+                    "nick": clean, "snapshot": result["snapshot"], "db_path": self._archive.db.path})
+            self.log_message.emit(f"🧹 History and tracking for “{clean}” erased — visible messages can be collected again", "info")
+            self._emit_archive_change("cleared", clean, reset=True)
         self._run_async("history_clear_person", work())
         return True
+
+    @Slot(str, result=bool)
+    def history_restore_cleared(self, nick):
+        """Old UI compatibility: there is no active cleared-message registry."""
+        self.log_message.emit("ℹ Collection now starts fresh after Clear. Use global Undo to restore the old archive immediately.", "info")
+        return False
 
     @Slot(str, str, result=bool)
     def history_delete_message(self, nick, message_id):
@@ -1959,6 +2087,13 @@ class Bridge(QObject):
         return True
 
     # ── media + clipboard ────────────────────────────────────────
+    def _emit_media_info(self, service, payload: dict, req_id: str = "") -> None:
+        """Cache completions and RPCs share the same generation-guarded channel."""
+        if service is not self._archive:
+            return
+        info = dict(payload, generation=service.generation)
+        self.media_ready.emit(req_id, json.dumps(info, ensure_ascii=False))
+
     @Slot(str, str)
     def media_path(self, req_id, media_ref):
         if not self._need_archive("media_path", req_id):
@@ -1968,8 +2103,7 @@ class Bridge(QObject):
             payload = await self._archive.media.path_for(media_ref)
             payload["req_id"] = req_id
             payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, req_id)
         self._run_async("media_path", work())
 
     @Slot(str, str)
@@ -1982,8 +2116,7 @@ class Bridge(QObject):
             payload = await self._archive.media.download_one(media_ref)
             payload["req_id"] = req_id
             payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, req_id)
         self._run_async("media_restore", work())
 
     @Slot(str, result=str)
@@ -2030,25 +2163,35 @@ class Bridge(QObject):
         """Run one DB action and record it as a single undo entry."""
         manager = self.db_manager
         manager.attach(self._archive)
+        self._db_actions_pending = getattr(self, "_db_actions_pending", 0) + 1
 
         async def work():
-            result = await runner(manager)
-            result = dict(result or {})
-            result["op"] = result.get("op", op)
-            if result.get("ok") and not result.get("unchanged"):
-                self._push_global("dbconn", {
-                    "op": result["op"],
-                    "path": result.get("path", ""),
-                    "before_path": result.get("before_path", ""),
-                    "backup": result.get("backup", ""),
-                })
-                self.log_message.emit(success.format(**{
-                    "path": result.get("path", ""),
-                    "name": os.path.basename(result.get("path", "")),
-                }), "success")
-            elif result.get("error"):
-                self.log_message.emit("⚠ " + str(result["error"]), "warn")
-            self._emit_db_change(op, result)
+            try:
+                try:
+                    result = await runner(manager)
+                except Exception as exc:
+                    log.exception("database action %s failed", op)
+                    result = {"ok": False, "error": str(exc)}
+                result = dict(result or {})
+                result["op"] = result.get("op", op)
+                if result.get("ok") and not result.get("unchanged"):
+                    self._push_global("dbconn", {
+                        "op": result["op"],
+                        "command_id": uuid.uuid4().hex,
+                        "was_active": bool(result.get("was_active", op == "clean")),
+                        "path": result.get("path", ""),
+                        "before_path": result.get("before_path", ""),
+                        "backup": result.get("backup", ""),
+                    })
+                    self.log_message.emit(success.format(**{
+                        "path": result.get("path", ""),
+                        "name": os.path.basename(result.get("path", "")),
+                    }), "success")
+                elif result.get("error"):
+                    self.log_message.emit("⚠ " + str(result["error"]), "warn")
+                self._emit_db_change(op, result)
+            finally:
+                self._db_actions_pending -= 1
         self._run_async("db_" + op, work())
         return True
 
@@ -2056,7 +2199,7 @@ class Bridge(QObject):
     def db_create(self, name):
         return self._db_action(
             "create", lambda m: m.create(name),
-            "🆕 New database {name} created and connected")
+            "🆕 New database {name} created. Click Load to connect; the active archive is unchanged.")
 
     @Slot(str, result=bool)
     def db_load(self, path):
@@ -2109,8 +2252,7 @@ class Bridge(QObject):
                         "📋 Copied " + (payload.get("path") or
                                         payload.get("text") or "media"),
                         "success")
-            self.media_ready.emit(str(media_ref), json.dumps(
-                payload, ensure_ascii=False))
+            self._emit_media_info(self._archive, payload, str(media_ref))
         self._run_async("copy_media", work())
 
     @Slot(str, result=bool)

@@ -26,9 +26,11 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
+from backend.archive_lock import db_operation
 from backend import chat_agent_js
-from backend.chat_parser import (ChatParser, _signature, sync_conversation,
-                                 verify_private)
+from backend.chat_parser import (ChatParser, identify_records, parse_records,
+                                 self_nick_history, state_signatures,
+                                 sync_conversation, verify_private)
 from backend.history_query import HistoryQuery
 from backend.history_repo import HistoryRepo
 from backend.user_memory import UserMemory, UserRecord
@@ -46,6 +48,7 @@ class CollectorState:
     COLLECTING = "collecting"
     COLLECTED = "collected"
     NO_NEW = "no_new"
+    CAPTURE_PENDING = "capture_pending"
     ERROR = "error"
 
 
@@ -83,7 +86,7 @@ class Collector(QObject):
 
     def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
                  media=None, settings: Optional[dict] = None,
-                 lease=None, memory=None, parent=None):
+                 lease=None, memory=None, parent=None, identity_history=None):
         super().__init__(parent)
         self.cdp = cdp
         self.repo = repo
@@ -91,6 +94,10 @@ class Collector(QObject):
         self.media = media
         self.lease = lease
         self.memory = memory
+        self._identity_history = identity_history
+        self._effective_my_nick = ""
+        self._verified_self_nicks = []
+        self._identity_source = "configured"
         self._settings = dict(DEFAULTS)
         self.configure(**(settings or {}))
         self.now = datetime.now
@@ -100,6 +107,8 @@ class Collector(QObject):
         self._nick = ""
         self._verified = False      # the two-step gate passed for _nick
         self._added = 0
+        self._session_added = {}
+        self._capture_epoch = ""
         self._total = 0
         self._error = ""
         self._warning = ""
@@ -120,10 +129,18 @@ class Collector(QObject):
         self._last_sync_count = 0
         self._last_media_repaired = 0
         self._last_media_requeued = 0
+        self._last_text_repaired = 0
+        self._last_capture_missing = 0
+        self._last_capture_errors = 0
+        self._capture_diagnostics = []
         self._detected_my_nick = ""
 
     # ── settings ─────────────────────────────────────────────────
     def configure(self, **kwargs) -> dict:
+        if "my_nick" in kwargs and str(kwargs["my_nick"] or "") != self._settings.get("my_nick", ""):
+            self._effective_my_nick = ""
+            self._verified_self_nicks = []
+            self._verified = False
         for key, value in (kwargs or {}).items():
             if key not in DEFAULTS:
                 continue                       # unknown keys are ignored
@@ -144,8 +161,17 @@ class Collector(QObject):
         return dict(self._settings)
 
     @property
-    def my_nick(self) -> str:
+    def configured_my_nick(self) -> str:
         return self._settings.get("my_nick", "")
+
+    @property
+    def my_nick(self) -> str:
+        return self._effective_my_nick or self.configured_my_nick
+
+    async def known_self_nicks(self, nick: str) -> list[str]:
+        declared = self._identity_history() if callable(self._identity_history) else []
+        person = await self.repo.get_person(nick) or {}
+        return list(dict.fromkeys(self_nick_history(declared) + self_nick_history(person.get("my_nicks"))))
 
     @property
     def enabled(self) -> bool:
@@ -192,7 +218,12 @@ class Collector(QObject):
         self._nick = ""
         self._text = ""
         self._verified = False
+        self._effective_my_nick = ""
+        self._verified_self_nicks = []
+        self._identity_source = "configured"
         self._added = 0
+        self._session_added.clear()
+        self._capture_epoch = ""
         self._total = 0
         self._error = ""
         self._warning = ""
@@ -200,9 +231,31 @@ class Collector(QObject):
         self._last_sync_reason = ""
         self._last_sync_added = 0
         self._last_sync_count = 0
+        self._last_text_repaired = 0
+        self._last_capture_missing = 0
+        self._last_capture_errors = 0
+        self._capture_diagnostics = []
+        self._last_media_repaired = 0
+        self._last_media_requeued = 0
         self._backfill_pending = False
         self._force_backfill = False
         self._last_emitted = ()
+
+    def reset_person(self, nick: str) -> None:
+        clean = self.repo.normalise_nick(nick)
+        self._session_added.pop(clean, None)
+        if self._nick == clean:
+            sessions = dict(self._session_added)
+            self.reset_state()
+            self._session_added = sessions
+            self._probe_penalty = 1.0
+            state = CollectorState.PAUSED if self._paused else (
+                CollectorState.OFF if not self._running or not self.enabled else CollectorState.NO_NEW)
+            self._set(state, "History reset — next scan starts fresh")
+
+    def wake(self) -> None:
+        if self._running and not self._paused and self._stop_event:
+            self._stop_event.set()
 
     def on_run_started(self) -> None:
         """An Action-Stack run began: keep collecting, but stay out of its way."""
@@ -243,10 +296,13 @@ class Collector(QObject):
             try:
                 await asyncio.wait_for(self._stop_event.wait(),
                                        timeout=self.next_interval_ms() / 1000.0)
+                if self._running:
+                    self._stop_event.clear()  # wake-on-reset is not a permanent busy loop
             except asyncio.TimeoutError:
                 pass
 
     # ── the heartbeat ────────────────────────────────────────────
+    @db_operation
     async def tick(self) -> str:
         if not self._running:
             return self._set(CollectorState.OFF, "Collector stopped")
@@ -259,7 +315,7 @@ class Collector(QObject):
         if self._busy:
             return self._state
         self._busy = True
-        started = self.now()
+        self.parser.reset_probe_metrics()
         try:
             return await self._tick()
         except Exception as e:                        # noqa: BLE001
@@ -268,8 +324,8 @@ class Collector(QObject):
         finally:
             self._busy = False
             try:
-                self.note_probe_duration(
-                    (self.now() - started).total_seconds())
+                self.note_probe_duration(self.parser.probe_seconds)
+                self._emit()
             except Exception:                         # noqa: BLE001
                 pass
 
@@ -284,6 +340,11 @@ class Collector(QObject):
             self._log(f"Re-installed the in-page agent "
                       f"(v{int(state.get('agent') or 0)})", "info")
         self._agent = int(state.get("agent") or 0)
+        if self._agent < chat_agent_js.AGENT_VERSION:
+            self._verified = False
+            self._error = "The current text-capture agent could not be installed. Retrying on the next tick."
+            self._log(self._error, "error")
+            return self._set(CollectorState.ERROR, self._error)
         self._error = ""
         self._last_probe = {
             "count": int(state.get("count") or 0),
@@ -291,9 +352,15 @@ class Collector(QObject):
             "pane_source": str(state.get("pane_source") or ""),
             "participants": int(state.get("participants") or 0),
             "partner": str(state.get("partner") or ""),
+            "page_self": str(state.get("me") or ""),
+            "me_source": str(state.get("me_source") or ""),
+            "participant_nicks": list(state.get("participant_nicks") or []),
             "in_authors": list(state.get("in_authors") or []),
             "out_authors": list(state.get("out_authors") or []),
             "scroll": dict(state.get("scroll") or {}),
+            "incomplete": int(state.get("incomplete") or 0),
+            "capture_issues": dict(state.get("capture_issues") or {}),
+            "text_sources": dict(state.get("text_sources") or {}),
         }
 
         if not state.get("ok", True):
@@ -329,17 +396,10 @@ class Collector(QObject):
             singles = [o for o in outs if o]
             if len(singles) == 1 and singles[0].lower() != nick.lower():
                 detected_me = singles[0]
-        if not self.my_nick and detected_me:
+        if not self.configured_my_nick and detected_me:
             self.configure(my_nick=detected_me)
             self._detected_my_nick = detected_me
             self._log(f"Detected My Nick as “{detected_me}”", "info", nick)
-
-        my_nick = self.my_nick or detected_me
-        if my_nick and nick.lower() == my_nick.lower():
-            self._log("Partner is the same as My Nick — refusing", "warn",
-                      nick)
-            return self._refuse(CollectorState.NOT_PRIVATE,
-                                "Partner is ambiguous (same as My Nick)")
 
         # A verified private tab (active tab = private, 2 participants, title
         # names the partner) is enough to create the person in BOTH stores.
@@ -350,17 +410,24 @@ class Collector(QObject):
         self._log(f"Partner “{nick}”: {remembered}", "info", nick)
 
         # ── the two-step gate ─────────────────────────────────────
-        check = verify_private(state, nick, self.my_nick)
+        known_names = await self.known_self_nicks(nick)
+        check = verify_private(state, nick, self.configured_my_nick, known_self_nicks=known_names,
+                               require_two_participants=bool(self._settings["require_two_participants"]))
         if not check.ok:
             self._nick = nick
-            self._log(f"Private-chat gate refused “{nick}” ({check.reason})",
-                      "warn", nick)
+            self._log(f"Private-chat gate refused “{nick}” ({check.reason}): {check.detail}; "
+                      f"configured self={self.configured_my_nick!r}, page self={state.get('me')!r}, "
+                      f"known self names={known_names!r}", "warn", nick)
             return self._refuse(*self._gate_status(check, nick))
         self._verified = True
-        if check.me and not self._detected_my_nick:
-            self._detected_my_nick = check.me
+        self._capture_epoch = str(state.get("capture_epoch") or "")
+        self._effective_my_nick = check.me or self.configured_my_nick
+        self._verified_self_nicks = list(check.self_nicks)
+        self._identity_source = check.identity_source
+        my_nick = self.my_nick
+        self._detected_my_nick = check.me or ""
 
-        self._warning = ("" if self.my_nick else
+        self._warning = check.warning or ("" if self.my_nick else
                          "My Nick is not known yet — the archive will use "
                          "the single outbound author as 'me'")
         if nick != self._nick:
@@ -368,10 +435,15 @@ class Collector(QObject):
             self._added = 0
 
         cursor = await self.repo.get_cursor(person_id)
-        head_sig = _signature(state.get("head"))
-        tail_sig = _signature(state.get("tail"))
+        head_sig, tail_sig = state_signatures(state)
         count = int(state.get("count") or 0)
-        unchanged = (cursor["bootstrapped"] and count == cursor["dom_count"]
+        repair_text = await self.repo.has_missing_text(person_id)
+        repair_media = self.media is not None and await self.repo.has_repairable_media(person_id)
+        want_backfill = (bool(self._settings.get("auto_backfill", True))
+                         and not cursor.get("full_scan_complete")) or self._force_backfill
+        unchanged = (not want_backfill and not repair_text and not repair_media
+                     and not state.get("incomplete") and cursor["bootstrapped"]
+                     and count == cursor["dom_count"]
                      and tail_sig and tail_sig == cursor["tail_sig"]
                      and head_sig == cursor["head_sig"])
         person = await self.repo.get_person_by_id(person_id) or {}
@@ -394,11 +466,6 @@ class Collector(QObject):
             return self._set(CollectorState.NO_NEW, self._no_new_text())
 
         bootstrap = not cursor["bootstrapped"]
-        full_scan_complete = bool(cursor.get("full_scan_complete"))
-        want_backfill = ((bool(self._settings.get("auto_backfill", True))
-                          and not full_scan_complete
-                          and not self._backfill_pending)
-                         or self._force_backfill)
         self._force_backfill = False
         self._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
@@ -412,6 +479,23 @@ class Collector(QObject):
         self._last_sync_count = int(result.count or 0)
         self._added = result.added
         self._total = result.total
+        self._last_text_repaired = result.text_repaired
+        self._last_capture_missing = result.capture_missing
+        self._last_capture_errors = result.capture_errors
+        self._capture_diagnostics = result.capture_diagnostics
+        if result.capture_errors:
+            self._error = result.error or "The browser message read failed"
+            self._log(f"Message read failed: {self._error}; complete rows were kept, retry scheduled", "error", nick)
+        elif result.capture_missing:
+            reasons = {}
+            for diagnostic in result.capture_diagnostics:
+                for reason, count in (diagnostic.get("reasons") or {}).items():
+                    reasons[reason] = reasons.get(reason, 0) + count
+            detail = ", ".join(f"{reason}: {count}" for reason, count in reasons.items()) or "DOM range changed"
+            self._warning = f"[text not captured] for {result.capture_missing} line(s); retrying capture ({detail})"
+            self._log(self._warning, "warn", nick)
+        if result.text_repaired:
+            self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success", nick)
         if result.media_repaired or result.media_requeued:
             self._last_media_repaired = int(result.media_repaired or 0)
             self._last_media_requeued = int(result.media_requeued or 0)
@@ -426,22 +510,33 @@ class Collector(QObject):
                 log.debug("media caching skipped: %s", e)
 
         suffix = " (throttled — a run is active)" if self._throttled else ""
+        repaired = bool(result.text_repaired or result.media_repaired or result.media_requeued or result.backfilled)
+        if repaired and not result.added:
+            await self._notify_appended(nick, [], 0, result.total, refresh=True)
         if result.added:
+            self._session_added[nick] = self._session_added.get(nick, 0) + result.added
             await self._notify_appended(nick, list(result.records[:200]),
-                                        result.added, result.total)
-            self._log(f"Archived {result.added} new message(s) "
-                      f"(total {result.total})", "success", nick)
-            return self._set(CollectorState.COLLECTED,
-                             f"Collected {result.added} new "
-                             f"message{'s' if result.added != 1 else ''} "
-                             f"from {nick}{suffix}")
+                                        result.added, result.total,
+                                        refresh=repaired or result.backfill_pending)
+            self._log(f"Archived {result.added} new message(s) (total {result.total})", "success", nick)
+        if result.stopped:
+            return self._set(CollectorState.PAUSED if self._paused else CollectorState.OFF,
+                             f"Capture stopped — {result.added} new message(s) kept")
+        if result.capture_errors:
+            return self._set(CollectorState.ERROR,
+                             f"Message read failed — {result.added} new saved; {self._error}")
         if not result.ok:
-            self._log(f"Sync failed for “{nick}” ({result.reason})", "error",
-                      nick)
-            return self._set(CollectorState.NOT_PRIVATE,
-                             "Not in private tab now")
-        self._log(f"No new messages ({result.reason}, page count "
-                  f"{result.count}, added {result.added})", "info", nick)
+            self._log(f"Sync refused for “{nick}” ({result.reason})", "error", nick)
+            self._verified = False
+            return self._set(CollectorState.NOT_PRIVATE, "Not in private tab now")
+        if result.capture_missing:
+            return self._set(CollectorState.CAPTURE_PENDING,
+                             f"Capture pending — {result.added} new saved, "
+                             f"{result.capture_missing} unreadable; retrying")
+        if result.added:
+            return self._set(CollectorState.COLLECTED,
+                             f"Collected {result.added} new message(s) from {nick}{suffix}")
+        self._log(f"No new messages ({result.reason}, page count {result.count}, added 0)", "info", nick)
         return self._set(CollectorState.NO_NEW, self._no_new_text())
 
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
@@ -449,11 +544,14 @@ class Collector(QObject):
         cap = int(self._settings["max_bootstrap"] or 0) if bootstrap else 0
         kwargs = dict(my_nick=my_nick,
                       require_private=bool(self._settings["require_private"]),
+                      require_two_participants=bool(self._settings["require_two_participants"]),
                       verify_partner=True,
                       max_messages=cap or None,
                       backfill_older=backfill_older,
                       backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
                       now=self.now(),
+                      known_self_nicks=self._verified_self_nicks,
+                      should_stop=lambda: not self._running or self._paused,
                       media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
             async with self.lease.low():
@@ -523,6 +621,7 @@ class Collector(QObject):
         except Exception as e:                       # noqa: BLE001
             log.debug("people_changed emit failed: %s", e)
 
+    @db_operation
     async def backfill_older(self) -> str:
         """Force one scroll-to-top full-history pass for the current person."""
         if not self._nick:
@@ -542,10 +641,20 @@ class Collector(QObject):
                   self._nick)
         return await self.tick()
 
+    @db_operation
+    async def archive_edited(self, nick: str) -> None:
+        """Refresh a count after Clear/Restore without changing capture state."""
+        if nick == self._nick:
+            person = await self.repo.get_person(nick) or {}
+            self._total = int(person.get("message_count") or 0)
+            self._emit()
+
     # ── the gate helpers ─────────────────────────────────────────
     def _refuse(self, state: str, text: str) -> str:
         """Refuse to save: the push channel is disarmed with the tick."""
         self._verified = False
+        self._verified_self_nicks = []
+        self._identity_source = "unverified"
         return self._set(state, text)
 
     @staticmethod
@@ -558,6 +667,10 @@ class Collector(QObject):
             return (CollectorState.GROUP_TAB,
                     f"Not a private chat — {shown} write here too "
                     f"(nothing saved for {nick})")
+        if check.reason == "participants_mismatch":
+            return (CollectorState.GROUP_TAB, "Not a two-person private chat — nothing saved")
+        if check.reason == "roster_mismatch":
+            return (CollectorState.NOT_PRIVATE, "Participant list does not match this private chat — nothing saved")
         if check.reason == "title_mismatch":
             return (CollectorState.NOT_PRIVATE,
                     f"Tab does not match “{nick}” — nothing saved")
@@ -570,13 +683,23 @@ class Collector(QObject):
         return (CollectorState.NOT_PRIVATE, "Not in private tab now")
 
     # ── the live push channel ────────────────────────────────────
+    @db_operation
     async def handle_push(self, payload) -> int:
         """Store what the in-page observer pushed. Never raises."""
-        if not self._nick or not self.enabled or self._paused:
+        if not self._running or not self._nick or not self.enabled or self._paused:
             return 0
         data = self._payload(payload)
         items = self._records(data)
         if not items:
+            return 0
+        incoming_epoch = str(data.get("capture_epoch") or "")
+        if not incoming_epoch:
+            epochs = {str(item.get("capture_epoch") or "") for item in items}
+            if len(epochs) == 1:
+                incoming_epoch = epochs.pop()
+        if self._capture_epoch and incoming_epoch != self._capture_epoch:
+            # A queued pre-reset push cannot repopulate a cleared archive, even
+            # if it arrives after a new tick has already verified this partner.
             return 0
         if not self._verified:
             # No tick has verified this conversation (or the last one
@@ -587,23 +710,39 @@ class Collector(QObject):
              "partner": data.get("partner") or self._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
-            self._nick, self.my_nick, items=items)
+            self._nick, self.my_nick, items=items,
+            known_self_nicks=self._verified_self_nicks)
         if not check.ok:
             self._refuse(*self._gate_status(check, self._nick))
             return 0
+        records = identify_records(parse_records(items), check)
+        missing = sum(r.incomplete for r in records)
+        if missing:
+            self._last_capture_missing = missing
+            self._log(f"Text/payload not captured for {missing} line(s); retrying from the chat on the next tick", "warn")
+            await self.repo.reset_cursor(self._nick)
+        captured = [r for r in records if not r.incomplete]
+        if not captured:
+            return 0
         try:
-            result = await self.repo.append(self._nick, items,
+            result = await self.repo.append(self._nick, captured,
                                             my_nick=self.my_nick,
                                             align=False, now=self.now())
         except Exception as e:                        # noqa: BLE001
             log.warning("push append failed: %s", e)
             return 0
+        if result.text_repaired and not result.added:
+            self._last_text_repaired = result.text_repaired
+            await self._notify_appended(self._nick, [], 0, result.total, refresh=True)
+            self._log(f"Text recovery: repaired {result.text_repaired} message(s)", "success")
         if result.added:
+            self._session_added[self._nick] = self._session_added.get(self._nick, 0) + result.added
             self._added = result.added
             self._total = result.total
             await self._notify_appended(self._nick,
                                         list(result.records[:200]),
-                                        result.added, result.total)
+                                        result.added, result.total,
+                                        refresh=bool(result.text_repaired))
             self._set(CollectorState.COLLECTED,
                       f"Collected {result.added} new "
                       f"message{'s' if result.added != 1 else ''} "
@@ -634,7 +773,7 @@ class Collector(QObject):
         return [item for item in items if isinstance(item, dict)]
 
     async def _notify_appended(self, nick: str, items: list, added: int,
-                               total: int) -> None:
+                               total: int, *, refresh: bool = False) -> None:
         """Emit UI-shaped rows, never the raw parser records.
 
         The UI rows need `ord`, `day`, `time` and the joined media fields;
@@ -651,10 +790,23 @@ class Collector(QObject):
                     total = int(page.get("total") or 0)
             except Exception as e:                    # noqa: BLE001
                 log.debug("live history page for %s failed: %s", nick, e)
+        # AppendResult was assembled before downloads ran. A completion event
+        # may also precede the UI row, so always send current media state here.
+        if self.media is not None:
+            media_info = {}
+            for item in live:
+                attachment = item.get("media")
+                if not attachment or attachment.get("id") is None:
+                    continue
+                mid = attachment["id"]
+                if mid not in media_info:
+                    media_info[mid] = await self.media.path_for(mid)
+                item["media"] = dict(attachment, **media_info[mid])
         try:
             self.history_appended.emit(json.dumps(
                 {"nick": nick, "my_nick": self.my_nick, "items": live,
-                 "added": added, "total": total}, ensure_ascii=False))
+                 "added": added, "total": total, "refresh": refresh,
+                 "session_added": self._session_added.get(nick, 0)}, ensure_ascii=False))
         except Exception as e:                        # noqa: BLE001
             log.debug("history_appended emit failed: %s", e)
 
@@ -665,8 +817,13 @@ class Collector(QObject):
             "text": self._text,
             "nick": self._nick,
             "my_nick": self.my_nick,
+            "configured_my_nick": self.configured_my_nick,
+            "known_self_nicks": list(self._verified_self_nicks),
+            "identity_source": self._identity_source,
             "detected_my_nick": self._detected_my_nick,
             "added": self._added,
+            "session_added": self._session_added.get(self._nick, 0),
+            "capture_epoch": self._capture_epoch,
             "total": self._total,
             "throttled": self._throttled,
             "backfill_pending": self._backfill_pending,
@@ -679,6 +836,10 @@ class Collector(QObject):
             "sync_count": self._last_sync_count,
             "media_repaired": self._last_media_repaired,
             "media_requeued": self._last_media_requeued,
+            "text_repaired": self._last_text_repaired,
+            "capture_missing": self._last_capture_missing,
+            "capture_errors": self._last_capture_errors,
+            "capture_diagnostics": list(self._capture_diagnostics),
             "last_probe": self._last_probe,
             "paused": self._paused,
             "running": self._running,
@@ -703,10 +864,15 @@ class Collector(QObject):
     def _emit(self) -> None:
         payload = self.state_payload()
         signature = (payload["state"], payload["text"], payload["nick"],
-                     payload["added"], payload["total"], payload["throttled"],
+                     payload["my_nick"], payload["configured_my_nick"],
+                     tuple(payload["known_self_nicks"]), payload["identity_source"],
+                     payload["added"], payload["session_added"], payload["total"], payload["throttled"],
                      payload["backfill_pending"], payload["sync_reason"],
                      payload["sync_added"], payload["sync_count"],
                      payload["media_repaired"], payload["media_requeued"],
+                     payload["capture_missing"], payload["capture_errors"],
+                     payload["interval_ms"], payload["text_repaired"],
+                     json.dumps(payload["capture_diagnostics"], sort_keys=True),
                      payload["error"], payload["warning"])
         if signature == self._last_emitted:
             return                                   # never spam the UI

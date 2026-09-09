@@ -97,6 +97,8 @@
           kind: item.media.kind || kind,
           state: item.media.state || '',
           path: item.media.path || '',
+          error: item.media.error || item.media.fail_reason || '',
+          bytes: item.media.bytes || 0,
           // what the <img> actually loads: the saved file when we have it
           src: fileUrl(item.media.path) || item.media.url || '',
           copyable: true,

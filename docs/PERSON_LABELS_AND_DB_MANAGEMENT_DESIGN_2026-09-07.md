@@ -1,5 +1,11 @@
 # Person History Management, Labels, Color Picker, Label Manager & DB Connection — Design
 
+> **Update 2026-09-08:** the DB lifecycle/Create/Load sections below describe
+> the earlier design. They are superseded by
+> [DB Connection safety and missing-text recovery](DB_CONNECTION_SAFETY_AND_TEXT_RECOVERY_DESIGN_2026-09-08.md).
+> In particular, Create no longer activates a database. Label storage remains unchanged.
+
+
 Date: 2026-09-07
 Status: implementation design, written BEFORE the code changes (AGENT_RULES
 process) — **implemented and shipped on 2026-09-07**; see “Implementation

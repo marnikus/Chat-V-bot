@@ -221,9 +221,9 @@
         <button id="historyFolderBtn" class="btn-small"
                 title="Open this person's saved images and GIFs (saved_media/<Nick>/images, /gifs)">📂 Files</button>
         <button id="historyClearBtn" class="btn-small"
-                title="Delete this whole conversation but KEEP the person in the database (Ctrl+Z restores it)">🧹 Clear chat</button>
+                title="Erase this conversation and all tracking; keep the person. The next scan can collect it fresh. Undo is separate.">🧹 Clear chat</button>
         <button id="historyDeletePersonBtn" class="btn-small danger"
-                title="Remove this person together with their entire history (Ctrl+Z restores both)">🗑 Remove person</button>
+                title="Remove this person and all message tracking; the same chat can be collected fresh. Ctrl+Z restores the separate snapshot.">🗑 Remove person</button>
       </div>
       <div class="history-header" id="historyHeader"></div>
       <div class="history-list" id="historyList"></div>
@@ -359,7 +359,7 @@
                  spellcheck="false" autocomplete="off" maxlength="60"
                  placeholder="New database name…">
           <button id="dbCreateBtn" class="btn-small btn-primary" type="button"
-                  title="Create an empty database and connect to it">＋ Create</button>
+                  title="Create an independent chat database; click Load when you want to switch">＋ Create</button>
           <button id="dbCleanBtn" class="btn-small danger" type="button"
                   title="Empty the connected database (a backup goes to db_trash — undoable)">🧹 Clean DB</button>
         </div>

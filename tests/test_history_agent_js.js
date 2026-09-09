@@ -405,6 +405,237 @@ t('text is never interpreted as html', () => {
   eq(env.agent.slice(0, 1).items[0].text, '<img src=x onerror=alert(1)>');
 });
 
+// ── late text / caption extraction (2026-09-08 incident) ─────────
+
+t('an empty text cache is retried even without an observer notification', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const before = env.agent.slice(0, 1).items[0];
+  ok(before.capture_pending);
+  env.document.querySelector('span.message').textContent = 'Поздний текст\n😊';
+  const after = env.agent.slice(0, 1).items[0];
+  eq(after.text, 'Поздний текст\n😊');
+  ok(!after.capture_pending);
+  ok(after.fp !== before.fp, 'fingerprint follows the captured payload');
+  const parses = env.agent.stats().parsed;
+  env.agent.state(); env.agent.slice(0, 1);
+  eq(env.agent.stats().parsed, parses, 'complete unchanged text remains cached');
+});
+
+function mutate(env, mutation) {
+  env.observers.filter((o) => o.target).forEach((o) => o.cb([mutation], o));
+}
+
+t('characterData changes invalidate and push an existing message', () => {
+  const env = load({ messages: [msg(0)] });
+  env.agent.state();
+  const span = env.document.querySelector('span.message');
+  span.textContent = 'Новый текст';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  env.flushTimers();
+  const payload = JSON.parse(env.pushes.pop());
+  eq(payload.kind, 'change');
+  eq(payload.items.length, 1);
+  eq(payload.items[0].text, 'Новый текст');
+  eq(env.agent.slice(0, 1).items[0].text, 'Новый текст');
+});
+
+t('replacing a text subtree reparses only the affected message', () => {
+  const env = load({ messages: many(60) });
+  env.agent.state();
+  const before = env.agent.stats().parsed;
+  const body = env.document.querySelectorAll('p.message')[25];
+  body.querySelector('span.message').textContent = 'nested link text';
+  mutate(env, { type: 'childList', target: body, addedNodes: [] });
+  eq(env.agent.slice(25, 26).items[0].text, 'nested link text');
+  eq(env.agent.stats().parsed, before + 1);
+});
+
+t('a middle message change is visible even if head and tail stay identical', () => {
+  const env = load({ messages: many(150) });
+  const before = env.agent.state();
+  const span = env.document.querySelectorAll('span.message')[70];
+  span.textContent = 'changed in the middle';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const after = env.agent.state();
+  eq(after.head, before.head);
+  eq(after.tail, before.tail);
+  ok(after.content_revision > before.content_revision);
+  ok(after.content_sig !== before.content_sig);
+  eq(after.count, before.count);
+});
+
+t('text and a media URL are both captured, not either-or', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/a.gif' })] });
+  const { el } = require('./dom_stub');
+  const body = env.document.querySelector('p.message');
+  body.append(el('span', { class: 'message', text: 'Подпись 😊' }));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Подпись 😊');
+  eq(record.media.url, 'https://example.test/a.gif');
+  eq(record.kind, 'gif');
+  ok(!record.capture_pending);
+});
+
+t('caption changes increment revision even though the media fingerprint is unchanged', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/a.gif' })] });
+  const { el } = require('./dom_stub');
+  const body = env.document.querySelector('p.message');
+  const span = el('span', { class: 'message', text: 'first caption' });
+  body.append(span);
+  const before = env.agent.state();
+  span.textContent = 'full caption';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const after = env.agent.state();
+  eq(after.head, before.head, 'media identity remains the URL');
+  ok(after.content_revision > before.content_revision);
+});
+
+t('line breaks and nested links preserve all text without sender metadata', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const span = env.document.querySelector('span.message');
+  span.childNodes = [
+    { nodeType: 3, nodeValue: 'Первый ряд' },
+    { tagName: 'BR', childNodes: [], textContent: '' },
+    { tagName: 'A', childNodes: [{ nodeType: 3, nodeValue: 'ссылка' }] },
+    { nodeType: 3, nodeValue: ' 😊' },
+  ];
+  eq(env.agent.slice(0, 1).items[0].text, 'Первый ряд\nссылка 😊');
+});
+
+t('updated payload replaces an earlier empty record in the push buffer', () => {
+  const env = load({ messages: [] });
+  env.append(msg(0, { text: '' }));
+  const span = env.document.querySelector('span.message');
+  span.textContent = 'ready';
+  mutate(env, { type: 'characterData', target: { parentElement: span } });
+  const pending = env.agent.drain();
+  eq(pending.items.length, 1);
+  eq(pending.items[0].text, 'ready');
+  ok(!pending.items[0].capture_pending);
+});
+
+t('src attribute changes repair a lazy media record without a new container', () => {
+  const env = load({ messages: [msg(0, { media: 'https://example.test/preview.png' })] });
+  env.agent.state();
+  const img = env.document.querySelector('app-chat-image img');
+  img.setAttribute('src', 'https://example.test/full.gif');
+  mutate(env, { type: 'attributes', attributeName: 'src', target: img });
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.media.url, 'https://example.test/full.gif');
+  eq(record.kind, 'gif');
+});
+
+// ── capture after Clear: scoped fallback and nickname integrity ───
+
+t('an unread badge cannot delete matching digits from the private nick', () => {
+  const { el } = require('./dom_stub');
+  const partner = 'Svetik25❤️';
+  const env = load({ partner, me: 'Me', messages: [{ from: partner, text: 'hello' }] });
+  const title = env.document.querySelector('.tab-item.active p.chat-title');
+  title.append(el('span', { class: 'unread', text: '2' }));
+  eq(env.agent.state().partner, partner);
+  eq(env.agent.state().in_authors, [partner]);
+});
+
+t('classless payload spans are read without sender, clock, or separator', () => {
+  const env = load({ messages: [msg(0, { text: 'Полный текст 😊' })] });
+  env.document.querySelector('span.message').className = '';
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Полный текст 😊');
+  eq(record.text_source, 'message-content');
+  ok(!record.capture_pending);
+});
+
+t('a metadata-only line stays incomplete under structural fallback', () => {
+  const env = load({ messages: [msg(0, { text: '' })] });
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, '');
+  ok(record.capture_pending);
+  eq(record.capture_reason, 'payload_empty');
+  eq(env.agent.state().capture_issues.payload_empty, 1);
+  eq(env.agent.state().pane_source, 'single-pane');
+});
+
+t('explicit range refresh reads changed content even without an observer event', () => {
+  const env = load({ messages: [msg(0, { text: 'old cache' })] });
+  env.agent.slice(0, 1);
+  env.document.querySelector('span.message').textContent = 'fresh body';
+  eq(env.agent.slice(0, 1, true).items[0].text, 'fresh body');
+});
+
+t('identity evidence comes from the selected pane roster, not a global nickname alone', () => {
+  const env = load({ messages: many(2) });
+  const state = env.agent.state();
+  eq(state.me_source, 'pane_roster');
+  eq(state.participant_nicks, ['HiHoney', 'На работе 25']);
+});
+
+t('reset discards cached fields and old buffered pushes, then parses the same DOM fresh', () => {
+  const env = load({ messages: many(2) });
+  const before = env.agent.state();
+  env.append(msg(2));
+  ok(env.agent.stats().pending > 0);
+  const result = env.agent.reset('На работе 25');
+  ok(result.ok && result.reset);
+  eq(env.agent.stats().cached, 0);
+  eq(env.agent.stats().parsed, 0);
+  eq(env.agent.drain().items, []);
+  const after = env.agent.state();
+  eq(after.count, 3);
+  ok(after.capture_epoch !== before.capture_epoch);
+  eq(env.agent.slice(0, 3).items[0].capture_epoch, after.capture_epoch);
+});
+
+t('resetting an inactive person does not lose the active persons push buffer', () => {
+  const env = load({ messages: many(2) });
+  const before = env.agent.state();
+  env.append(msg(2));
+  const result = env.agent.reset('Someone else');
+  ok(result.ok && !result.reset);
+  eq(result.capture_epoch, before.capture_epoch);
+  eq(env.agent.drain().items.length, 1);
+});
+
+// ── real attachments nested inside the text payload ────────────
+
+t('app-chat-image inside message-text is media, not an inline emoji', () => {
+  const { el } = require('./dom_stub');
+  const env = load({ messages: [msg(0, { media: 'https://example.test/nested.gif' })] });
+  const body = env.document.querySelector('p.message');
+  const attachment = body.querySelector('app-chat-image');
+  body.children = body.children.filter(node => node !== attachment);
+  body.append(el('div', { class: 'message-text', text: 'Caption' }, [attachment]));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.media.url, 'https://example.test/nested.gif');
+  eq(record.kind, 'gif');
+  eq(record.text, 'Caption');
+  ok(!record.capture_pending);
+});
+
+t('an attachment host without its image stays pending even when text is ready', () => {
+  const { el } = require('./dom_stub');
+  const env = load({ messages: [msg(0, { text: 'Caption' })] });
+  const span = env.document.querySelector('span.message');
+  span.append(el('app-chat-image', {}, [el('div', { class: 'image-wrapper' })]));
+  const record = env.agent.slice(0, 1).items[0];
+  eq(record.text, 'Caption');
+  eq(record.media.url, '');
+  eq(record.capture_reason, 'media_url_pending');
+  ok(record.capture_pending);
+});
+
+t('v14 replaces the old v13 attachment parser rather than reusing it', () => {
+  const env = buildChat({ messages: many(1) });
+  let uninstalled = 0;
+  const old = { version: 13, uninstall() { uninstalled++; } };
+  env.window.__cvbAgent = old;
+  new Function('window', 'document', 'MutationObserver', 'setTimeout', 'clearTimeout', SRC)(
+    env.window, env.document, env.MutationObserver, env.setTimeout, env.clearTimeout);
+  ok(env.window.__cvbAgent !== old);
+  ok(env.window.__cvbAgent.version >= 14);
+  eq(uninstalled, 1);
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');

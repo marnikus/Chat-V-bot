@@ -100,6 +100,14 @@ class CollectHistory(BaseAction):
             return ActionResult.FAIL
 
         repo = getattr(service, "repo", None)
+        if repo is None or getattr(service, "parser", None) is None:
+            report("❌ Collect Message History: the archive service is incomplete", "error")
+            return ActionResult.FAIL
+        async with repo.db.operation_lock:
+            return await self._collect(user_nick, cdp, engine, service, report)
+
+    async def _collect(self, user_nick, cdp, engine, service, report):
+        repo = getattr(service, "repo", None)
         parser = getattr(service, "parser", None)
         if repo is None or parser is None:
             report("❌ Collect Message History: the archive service is "
@@ -153,7 +161,8 @@ class CollectHistory(BaseAction):
         stopping = getattr(engine, "is_stopping", None)
         result = await sync_conversation(
             parser, repo, nick, my_nick=my_nick,
-            require_private=self.require_private, verify_partner=verify,
+            require_private=self.require_private, verify_partner=True,
+            known_self_nicks=(service.known_self_nicks() if callable(getattr(service, "known_self_nicks", None)) else []),
             max_messages=self.max_messages or None,
             chunk_pause_ms=self.chunk_pause_ms,
             should_stop=stopping, on_progress=progress, now=self.now(),
@@ -170,7 +179,7 @@ class CollectHistory(BaseAction):
                        "error")
             else:
                 report(f"❌ Collect Message History failed: "
-                       f"{result.reason or 'unknown reason'}", "error")
+                       f"{result.error or result.reason or 'unknown reason'}", "error")
             return ActionResult.FAIL
 
         media = getattr(service, "media", None)
@@ -188,6 +197,11 @@ class CollectHistory(BaseAction):
                    f"{result.added} new message(s) kept for “{nick}” "
                    f"({result.total} in the archive)", "success")
             return ActionResult.OK
+        if result.capture_missing:
+            report(f"⚠ Capture incomplete for “{nick}”: {result.capture_missing} "
+                   f"message(s) still unreadable; {result.added} new message(s) saved. "
+                   "The collector will retry; this is not an empty successful scan.", "warn")
+            return ActionResult.FAIL
         if result.gap:
             report("⚠ Part of the conversation was not visible — a gap was "
                    "recorded in the archive", "info")

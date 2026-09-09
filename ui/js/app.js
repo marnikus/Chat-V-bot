@@ -406,6 +406,12 @@ function setupBridgeListeners() {
     b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
   if (b.userdb_page_ready)
     b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
+  if (b.history_reset) {
+    b.history_reset.connect((json) => {
+      HistoryStore.onReset(json);
+      CollectorPanel.onReset(json);
+    });
+  }
   if (b.userdb_changed) {
     b.userdb_changed.connect(() => {
       HistoryDb.onChanged();
@@ -423,9 +429,6 @@ function setupBridgeListeners() {
   if (b.db_changed) {
     b.db_changed.connect((json) => {
       DbPanel.onChanged(json);
-      HistoryDb.onChanged();
-      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
-        HistoryStore.reloadCurrent();
     });
   }
   if (b.collector_status)
@@ -446,6 +449,7 @@ function setupBridgeListeners() {
     b.history_error.connect((scope, message) => {
       LogConsole.log('⚠ ' + scope + ': ' + message, 'warn');
       HistoryStore.onError(scope, message);
+      if (typeof DbPanel !== 'undefined') DbPanel.onError(scope, message);
     });
   }
   if (b.get_history_settings) {

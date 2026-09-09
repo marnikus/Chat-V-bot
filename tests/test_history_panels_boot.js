@@ -60,6 +60,14 @@ function mkEl(tag) {
       cs.forEach((c) => el.appendChild(typeof c === 'string' ? mkText(c) : c));
     },
     replaceChildren(...cs) { el.children = []; el.append(...cs); },
+    replaceChild(next, old) {
+      const index = el.children.indexOf(old);
+      if (index < 0) throw new Error('node is not a child');
+      el.children.splice(index, 1, next);
+      old.parentNode = null;
+      next.parentNode = el;
+      return old;
+    },
     removeChild(c) {
       el.children = el.children.filter((n) => n !== c);
       c.parentNode = null;
@@ -165,6 +173,7 @@ function slot(name) {
 global.App = {
   bridge: {
     history_open: slot('history_open'),
+    history_restore_cleared: slot('history_restore_cleared'),
     history_page: slot('history_page'),
     history_search: slot('history_search'),
     userdb_page: slot('userdb_page'),
@@ -682,6 +691,257 @@ t('the filter buttons send an include/exclude rule', () => {
      { include: [], exclude: ['lbl_1'] });
   document.getElementById('labelClearFilterBtn').fire('click');
   eq(named('label_clear_filter').length, 1);
+});
+
+t('a repair-only live event reloads existing bubbles instead of adding duplicates', () => {
+  HistoryStore.openPerson('Nick');
+  const initial = named('history_open').pop().args[0];
+  HistoryStore.onPage(initial, JSON.stringify({ nick: 'Nick', items: rows(1, 3), total: 3 }));
+  const before = named('history_open').length;
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Nick', added: 0, total: 3, refresh: true }));
+  eq(named('history_open').length, before + 1);
+  ok(named('history_open').pop().args[0] !== initial, 'old replies have been invalidated');
+});
+
+t('pending capture has a warning status and shows structured read diagnostics', () => {
+  CollectorPanel.onStatus(JSON.stringify({
+    state: 'capture_pending', text: 'Capture pending — 1 unreadable; retrying',
+    agent: 11, nick: 'Nick', total: 0, added: 0, capture_missing: 1, capture_errors: 0,
+    capture_diagnostics: [{ from: 0, to: 1, returned: 1, ready: 0,
+      reason: 'payload_pending', sources: { 'message-content': 1 } }],
+  }));
+  const status = document.getElementById('collectorStatus');
+  ok(status.classList.contains('state-capture-pending'));
+  ok(!/No new messages/.test(status.textContent));
+  const rows = document.getElementById('collectorRows').textContent;
+  ok(rows.includes('awaiting retry 1'));
+  ok(rows.includes('v11'));
+  ok(rows.includes('payload_pending'));
+  ok(rows.includes('message-content'));
+});
+
+t('a failed browser read is shown as an error, not a no-new success', () => {
+  CollectorPanel.onStatus(JSON.stringify({
+    state: 'error', text: 'Message read failed', nick: 'Nick', total: 0,
+    capture_errors: 1, error: 'DOM 0:2: invalid response',
+    capture_diagnostics: [{ from: 0, to: 2, returned: 0, ready: 0,
+      reason: 'invalid_response', error: 'invalid response' }],
+  }));
+  ok(document.getElementById('collectorStatus').classList.contains('state-error'));
+  ok(document.getElementById('collectorRows').textContent.includes('read errors 1'));
+  ok(document.getElementById('collectorRows').textContent.includes('DOM 0:2: invalid response'));
+});
+
+t('reset removes old message IDs and rejects older replies and appends', () => {
+  HistoryStore.openPerson('Nick');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onReset({ nick: 'Nick', generation: 1, reset: true });
+  eq(HistoryStore.model.items.length, 0);
+  eq(HistoryStore.model.total, 0);
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Nick', generation: 0, items: rows(1, 25), total: 25 }));
+  HistoryStore.onStats('old', JSON.stringify({ nick: 'Nick', generation: 0, message_count: 25 }));
+  eq(HistoryStore.model.items.length, 0);
+  eq(HistoryStore.model.total, 0);
+  ok(!document.getElementById('historyRestoreClearedBtn'), 're-collection must not depend on Restore cleared');
+});
+
+t('session totals reset per person and re-collection starts from zero, not fifty', () => {
+  CollectorPanel.onStatus(JSON.stringify({ nick: 'Nick', generation: 2, state: 'collected', session_added: 25, total: 25 }));
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Other', generation: 2, session_added: 7, added: 7 }));
+  CollectorPanel.onLog(JSON.stringify({ nick: 'Nick', message: 'old count 25' }));
+  CollectorPanel.onLog(JSON.stringify({ nick: 'Other', message: 'keep other log' }));
+  CollectorPanel.onReset({ nick: 'Nick', generation: 3, reset: true });
+  ok(!CollectorPanel._sessionTotals.has('Nick'));
+  eq(CollectorPanel._sessionTotals.get('Other'), 7);
+  ok(!document.getElementById('collectorLog').textContent.includes('old count 25'));
+  ok(document.getElementById('collectorLog').textContent.includes('keep other log'));
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Nick', generation: 2, session_added: 25, added: 25 }));
+  ok(!CollectorPanel._sessionTotals.has('Nick'), 'an old append cannot restore the old count');
+  CollectorPanel.onAppended(JSON.stringify({ nick: 'Nick', generation: 3, session_added: 25, added: 25 }));
+  eq(CollectorPanel._sessionTotals.get('Nick'), 25);
+});
+
+t('clear confirmation is bound to the original person and promises a fresh scan', () => {
+  HistoryStore.openPerson('First');
+  let confirm, body;
+  const original = PresetsUI.confirm;
+  PresetsUI.confirm = (_title, text, _label, callback) => { confirm = callback; body = text; };
+  try {
+    HistoryStore.clearHistory();
+    HistoryStore.openPerson('Second');
+    confirm();
+    eq(named('history_clear_person').pop().args, ['First']);
+    ok(body.includes('same visible messages again'));
+  } finally { PresetsUI.confirm = original; }
+});
+
+t('current browser self and known historical self names are shown separately', () => {
+  CollectorPanel.onStatus(JSON.stringify({ state: 'no_new', text: 'No new messages',
+    nick: 'Катя462', my_nick: 'Хорошо Все', configured_my_nick: 'Пошлый01',
+    known_self_nicks: ['Хорошо Все', 'Пошлый01'], identity_source: 'pane_roster',
+    last_probe: { page_self: 'Хорошо Все', in_authors: ['Катя462'], out_authors: ['Пошлый01'],
+      participants: 2, panes: 1, pane_source: 'single-pane' } }));
+  const text = document.getElementById('collectorRows').textContent;
+  ok(text.includes('My previous nicks'));
+  ok(text.includes('Пошлый01'));
+  ok(text.includes('Configured nick'));
+  ok(text.includes('pane_roster'));
+});
+
+t('a verified page self is displayed without overwriting the My Nick setting input', () => {
+  HistoryStore.setMyNick('configured old');
+  HistoryStore.openPerson('Peer');
+  const req = named('history_open').pop().args[0];
+  HistoryStore.onPage(req, JSON.stringify({ nick: 'Peer', items: rows(1, 1), total: 1,
+    my_nick: 'browser current', stats: { messages: 1 } }));
+  ok(document.getElementById('historyHeader').textContent.includes('browser current'));
+  eq(document.getElementById('myNickInput').value, 'configured old');
+});
+
+// ── nested attachment delivery (2026-09-09 incident) ────────────
+
+const MEDIA_URL = 'https://images.example.test/a.gif';
+const MEDIA_PATH = 'C:\\Saved media\\Peer\\gifs\\2026-09-09_001.gif';
+function openMedia(extra) {
+  HistoryStore.showImages = true;
+  HistoryStore.openPerson('Media Peer');
+  const generation = (HistoryStore._generation || 0) + 1;
+  const attachment = Object.assign({ id: 501, url: MEDIA_URL, kind: 'gif',
+    state: 'pending', path: '', error: '' }, extra || {});
+  HistoryStore.onPage(HistoryStore._open, JSON.stringify({
+    nick: 'Media Peer', generation, total: 1, has_more: false, has_newer: false,
+    items: [{ id: 401, ord: 1, fp: 'media-501', dir: 'out', from: 'Previous Self',
+      kind: 'gif', text: '', time: '23:29', day: '2026-09-09', media: attachment }],
+  }));
+  return { generation, list: document.getElementById('historyList') };
+}
+function ready(generation, extra) {
+  HistoryStore.onMediaReady('', JSON.stringify(Object.assign({
+    id: 501, generation, state: 'cached', path: MEDIA_PATH, url: MEDIA_URL,
+    kind: 'gif', error: '', bytes: 42,
+  }, extra || {})));
+}
+
+t('a cache completion turns a pending live row into a saved GIF without reopening', () => {
+  const { generation, list } = openMedia();
+  ok(list.querySelector('.msg-media-restore').textContent.includes('waiting for download'));
+  const opens = named('history_open').length;
+  list.scrollTop = 135;
+  ready(generation);
+  const img = list.querySelector('.msg-media');
+  ok(img && img.classList.contains('is-gif'));
+  eq(img.getAttribute('src'), HistoryModel.fileUrl(MEDIA_PATH));
+  eq(list.scrollTop, 135, 'scroll anchor survives the update');
+  eq(named('history_open').length, opens, 'no manual page reopen');
+  eq(HistoryStore.model.total, 1);
+  eq(HistoryStore.model.items[0].media.state, 'cached');
+});
+
+t('a failed media update displays its actual reason rather than a generic unavailable marker', () => {
+  const { generation, list } = openMedia();
+  ready(generation, { state: 'failed', path: '', error: 'HTTP 403 — host refused the download' });
+  const marker = list.querySelector('.msg-media-restore');
+  ok(marker.textContent.includes('HTTP 403'));
+  ok(marker.title.includes(MEDIA_URL));
+  eq(list.querySelectorAll('.msg-media').length, 0);
+  marker.fire('click');
+  eq(named('media_restore').pop().args[1], '501');
+});
+
+t('evicted or missing media clears an existing saved path and can recover again', () => {
+  const { generation, list } = openMedia({ state: 'cached', path: MEDIA_PATH });
+  ready(generation, { state: 'evicted', path: '', error: '' });
+  eq(HistoryStore.model.items[0].media.path, '');
+  eq(list.querySelectorAll('.msg-media').length, 0);
+  ok(list.querySelector('.msg-media-restore'));
+  ready(generation);
+  ok(list.querySelector('.msg-media'));
+});
+
+t('a stale pre-reset or pre-load media reply cannot replace a current path with a reused ID', () => {
+  const { generation, list } = openMedia({ state: 'cached', path: MEDIA_PATH });
+  ready(generation - 1, { path: 'C:/old-archive/wrong.gif' });
+  eq(HistoryStore.model.items[0].media.path, MEDIA_PATH);
+  eq(list.querySelector('.msg-media').getAttribute('src'), HistoryModel.fileUrl(MEDIA_PATH));
+  ready(generation - 1, { state: 'failed', path: '', error: 'obsolete failure' });
+  ok(list.querySelector('.msg-media'));
+});
+
+t('a media completion respects Images off and appears when the user turns them on', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.showImages = false;
+  HistoryStore.render();
+  ready(generation);
+  eq(list.querySelectorAll('img').length, 0);
+  ok(list.querySelector('.msg-media-off'));
+  HistoryStore.showImages = true;
+  HistoryStore.render();
+  ok(list.querySelector('.msg-media'));
+});
+
+t('buffered live rows also receive a finished local media path', () => {
+  const { generation } = openMedia();
+  HistoryStore.model.hasNewer = true;
+  HistoryStore.onLiveAppend(JSON.stringify({ nick: 'Media Peer', generation,
+    added: 1, total: 2, items: [{ ord: 2, fp: 'buffered', kind: 'gif',
+      media: { id: 502, kind: 'gif', url: MEDIA_URL, state: 'pending', path: '' } }] }));
+  ready(generation, { id: 502 });
+  eq(HistoryStore.model.buffer[0].media.path, MEDIA_PATH);
+  eq(HistoryStore.model.buffer[0].media.state, 'cached');
+  eq(HistoryStore.model.items[0].media.state, 'pending', 'another ID stays pending');
+});
+
+t('media completions update every occurrence of a shared ID and leave other IDs alone', () => {
+  const { generation } = openMedia();
+  const duplicate = JSON.parse(JSON.stringify(HistoryStore.model.items[0]));
+  duplicate.ord = 2;
+  duplicate.fp = 'another occurrence';
+  HistoryStore.model.items.push(duplicate);
+  const other = JSON.parse(JSON.stringify(duplicate));
+  other.ord = 3;
+  other.media.id = 999;
+  HistoryStore.model.items.push(other);
+  ready(generation);
+  eq(HistoryStore.model.items.map(row => row.media.state), ['cached', 'cached', 'pending']);
+});
+
+t('search results retain GIF, copy and restore/error behavior after a late cache completion', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.query = 'caption';
+  HistoryStore.onSearch('search-media', JSON.stringify({ scope: 'person', generation,
+    items: [Object.assign({}, HistoryStore.model.items[0], { text: 'caption' })] }));
+  ready(generation);
+  const img = list.querySelector('.msg-media');
+  ok(img.classList.contains('is-gif'));
+  ok(list.textContent.includes('caption'), 'the search result was not replaced with the unfiltered model');
+  img.fire('click');
+  eq(named('copy_media').pop().args, ['501']);
+  img.fire('error');
+  const marker = list.querySelector('.msg-media-restore');
+  ok(marker.textContent.includes('could not be displayed'));
+  marker.fire('click');
+  eq(named('media_restore').pop().args[1], '501');
+});
+
+t('a failed search-result media update stays a search result and shows its error', () => {
+  const { generation, list } = openMedia();
+  HistoryStore.query = 'caption';
+  HistoryStore.onSearch('search-failure', JSON.stringify({ scope: 'person', generation,
+    items: [Object.assign({}, HistoryStore.model.items[0], { text: 'caption' })] }));
+  ready(generation, { state: 'failed', path: '', error: 'Download timed out' });
+  ok(list.textContent.includes('caption'));
+  ok(list.querySelector('.msg-media-restore').textContent.includes('Download timed out'));
+});
+
+t('repeated media-ready events neither duplicate rows nor change message totals', () => {
+  const { generation, list } = openMedia();
+  ready(generation);
+  ready(generation);
+  eq(HistoryStore.model.total, 1);
+  eq(list.querySelectorAll('.msg').length, 1);
+  eq(list.querySelectorAll('.msg-media').length, 1);
 });
 
 // ── reporting ────────────────────────────────────────────────────

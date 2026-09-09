@@ -105,6 +105,7 @@ const HistoryStore = {
 
   setMyNick(value) {
     this.myNick = value || '';
+    this.viewMyNick = '';
     if (this._els.myNick && this._els.myNick.value !== this.myNick)
       this._els.myNick.value = this.myNick;
     if (this.model) this.model.myNick = this.myNick;
@@ -139,6 +140,8 @@ const HistoryStore = {
     if (!nick || !this.model) return;
     options = options || {};
     this.nick = nick;
+    this.stats = null;
+    this.viewMyNick = '';
     this.query = '';
     if (this._els.search) this._els.search.value = '';
     this.model.reset({ nick: nick, myNick: this.myNick,
@@ -168,17 +171,39 @@ const HistoryStore = {
     return id;
   },
 
+  _acceptGeneration(payload) {
+    if (typeof payload.generation !== 'number') return true;
+    if (payload.generation < (this._generation || 0)) return false;
+    this._generation = payload.generation;
+    return true;
+  },
+
+  onReset(json) {
+    let payload;
+    try { payload = typeof json === 'string' ? JSON.parse(json) : json; } catch (_) { return; }
+    if (!payload || !this._acceptGeneration(payload)) return;
+    if (payload.nick != null && payload.nick !== this.nick) return;
+    this.stats = null;
+    this._open = 'reset-' + (++this._seq);
+    this.query = '';
+    if (this.model) this.model.reset({ nick: this.nick, myNick: this.myNick,
+      showImages: this.showImages, preloadRows: this.preloadRows });
+    this.renderHeader();
+    this.renderEmpty('History reset — the next scan can collect this chat again.');
+  },
+
   // ── bridge answers ───────────────────────────────────────────
 
   onPage(reqId, json) {
     let page = null;
     try { page = JSON.parse(json); } catch (e) { return; }
-    if (!page || page.nick !== this.nick) return;
+    if (!page || page.nick !== this.nick || !this._acceptGeneration(page)) return;
     const position = reqId === this._open ? 'initial' : undefined;
     this.model.applyPage(page, position ? { position } : undefined);
     this.stats = page.stats || this.stats;
     if (page.preview) this.applySettings({ preview: page.preview });
     if (page.my_nick && !this.myNick) this.setMyNick(page.my_nick);
+    if (page.my_nick) this.viewMyNick = page.my_nick;
     this.renderHeader();
     this.render();
   },
@@ -186,7 +211,7 @@ const HistoryStore = {
   onSearch(reqId, json) {
     let data = null;
     try { data = JSON.parse(json); } catch (e) { return; }
-    if (!data) return;
+    if (!data || !this._acceptGeneration(data)) return;
     if (data.scope === 'global') {
       HistoryView.renderSearchGroups(this._els.list, data.groups || [], {
         query: this.query,
@@ -205,8 +230,12 @@ const HistoryStore = {
   onLiveAppend(json) {
     let payload = null;
     try { payload = JSON.parse(json); } catch (e) { return; }
-    if (!payload || !this.model) return;
+    if (!payload || !this.model || !this._acceptGeneration(payload)) return;
     if (payload.nick !== this.nick) return;
+    if (payload.refresh) {
+      this.reloadCurrent();
+      return;
+    }
     const added = this.model.appendLive(payload.items || []);
     if (payload.total != null) {
       const total = Number(payload.total);
@@ -231,11 +260,12 @@ const HistoryStore = {
   onStats(reqId, json) {
     let stats = null;
     try { stats = JSON.parse(json); } catch (e) { return; }
-    if (!stats || stats.nick !== this.nick) return;
+    if (!stats || stats.nick !== this.nick || !this._acceptGeneration(stats)) return;
     this.stats = stats;
     if (this.model && stats.message_count != null)
       this.model.total = Number(stats.message_count);
     this.renderHeader();
+    if (this.model && this.model.isEmpty) this.render();
   },
 
   /** Show this person's saved images and GIFs in the file manager. */
@@ -257,18 +287,15 @@ const HistoryStore = {
   onMediaReady(reqId, json) {
     let info = null;
     try { info = JSON.parse(json); } catch (e) { return; }
-    if (!info) return;
+    if (!info || !this._acceptGeneration(info)) return;
     const id = info.id != null ? info.id : reqId;
-    if (info.path) {
-      // Put the fresh local path into the model, then re-render.  That lets
-      // a restored "click to restore" marker become a working <img> without
-      // a manual refresh, while the scroll anchor is preserved by render().
-      const hit = this._applyModelMedia(id, info);
-      if (hit) { this.render(); return; }
-      HistoryView.applyMediaPath(this._els.list, id, info.path);
-    }
-    if (!info.path && typeof LogConsole !== 'undefined')
-      LogConsole.log('⚠ ' + (info.error || 'media is not available yet') +
+    // An empty path is meaningful too (failed, missing or evicted). Update
+    // buffered rows as well, so scrolling back to the live end is accurate.
+    const hit = this._applyModelMedia(id, info);
+    if (hit && !this.query) this.render();
+    else HistoryView.applyMediaInfo(this._els.list, id, info);
+    if (!info.path && info.error && typeof LogConsole !== 'undefined')
+      LogConsole.log('⚠ ' + info.error +
                      (info.state ? ' (' + info.state + ')' : ''), 'warn');
   },
 
@@ -276,13 +303,13 @@ const HistoryStore = {
     if (!this.model) return false;
     const want = String(id == null ? '' : id);
     let changed = false;
-    this.model.items.forEach((item) => {
+    this.model.items.concat(this.model.buffer || []).forEach((item) => {
       if (!item.media || String(item.media.id) !== want) return;
-      if (info.path) item.media.path = info.path;
-      if (info.state) item.media.state = info.state;
-      if (info.url) item.media.url = info.url;
-      if (info.kind) item.media.kind = info.kind;
-      changed = true;
+      ['path', 'state', 'url', 'kind', 'error', 'bytes'].forEach((key) => {
+        if (!Object.prototype.hasOwnProperty.call(info, key) || item.media[key] === info[key]) return;
+        item.media[key] = info[key];
+        changed = true;
+      });
     });
     return changed;
   },
@@ -343,7 +370,7 @@ const HistoryStore = {
   // ── rendering ────────────────────────────────────────────────
 
   _context() {
-    return { nick: this.nick, myNick: this.myNick,
+    return { nick: this.nick, myNick: this.viewMyNick || this.myNick,
              showImages: this.showImages,
              today: new Date().toISOString().slice(0, 10),
              onCopyMedia: (id) => this.copyMedia(id),
@@ -364,30 +391,34 @@ const HistoryStore = {
 
   /** Wipe the whole conversation but keep the person (undoable). */
   clearHistory() {
-    if (!this.nick) return;
+    const nick = this.nick;
+    if (!nick) return;
     if (!App.bridge || !App.bridge.history_clear_person) return;
     PresetsUI.confirm(
       'Clear this conversation?',
-      'Every archived message with “' + this.nick + '” is removed. ' +
-      'The person stays in the database and Ctrl+Z restores the messages.',
-      'Clear', () => App.bridge.history_clear_person(this.nick));
+      'Every archived message with “' + nick + '” is removed. ' +
+      'All message tracking is erased too. The person stays; the next scan can ' +
+      'collect the same visible messages again. Undo is kept separately. Pause collection first to keep the view empty.',
+      'Clear', () => App.bridge.history_clear_person(nick));
   },
 
   /** Remove the person together with their whole history (undoable). */
   deletePerson() {
-    if (!this.nick) return;
+    const nick = this.nick;
+    if (!nick) return;
     if (!App.bridge || !App.bridge.history_delete_person) return;
     PresetsUI.confirm(
       'Remove this person?',
-      '“' + this.nick + '” and their entire history are removed from the ' +
-      'database. Ctrl+Z restores both.',
-      'Remove', () => App.bridge.history_delete_person(this.nick, false));
+      '“' + nick + '” and their entire history are removed from the ' +
+      'database and erase all message tracking. The same chat can be collected ' +
+      'fresh on the next scan. Ctrl+Z can restore the separate undo snapshot.',
+      'Remove', () => App.bridge.history_delete_person(nick, false));
   },
 
   renderHeader() {
     if (!this._els.header) return;
     HistoryView.renderHeader(this._els.header, {
-      nick: this.nick, myNick: this.myNick, stats: this.stats || null,
+      nick: this.nick, myNick: this.viewMyNick || this.myNick, stats: this.stats || null,
       labels: (typeof Labels !== 'undefined' && this.nick)
         ? Labels.forNick(this.nick) : [],
       pill: (typeof Labels !== 'undefined')

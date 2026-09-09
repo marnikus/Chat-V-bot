@@ -281,6 +281,8 @@ class TestResilience(CollectorCase):
         self.assertEqual(person["message_count"], 4)
 
     async def test_run_loop_starts_and_stops_cleanly(self):
+        # This tests heartbeat lifecycle, not a timed scroll-to-top bootstrap.
+        self.col.configure(auto_backfill=False)
         task = asyncio.ensure_future(self.col.run())
         await asyncio.sleep(0.05)
         self.col.stop()
