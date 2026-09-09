@@ -23,6 +23,11 @@ from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine
 from backend.bridge import Bridge
 from backend.history_service import HistoryService
+from core.di import Container
+from core.result import Result
+from core.events import EventBus
+from stores.atomic import AtomicJsonStore
+from stores.settings_store import SettingsStore
 
 log = logging.getLogger("chatbot")
 
@@ -171,6 +176,22 @@ class MainWindow(QMainWindow):
         os._exit(0)
 
 
+def build_container(config: ConfigManager | None = None) -> Container:
+    """DI container — ~40 lines, no third-party framework.
+
+    Arrows down only: main -> bridge/router -> services(Result) -> stores(atomic).
+    """
+    c = Container()
+    cfg = config or ConfigManager()
+    c.register_instance("config", cfg)
+    c.register_instance("event_bus", EventBus())
+    c.register("atomic_store", lambda cont: AtomicJsonStore(cfg._path if hasattr(cfg, "_path") else "config.json"))
+    c.register("settings_store", lambda cont: SettingsStore(cont.resolve("atomic_store")))
+    c.register("cdp", lambda cont: CDPClient(host=cont.resolve("config").get("chrome", "host", default="127.0.0.1"), port=cont.resolve("config").get("chrome", "port", default=9222)))
+    # memory/criteria/engine are request-scoped (built in main() after world path known)
+    return c
+
+
 def main() -> int:
     app = QApplication(sys.argv)
     # We drive shutdown ourselves from MainWindow.closeEvent so that async
@@ -183,12 +204,12 @@ def main() -> int:
     setup_logger()
     config = ConfigManager()
     log.info("Starting ChatBot Automator")
+    # DI container (main.py is DI only — no business logic here)
+    container = build_container(config)
+    log.info("DI container ready: %s", list(container._factories.keys()) + list(container._singletons.keys()))
 
-    # Backend services
-    cdp = CDPClient(
-        host=config.get("chrome", "host", default="127.0.0.1"),
-        port=config.get("chrome", "port", default=9222),
-    )
+    # Backend services (resolved via container where possible)
+    cdp = container.resolve("cdp")
     # People queue: since the unified single-DB redesign the queue's
     # `users` table lives INSIDE the world file. A pre-redesign install
     # still has a separate chatbot.db — start from it, the startup
