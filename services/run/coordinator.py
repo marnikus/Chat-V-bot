@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
+# Importing actions.registry also runs the actions package scan, so every
+# action block is registered before load_stack() looks one up.
+from actions.registry import get_action_class  # noqa: E402
 from core.events import EventBus
 try:
     from stores.user_memory import UserRecord
