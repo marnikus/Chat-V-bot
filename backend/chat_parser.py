@@ -347,6 +347,46 @@ class ChatParser:
             await asyncio.sleep(self.chunk_pause_ms / 1000.0)
 
 
+@dataclass(frozen=True)
+class SyncOptions:
+    """Validated controls for one sync; legacy kwargs are normalized here."""
+    my_nick: str = ""
+    require_private: bool = False
+    verify_partner: bool = False
+    max_messages: Optional[int] = None
+    chunk_pause_ms: Optional[int] = None
+    should_stop: Optional[Callable[[], bool]] = None
+    on_progress: Optional[Callable[[int, int], None]] = None
+    now: Optional[datetime] = None
+    backfill_older: bool = False
+    backfill_wait_s: float = 2.0
+    media: object = None
+
+    @classmethod
+    def from_legacy(cls, **values):
+        def integer(name, default=None, minimum=0):
+            value = values.get(name, default)
+            if value is None: return None
+            try: return max(minimum, int(value))
+            except (TypeError, ValueError): return default
+        try: wait = max(0.0, float(values.get("backfill_wait_s", 2.0)))
+        except (TypeError, ValueError): wait = 2.0
+        return cls(
+            my_nick=str(values.get("my_nick") or ""),
+            require_private=bool(values.get("require_private", False)),
+            verify_partner=bool(values.get("verify_partner", False)),
+            max_messages=integer("max_messages"),
+            chunk_pause_ms=integer("chunk_pause_ms"),
+            should_stop=values.get("should_stop"),
+            on_progress=values.get("on_progress"), now=values.get("now"),
+            backfill_older=bool(values.get("backfill_older", False)),
+            backfill_wait_s=wait, media=values.get("media"))
+
+
+# Descriptive alias retained for callers that adopted the first design draft.
+ChatSyncOptions = SyncOptions
+
+
 async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             my_nick: str = "",
                             require_private: bool = False,
@@ -358,14 +398,28 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
                             now: Optional[datetime] = None,
                             backfill_older: bool = False,
                             backfill_wait_s: float = 2.0,
-                            media=None) -> SyncResult:
+                            media=None,
+                            options: Optional[SyncOptions] = None) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
+
+    ``options`` is the preferred boundary for new callers. Positional and
+    legacy keyword arguments remain supported for saved blocks and plugins.
 
     With `backfill_older=True` the pane is first scrolled to its first message
     (and put back after the read). This is the “full history from the
     beginning” path: the in-page virtualiser only keeps recent nodes, so the
     earliest lines visit the DOM only after scrolling up.
     """
+    if options is not None:
+        if not isinstance(options, SyncOptions):
+            raise TypeError("options must be SyncOptions")
+        my_nick, require_private = options.my_nick, options.require_private
+        verify_partner, max_messages = options.verify_partner, options.max_messages
+        chunk_pause_ms, should_stop = options.chunk_pause_ms, options.should_stop
+        on_progress, now = options.on_progress, options.now
+        backfill_older, backfill_wait_s, media = (
+            options.backfill_older, options.backfill_wait_s, options.media)
+
     now = now or datetime.now()
     pause_ms = parser.chunk_pause_ms if chunk_pause_ms is None \
         else max(0, int(chunk_pause_ms))

@@ -87,6 +87,45 @@ class CollectResult:
         return [p for p in self.collected if not p.messaged]
 
 
+@dataclass(frozen=True)
+class ScrollOptions:
+    """Parser controls grouped to prevent twenty-argument call sites."""
+    criteria: object = None
+    viewport_sel: str = "cdk-virtual-scroll-viewport.users-list-viewport"
+    scroll_dy: int = 300
+    pause_ms: int = 800
+    stall_threshold: int = 3
+    max_scrolls: int = 50
+    load_timeout_ms: int = 2500
+    poll_ms: int = 150
+    person_filter: object = None
+    person_selector: str = "user-item"
+    nick_selector: str = ".primary-text"
+    highlight_enabled: bool = True
+    highlight_ms: int = 900
+    confirm_pause_ms: int = 500
+
+    @classmethod
+    def from_legacy(cls, **values):
+        def number(name, default):
+            try: return max(0, int(values.get(name, default)))
+            except (TypeError, ValueError): return default
+        return cls(
+            criteria=values.get("criteria"),
+            viewport_sel=values.get("viewport_sel", cls.viewport_sel),
+            scroll_dy=number("scroll_dy", 300), pause_ms=number("pause_ms", 800),
+            stall_threshold=number("stall_threshold", 3),
+            max_scrolls=number("max_scrolls", 50),
+            load_timeout_ms=number("load_timeout_ms", 2500),
+            poll_ms=number("poll_ms", 150),
+            person_filter=values.get("person_filter"),
+            person_selector=values.get("person_selector", "user-item"),
+            nick_selector=values.get("nick_selector", ".primary-text"),
+            highlight_enabled=bool(values.get("highlight_enabled", True)),
+            highlight_ms=number("highlight_ms", 900),
+            confirm_pause_ms=number("confirm_pause_ms", 500))
+
+
 class ScrollParser:
     """Scroll through the virtual user list, filtering and collecting people."""
 
@@ -104,7 +143,19 @@ class ScrollParser:
                  on_collect=None,
                  on_reject=None,
                  should_stop=None,
-                 log_cb=None):
+                 log_cb=None,
+                 options: ScrollOptions | None = None):
+        if options is not None:
+            if not isinstance(options, ScrollOptions):
+                raise TypeError("options must be ScrollOptions")
+            criteria, viewport_sel, scroll_dy, pause_ms = (
+                options.criteria, options.viewport_sel, options.scroll_dy, options.pause_ms)
+            stall_threshold, max_scrolls = options.stall_threshold, options.max_scrolls
+            load_timeout_ms, poll_ms = options.load_timeout_ms, options.poll_ms
+            person_filter, person_selector, nick_selector = (
+                options.person_filter, options.person_selector, options.nick_selector)
+            highlight_enabled, highlight_ms, confirm_pause_ms = (
+                options.highlight_enabled, options.highlight_ms, options.confirm_pause_ms)
         self._cdp = cdp
         self._criteria = criteria
         self._vp_sel = viewport_sel

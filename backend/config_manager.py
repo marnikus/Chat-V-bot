@@ -50,29 +50,28 @@ class ConfigManager:
 
     # access (mirrors old behaviour including DEFAULTS fallback)
     def get(self, *keys: str, default: Any = None) -> Any:
+        """Read a path, falling back safely when legacy data is malformed."""
         node = self._data
         for key in keys:
-            if isinstance(node, dict):
-                node = node.get(key, _UNSET)
-            else:
-                return default
-            if node is _UNSET:
-                node2: Any = DEFAULTS
-                for k in keys:
-                    node2 = node2.get(k, default) if isinstance(node2, dict) else default
-                    if node2 is default:
-                        return default
-                return copy.deepcopy(node2) if isinstance(node2, (dict, list)) else node2
-        return node
+            if not isinstance(node, dict) or key not in node:
+                return _default_path(keys, default)
+            node = node[key]
+        return copy.deepcopy(node) if isinstance(node, (dict, list)) else node
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:
         return copy.deepcopy(self.get(*keys, default=default))
 
     def set(self, *keys_and_value: Any) -> None:
+        if len(keys_and_value) < 2:
+            raise TypeError("set requires at least one key and a value")
         *keys, value = keys_and_value
         node = self._data
         for key in keys[:-1]:
-            node = node.setdefault(key, {})
+            if not isinstance(node, dict):
+                raise TypeError("configuration root must be a mapping")
+            if not isinstance(node.get(key), dict):
+                node[key] = {}
+            node = node[key]
         node[keys[-1]] = value
 
     def to_dict(self) -> str:
@@ -137,6 +136,15 @@ class ConfigManager:
         except (TypeError, ValueError):
             errors.append(f"chrome.port invalid: {port}")
         return errors
+
+
+def _default_path(keys: tuple[str, ...], fallback: Any) -> Any:
+    node: Any = DEFAULTS
+    for key in keys:
+        if not isinstance(node, dict) or key not in node:
+            return fallback
+        node = node[key]
+    return copy.deepcopy(node) if isinstance(node, (dict, list)) else node
 
 
 _UNSET = object()

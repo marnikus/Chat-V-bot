@@ -27,7 +27,7 @@ from typing import Optional
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
 from backend.person_filter import ANY, NO, YES, PersonFilter, normalize
-from backend.scroll_parser import CollectResult, ScrollParser
+from backend.scroll_parser import CollectResult, ScrollOptions, ScrollParser
 
 log = logging.getLogger("chatbot")
 
@@ -107,21 +107,17 @@ class ScrollParse(BaseAction):
     def build_parser(self, cdp: CDPClient, panel_criteria=None,
                      log_cb=None, on_collect=None, on_reject=None,
                      should_stop=None) -> ScrollParser:
-        return ScrollParser(
-            cdp=cdp,
-            criteria=None,          # panel criteria intentionally not applied
-            viewport_sel=self.viewport_selector,
-            scroll_dy=self.scroll_delta_y,
-            pause_ms=self.scroll_pause_ms,
-            stall_threshold=self.stall_threshold,
-            max_scrolls=self.max_scrolls,
+        options = ScrollOptions(
+            criteria=None, viewport_sel=self.viewport_selector,
+            scroll_dy=self.scroll_delta_y, pause_ms=self.scroll_pause_ms,
+            stall_threshold=self.stall_threshold, max_scrolls=self.max_scrolls,
             load_timeout_ms=self.load_timeout_ms,
             person_filter=self.build_filter(panel_criteria),
-            person_selector=self.person_selector,
-            nick_selector=self.nick_selector,
+            person_selector=self.person_selector, nick_selector=self.nick_selector,
             highlight_enabled=self.highlight_enabled,
-            highlight_ms=self.highlight_ms,
-            confirm_pause_ms=self.confirm_pause_ms,
+            highlight_ms=self.highlight_ms, confirm_pause_ms=self.confirm_pause_ms)
+        return ScrollParser(
+            cdp=cdp, options=options,
             on_collect=on_collect,
             on_reject=on_reject if self.purge_rejected else None,
             should_stop=should_stop,
