@@ -32,6 +32,7 @@ const DbPanel = {
       active: $('dbActivePath'),
       stats: $('dbStatsGrid'),
       list: $('dbFileList'),
+      folderHint: $('dbFolderHint'),
       nameInput: $('dbNewNameInput'),
       createBtn: $('dbCreateBtn'),
       cleanBtn: $('dbCleanBtn'),
@@ -82,10 +83,11 @@ const DbPanel = {
     }
     if (!payload) return;
     this.info = payload;
-    this.items = this.manageableItems(payload.items);
-    this.activePath = payload.path || payload.db_path || this.activePath;
+    if (Array.isArray(payload.items)) this.items = this.visibleItems(payload.items);
+    this.activePath = payload.path || payload.db_path || payload.active_path || this.activePath;
     // Keep completion/error notices; only clear a progress line.
-    if (payload.error) this.setStatus('⚠ ' + payload.error, true);
+    if (payload.error || payload.inventory_error)
+      this.setStatus('⚠ ' + (payload.error || payload.inventory_error), true);
     else if (this._els.status && this._els.status.textContent === 'Measuring database…')
       this.setStatus('');
     this.render();
@@ -98,10 +100,15 @@ const DbPanel = {
       try { payload = JSON.parse(json); } catch (e) { payload = null; }
     }
     this.busy = false;
+    this._pending = 'change-' + (++this._seq); // invalidate even without a bridge
+    if (payload && Array.isArray(payload.items))
+      this.items = this.visibleItems(payload.items); // errors carry real conflicts too
+    if (payload && payload.inventory_folder)
+      this.info = Object.assign({}, this.info || {}, { inventory_folder: payload.inventory_folder });
     if (payload && payload.ok) {
       if (payload.active_path || payload.path_after)
         this.activePath = payload.active_path || payload.path_after;
-      if (payload.op === 'delete')
+      if (payload.op === 'delete' && !Array.isArray(payload.items))
         this.items = this.items.filter((item) => item.path !== payload.path);
     }
     this.render();
@@ -127,9 +134,15 @@ const DbPanel = {
     this._els.status.classList.toggle('error', !!isError);
   },
 
-  manageableItems(items) {
+  visibleItems(items) {
     return (Array.isArray(items) ? items : []).filter((item) => item && item.path &&
-      item.exists !== false && !item.protected && item.manageable !== false);
+      !item.protected && (item.exists === true || item.blocking === true ||
+        (item.exists !== false && item.manageable !== false)));
+  },
+
+  manageableItems(items) {
+    return this.visibleItems(items).filter((item) => item.manageable !== false &&
+      item.compatible !== false && item.kind !== 'file');
   },
 
   _begin(text) {
@@ -154,6 +167,30 @@ const DbPanel = {
     this._begin('Creating “' + name + '”…');
     bridge.db_create(name);
     if (input) input.value = '';
+  },
+
+  reveal(path) {
+    if (this.busy || !path) return;
+    const item = this.visibleItems(this.items).find((row) => row.path === path);
+    if (!item || item.can_reveal === false) return;
+    const bridge = this._bridge('db_reveal');
+    if (!bridge) {
+      this.setStatus('File reveal is unavailable. Restart the application after updating.', true);
+      return;
+    }
+    // Non-mutating RPC: no _begin(), db_load(), or global undo command.
+    this.setStatus('Opening file location…');
+    const sequence = this._seq;
+    bridge.db_reveal(path, (json) => {
+      let result = json;
+      if (typeof json === 'string') {
+        try { result = JSON.parse(json); } catch (e) { result = null; }
+      }
+      if (this.busy || sequence !== this._seq) return;
+      if (result && result.ok)
+        this.setStatus('File location: ' + (result.reveal_path || item.reveal_path || path));
+      else this.setStatus('⚠ ' + (result && result.error || 'Cannot open the file location.'), true);
+    });
   },
 
   load(path) {
@@ -301,7 +338,14 @@ const DbPanel = {
     const host = this._els.list;
     if (!host) return;
     const nodes = [];
-    const items = this.manageableItems(this.items);
+    const items = this.visibleItems(this.items);
+    const archives = this.manageableItems(items);
+    if (this._els.folderHint) {
+      const folder = this.info && this.info.inventory_folder ||
+        this.activePath.replace(/[\\/][^\\/]*$/, '');
+      this._els.folderHint.textContent = (folder ? 'Create folder: ' + folder + '. ' : '') +
+        'Click a name to reveal its file. Load connects.';
+    }
     if (!items.length) {
       const empty = document.createElement('div');
       empty.className = 'db-empty';
@@ -312,12 +356,31 @@ const DbPanel = {
     }
     items.forEach((item) => {
       const row = document.createElement('div');
-      row.className = 'db-row' + (item.active ? ' active' : '');
-      const name = document.createElement('span');
+      const manageable = archives.includes(item);
+      row.className = 'db-row' + (item.active ? ' active' : '') + (!manageable ? ' conflict' : '');
+      row.dataset.path = item.path;
+      const file = document.createElement('div');
+      file.className = 'db-row-file';
+      const name = document.createElement('button');
+      name.type = 'button';
       name.className = 'db-row-name';
       name.textContent = item.name || this.baseName(item.path);
-      name.title = item.path || '';
-      row.appendChild(name);
+      name.title = 'Reveal in file manager: ' + (item.reveal_path || item.path);
+      name.disabled = this.busy || item.can_reveal === false;
+      name.addEventListener('click', () => this.reveal(item.path));
+      file.appendChild(name);
+      if (item.detail || !manageable) {
+        const detail = document.createElement('div');
+        detail.className = 'db-row-detail';
+        const label = { empty: 'Empty file', incompatible: 'Incompatible',
+          unavailable: 'Unavailable', sidecars: 'Sidecar files only',
+          not_file: 'Name occupied', alias: 'File alias', broken_link: 'Broken link',
+          legacy: 'Upgrade on Load' }[item.status] || 'Not loadable';
+        detail.textContent = label + (item.detail ? ': ' + item.detail : '');
+        detail.title = item.path + '\n' + detail.textContent;
+        file.appendChild(detail);
+      }
+      row.appendChild(file);
       const size = document.createElement('span');
       size.className = 'db-row-size';
       size.textContent = this.bytes(item.bytes);
@@ -329,7 +392,7 @@ const DbPanel = {
         tag.className = 'db-tag';
         tag.textContent = 'connected';
         actions.appendChild(tag);
-      } else if (item.can_load !== false) {
+      } else if (manageable && item.can_load !== false) {
         const load = document.createElement('button');
         load.type = 'button';
         load.className = 'btn-small';
@@ -339,17 +402,25 @@ const DbPanel = {
         load.addEventListener('click', () => this.load(item.path));
         actions.appendChild(load);
       }
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'btn-small danger';
-      del.textContent = 'Delete';
-      const last = items.length <= 1 || item.can_delete === false;
-      del.disabled = this.busy || last;
-      del.title = last ? (item.delete_reason ||
-        'Cannot delete the last database. Create a new one first.')
-        : 'Move this file to db_trash (undoable)';
-      del.addEventListener('click', () => this.remove(item.path));
-      actions.appendChild(del);
+      if (manageable) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-small danger';
+        del.textContent = 'Delete';
+        const last = archives.length <= 1 || item.can_delete === false;
+        del.disabled = this.busy || last;
+        del.title = last ? (item.delete_reason ||
+          'Cannot delete the last database. Create a new one first.')
+          : 'Move this file to db_trash (undoable)';
+        del.addEventListener('click', () => this.remove(item.path));
+        actions.appendChild(del);
+      } else {
+        const tag = document.createElement('span');
+        tag.className = 'db-tag readonly';
+        tag.textContent = 'read-only';
+        tag.title = item.delete_reason || 'Reveal this file to inspect or rename it safely';
+        actions.appendChild(tag);
+      }
       row.appendChild(actions);
       nodes.push(row);
     });

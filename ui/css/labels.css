@@ -176,11 +176,26 @@
 }
 .db-row:hover { background: var(--bg-card-hover); }
 .db-row.active { border-color: var(--green); }
-.db-row.missing { opacity: .55; }
-.db-row-name {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: var(--font-size-sm);
+.db-row.conflict { border-style: dashed; }
+.db-folder-hint {
+  color: var(--text-muted); font-size: var(--font-size-xs); overflow-wrap: anywhere;
 }
+.db-row-file { flex: 1; min-width: 0; }
+.db-row-name {
+  display: block; max-width: 100%; padding: 0; border: 0; background: none;
+  color: var(--text-primary); text-align: left; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: inherit; font-size: var(--font-size-sm); text-decoration: underline;
+  text-decoration-style: dotted; text-underline-offset: 3px;
+}
+.db-row-name:hover { color: var(--accent); text-decoration-style: solid; }
+.db-row-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.db-row-name:disabled { opacity: .55; cursor: not-allowed; }
+.db-row-detail {
+  margin-top: 3px; color: var(--text-secondary); font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+.db-tag.readonly { color: var(--text-muted); }
 .db-row-size {
   font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);
 }

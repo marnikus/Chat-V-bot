@@ -46,12 +46,14 @@ class Page(FakePage):
 
 
 class SafetyCase(unittest.IsolatedAsyncioTestCase):
+    database_name = "history.db"
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = self.temp.name
         self.cfg = ConfigManager(os.path.join(self.root, "config.json"))
-        self.path = os.path.join(self.root, "history.db")
+        self.path = os.path.join(self.root, self.database_name)
         settings = self.cfg.get("history")
         settings["db_path"] = self.path
         settings["media"]["cache_dir"] = os.path.join(self.root, "saved_media")
@@ -305,7 +307,11 @@ class TestSchemaSafety(SafetyCase):
         with sqlite3.connect(path) as db:
             db.execute("PRAGMA foreign_keys=OFF")
             db.execute("INSERT INTO cursors(person_id) VALUES(999)")
-        self.assertNotIn("orphan.db", self.names())
+        item = next(i for i in self.manager.list_dbs() if i["name"] == "orphan.db")
+        self.assertFalse(item["manageable"], "an orphaned reference is visible but not a fallback")
+        self.assertFalse(item["can_load"])
+        self.assertFalse(item["can_delete"])
+        self.assertIn("foreign key", item["detail"])
         await self.assert_refused_without_switch(path, "foreign key")
         result = await self.manager.delete(self.path)
         self.assertEqual(result["error"], LAST_DATABASE)
@@ -430,7 +436,12 @@ class TestDeletionAndProtectedStores(SafetyCase):
             self.assertFalse((await self.manager.load(path))["ok"], path)
             self.assertFalse((await self.manager.delete(path))["ok"], path)
             self.assertEqual(hashlib.sha256(Path(path).read_bytes()).digest(), before)
-        self.assertEqual(sorted(self.names()), ["history.db", "work.db"])
+        self.assertEqual(sorted(self.names()), ["history.db", "renamed.db", "work.db"])
+        foreign = next(i for i in self.manager.list_dbs() if i["name"] == "renamed.db")
+        self.assertFalse(foreign["manageable"])
+        self.assertFalse(foreign["can_load"])
+        self.assertFalse(foreign["can_delete"])
+        self.assertTrue(foreign["can_reveal"])
         self.assertEqual(self.cfg.get_state("undo_history"), timeline)
         self.assertEqual(self.cfg.get_state("undo_history_index"), 0)
 

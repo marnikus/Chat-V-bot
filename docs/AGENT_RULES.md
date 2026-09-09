@@ -324,3 +324,28 @@ idle-batch completions; new live rows must not retain pre-download media DTOs.
 Use one truthful media-info shape with local path/state/error and generation
 checks on bridge/UI replies. Missing or failed previews must not silently look
 cached, and a renderer callback failure must not break media storage.
+
+
+## RULE 16 — database presence is not database loadability
+
+DB Connection discovery, Create conflicts and mutation/undo replies share
+`backend.db_inventory`. Never hide an existing user file merely because schema
+validation fails: empty/incompatible/unavailable files and orphan SQLite
+sidecars must be visible diagnostic rows. Config recents are discovery hints;
+prune truly missing file groups, not existing files with an invalid schema.
+
+Only independent, compatible archives are Load/Delete targets or last-database
+fallbacks. People/Undo/internal paths stay protected. Aliases must not count
+as extra archives or redirect Delete/Restore to another file; a hardlink into
+an external file or backup remains read-only. Keep exclusive staging and atomic
+no-overwrite publication. Move all original group entries, including broken
+sidecar links, so a successful Delete really frees the filename.
+
+A filename click reveals the actual file (or remaining sidecar), never implicitly
+loads it or invokes its file association. Native launch uses arguments/Qt APIs,
+not a shell. Revealing does not create an undo command or reset history.
+
+Apply fresh inventory snapshots immediately even when Create fails. A stale
+stats/reveal reply must not re-hide conflicts, resurrect deleted files, or
+replace a newer operation's notice. Test the real manager/SQLite/Bridge payloads
+through the shipped panel (`tests/test_db_inventory.py`), not only mock DTOs.
