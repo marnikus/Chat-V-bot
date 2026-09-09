@@ -32,6 +32,15 @@ def _fnv1a(text: str, seed: int) -> int:
     return h
 
 
+def _int_or(value, default: int) -> int:
+    """Tolerant int coercion — agent JSON with a garbage `occ`/`idx`
+    must still become a usable record, not a dropped one."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def fingerprint(direction: str, from_nick: str, ts_display: str, kind: str,
                 payload: str, occ: int = 0) -> str:
     """Stable identity of one chat line.
@@ -100,7 +109,9 @@ class MessageRecord:
     def from_dict(cls, data: dict) -> "MessageRecord":
         """Build a record from the JSON the in-page agent produces."""
         data = data or {}
-        media = data.get("media") or {}
+        media = data.get("media")
+        if not isinstance(media, dict):
+            media = {}          # a garbage `media` degrades to no-media
         rec = cls(
             fp=str(data.get("fp", "")),
             direction=str(data.get("dir") or data.get("direction") or "in"),
@@ -110,8 +121,8 @@ class MessageRecord:
             media_url=str(media.get("url") or data.get("media_url") or ""),
             media_kind=str(media.get("kind") or data.get("media_kind") or ""),
             ts_display=str(data.get("time") or data.get("ts_display") or ""),
-            occ=int(data.get("occ") or 0),
-            idx=int(data.get("idx") or 0),
+            occ=_int_or(data.get("occ"), 0),
+            idx=_int_or(data.get("idx"), 0),
         )
         rec.ensure_fp()
         return rec

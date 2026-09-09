@@ -161,7 +161,11 @@ def list_image_files(folder: str, file_pattern: str) -> list[str]:
     for name in names:
         low = name.lower()
         if any(fnmatch.fnmatchcase(low, p) for p in patterns):
-            files.append(os.path.join(folder, name))
+            path = os.path.join(folder, name)
+            # a directory named `vacation.jpg` matches the glob but is
+            # not attachable — only real files reach the file input
+            if os.path.isfile(path):
+                files.append(path)
     return sorted(set(files))
 
 

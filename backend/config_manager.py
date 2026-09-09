@@ -212,7 +212,11 @@ class ConfigManager:
 
     def data(self) -> dict[str, Any]:
         """Full JSON-serialisable merged data (for get_app_state etc.)."""
-        merged = self.settings.data()
+        # underlay the defaults so a fresh install (no settings.json yet)
+        # still reports the whole documented tree, not just the routed
+        # sections — "merged" must mean the same thing `get()` serves.
+        merged = copy.deepcopy(SETTINGS_DEFAULTS)
+        merged.update(self.settings.data())
         merged["url_presets"] = self.bookmarks.all()
         merged["custom_blocks"] = self.blocks.all()
         merged["labels"] = self.labels_file.data()
