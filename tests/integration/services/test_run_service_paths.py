@@ -1,30 +1,25 @@
 """
-services/run_service — Key Path Tests (Normalize, Norm, Trace)
-Real assertions on logic, not pass-through.
+services/run_service — Key Path Tests (Normalize, Norm, Trace) +
+AREA A P0-1/P0-2 regression pins for RunCoordinator.load_stack and
+RunProgress.UserRecord.
+
+Real assertions on logic, not pass-through.  This module deliberately does
+NOT stub PySide6: the run engine is a real QObject subclass and importing it
+with real Qt headless is part of the harness contract.
 """
 import unittest
 import os
-import tempfile
 import sys
-import types
-sys.path.insert(0, "/home/user/Chat-V-bot")
-# Stub missing PySide6 so run_service import succeeds for path testing
-if "PySide6" not in sys.modules:
-    import types
-    pyside = types.ModuleType("PySide6")
-    pyside.QtCore = types.ModuleType("PySide6.QtCore")
-    class _QObject: pass
-    class _Signal:
-        def __init__(self, *a, **kw): pass
-        def connect(self, *a, **kw): pass
-        def emit(self, *a, **kw): pass
-    pyside.QtCore.QObject = _QObject
-    pyside.QtCore.Signal = _Signal
-    pyside.QtCore.Slot = lambda *a, **kw: (lambda f: f)
-    pyside.QtCore.QMetaMethod = object
-    sys.modules["PySide6"] = pyside
-    sys.modules["PySide6.QtCore"] = pyside.QtCore
-from services.run_service import normalize_blocks, norm_level, RunTracer, USER_SCOPED_BLOCKS, STANDALONE_NICK, RETIRED_BLOCK_KEYS
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+
+from services.run import RunProgress  # noqa: E402
+from services.run_service import (  # noqa: E402
+    STANDALONE_NICK, USER_SCOPED_BLOCKS, RETIRED_BLOCK_KEYS,
+    RunCoordinator, RunTracer, norm_level, normalize_blocks,
+)
 
 
 class TestRunServicePaths(unittest.TestCase):
@@ -83,6 +78,58 @@ class TestRunServicePaths(unittest.TestCase):
                 line = f.readline()
                 self.assertIn("test-123", line)
                 self.assertIn("step", line)
+
+
+class TestRunCoordinatorLoadStack(unittest.TestCase):
+    """P0-1 pin: load_stack must resolve registered action classes."""
+
+    def _engine(self):
+        return RunCoordinator(cdp=None, memory=None, criteria=None)
+
+    def test_load_stack_instantiates_registered_block(self):
+        engine = self._engine()
+        engine.load_stack([{"block_id": "PAUSE", "id": "A", "pause_ms": 1}])
+        stack = engine.get_stack()
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack[0]["block_id"], "PAUSE")
+        self.assertEqual(stack[0]["pause_ms"], 1)
+        self.assertIsInstance(engine._stack[0], object)
+
+    def test_load_stack_drops_unknown_and_garbage(self):
+        engine = self._engine()
+        engine.load_stack([
+            {"block_id": "NOT_A_REAL_BLOCK"},
+            {"block_id": "PAUSE", "pause_ms": 1},
+            "garbage",
+            None,
+            {"block_id": "PAUSE", "enabled": False, "pause_ms": 2},
+        ])
+        stack = engine.get_stack()
+        self.assertEqual(len(stack), 2, "unknown ids and non-dicts are dropped")
+        self.assertEqual([s["enabled"] for s in stack], [True, False])
+
+    def test_load_stack_clears_previous_stack(self):
+        engine = self._engine()
+        engine.load_stack([{"block_id": "PAUSE"}])
+        engine.load_stack([])
+        self.assertEqual(engine.get_stack(), [])
+
+
+class TestRunProgressUserRecord(unittest.TestCase):
+    """P0-2 pin: UserRecord must be importable/constructible at runtime."""
+
+    def test_user_record_is_importable_from_progress(self):
+        from services.run.progress import UserRecord
+
+        rec = UserRecord(nick="wheel")
+        self.assertEqual(rec.nick, "wheel")
+        self.assertFalse(rec.messaged)
+
+    def test_run_progress_is_usable_without_a_bus_until_emitted(self):
+        progress = RunProgress()
+        self.assertEqual(progress.total, 0)
+        progress.extend_total(2)
+        self.assertEqual(progress.total, 2)
 
 
 if __name__ == "__main__":
