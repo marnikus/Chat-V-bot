@@ -1,20 +1,37 @@
-"""Person labels: custom coloured tags stored in the ONE settings file.
+"""Person labels: custom coloured tags — ONE world's data, per database.
 
-Labels describe a *person*, and two different windows show them: the People
-list (`chatbot.db` → User Memory) and the Full User Database (`history.db` →
-the archive). Putting the tags in either database would duplicate them, or
-break RULE 14 ("the two stores are joined by nick at read time only"), so
-they live in `config.json` next to every other user-authored setting and are
-merged into each row when it is read.
+Since the unified single-DB redesign (2026-09-08, docs/
+DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md) labels belong to the
+WORLD they were created in: the definitions live in the `labels` table and
+the person→label mapping in `label_assigns` inside the active database file,
+so deleting a database takes its labels with it and loading another one
+shows only that world's tags (no cross-DB leakage).
 
-Shape of the stored section::
+The class keeps a fully SYNCHRONOUS read API because the run queue and the
+engine's label guard call it from non-async code paths:
 
-    "labels": {
+* `LabelStore(config)` — legacy/offline mode: the config.json `labels`
+  section is the store (hand-assembled bridges, unit tests, or a moment
+  before the archive service is up).
+* `LabelStore(config, db, scheduler)` — world mode: `db` is the open
+  `HistoryDB`; every mutation updates the in-memory state immediately and
+  schedules an async write-through to the database (`scheduler(coro)`).
+  `await store.load_from_db(db)` / `await store.switch_db(db)` move the
+  world; `await store.flush_to_db()` empties the dirty queue.
+
+Shape of the in-memory state (same as the old config section, so undo
+snapshots keep working unchanged)::
+
+    {
       "defs":   [{"id": "lbl_1", "name": "Rude", "color": "#ff3b30",
                   "created_at": "2026-09-07T18:22:31"}],
       "assign": {"Angelochenek": ["lbl_1", "lbl_2"]},
-      "filter": {"include": ["lbl_3"], "exclude": ["lbl_1"]}
+      "filter": {"include": ["lbl_3"], "exclude": ["lbl_1"]},
+      "next_id": 4
     }
+
+The include/exclude filter is a per-world setting: it persists in the
+database's `app_settings` table under the key `label_filter`.
 
 Everything is normalised on read: unknown ids, broken colours and duplicate
 names can never reach the UI or crash a panel (AGENT_RULES RULE 13).
@@ -22,8 +39,11 @@ names can never reach the UI or crash a panel (AGENT_RULES RULE 13).
 
 from __future__ import annotations
 
+import asyncio
 import copy
+import json
 import logging
+import os
 import re
 from datetime import datetime
 
@@ -40,6 +60,9 @@ PALETTE = [
 DEFAULT_COLOR = PALETTE[0]
 MAX_NAME = 40
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+#: app_settings key that holds the world's include/exclude label filter.
+FILTER_KEY = "label_filter"
 
 
 def normalize_color(value, fallback: str = DEFAULT_COLOR) -> str:
@@ -72,17 +95,150 @@ class LabelStore:
 
     SECTION = "labels"
 
-    def __init__(self, config):
+    def __init__(self, config, db=None, scheduler=None):
+        """`db`: an open `HistoryDB` (world mode), else config.json mode.
+        `scheduler(coro)`: runs the async write-through (the bridge passes a
+        Qt-loop helper). Mutations are always applied to memory first."""
         self._config = config
+        self._db = db
+        self._scheduler = scheduler
+        self._memory: dict | None = None     # live raw state (world mode)
+        self._dirty = False
 
-    # ── raw section access ───────────────────────────────────────
-    def _raw(self) -> dict:
+    # ── world binding ────────────────────────────────────────────
+    @property
+    def db(self):
+        return self._db
+
+    @property
+    def is_bound(self) -> bool:
+        return self._db is not None
+
+    def set_scheduler(self, scheduler) -> None:
+        self._scheduler = scheduler
+
+    def _initial_state(self) -> dict:
+        return {"defs": [], "assign": {},
+                "filter": {"include": [], "exclude": []}, "next_id": 0}
+
+    def _memory_state(self) -> dict:
+        if self._memory is None:
+            raw = self._raw_config()
+            if isinstance(raw, dict) and raw:
+                self._memory = copy.deepcopy(raw)
+            else:
+                self._memory = self._initial_state()
+        return self._memory
+
+    async def load_from_db(self, db) -> dict:
+        """Read one world's labels out of `db` into memory (the switch path)."""
+        self._db = db
+        self._dirty = False
+        rows = await db.fetchdicts("SELECT id, name, color, created_at "
+                                   "FROM labels ORDER BY rowid")
+        defs = [{"id": str(r["id"]), "name": str(r["name"] or ""),
+                 "color": str(r["color"] or DEFAULT_COLOR),
+                 "created_at": str(r["created_at"] or "")} for r in rows]
+        assign: dict[str, list[str]] = {}
+        known = {d["id"] for d in defs}
+        pairs = await db.fetchall("SELECT nick, label_id FROM label_assigns "
+                                  "ORDER BY rowid")
+        for nick, label_id in pairs:
+            if label_id in known:
+                assign.setdefault(str(nick), []).append(str(label_id))
+        filter_state = {"include": [], "exclude": []}
+        raw_filter = await db.scalar(
+            "SELECT value FROM app_settings WHERE key=?", (FILTER_KEY,), "")
+        if raw_filter:
+            try:
+                data = json.loads(str(raw_filter))
+                if isinstance(data, dict):
+                    filter_state = {"include": [str(i) for i in
+                                                data.get("include") or []],
+                                    "exclude": [str(i) for i in
+                                                data.get("exclude") or []]}
+            except (TypeError, ValueError):
+                pass
+        next_id = int(await db.scalar(
+            "SELECT value FROM schema_meta WHERE key='labels_next_id'", (), 0))
+        self._memory = {"defs": defs, "assign": assign,
+                        "filter": filter_state, "next_id": next_id}
+        return self._normalized()
+
+    async def flush_to_db(self) -> None:
+        """Write the dirty in-memory state into the bound world's tables."""
+        if self._db is None or not self._dirty:
+            return
+        db = self._db
+        data = self._normalized()
+        stamp = datetime.now().isoformat(timespec="seconds")
+        await db.execute("DELETE FROM labels")
+        for label in data["defs"]:
+            await db.execute(
+                "INSERT INTO labels(id, name, color, created_at) "
+                "VALUES(?,?,?,?)",
+                (label["id"], label["name"], label["color"],
+                 label["created_at"]))
+        await db.execute("DELETE FROM label_assigns")
+        for nick, ids in data["assign"].items():
+            for label_id in ids:
+                await db.execute(
+                    "INSERT OR IGNORE INTO label_assigns(nick, label_id) "
+                    "VALUES(?,?)", (nick, label_id))
+        await db.execute(
+            "INSERT INTO app_settings(key, value, updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+            "updated_at=excluded.updated_at",
+            (FILTER_KEY, json.dumps(data["filter"]), stamp))
+        await db.execute(
+            "INSERT INTO schema_meta(key, value) VALUES('labels_next_id',?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (str(int(data["next_id"])),))
+        await db.commit()
+        self._dirty = False
+
+    def _schedule_flush(self) -> None:
+        if self._db is None:
+            return
+        self._dirty = True
+        if self._scheduler is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return                          # flushed on switch/close instead
+        # the scheduler (the bridge) starts the coroutine on the live loop
+        try:
+            self._scheduler(self._guarded_flush())
+        except Exception as exc:            # noqa: BLE001
+            log.warning("cannot schedule label flush: %s", exc)
+
+    async def _guarded_flush(self) -> None:
+        try:
+            await self.flush_to_db()
+        except Exception as exc:            # noqa: BLE001
+            log.warning("label write-through failed: %s", exc)
+
+    # ── raw state access ─────────────────────────────────────────
+    def _raw_config(self) -> dict:
         data = None
         if self._config is not None:
             data = self._config.get(self.SECTION, default=None)
         return data if isinstance(data, dict) else {}
 
+    def _raw(self) -> dict:
+        if self._db is not None:
+            return self._memory_state()
+        data = self._raw_config()
+        if isinstance(data, dict) and data:
+            return data
+        return self._memory_state()
+
     def _write(self, data: dict) -> None:
+        self._memory = copy.deepcopy(data)
+        if self._db is not None:
+            self._schedule_flush()
+            return
         if self._config is None:
             return
         self._config.set(self.SECTION, copy.deepcopy(data))
@@ -153,11 +309,11 @@ class LabelStore:
     def defs(self) -> list[dict]:
         return self._normalized()["defs"]
 
-    def by_id(self, label_id: str) -> dict | None:
+    def by_id(self, label_id) -> dict | None:
         wanted = normalize_id(label_id)
         return next((d for d in self.defs() if d["id"] == wanted), None)
 
-    def by_name(self, name: str) -> dict | None:
+    def by_name(self, name) -> dict | None:
         wanted = normalize_name(name).casefold()
         if not wanted:
             return None

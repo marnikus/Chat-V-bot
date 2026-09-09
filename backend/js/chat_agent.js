@@ -4,8 +4,8 @@
    Page.addScriptToEvaluateOnNewDocument for later navigations). Everything
    expensive happens HERE, in the page, where the DOM is local:
 
-     * complete, unchanged message nodes reuse a cache; incomplete/changed
-       payloads and explicit range refreshes are re-extracted;
+     * every message node is parsed at most once, ever (a node → record
+       cache that is rebuilt — and thereby pruned — on each walk);
      * `state()` ships a summary, never the conversation;
      * `slice(a, b)` ships exactly the range Python asked for;
      * a MutationObserver buffers new lines and pushes a debounced
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var VERSION = 14;
+  var VERSION = 11;
   var HEAD_FPS = 5;         // how many leading fingerprints state() ships
   var TAIL_FPS = 25;        // …and how many trailing ones
   var AUTHOR_MAX = 12;      // distinct nicks reported per direction
@@ -29,10 +29,6 @@
   var PUSH_DEBOUNCE_MS = 120;
   var AUTHOR_SCAN_MAX = 1200;   // per-pane author scan cap (keeps state cheap)
   var SEP = '\u001f';
-  var INSTANCE = String(Date.now()) + '-' + String(Math.random()).slice(2);
-  var epoch = 0;
-  var cachePartner = '';
-  function captureEpoch() { return INSTANCE + ':' + String(epoch); }
 
   if (window.__cvbAgent && window.__cvbAgent.version === VERSION) {
     return window.__cvbAgent.version;
@@ -75,24 +71,12 @@
   /** text of `el` without the text of its child elements (unread badges…) */
   function ownText(el) {
     if (!el) return '';
-    var nodes = el.childNodes;
-    if (nodes) {
-      var direct = '';
-      for (var i = 0; i < nodes.length; i++) {
-        if (nodes[i].nodeType === 3 || nodes[i].nodeType === 4)
-          direct += nodes[i].nodeValue || '';
-      }
-      return clean(direct);
-    }
-    // Minimal DOM adapters expose own text followed by their child text.
-    // Substring replacement corrupts nicknames containing a badge's digits
-    // (Svetik25 + unread 2 must never become Svetik5 + unread 2).
     var text = String(el.textContent || '');
     var kids = el.children || [];
-    var childText = '';
-    for (var j = 0; j < kids.length; j++) childText += String(kids[j].textContent || '');
-    if (childText && text.slice(-childText.length) === childText)
-      text = text.slice(0, -childText.length);
+    for (var i = 0; i < kids.length; i++) {
+      var kid = String(kids[i].textContent || '');
+      if (kid) text = text.replace(kid, '');
+    }
     return clean(text);
   }
   function isAncestor(maybe, node) {
@@ -273,14 +257,14 @@
       }
     }
     var chosen = selectPane(nodes, groups);
+    var sameAsLast = !!(chosen && chosen.pane && chosen.pane === lastPane);
     if (chosen && chosen.pane) {
       lastPane = chosen.pane;
       lastPartner = currentPartner;
     }
     return { pane: chosen ? chosen.pane : null,
              nodes: chosen ? chosen.nodes : nodes,
-             panes: groups.length,
-             source: groups.length === 1 ? 'single-pane' : 'author-match' };
+             panes: groups.length, sameAsLast: sameAsLast };
   }
 
   function containers() {
@@ -304,7 +288,6 @@
 
   var cache = new Map();     // node → parsed fields
   var stats = { parsed: 0, cached: 0, walks: 0 };
-  var contentRevision = 0; // changes INSIDE existing lines, not tail appends
 
   /** The media URL the browser is actually rendering right now.
    *
@@ -317,138 +300,61 @@
                  img.getAttribute('data-src') || '');
   }
 
-  function hasClass(node, name) {
-    return !!(node && node.classList && node.classList.contains(name));
-  }
-
-  function metadata(node) {
-    if (!node || !node.tagName) return false;
-    var tag = String(node.tagName).toLowerCase();
-    if (['svg', 'mat-icon', 'mat-menu', 'script', 'style', 'template',
-         'button', 'input', 'select', 'textarea', 'avatar-item'].indexOf(tag) >= 0) return true;
-    var names = ['from', 'sent-time', 'message-status', 'state-icon',
-                 'additional-icon', 'avatar', 'avatar-wrapper', 'source-indicator',
-                 'message-actions', 'message-menu', 'message-header', 'message-meta', 'message-avatar'];
-    for (var i = 0; i < names.length; i++) if (hasClass(node, names[i])) return true;
-    return !!(node.hidden || (node.style && (node.style.display === 'none' ||
-                                           node.style.visibility === 'hidden')));
-  }
-
-  function insideMetadata(node, scope) {
-    for (var p = node; p && p !== scope; p = p.parentElement) {
-      if (metadata(p)) return true;
-    }
-    return false;
-  }
-
-  /** Payload text only. Never fall back to a container's unfiltered textContent. */
-  function messageText(root, structural) {
-    if (!root) return '';
-    var started = false, separator = false;
-    function bodyText(text) {
-      text = String(text || '');
-      if (structural && !started && !separator) {
-        var trimmed = clean(text);
-        if (['▸', '►', '▶', '>'].indexOf(trimmed) >= 0) {
-          separator = true;
-          return '';
-        }
-        // Some layouts put the separator and body in one text node.
-        if (/^\s*[▸►▶]\s*/.test(text)) {
-          text = text.replace(/^\s*[▸►▶]\s*/, '');
-          separator = true;
-        }
-      }
-      if (clean(text)) started = true;
-      return text;
-    }
-    function visit(node) {
-      if (node.nodeType === 3 || node.nodeType === 4) return bodyText(node.nodeValue);
-      if (node.nodeType === 8 || metadata(node)) return '';
-      var tag = String(node.tagName || '').toLowerCase();
-      if (attachmentContainer(node)) return '';
-      if (tag === 'br') return '\n';
-      if (tag === 'img') {
-        // Emoji belongs to text; attachment alt labels do not.
-        return (!structural || hasClass(node, 'emoji') || hasClass(node, 'emoticon'))
-          ? bodyText(node.getAttribute && node.getAttribute('alt')) : '';
-      }
-      var kids = node.childNodes;
-      var text = '';
-      if (kids) {
-        for (var i = 0; i < kids.length; i++) text += visit(kids[i]);
-      } else {
-        // Small DOM adapters without text-node objects still preserve their
-        // own text and element children; the browser uses childNodes above.
-        text = bodyText(ownText(node));
-        kids = node.children || [];
-        for (var j = 0; j < kids.length; j++) text += visit(kids[j]);
-      }
-      return text + (tag === 'div' || tag === 'p' ? '\n' : '');
-    }
-    return clean(visit(root));
-  }
-
-  function attachmentContainer(node) {
-    return String((node || {}).tagName || '').toLowerCase() === 'app-chat-image' ||
-           hasClass(node, 'image-wrapper');
-  }
-
-  function insideAttachment(node, scope) {
-    for (var p = node; p; p = p.parentElement) {
-      if (attachmentContainer(p)) return true;
-      if (p === scope) break;
-    }
-    return false;
-  }
-
-  function payloadParts(node) {
-    var scope = qs(node, '.message-content') || qs(node, '.message-body') || node;
-    var span = qs(scope, 'span.message') || qs(scope, '.message-text') ||
-               qs(scope, '[data-message-text]');
-    var img = null;
-    var images = qsa(scope, 'img');
-    for (var i = 0; i < images.length; i++) {
-      var candidate = images[i];
-      if (insideMetadata(candidate, scope) ||
-          hasClass(candidate, 'emoji') || hasClass(candidate, 'emoticon')) continue;
-      // Current layouts put real attachments INSIDE .message-text. Only an
-      // inline image outside an attachment component is treated as text/emoji.
-      if (span && isAncestor(span, candidate) && !insideAttachment(candidate, scope)) continue;
-      img = candidate;
-      break;
-    }
-    var hosts = qsa(scope, 'app-chat-image').concat(qsa(scope, '.image-wrapper'));
-    var hasMedia = !!img;
-    for (var j = 0; j < hosts.length && !hasMedia; j++)
-      hasMedia = !insideMetadata(hosts[j], scope);
-    return { scope: scope, text: span, image: img, hasMedia: hasMedia,
-             hasBody: !!(span || qs(scope, 'p.message') || qs(node, '.message-content') ||
-                         qs(node, '.message-body')) };
-  }
-
   function parseNode(node) {
     stats.parsed++;
-    var dir = hasClass(node, 'my-message-background') ? 'out' : 'in';
-    var parts = payloadParts(node);
-    var author = qs(parts.scope, 'span.from') || qs(parts.scope, '.from');
-    var from = clean(ownText(author) || (author || {}).textContent);
-    var text = parts.text ? messageText(parts.text, false) : '';
-    var source = text ? 'payload-element' : 'message-content';
-    if (!text) text = messageText(parts.scope, true);
-    var media = null, kind = 'text';
-    if (parts.hasMedia) {
-      var url = liveMediaUrl(parts.image);
-      kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
-      media = { url: url, kind: kind };
+    var dir = node.classList && node.classList.contains('my-message-background')
+      ? 'out' : 'in';
+    var body = qs(node, 'p.message');
+    var from = '', text = '', kind = 'text', media = null;
+    if (body) {
+      from = clean(ownText(qs(body, 'span.from')) ||
+                   (qs(body, 'span.from') || {}).textContent);
+      var img = qs(body, 'app-chat-image img') || qs(body, 'img');
+      if (img) {
+        var url = liveMediaUrl(img);
+        kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
+        media = { url: url, kind: kind };
+      } else {
+        var span = qs(body, 'span.message');
+        text = clean(span ? span.textContent : '');
+      }
     }
-    var pending = !from || (!text && !(media && media.url)) || !!(media && !media.url);
-    var reason = !pending ? '' : !from ? 'author_pending' : media ? 'media_url_pending' :
-                 !parts.hasBody ? 'body_missing' : 'payload_empty';
     var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
     return { dir: dir, from: from, kind: kind, text: text, media: media,
-             capture_pending: pending, capture_reason: reason, text_source: source,
              time: clean(stamp ? stamp.textContent : '') };
+  }
+
+  /** The parse-relevant fields of a node, re-read cheaply.
+   *
+   * Angular renders a message in passes: the container can exist long
+   * before `span.message` (or the lazy `app-chat-image`) carries its
+   * payload. Caching the first parse would burn `text:''` into the archive
+   * forever — the exact "only nicks, no message text" bug — so every walk
+   * compares these fields against the cache and re-parses on ANY change
+   * (text, nick, time, media url). */
+  function liveFields(node) {
+    var body = qs(node, 'p.message');
+    var img = body ? (qs(body, 'app-chat-image img') || qs(body, 'img'))
+                   : null;
+    var span = body ? qs(body, 'span.message') : null;
+    var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
+    return {
+      from: body ? clean(ownText(qs(body, 'span.from')) ||
+                         (qs(body, 'span.from') || {}).textContent) : '',
+      text: span ? clean(span.textContent) : '',
+      hasMedia: !!img,
+      mediaUrl: img ? liveMediaUrl(img) : '',
+      time: clean(stamp ? stamp.textContent : '')
+    };
+  }
+
+  function fieldsStale(fields, live) {
+    if (!fields) return true;
+    if (fields.from !== live.from || fields.time !== live.time) return true;
+    if (live.hasMedia) {
+      return !fields.media || fields.media.url !== live.mediaUrl;
+    }
+    return !!fields.media || fields.text !== live.text;
   }
 
   function keyOf(fields) {
@@ -458,15 +364,6 @@
 
   /** Parse the whole conversation, reusing the cache; returns records. */
   function walk() {
-    var partner = normNick(describeTab().partner);
-    if (partner !== cachePartner) {
-      cache = new Map();
-      buffer = [];
-      dropped = 0;
-      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-      cachePartner = partner;
-      epoch++;
-    }
     stats.walks++;
     var nodes = containers();
     var next = new Map();
@@ -475,35 +372,37 @@
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       var fields = cache.get(node);
-      var previous = fields;
-      if (fields && (fields.dirty || fields.capture_pending)) fields = null;
-      if (fields) {
-        // a lazy <img> may have gained its real src after the first parse;
-        // do not keep the empty-url record in the cache forever
-        var img = payloadParts(node).image;
-        var liveUrl = liveMediaUrl(img);
-        var cachedUrl = fields.media ? fields.media.url : '';
-        if (liveUrl !== cachedUrl) fields = null;
+      if (fields && fieldsStale(fields, liveFields(node))) {
+        // the node changed after its first parse (lazy media, or the text
+        // span rendered late) — never keep the stale payload-less fields
+        fields = null;
       }
       if (!fields) fields = parseNode(node);
-      if (previous && (keyOf(previous) !== keyOf(fields) || previous.text !== fields.text))
-        contentRevision++;
       next.set(node, fields);
       var key = keyOf(fields);
       var occ = counts[key] === undefined ? 0 : counts[key] + 1;
       counts[key] = occ;
-      if (fields.fp === undefined || fields.occ !== occ) {
+      if (fields.fp === undefined || fields.fpAny === undefined ||
+          fields.occ !== occ) {
         fields.occ = occ;
         fields.fp = fingerprint(fields.dir, fields.from, fields.time,
                                 fields.kind,
                                 fields.media ? fields.media.url : fields.text,
                                 occ);
+        // the same fingerprint WITHOUT the author: a partner renaming
+        // themselves re-renders every line under the new nick, which changes
+        // `fp` for all of them — `fpAny` still matches the conversation the
+        // cursor ended with, so the rename continues the same person
+        fields.fpAny = fingerprint(fields.dir, '', fields.time,
+                                   fields.kind,
+                                   fields.media ? fields.media.url
+                                                : fields.text,
+                                   occ);
       }
-      out.push({ fp: fields.fp, dir: fields.dir, from: fields.from,
+      out.push({ fp: fields.fp, fpAny: fields.fpAny, dir: fields.dir,
+                 from: fields.from,
                  kind: fields.kind, text: fields.text, media: fields.media,
-                 time: fields.time, occ: occ, idx: i, node: node,
-                 capture_pending: fields.capture_pending,
-                 capture_reason: fields.capture_reason, text_source: fields.text_source });
+                 time: fields.time, occ: occ, idx: i, node: node });
     }
     cache = next;                       // rebuilding prunes removed nodes
     stats.cached = cache.size;
@@ -513,10 +412,7 @@
   function strip(record) {
     return { fp: record.fp, dir: record.dir, from: record.from,
              kind: record.kind, text: record.text, media: record.media,
-             time: record.time, occ: record.occ, idx: record.idx,
-             capture_pending: !!record.capture_pending,
-             capture_reason: record.capture_reason || '', text_source: record.text_source || '',
-             capture_epoch: captureEpoch() };
+             time: record.time, occ: record.occ, idx: record.idx };
   }
 
   /** distinct nicks per direction — the private-chat gate reads these */
@@ -543,13 +439,7 @@
   var pushTimer = null;
 
   function bufferRecord(record) {
-    for (var i = 0; i < buffer.length; i++) {
-      if (buffer[i].node === record.node) {
-        buffer[i].record = strip(record);
-        return;
-      }
-    }
-    buffer.push({ node: record.node, record: strip(record) });
+    buffer.push(strip(record));
     while (buffer.length > BUFFER_MAX) { buffer.shift(); dropped++; }
   }
 
@@ -564,21 +454,12 @@
   function sendPush(count, kind) {
     var hook = window.__cvbPush;
     if (typeof hook !== 'function') return;
-    var records = walk();
     var summary = describe();
-    if (!buffer.length) return;
-    var authors = authorsOf(records);
-    // A pending payload can finish rendering during the debounce window.
-    records.forEach(function (record) {
-      for (var b = 0; b < buffer.length; b++) {
-        if (buffer[b].node === record.node) buffer[b].record = strip(record);
-      }
-    });
+    var authors = authorsOf(walk());
     try {
       hook(JSON.stringify({
         kind: kind || 'append',
         agent: VERSION,
-        capture_epoch: captureEpoch(),
         count: count,
         partner: summary.partner,
         title: summary.title,
@@ -589,54 +470,34 @@
         authors: authors.all,
         pending: buffer.length,
         dropped: dropped,
-        items: buffer.slice(-BUFFER_MAX).map(function (b) { return b.record; }),
+        items: buffer.slice(-BUFFER_MAX),
       }));
     } catch (e) { /* the page must never break because we cannot push */ }
   }
 
-  function messageOf(node) {
-    for (var p = node; p; p = p.parentElement || p.parentNode) {
-      if (p.classList && p.classList.contains('message-container')) return p;
-    }
-    return null;
-  }
-
   function onMutations(mutations) {
-    var affected = new Set();
-    var changed = false;
+    var added = [];
     for (var i = 0; i < mutations.length; i++) {
-      var mutation = mutations[i];
-      var owner = messageOf(mutation.target);
-      if (owner) {
-        affected.add(owner);
-        var cached = cache.get(owner);
-        if (cached) cached.dirty = true;
-        changed = true;
-      }
-      var nodes = mutation.addedNodes || [];
+      var nodes = mutations[i].addedNodes || [];
       for (var j = 0; j < nodes.length; j++) {
         var node = nodes[j];
         if (!node || typeof node.querySelectorAll !== 'function') continue;
         if (node.classList && node.classList.contains('message-container')) {
-          affected.add(node);
+          added.push(node);
         } else {
-          qsa(node, 'div.message-container').forEach(function (n) { affected.add(n); });
+          added = added.concat(qsa(node, 'div.message-container'));
         }
       }
-      if ((mutation.removedNodes || []).length) {
-        // Replacing a whole virtualized window can change its middle while
-        // head/tail stay equal. Force a re-read, not an append-only shortcut.
-        contentRevision++;
-        changed = true;
-      }
     }
-    if (!affected.size && !changed) return;
+    if (!added.length) return;
     var records = walk();
-    var tail = !changed;
-    for (var k = 0; k < records.length; k++) {
-      var record = records[k];
-      if (!affected.has(record.node)) continue;
-      if (record.idx < records.length - affected.size) tail = false;
+    var byNode = new Map();
+    for (var k = 0; k < records.length; k++) byNode.set(records[k].node, records[k]);
+    var tail = true;
+    for (var a = 0; a < added.length; a++) {
+      var record = byNode.get(added[a]);
+      if (!record) continue;
+      if (record.idx < records.length - added.length) tail = false;
       bufferRecord(record);
     }
     schedulePush(records.length, tail ? 'append' : 'change');
@@ -647,8 +508,7 @@
     if (!root || typeof MutationObserver !== 'function') return false;
     if (observer) observer.disconnect();
     observer = new MutationObserver(onMutations);
-    observer.observe(root, { childList: true, subtree: true, characterData: true,
-                             attributes: true, attributeFilter: ['src', 'data-src', 'class'] });
+    observer.observe(root, { childList: true, subtree: true });
     observedRoot = root;
     return true;
   }
@@ -690,10 +550,19 @@
     var active = qs(document, '.tab-item.active');
     var tab = 'none', partner = '', title = '';
     if (active) {
-      var icon = qs(active, 'mat-icon.chat-type-icon') || qs(active, 'mat-icon');
+      var icon = qs(active, 'mat-icon.chat-type-icon') ||
+                 qs(active, 'mat-icon');
       var name = icon ? icon.getAttribute('data-mat-icon-name') : '';
-      tab = name === 'user' ? 'private' : 'room';
       title = ownText(qs(active, 'p.chat-title'));
+      /* The main room is the ONLY tab we identify positively, by its own
+       * icon. Every other open tab that names a person in its title IS a
+       * private chat: a partner without an avatar identification (guest,
+       * anonymous, or an icon the page renders late or never) used to be
+       * reported as a room, and the collector refused their chat with
+       * "Not in private tab now" (2026-09-08). Whether this really is a
+       * two-person conversation with me in it is verified from the pane
+       * itself — never from the tab's icon or the partner's avatar. */
+      tab = name === 'room' ? 'room' : (clean(title) ? 'private' : 'none');
       partner = title;
     }
     var mine = qs(document, '.primary-text.bold');
@@ -701,30 +570,40 @@
              me: clean(mine ? mine.textContent : ''), participants: 0 };
   }
 
+  /** The pane's own people, counted without any identification metadata.
+   *
+   * A private pane can render without a readable `.users-counter` —
+   * exactly the identification-free chats this agent must still serve.
+   * Counting DISTINCT user-item nicks (the partner and me) keeps the
+   * "exactly two people" fact available; no avatar class or gender icon
+   * is consulted. */
+  function countPaneUsers(container) {
+    if (!container) return 0;
+    var items = qsa(container, 'user-item'), seen = {}, n = 0;
+    for (var i = 0; i < items.length; i++) {
+      var el = qs(items[i], '.primary-text');
+      var nick = normNick(el ? el.textContent : '');
+      if (!nick || seen[nick]) continue;
+      seen[nick] = 1;
+      n += 1;
+    }
+    return n;
+  }
+
   function describePane(pane) {
     var base = describeTab();
     var container = containerOf(pane);
     var counter = container ? qs(container, '.users-counter') : null;
-    var lists = container ? qsa(container, 'users-list') : [];
-    var rosterRoot = lists.length === 1 ? lists[0] : null;
-    var names = [], own = [];
-    qsa(rosterRoot, 'user-item .primary-text').forEach(function (node) {
-      var name = clean(ownText(node) || node.textContent);
-      if (!name) return;
-      names.push(name);
-      if (hasClass(node, 'bold')) own.push(name);
-    });
-    names = distinctNicks(names);
-    own = distinctNicks(own);
-    var scoped = own.length === 1 && names.indexOf(own[0]) >= 0;
-    var fallback = container ? qs(container, '.primary-text.bold') : null;
-    fallback = fallback || qs(document, '.primary-text.bold');
+    var mine = container ? qs(container, '.primary-text.bold') : null;
+    var globalMine = qs(document, '.primary-text.bold');
+    var count = counter ? num(clean(counter.textContent)) : 0;
     return {
-      tab: base.tab, partner: base.partner, title: base.title,
-      me: scoped ? own[0] : clean(fallback ? fallback.textContent : ''),
-      me_source: scoped ? 'pane_roster' : 'global_fallback',
-      participant_nicks: names,
-      participants: counter ? num(clean(counter.textContent)) : 0,
+      tab: base.tab,
+      partner: base.partner,
+      title: base.title,
+      me: clean(mine ? mine.textContent :
+                (globalMine ? globalMine.textContent : '')),
+      participants: count > 0 ? count : countPaneUsers(container),
     };
   }
 
@@ -856,96 +735,55 @@
     }
     var records = walk();
     var fps = records.map(function (r) { return r.fp; });
+    var anyFps = records.map(function (r) { return r.fpAny || ''; });
     var summary = describe();
     var authors = authorsOf(records);
-    var issues = {}, sources = {};
-    records.forEach(function (r) {
-      if (r.capture_reason) issues[r.capture_reason] = (issues[r.capture_reason] || 0) + 1;
-      sources[r.text_source] = (sources[r.text_source] || 0) + 1;
-    });
     var pv = visiblePane();
     return {
       ok: true,
       agent: VERSION,
-      capture_epoch: captureEpoch(),
       tab: summary.tab,
       partner: summary.partner,
       title: summary.title,
       me: summary.me,
-      me_source: summary.me_source,
-      participant_nicks: summary.participant_nicks,
       participants: summary.participants,
       count: records.length,
-      incomplete: records.filter(function (r) { return r.capture_pending; }).length,
-      capture_issues: issues,
-      text_sources: sources,
-      content_revision: contentRevision,
-      content_sig: hex8(fnv1a(fps.join(SEP), 0x811c9dc5)),
       authors: authors.all,
       in_authors: authors.inbound,
       out_authors: authors.outbound,
       panes: pv.panes,
       pane_source: pv.source || '',
+      pane_same: !!pv.sameAsLast,
       head: fps.slice(0, HEAD_FPS),
       tail: fps.slice(Math.max(0, fps.length - TAIL_FPS)),
+      head_any: anyFps.slice(0, HEAD_FPS),
+      tail_any: anyFps.slice(Math.max(0, anyFps.length - TAIL_FPS)),
       pending: buffer.length,
       dropped: dropped,
       scroll: scrollInfo(),
     };
   }
 
-  function slice(from, to, refresh) {
+  function slice(from, to) {
     reattach();
-    if (refresh) {
-      var nodes = containers();
-      for (var i = Math.max(0, num(from)); i < Math.min(nodes.length, num(to)); i++) {
-        var fields = cache.get(nodes[i]);
-        if (fields) fields.dirty = true;
-      }
-    }
     var records = walk();
     var a = Math.max(0, Math.min(records.length, num(from)));
     var b = Math.max(a, Math.min(records.length, num(to)));
     return { ok: true, from: a, to: b, count: records.length,
-             agent: VERSION, capture_epoch: captureEpoch(), items: records.slice(a, b).map(strip) };
+             items: records.slice(a, b).map(strip) };
   }
 
   function drain() {
-    var items = buffer.map(function (b) { return b.record; });
+    var items = buffer;
     var lost = dropped;
     buffer = [];
     dropped = 0;
     return { ok: true, items: items, dropped: lost };
   }
 
-  function reset(nick) {
-    var target = normNick(nick);
-    var active = normNick(describeTab().partner);
-    // Parsed-node caching is only an optimization. Evicting it cannot lose
-    // another person's buffered messages or change their database cursor.
-    cache = new Map();
-    stats.cached = 0;
-    if (!target || target === active || target === cachePartner) {
-      buffer = [];
-      dropped = 0;
-      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-      contentRevision = 0;
-      stats.parsed = 0;
-      stats.walks = 0;
-      lastBeforeTops = [];
-      lastPane = null;
-      lastPartner = '';
-      cachePartner = active;
-      epoch++;
-      return { ok: true, reset: true, capture_epoch: captureEpoch() };
-    }
-    return { ok: true, reset: false, capture_epoch: captureEpoch() };
-  }
-
   var agent = {
     version: VERSION,
     state: state,
-    reset: reset,
     slice: slice,
     drain: drain,
     fingerprint: fingerprint,

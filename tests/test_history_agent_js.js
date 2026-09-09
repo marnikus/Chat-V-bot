@@ -140,6 +140,48 @@ t('a room tab is reported as such', () => {
   eq(s.participants, 17);
 });
 
+// ── identification-free private chats (2026-09-08) ───────────────
+// A partner without avatar/gender identification must never make the
+// collector refuse an open private chat: only the room is identified
+// positively, by its own icon. Everything else with a nick in the title
+// is a private-chat candidate; "two people, one is me" is verified from
+// the pane, not from the icon.
+
+t('a private tab with a foreign icon is still a private chat', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  const icon = env.document.querySelectorAll('.tab-item')[1]
+                   .querySelector('mat-icon.chat-type-icon');
+  icon.setAttribute('data-mat-icon-name', 'anonymous');
+  const s = env.agent.state();
+  eq(s.tab, 'private');
+  eq(s.partner, 'На работе 25');
+});
+
+t('a private tab with NO icon at all is still a private chat', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  const tab = env.document.querySelectorAll('.tab-item')[1];
+  tab.remove(tab.querySelector('mat-icon.chat-type-icon'));
+  eq(env.agent.state().tab, 'private');
+});
+
+t('participants fall back to the pane user list without a counter', () => {
+  const env = load({ partner: 'На работе 25', me: 'HiHoney',
+                     messages: many(2) });
+  env.document.querySelector('.users-counter').textContent = '';
+  eq(env.agent.state().participants, 2);
+});
+
+t('an icon-less tab with no title is not a private chat', () => {
+  const env = load({ partner: 'На работе 25', messages: many(2) });
+  const tab = env.document.querySelectorAll('.tab-item')[1];
+  tab.querySelector('p.chat-title').textContent = '';
+  tab.querySelector('mat-icon.chat-type-icon')
+     .setAttribute('data-mat-icon-name', 'anonymous');
+  eq(env.agent.state().tab, 'none');
+});
+
 t('switching tabs changes the reported partner', () => {
   const env = load({ messages: many(2) });
   eq(env.agent.state().tab, 'private');
@@ -637,6 +679,89 @@ t('v14 replaces the old v13 attachment parser rather than reusing it', () => {
 });
 
 // ── reporting ────────────────────────────────────────────────────
+
+// ── late-rendering payloads (bug report of 2026-09-08, Bug 2) ────
+// Angular renders a message in passes: the container node can exist long
+// before its `span.message` (or its lazy image) carries a payload. The
+// cached first parse must never burn text:'' into the archive forever.
+//
+// stub node path: messagesRoot → wrapper div → .message-container
+//   → .message-content → p.message → [icons, span.from, arrow, span.message]
+
+function bodyOf(env, i) {
+  return env.messagesRoot.children[i].children[0].children[1].children[0];
+}
+
+function fakeNode(tag, attrs) {
+  return {
+    tagName: String(tag).toUpperCase(), className: '', children: [],
+    textContent: '', parentElement: null,
+    classList: { contains: () => false },
+    getAttribute: (n) => ((attrs || {})[n] != null ? attrs[n] : null),
+    querySelector: () => null, querySelectorAll: () => [],
+  };
+}
+
+t('a text span that renders after the first parse is re-parsed', () => {
+  const env = load({ messages: [] });
+  env.append({ dir: 'in', from: 'Nick', text: '', time: '17:31' });
+  const empty = env.agent.slice(0, 1).items[0];
+  eq(empty.text, '', 'the too-early parse sees no text');
+  // Angular fills the text span of the SAME node afterwards
+  bodyOf(env, 0).children[3].textContent = 'привет';
+  const again = env.agent.slice(0, 1).items[0];
+  eq(again.text, 'привет',
+     'the cache must invalidate when the text arrives late');
+});
+
+t('a media url that renders after the first parse is re-parsed', () => {
+  const env = load({ messages: [] });
+  env.append({ dir: 'in', from: 'Nick', text: '', time: '17:32' });
+  const empty = env.agent.slice(0, 1).items[0];
+  ok(!empty.media, 'no url yet');
+  // the app-chat-image + lazy img render into the same node afterwards
+  const body = bodyOf(env, 0);
+  body.children.pop();                 // remove the empty span.message
+  const wrap = fakeNode('app-chat-image');
+  wrap.querySelector = (sel) =>
+    (String(sel).indexOf('img') >= 0 ? wrap.children[0] : null);
+  const img = fakeNode('img', { src: 'https://x/y.gif' });
+  wrap.parentElement = body;
+  body.children.push(wrap);
+  img.parentElement = wrap;
+  wrap.children.push(img);
+  const again = env.agent.slice(0, 1).items[0];
+  ok(again.media && again.media.url === 'https://x/y.gif',
+     'the cache must invalidate when the url arrives late');
+});
+
+t('state() ships author-agnostic fingerprints for the rename check', () => {
+  const env = load({ messages: many(3) });
+  const s = env.agent.state();
+  eq(s.head_any.length, s.head.length, 'head_any mirrors head');
+  eq(s.tail_any.length, s.tail.length, 'tail_any mirrors tail');
+  // a partner rename re-renders every line under the new nick: every fp
+  // changes, fpAny (the fingerprint without the author) does not
+  const beforeAny = env.agent.state().tail_any.slice();
+  const beforeFp = env.agent.state().tail.slice();
+  env.messagesRoot.children.forEach((node) => {
+    node.children[0].children[1].children[0].children[1].textContent =
+      'Svetochka';
+  });
+  env.agent.state();                   // re-parses the renamed nodes
+  eq(JSON.stringify(env.agent.state().tail_any), JSON.stringify(beforeAny),
+     'the same words at the same time keep fpAny across a rename');
+  ok(JSON.stringify(env.agent.state().tail) !== JSON.stringify(beforeFp),
+     'the ordinary fp DOES change with the author');
+});
+
+t('a changed nick alone invalidates the cached node', () => {
+  const env = load({ messages: many(2) });
+  env.agent.slice(0, 2);
+  bodyOf(env, 0).children[1].textContent = 'Renamed';
+  const item = env.agent.slice(0, 1).items[0];
+  eq(item.from, 'Renamed', 'the record carries the new nick');
+});
 
 console.log('history_agent_js: ' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

@@ -1,15 +1,21 @@
 """The DB Connection window: create / load / delete / clean, and the sizes.
 
-The promises this proves:
+Since the unified single-DB redesign (docs/DB_CREATION_DELETION_REDESIGN_
+DESIGN_2026-09-08.md) the promises this proves are:
 
-  * **nothing is ever unlinked.** "Delete DB" and "Clean DB" move or copy the
-    file into `db_trash/` first, so one Ctrl+Z brings the data back
-    (AGENT_RULES RULE 12);
+  * **delete is permanent.** "Delete DB" unlinks the file (and its
+    `-wal`/`-shm` siblings), removes the world's own media folder, keeps
+    files other worlds still reference, and leaves no "missing" ghost row,
+    no `db_recent` entry and no `db_path` pointing at the gone file.
+  * **the last world cannot be deleted** — refused in the backend, and
+    `list_dbs()` says so via `can_delete`/`delete_hint`.
+  * **clean stays reversible.** "Clean DB" copies the file into
+    `db_trash/` (Ctrl+Z brings the tables back), one entry on the ONE
+    global undo timeline.
   * **the app stays connected.** Switching databases closes the live handle
     and, if the new file cannot be opened, re-opens the previous one;
-  * **the read-out is the truth**: full database size (file + WAL), text size
-    and the images-folder size come from the real files on disk;
-  * every action is one entry on the ONE global undo timeline.
+  * **the read-out is the truth**: full database size (file + WAL), text
+    size and the world's images-folder size come from the real files.
 
 Per AGENT_RULES RULE 8 this drives the REAL HistoryService and the REAL
 Bridge slots against real SQLite files in a temp folder.
@@ -102,6 +108,11 @@ class DbCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
+        # the media root lives INSIDE the temp dir so per-world folders
+        # (saved_media/<stem>) never touch the checkout
+        media_cfg = dict(self.cfg.get("history", "media", default={}) or {})
+        media_cfg["cache_dir"] = os.path.join(self.dir, "saved_media")
+        self.cfg.set("history", "media", media_cfg)
         self.page = ConnectedPage([raw(f"m{i}", idx=i) for i in range(4)])
         self.db_path = os.path.join(self.dir, "history.db")
         self.service = HistoryService(cdp=self.page, config=self.cfg,
@@ -213,15 +224,80 @@ class TestLifecycle(DbCase):
         await self.manager.load(made["path"])
         self.assertEqual(self.cfg.get("history", "db_path"), made["path"])
 
-    async def test_delete_moves_the_file_to_the_trash(self):
+    async def test_delete_permanently_removes_the_file(self):
+        await self.seed()
         made = await self.manager.create("work")
         await self.manager.load(self.db_path)
         result = await self.manager.delete(made["path"])
         self.assertTrue(result["ok"], result.get("error"))
-        self.assertFalse(os.path.exists(made["path"]))
-        self.assertTrue(os.path.exists(result["backup"]),
-                        "the file must survive inside db_trash")
-        self.assertTrue(result["backup"].startswith(self.manager.trash_dir()))
+        for suffix in ("", "-wal", "-shm"):
+            self.assertFalse(os.path.exists(made["path"] + suffix),
+                             "file group member must be unlinked")
+        self.assertNotIn("backup", result,
+                         "permanent delete makes no copy anywhere")
+        # clean break: no ghost in the list, none remembered in the config
+        names = [os.path.basename(i["path"]) for i in self.manager.list_dbs()]
+        self.assertNotIn(os.path.basename(made["path"]), names)
+        self.assertNotIn(made["path"], self.manager.known_paths())
+        # the surviving world is intact and still connected
+        self.assertTrue(self.service.db.is_open)
+        self.assertEqual(await self.messages(), 4)
+
+    async def test_delete_removes_the_worlds_own_media_folder(self):
+        made = await self.manager.create("work")
+        work_folder = self.manager.media_dir(made["path"])
+        os.makedirs(os.path.join(work_folder, "Nick", "images"), exist_ok=True)
+        media_file = os.path.join(work_folder, "Nick", "images", "a.jpg")
+        with open(media_file, "wb") as fh:
+            fh.write(b"image-bytes")
+        await self.manager.load(self.db_path)
+        result = await self.manager.delete(made["path"])
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertFalse(os.path.exists(work_folder),
+                         "the world's media folder must go with it")
+        self.assertGreaterEqual(result.get("media_files_removed", 1), 0)
+        # the media ROW of the world must not be left pointing at a file
+        # that a survivor would show — the file itself is gone too
+        self.assertFalse(os.path.exists(media_file))
+
+    async def _point_active_world_at(self, url: str, shared: str) -> None:
+        """Insert one cached media row in whatever world is connected."""
+        await self.service.db.execute(
+            "INSERT INTO media(url, state, cache_path, owner) "
+            "VALUES(?,?,?,?)", (url, "cached", shared, "Nick"))
+        await self.service.db.commit()
+
+    async def test_delete_keeps_a_file_another_world_still_uses(self):
+        # legacy shared layout: worlds A and B name the SAME file; C owns
+        # none of it. Deleting B keeps the file (A still references it);
+        # deleting A removes it (nobody left does).
+        base = self.manager.media_base_dir()
+        shared = os.path.join(base, "shared", "Nick", "images", "a.jpg")
+        os.makedirs(os.path.dirname(shared), exist_ok=True)
+        with open(shared, "wb") as fh:
+            fh.write(b"shared-bytes")
+        world_b = (await self.manager.create("work"))["path"]
+        world_c = (await self.manager.create("other"))["path"]
+        await self.manager.load(self.db_path)           # world A is active
+        await self._point_active_world_at("https://x/a.jpg", shared)
+        await self.manager.load(world_b)                # world B is active
+        await self._point_active_world_at("https://x/a.jpg", shared)
+        # delete the ACTIVE world B — it switches away, the file survives
+        result = await self.manager.delete(world_b)
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertTrue(os.path.exists(shared),
+                        "a file another world references must survive")
+        # delete world A now (active again after the switch) — the last
+        # reference, so the file goes; the app reconnects to world C
+        self.assertEqual(self.manager.active_path(), self.db_path)
+        result = await self.manager.delete(self.db_path)
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertEqual(self.manager.active_path(), world_c)
+        self.assertFalse(os.path.exists(shared),
+                         "no world references it any more")
+        # …and the empty legacy folders are swept away with it
+        self.assertFalse(os.path.isdir(os.path.join(base, "shared")))
+        self.assertTrue(os.path.exists(world_c), "an unrelated world is safe")
 
     async def test_deleting_the_connected_database_reconnects_elsewhere(self):
         await self.seed()
@@ -233,14 +309,17 @@ class TestLifecycle(DbCase):
                         "the app must never end up without a database")
         self.assertNotEqual(self.manager.active_path(), other["path"])
 
-    async def test_a_deleted_database_can_be_restored(self):
+    async def test_a_deleted_database_cannot_come_back(self):
         made = await self.manager.create("work")
         await self.manager.load(self.db_path)
         deleted = await self.manager.delete(made["path"])
-        restored = await self.manager.restore_backup(deleted["backup"],
-                                                     made["path"])
-        self.assertTrue(restored["ok"], restored.get("error"))
-        self.assertTrue(os.path.exists(made["path"]))
+        self.assertTrue(deleted["ok"], deleted.get("error"))
+        self.assertFalse(os.path.exists(made["path"]))
+        # there is no backup to restore — the bytes are gone for good
+        restored = await self.manager.restore_backup("", made["path"])
+        self.assertFalse(restored["ok"])
+        self.assertFalse(os.path.exists(made["path"]),
+                         "permanent delete must not be undoable")
 
     async def test_clean_empties_the_tables_but_keeps_the_file(self):
         await self.seed(count=4)
@@ -352,23 +431,85 @@ class TestDbBridge(DbCase):
         self.assertEqual(await self.messages(), 4,
                          "Ctrl+Z must restore a cleaned database")
 
-    async def test_undoing_a_delete_puts_the_file_back(self):
+    async def test_a_delete_is_not_an_undo_step(self):
+        # permanent delete (D4): the action is NOT recorded on the timeline,
+        # and no amount of Ctrl+Z can bring the world back
         made = await self.manager.create("work")
         await self.manager.load(self.db_path)
+        self.changes.clear()
         self.assertTrue(self.bridge.db_delete(made["path"]))
         await wait_for(self.changes)
         self.assertFalse(os.path.exists(made["path"]))
+        history, index = self.bridge._get_global_history()
+        deletes = [e for e in history
+                   if e.get("kind") == "dbconn"
+                   and e.get("value", {}).get("op") == "delete"]
+        self.assertEqual(deletes, [],
+                         "a permanent delete must not be undoable")
         self.changes.clear()
         self.bridge.undo()
         await wait_for(self.changes)
-        self.assertTrue(os.path.exists(made["path"]),
-                        "Ctrl+Z must bring the database file back")
+        self.assertFalse(os.path.exists(made["path"]),
+                         "Ctrl+Z cannot resurrect a deleted world")
 
     async def test_a_failed_action_is_not_recorded(self):
         self.bridge.db_load(os.path.join(self.dir, "ghost.db"))
         await asyncio.sleep(0.2)
         history, _index = self.bridge._get_global_history()
         self.assertEqual(history, [], "a refused action is not an undo step")
+
+
+class TestLastWorldProtection(DbCase):
+    async def test_the_only_world_cannot_be_deleted(self):
+        # only history.db exists — the backend must refuse
+        result = await self.manager.delete(self.db_path)
+        self.assertFalse(result["ok"])
+        self.assertIn("last database", result["error"])
+        self.assertTrue(os.path.exists(self.db_path),
+                        "the only world must survive a refused delete")
+        self.assertTrue(self.service.db.is_open, "still connected")
+
+    async def test_the_list_marks_the_last_world_undeletable(self):
+        items = self.manager.list_dbs()
+        self.assertEqual(len(items), 1)
+        self.assertFalse(items[0]["can_delete"])
+        self.assertIn("Create a new database", items[0]["delete_hint"])
+        # a second world makes every world deletable again
+        await self.manager.create("work")
+        items = self.manager.list_dbs()
+        self.assertTrue(all(i["can_delete"] for i in items))
+
+    async def test_the_user_creates_then_deletes(self):
+        # the flow the UI guides: create first, then the old one may go
+        made = await self.manager.create("work")
+        self.assertTrue(os.path.exists(self.db_path))
+        result = await self.manager.delete(self.db_path)
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertFalse(os.path.exists(self.db_path))
+        self.assertEqual(self.manager.active_path(), made["path"],
+                         "the app lives on in the new world")
+
+
+class TestNoMissingWorlds(DbCase):
+    async def test_a_gone_file_is_pruned_from_the_remember_list(self):
+        made = await self.manager.create("work")
+        self.assertIn(made["path"], self.manager.known_paths())
+        await self.manager.load(self.db_path)
+        # simulate the file vanishing outside the app (user deleted it)
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(made["path"] + suffix):
+                os.unlink(made["path"] + suffix)
+        items = self.manager.list_dbs()
+        self.assertEqual([i["name"] for i in items], ["history.db"],
+                         "no ghost row may survive a vanished file")
+        self.assertEqual(self.manager.known_paths(),
+                         [self.db_path], "the remember list is pruned")
+
+    async def test_the_list_never_reports_a_missing_entry(self):
+        items = self.manager.list_dbs()
+        self.assertTrue(items)
+        self.assertTrue(all(i["exists"] for i in items),
+                        "every listed world exists on disk")
 
 
 class TestUiWiring(unittest.TestCase):
@@ -399,6 +540,16 @@ class TestUiWiring(unittest.TestCase):
     def test_destructive_actions_are_confirmed_and_explained(self):
         self.assertIn("PresetsUI.confirm", self.js)
         self.assertIn("db_trash", self.js)
+        # delete is PERMANENT — the dialog says so
+        self.assertIn("Delete database PERMANENTLY?", self.js)
+        self.assertIn("Ctrl+Z will NOT bring it", self.js)
+
+    def test_the_last_worlds_delete_button_is_disabled(self):
+        # the backend's can_delete flag drives the button; the tooltip is
+        # the backend's hint (D5 of the design)
+        self.assertIn("can_delete === false", self.js)
+        self.assertIn("delete_hint", self.js)
+        self.assertIn("Create a new database before deleting", self.js)
 
 
 if __name__ == "__main__":

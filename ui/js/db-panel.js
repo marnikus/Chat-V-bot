@@ -4,9 +4,19 @@
    Create · Load · Delete · Clean the message-history database, plus a
    live size read-out (whole database, text only, images folder).
 
-   Nothing here destroys data: delete and clean move the file into
-   db_trash/ first, so a single Ctrl+Z brings the database back — the
-   backend records every action on the one global undo timeline.
+   One database file = one complete world (unified single-DB redesign):
+   its messages, people queue, labels, undo history, radar state and its
+   OWN media folder all live with it.
+
+   Delete is PERMANENT — the world's file and media are removed, nothing
+   is copied anywhere, there is no Ctrl+Z for it. The backend refuses to
+   delete the last remaining database; this window mirrors that by
+   disabling the button with a tooltip. Clean stays reversible (the file
+   backup + the world's media folder go to db_trash).
+
+   After a create/load/delete the app restarts the whole world (caches,
+   counters, people list, labels, undo timeline) — the db_changed signal
+   carries `switched: true` and every window drops its cached data.
 
    createElement/textContent only; a file name is user text.
    ═══════════════════════════════════════════════════════════════ */
@@ -23,6 +33,8 @@ const DbPanel = {
   _seq: 0,
   _pending: '',
 
+  _notice: '',
+
   init() {
     if (this._wired) return;
     this._wired = true;
@@ -32,7 +44,6 @@ const DbPanel = {
       active: $('dbActivePath'),
       stats: $('dbStatsGrid'),
       list: $('dbFileList'),
-      folderHint: $('dbFolderHint'),
       nameInput: $('dbNewNameInput'),
       createBtn: $('dbCreateBtn'),
       cleanBtn: $('dbCleanBtn'),
@@ -64,7 +75,6 @@ const DbPanel = {
 
   /** Ask for fresh sizes + the file list. */
   refresh() {
-    if (this.busy) return;
     const bridge = this._bridge('db_info');
     if (!bridge) { this.render(); return; }
     this._seq += 1;
@@ -75,7 +85,6 @@ const DbPanel = {
 
   /** db_info_ready(req_id, json) */
   onInfo(reqId, json) {
-    if (this.busy) return; // pre-operation measurements cannot re-enable controls
     if (this._pending && reqId && reqId !== this._pending) return;
     let payload = json;
     if (typeof json === 'string') {
@@ -83,13 +92,15 @@ const DbPanel = {
     }
     if (!payload) return;
     this.info = payload;
-    if (Array.isArray(payload.items)) this.items = this.visibleItems(payload.items);
-    this.activePath = payload.path || payload.db_path || payload.active_path || this.activePath;
-    // Keep completion/error notices; only clear a progress line.
-    if (payload.error || payload.inventory_error)
-      this.setStatus('⚠ ' + (payload.error || payload.inventory_error), true);
-    else if (this._els.status && this._els.status.textContent === 'Measuring database…')
-      this.setStatus('');
+    this.items = Array.isArray(payload.items) ? payload.items : [];
+    this.activePath = payload.path || payload.db_path || this.activePath;
+    this.busy = false;
+    // Keep a reported failure on screen; only clear a progress line — a
+    // switch notice ("fresh world loaded") stays until the next action.
+    if (!this._els.status || !this._els.status.classList.contains('error')) {
+      if (this._notice) this.setStatus(this._notice, false);
+      else this.setStatus('');
+    }
     this.render();
   },
 
@@ -100,32 +111,23 @@ const DbPanel = {
       try { payload = JSON.parse(json); } catch (e) { payload = null; }
     }
     this.busy = false;
-    this._pending = 'change-' + (++this._seq); // invalidate even without a bridge
-    if (payload && Array.isArray(payload.items))
-      this.items = this.visibleItems(payload.items); // errors carry real conflicts too
-    if (payload && payload.inventory_folder)
-      this.info = Object.assign({}, this.info || {}, { inventory_folder: payload.inventory_folder });
-    if (payload && payload.ok) {
-      if (payload.active_path || payload.path_after)
-        this.activePath = payload.active_path || payload.path_after;
-      if (payload.op === 'delete' && !Array.isArray(payload.items))
-        this.items = this.items.filter((item) => item.path !== payload.path);
+    if (payload && payload.error) {
+      this._notice = '';
+      this.refresh();
+      // After refresh(), so the "measuring…" line cannot bury the failure.
+      this.setStatus('⚠ ' + payload.error, true);
+      return;
     }
-    this.render();
+    if (payload && payload.switched) {
+      // Stash BEFORE refresh(): the incoming db_info_ready would clear a
+      // plain progress line, but a notice set here survives the re-measure.
+      const name = payload.path ? this.baseName(payload.path) : '';
+      this._notice = 'Fresh world “' + name +
+        '” loaded — all caches cleared';
+    } else {
+      this._notice = '';
+    }
     this.refresh();
-    // After refresh(), so the measuring line cannot bury the result.
-    if (payload && payload.error) this.setStatus('⚠ ' + payload.error, true);
-    else if (payload && payload.ok && payload.op === 'create')
-      this.setStatus('Created ' + this.baseName(payload.path) +
-        '. Click Load to connect. The active database is unchanged.');
-  },
-
-  onError(scope, message) {
-    if (!String(scope || '').startsWith('db_')) return;
-    this.busy = false;
-    this._pending = 'error-' + (++this._seq);
-    this.setStatus('⚠ ' + message, true);
-    this.render();
   },
 
   setStatus(text, isError) {
@@ -134,27 +136,8 @@ const DbPanel = {
     this._els.status.classList.toggle('error', !!isError);
   },
 
-  visibleItems(items) {
-    return (Array.isArray(items) ? items : []).filter((item) => item && item.path &&
-      !item.protected && (item.exists === true || item.blocking === true ||
-        (item.exists !== false && item.manageable !== false)));
-  },
-
-  manageableItems(items) {
-    return this.visibleItems(items).filter((item) => item.manageable !== false &&
-      item.compatible !== false && item.kind !== 'file');
-  },
-
-  _begin(text) {
-    this.busy = true;
-    this._pending = 'mutation-' + (++this._seq); // invalidate in-flight info
-    this.setStatus(text);
-    this.render();
-  },
-
   // ── actions ─────────────────────────────────────────────────
   create() {
-    if (this.busy) return;
     const input = this._els.nameInput;
     const name = input ? String(input.value || '').trim() : '';
     if (!name) {
@@ -164,80 +147,58 @@ const DbPanel = {
     }
     const bridge = this._bridge('db_create');
     if (!bridge) return;
-    this._begin('Creating “' + name + '”…');
+    this.busy = true;
+    this.setStatus('Creating “' + name + '”…');
     bridge.db_create(name);
     if (input) input.value = '';
   },
 
-  reveal(path) {
-    if (this.busy || !path) return;
-    const item = this.visibleItems(this.items).find((row) => row.path === path);
-    if (!item || item.can_reveal === false) return;
-    const bridge = this._bridge('db_reveal');
-    if (!bridge) {
-      this.setStatus('File reveal is unavailable. Restart the application after updating.', true);
-      return;
-    }
-    // Non-mutating RPC: no _begin(), db_load(), or global undo command.
-    this.setStatus('Opening file location…');
-    const sequence = this._seq;
-    bridge.db_reveal(path, (json) => {
-      let result = json;
-      if (typeof json === 'string') {
-        try { result = JSON.parse(json); } catch (e) { result = null; }
-      }
-      if (this.busy || sequence !== this._seq) return;
-      if (result && result.ok)
-        this.setStatus('File location: ' + (result.reveal_path || item.reveal_path || path));
-      else this.setStatus('⚠ ' + (result && result.error || 'Cannot open the file location.'), true);
-    });
-  },
-
   load(path) {
-    if (this.busy || !path || path === this.activePath) return;
-    const item = this.manageableItems(this.items).find((row) => row.path === path);
-    if (!item || item.can_load === false) return;
+    if (!path || path === this.activePath) return;
     const bridge = this._bridge('db_load');
     if (!bridge) return;
-    this._begin('Connecting to ' + this.baseName(path) + '…');
+    this.busy = true;
+    this.setStatus('Connecting to ' + this.baseName(path) + '…');
     bridge.db_load(path);
   },
 
   remove(path) {
-    if (this.busy || !path) return;
-    const items = this.manageableItems(this.items);
-    const item = items.find((row) => row.path === path);
-    if (!item) return;
-    if (items.length <= 1 || item.can_delete === false) {
-      this.setStatus(item.delete_reason ||
-        'Cannot delete the last database. Create a new one first.', true);
-      return;
-    }
+    if (!path) return;
     const bridge = this._bridge('db_delete');
     if (!bridge) return;
+    const item = this.items.find((i) => i.path === path) || {};
+    if (item.can_delete === false) {
+      // mirrors the backend rule (D5): the last world stays
+      this.setStatus(
+        (item.delete_hint || 'Create a new database before deleting the last one') +
+        '.', true);
+      return;
+    }
     PresetsUI.confirm(
-      'Delete database?',
-      '“' + this.baseName(path) + '” moves to the db_trash folder. ' +
-      'Nothing is erased and Ctrl+Z puts it back.',
-      'Delete', () => {
-        if (this.busy) return;
-        this._begin('Moving ' + this.baseName(path) + ' to db_trash…');
+      'Delete database PERMANENTLY?',
+      '“' + this.baseName(path) + '” is a complete world: its messages, ' +
+      'people, labels, undo history and its images folder will be deleted ' +
+      'for good. Nothing is copied anywhere and Ctrl+Z will NOT bring it ' +
+      'back. Other databases are not touched.',
+      'Delete forever', () => {
+        this.busy = true;
+        this.setStatus('Permanently deleting ' + this.baseName(path) + '…');
         bridge.db_delete(path);
       });
   },
 
   clean() {
-    if (this.busy || !this.activePath) return;
     const bridge = this._bridge('db_clean');
     if (!bridge) return;
     const name = this.baseName(this.activePath) || 'the current database';
     PresetsUI.confirm(
       'Clean database?',
-      'Every message, person and media record in “' + name + '” is removed. ' +
-      'A full backup goes to db_trash first, so Ctrl+Z restores everything.',
+      'Every message, person, queue entry and media record in “' + name +
+      '” is removed. A full backup goes to db_trash first (along with the ' +
+      'world’s images folder), so Ctrl+Z restores everything.',
       'Clean', () => {
-        if (this.busy) return;
-        this._begin('Cleaning ' + name + '…');
+        this.busy = true;
+        this.setStatus('Cleaning ' + name + '…');
         bridge.db_clean();
       });
   },
@@ -268,9 +229,6 @@ const DbPanel = {
     this.renderList();
     if (this._els.cleanBtn)
       this._els.cleanBtn.disabled = !this.activePath || this.busy;
-    ['createBtn', 'refreshBtn', 'nameInput'].forEach((key) => {
-      if (this._els[key]) this._els[key].disabled = this.busy;
-    });
   },
 
   renderActive() {
@@ -338,15 +296,7 @@ const DbPanel = {
     const host = this._els.list;
     if (!host) return;
     const nodes = [];
-    const items = this.visibleItems(this.items);
-    const archives = this.manageableItems(items);
-    if (this._els.folderHint) {
-      const folder = this.info && this.info.inventory_folder ||
-        this.activePath.replace(/[\\/][^\\/]*$/, '');
-      this._els.folderHint.textContent = (folder ? 'Create folder: ' + folder + '. ' : '') +
-        'Click a name to reveal its file. Load connects.';
-    }
-    if (!items.length) {
+    if (!this.items.length) {
       const empty = document.createElement('div');
       empty.className = 'db-empty';
       empty.textContent = this.info
@@ -354,36 +304,18 @@ const DbPanel = {
         : 'Reading the database folder…';
       nodes.push(empty);
     }
-    items.forEach((item) => {
+    this.items.forEach((item) => {
       const row = document.createElement('div');
-      const manageable = archives.includes(item);
-      row.className = 'db-row' + (item.active ? ' active' : '') + (!manageable ? ' conflict' : '');
-      row.dataset.path = item.path;
-      const file = document.createElement('div');
-      file.className = 'db-row-file';
-      const name = document.createElement('button');
-      name.type = 'button';
+      row.className = 'db-row' + (item.active ? ' active' : '') +
+        (item.exists === false ? ' missing' : '');
+      const name = document.createElement('span');
       name.className = 'db-row-name';
       name.textContent = item.name || this.baseName(item.path);
-      name.title = 'Reveal in file manager: ' + (item.reveal_path || item.path);
-      name.disabled = this.busy || item.can_reveal === false;
-      name.addEventListener('click', () => this.reveal(item.path));
-      file.appendChild(name);
-      if (item.detail || !manageable) {
-        const detail = document.createElement('div');
-        detail.className = 'db-row-detail';
-        const label = { empty: 'Empty file', incompatible: 'Incompatible',
-          unavailable: 'Unavailable', sidecars: 'Sidecar files only',
-          not_file: 'Name occupied', alias: 'File alias', broken_link: 'Broken link',
-          legacy: 'Upgrade on Load' }[item.status] || 'Not loadable';
-        detail.textContent = label + (item.detail ? ': ' + item.detail : '');
-        detail.title = item.path + '\n' + detail.textContent;
-        file.appendChild(detail);
-      }
-      row.appendChild(file);
+      name.title = item.path || '';
+      row.appendChild(name);
       const size = document.createElement('span');
       size.className = 'db-row-size';
-      size.textContent = this.bytes(item.bytes);
+      size.textContent = item.exists === false ? 'missing' : this.bytes(item.bytes);
       row.appendChild(size);
       const actions = document.createElement('span');
       actions.className = 'db-row-actions';
@@ -392,35 +324,24 @@ const DbPanel = {
         tag.className = 'db-tag';
         tag.textContent = 'connected';
         actions.appendChild(tag);
-      } else if (manageable && item.can_load !== false) {
+      } else if (item.exists !== false) {
         const load = document.createElement('button');
         load.type = 'button';
         load.className = 'btn-small';
         load.textContent = 'Load';
-        load.title = 'Validate this database, then connect to it';
-        load.disabled = this.busy;
+        load.title = 'Disconnect the current database and connect this one';
         load.addEventListener('click', () => this.load(item.path));
         actions.appendChild(load);
       }
-      if (manageable) {
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'btn-small danger';
-        del.textContent = 'Delete';
-        const last = archives.length <= 1 || item.can_delete === false;
-        del.disabled = this.busy || last;
-        del.title = last ? (item.delete_reason ||
-          'Cannot delete the last database. Create a new one first.')
-          : 'Move this file to db_trash (undoable)';
-        del.addEventListener('click', () => this.remove(item.path));
-        actions.appendChild(del);
-      } else {
-        const tag = document.createElement('span');
-        tag.className = 'db-tag readonly';
-        tag.textContent = 'read-only';
-        tag.title = item.delete_reason || 'Reveal this file to inspect or rename it safely';
-        actions.appendChild(tag);
-      }
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn-small danger';
+      del.textContent = 'Delete';
+      del.disabled = item.exists === false || item.can_delete === false;
+      del.title = item.delete_hint ||
+        'Permanently delete this database and its media';
+      del.addEventListener('click', () => this.remove(item.path));
+      actions.appendChild(del);
       row.appendChild(actions);
       nodes.push(row);
     });

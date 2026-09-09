@@ -32,7 +32,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_db import HistoryDB, SCHEMA, SCHEMA_VERSION  # noqa: E402
+from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 
@@ -81,10 +81,13 @@ class TestSchema(ArchiveCase):
         rows = await self.db.fetchall(
             "SELECT name FROM sqlite_master WHERE type='table'")
         names = {r[0] for r in rows}
+        # v6: one DB = one complete world — the world tables live in the
+        # same file as the archive tables
         for t in ("persons", "messages", "media", "cursors", "gaps",
-                  "schema_meta"):
+                  "schema_meta", "users", "labels", "label_assigns",
+                  "undo_history", "gaze_data", "app_settings"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), SCHEMA_VERSION)
+        self.assertEqual(await self.db.get_meta("schema_version"), "6")
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)
@@ -123,11 +126,6 @@ class TestLegacyMigration(ArchiveCase):
             " session_id TEXT NOT NULL DEFAULT '',"
             " created_at TEXT,"
             " UNIQUE(person_id, fp, day))")
-        # A real v1 archive has all core tables and valid person references;
-        # an isolated legacy `messages` table is an incompatible foreign DB.
-        conn.executescript(SCHEMA)
-        conn.execute("INSERT INTO persons(id,nick,nick_lc) VALUES(1,'Nick','nick')")
-        conn.execute("INSERT INTO schema_meta(key,value) VALUES('schema_version','1')")
         fp0 = fingerprint("in", "Nick", "12:00", "text", "Nice", 0)
         fp1 = fingerprint("in", "Nick", "12:00", "text", "Nice", 1)
         for i, fp in enumerate((fp0, fp1), start=1):
@@ -384,7 +382,7 @@ class TestCountersAndCursor(ArchiveCase):
 class TestLifecycle(ArchiveCase):
     async def test_tombstone_hides_and_restore_brings_back(self):
         await self.repo.append("Nick", convo(3), now=NOW)
-        self.assertTrue(await self.repo.legacy_hide_person("Nick"))
+        self.assertTrue(await self.repo.delete_person("Nick"))
         person = await self.repo.get_person("Nick")
         self.assertIsNotNone(person["deleted_at"])
         rows = await self.db.fetchall("SELECT COUNT(*) FROM messages")

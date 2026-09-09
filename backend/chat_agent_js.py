@@ -15,8 +15,11 @@ import os
 
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
-#: re-installs instead — see backend/collector.py.
-AGENT_VERSION = 14
+#: re-installs instead — see backend/collector.py. v10 (2026-09-08): the
+#: node cache is invalidated whenever ANY parsed field changed live, not
+#: only the media URL — a text span that rendered after the first parse no
+#: longer stays an empty '' forever (Bug 2 of 2026-09-08).
+AGENT_VERSION = 11
 
 AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
                           "chat_agent.js")
@@ -40,11 +43,9 @@ def _args(payload: dict) -> str:
     return "/*ARGS:" + json.dumps(payload, ensure_ascii=False) + "*/"
 
 
-def install_expression(*, force: bool = False) -> str:
+def install_expression() -> str:
     """(Re-)install the agent and return its version number."""
-    reset = ("var old=window.__cvbAgent;if(old&&old.uninstall)old.uninstall();"
-             "delete window.__cvbAgent;") if force else ""
-    return ("/*CVB_INSTALL*/(function(){try{" + reset + agent_source() +
+    return ("/*CVB_INSTALL*/(function(){try{" + agent_source() +
             "}catch(e){return 0;}"
             "return window.__cvbAgent?window.__cvbAgent.version:0;})()")
 
@@ -59,26 +60,15 @@ def state_expression() -> str:
             "reason:String(e)});}})()")
 
 
-def reset_expression(nick=None) -> str:
-    payload = {"nick": nick}
-    return ("/*CVB_RESET_AGENT*/(function(){var a=window.__cvbAgent;"
-            "if(!a||!a.reset)return JSON.stringify({ok:false,reason:'reset unavailable'});"
-            "try{return JSON.stringify(a.reset(" + json.dumps(nick, ensure_ascii=False) + "));}"
-            "catch(e){return JSON.stringify({ok:false,reason:String(e)});}})()" + _args(payload))
-
-
-def slice_expression(start: int, end: int, *, refresh: bool = False) -> str:
+def slice_expression(start: int, end: int) -> str:
     """Exactly the half-open range [start, end) of message records."""
-    payload = {"from": int(start), "to": int(end)}
-    if refresh:
-        payload["refresh"] = True
     return ("/*CVB_SLICE*/(function(){var a=window.__cvbAgent;"
             "if(!a)return JSON.stringify({ok:false,items:[]});"
-            "var p=" + json.dumps(payload) + ";"
-            "try{return JSON.stringify(a.slice(p.from,p.to,!!p.refresh));}"
+            "var p=" + json.dumps({"from": int(start), "to": int(end)}) + ";"
+            "try{return JSON.stringify(a.slice(p.from,p.to));}"
             "catch(e){return JSON.stringify({ok:false,items:[],"
             "error:String(e)});}})()" +
-            _args(payload))
+            _args({"from": int(start), "to": int(end)}))
 
 
 def drain_expression() -> str:

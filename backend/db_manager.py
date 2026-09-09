@@ -1,47 +1,43 @@
-"""Safe lifecycle for chat archives, never the queue or global undo store.
+"""Create / load / delete / clean the archive database — ONE DB = ONE WORLD.
 
-Create is independent of Load. Validated candidates are opened before a live
-swap. Delete/Clean retain SQLite-consistent undo backups in db_trash but no
-missing/trash entries appear in the connection panel.
+Since the unified single-DB redesign (docs/DB_CREATION_DELETION_REDESIGN_
+DESIGN_2026-09-08.md) a database file is a complete, self-contained world
+(messages, people queue, labels, undo, radar state, settings, and its own
+media folder). This module owns the lifecycle rules:
+
+* **delete is permanent.** Deleting a world removes its file, its
+  `-wal`/`-shm` siblings, its media (a reference scan across the other
+  worlds keeps files that two worlds share) and every reference to it.
+  There is no trash copy and no restore — the UI says so before it asks.
+* **the last world cannot be deleted.** The system must always have at
+  least one database; deleting the only remaining one is refused here (the
+  DB window mirrors the decision by disabling its button with a tooltip).
+* **clean break.** After a deletion there are no "missing" ghost rows left
+  in the list, no `db_recent` entry pointing at a file that is gone, no
+  `history.db_path` at a deleted file, and no other world's media row
+  pointing at an unlinked file.
+* **a failed swap leaves the app connected.** Switching databases closes
+  the live connection, and if the new file cannot be opened the previous
+  one is re-opened before the error is reported (fail closed).
+* **Clean DB stays reversible.** Emptying a world's tables is an edit, not
+  a deletion: the file backup goes to `db_trash/` and Ctrl+Z restores it,
+  exactly like every other editable surface (AGENT_RULES RULE 12).
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
-import tempfile
-import uuid
+import shutil
 from datetime import datetime
-from functools import wraps
-from pathlib import Path
-
-import aiosqlite
-
-from backend.archive_lock import ArchiveLock
-from backend.db_inventory import (ALIAS_DATABASE, LAST_DATABASE, SUFFIXES,
-                                  existing_group, group_size, inventory, path_key)
-from backend.db_paths import (PROTECTED_DATABASE, canonical_path, in_trash,
-                              protected_database, same_database)
-from backend.history_db import (HistoryDB, INCOMPATIBLE_SCHEMA, SCHEMA_VERSION,
-                                SchemaError, inspect_archive)
 
 log = logging.getLogger("chatbot")
+
 TRASH_DIR = "db_trash"
+SUFFIXES = ("", "-wal", "-shm")
 _SAFE = re.compile(r"[^0-9A-Za-z._-]+")
-CREATE_SCHEMA_ERROR = "Failed to create database. Schema error."
-
-
-def mutation(method):
-    @wraps(method)
-    async def guarded(self, *args, **kwargs):
-        async with self._mutations:
-            result = await method(self, *args, **kwargs)
-            # A completion/error carries the same inventory as ordinary reads.
-            # The panel need not wait for a separate, potentially stale stats RPC.
-            result.update(self.snapshot())
-            return result
-    return guarded
 
 
 def safe_db_name(name: str) -> str:
@@ -49,9 +45,16 @@ def safe_db_name(name: str) -> str:
     clean = _SAFE.sub("_", str(name or "").strip()).strip("._-")
     if not clean:
         clean = "history"
-    if clean.lower().endswith(".db"):
-        clean = clean[:-3]
-    return clean[:77] + ".db"
+    if not clean.lower().endswith(".db"):
+        clean += ".db"
+    return clean[:80]
+
+
+def db_stem(path: str) -> str:
+    """`work.db` → `work` (the name of the world's media folder)."""
+    stem = os.path.splitext(os.path.basename(str(path or "")))[0]
+    stem = re.sub(r"[^0-9A-Za-z._-]+", "_", stem).strip("._-")
+    return stem or "world"
 
 
 def folder_size(path: str) -> tuple[int, int]:
@@ -71,17 +74,49 @@ def folder_size(path: str) -> tuple[int, int]:
 
 def file_group_size(path: str) -> int:
     """Size of a SQLite file including its WAL siblings."""
-    return group_size(path)
+    total = 0
+    for suffix in SUFFIXES:
+        try:
+            total += os.path.getsize(path + suffix)
+        except OSError:
+            continue
+    return total
+
+
+async def _media_references(path: str) -> set[str]:
+    """Absolute `cache_path` values a world's `media` table points at.
+
+    Read-only, best effort: a world file that cannot be opened (foreign
+    format, locked, corrupt) simply contributes no references — and the
+    caller then keeps the file rather than unlinking something it could
+    not verify (never destroy what you cannot read).
+    """
+    refs: set[str] = set()
+    import aiosqlite
+    try:
+        async with aiosqlite.connect(
+                f"file:{os.path.abspath(path)}?mode=ro", uri=True) as conn:
+            cur = await conn.execute(
+                "SELECT cache_path FROM media "
+                "WHERE state='cached' AND cache_path<>'' AND cache_path IS NOT NULL")
+            for (cache_path,) in await cur.fetchall():
+                text = str(cache_path or "").strip()
+                if text:
+                    refs.add(os.path.abspath(text))
+    except Exception as exc:                         # noqa: BLE001
+        log.debug("no media references readable from %s: %s", path, exc)
+    return refs
 
 
 class DbManager:
+    """Lifecycle + size reporting for the world database files."""
+
     def __init__(self, config=None, service=None, root: str = ""):
         self._config = config
         self._service = service
-        self.root = os.path.abspath(root or os.getcwd())
-        self._mutations = ArchiveLock()
-        self._offline_lock = ArchiveLock()
+        self.root = root or os.getcwd()
 
+    # ── wiring ───────────────────────────────────────────────────
     def attach(self, service) -> None:
         self._service = service
 
@@ -89,126 +124,129 @@ class DbManager:
     def service(self):
         return self._service
 
-    @property
-    def _archive_lock(self):
-        return self.service.db.operation_lock if self.service else self._offline_lock
-
+    # ── paths ────────────────────────────────────────────────────
     def active_path(self) -> str:
-        if self.service is not None:
-            return os.path.abspath(self.service.db.path)
-        stored = self._config.get("history", "db_path", default="history.db") \
-            if self._config is not None else "history.db"
-        stored = stored if isinstance(stored, str) and stored else "history.db"
-        return os.path.abspath(stored if os.path.isabs(stored) else os.path.join(self.root, stored))
+        if self._service is not None:
+            try:
+                return self._service.db.path
+            except Exception:                          # noqa: BLE001
+                pass
+        if self._config is not None:
+            stored = self._config.get("history", "db_path", default="history.db")
+            if isinstance(stored, str) and stored:
+                return stored
+        return "history.db"
 
-    def location(self, name_or_path: str) -> str:
-        """Requested filename, preserving links so existence checks cannot escape it."""
+    def resolve(self, name_or_path: str) -> str:
+        """Absolute-ish path for a user-supplied name (kept inside the app)."""
         text = str(name_or_path or "").strip()
         if not text:
             return ""
-        if os.path.isabs(text):
-            return os.path.abspath(text)
-        if os.sep in text or "/" in text:
-            return os.path.abspath(os.path.join(self.root, text))
-        return os.path.join(os.path.dirname(self.active_path()), safe_db_name(text))
-
-    def resolve(self, name_or_path: str) -> str:
-        path = self.location(name_or_path)
-        return canonical_path(path) if path else ""
+        if os.path.isabs(text) or os.sep in text or "/" in text:
+            return os.path.normpath(text)
+        return os.path.join(os.path.dirname(self.active_path()) or ".",
+                            safe_db_name(text))
 
     def trash_dir(self) -> str:
-        return os.path.join(os.path.dirname(self.active_path()), TRASH_DIR)
+        base = os.path.dirname(os.path.abspath(self.active_path())) or self.root
+        return os.path.join(base, TRASH_DIR)
 
-    def media_dir(self) -> str:
-        if self.service is not None:
-            return self.service.media.cache_dir
-        media = self._config.get("history", "media", default={}) if self._config else {}
-        return str((media or {}).get("cache_dir") or "saved_media")
+    def media_base_dir(self) -> str:
+        """The app-level media root (one folder per world lives inside it)."""
+        if self._service is not None:
+            try:
+                return self._service.media_base_dir()
+            except Exception:                          # noqa: BLE001
+                pass
+        if self._config is not None:
+            media = self._config.get("history", "media", default={}) or {}
+            if isinstance(media, dict):
+                return str(media.get("cache_dir") or "saved_media")
+        return "saved_media"
 
-    def _protected(self, path: str) -> bool:
-        return (protected_database(path, root=self.root,
-                                   memory=getattr(self.service, "memory", None)) or in_trash(path) or
-                any(os.path.basename(p).lower().startswith(".cvb-")
-                    for p in (path, canonical_path(path))))
+    def media_dir(self, path: str = "") -> str:
+        """The world's own media folder: `<media root>/<world stem>/`."""
+        target = path or self.active_path()
+        return os.path.join(self.media_base_dir(), db_stem(target))
 
-    def _eligible(self, path: str) -> bool:
-        return not self._protected(path) and inspect_archive(path, full=True)
-
-    # ── discovery / recent files ─────────────────────────────────
+    # ── listing ──────────────────────────────────────────────────
     def known_paths(self) -> list[str]:
-        raw = self._config.get_state("db_recent", []) if self._config else []
-        return [p for p in raw if isinstance(p, str) and p] if isinstance(raw, list) else []
-
-    def _set_recent(self, paths) -> None:
-        if self._config is not None and self.known_paths() != paths:
-            self._config.set_state(db_recent=paths)
-
-    def _present(self, path: str) -> bool:
-        return not self._protected(path) and bool(existing_group(path))
+        stored = []
+        if self._config is not None:
+            raw = self._config.get_state("db_recent", [])
+            if isinstance(raw, list):
+                stored = [p for p in raw if isinstance(p, str) and p]
+        return stored
 
     def _remember(self, path: str) -> None:
-        paths = [os.path.abspath(path)] + [p for p in self.known_paths()
-                                         if path_key(p) != path_key(path)]
-        self._set_recent([p for p in paths if self._present(p)][:12])
+        if self._config is None or not path:
+            return
+        recent = [p for p in self.known_paths() if p != path]
+        recent.insert(0, path)
+        self._config.set_state(db_recent=recent[:12])
 
-    def _forget(self, path: str) -> None:
-        self._set_recent([p for p in self.known_paths()
-                          if path_key(p) != path_key(path) and self._present(p)])
+    def _prune_remembered(self) -> None:
+        """Drop remembered paths whose file is gone (the "missing" ghosts).
 
-    def list_dbs(self, *, extra=()) -> list[dict]:
-        """All present user-file groups; loadability is a capability, not visibility."""
-        found = inventory(self.active_path(), self.known_paths(),
-                          protected=self._protected, extra=extra)
-        visible = {path_key(item["path"]) for item in found}
-        self._set_recent([p for p in self.known_paths() if path_key(p) in visible])
-        return found
+        `db_recent` is a recall list, not a registry: a file that does not
+        exist on disk must never reach the UI (D3 of the design).
+        """
+        if self._config is None:
+            return
+        stored = self.known_paths()
+        kept = [p for p in stored if os.path.exists(p)]
+        if len(kept) != len(stored):
+            self._config.set_state(db_recent=kept[:12])
 
-    def snapshot(self) -> dict:
-        payload = {"active_path": self.active_path(),
-                   "inventory_folder": os.path.dirname(self.active_path())}
+    def existing_worlds(self) -> list[str]:
+        """Every database file that EXISTS: the folder scan + the active file."""
+        active = self.active_path()
+        folder = os.path.dirname(os.path.abspath(active)) or self.root
+        found: dict[str, str] = {}
         try:
-            payload["items"] = self.list_dbs()
-        except Exception as exc:
-            # Failure to refresh must not turn an already committed operation
-            # into a fake failure or remove its global undo entry.
-            log.warning("database inventory unavailable: %s", exc)
-            payload["inventory_error"] = str(exc)
-        return payload
+            for name in sorted(os.listdir(folder)):
+                if not name.lower().endswith(".db"):
+                    continue
+                path = os.path.join(folder, name)
+                if os.path.isfile(path):
+                    found[os.path.abspath(path)] = path
+        except OSError as exc:
+            log.debug("cannot list databases in %s: %s", folder, exc)
+        if os.path.exists(active):
+            found.setdefault(os.path.abspath(active), active)
+        return [found[key] for key in sorted(found)]
 
-    def _conflict(self, path: str) -> dict | None:
-        items = self.list_dbs(extra=[path])
-        entry = next((i for i in items if path_key(i["path"]) == path_key(path)), None)
-        if entry is None:
-            return None
-        self._remember(path)  # retain external conflicts on the next refresh
-        if entry["main_exists"]:
-            error = f"{entry['name']} already exists. See its entry in Databases."
-        else:
-            names = ", ".join(os.path.basename(p) for p in entry["files"])
-            error = (f"Cannot create {entry['name']}: SQLite sidecar files already exist ({names}). "
-                     "The database file itself is missing. See its entry in Databases.")
-        return {"ok": False, "error": error, "path": path, "conflict": entry,
-                "detail": entry["detail"], "items": items, "active_changed": False}
+    def list_dbs(self) -> list[dict]:
+        """Every `*.db` that exists, with delete eligibility (D3, D5).
 
-    def reveal_target(self, path: str) -> dict:
-        """A visible inventory file, not an arbitrary URL or an implicit Load."""
-        target = self.location(path)
-        item = next((i for i in self.list_dbs() if target and path_key(i["path"]) == path_key(target)), None)
-        if item is None or not item.get("can_reveal"):
-            return {"ok": False, "error": "That database file is no longer in the list. Refresh Databases."}
-        actual = item["reveal_path"]
-        if not os.path.lexists(actual):
-            return {"ok": False, "error": "That file no longer exists. Refresh Databases."}
-        return {"ok": True, "path": item["path"], "reveal_path": actual}
+        No more remembered-but-gone paths: those are pruned before they can
+        render, so the "missing" row is impossible, and `can_delete`/
+        `delete_hint` let the UI mirror the backend's last-world rule.
+        """
+        self._prune_remembered()
+        active = self.active_path()
+        total = len(self.existing_worlds())
+        items = []
+        for path in self.existing_worlds():
+            items.append({
+                "path": path, "name": os.path.basename(path),
+                "bytes": file_group_size(path),
+                "exists": True,
+                "active": os.path.abspath(path) == os.path.abspath(active),
+                "can_delete": total >= 2,
+                "delete_hint": ("Create a new database before deleting the "
+                                "last one" if total < 2 else
+                                "Permanently delete this database and its "
+                                "media"),
+            })
+        items.sort(key=lambda i: (not i["active"], i["name"].lower()))
+        return items
 
+    # ── info ─────────────────────────────────────────────────────
     async def info(self) -> dict:
-        async with self._archive_lock:
-            return await self._info()
-
-    async def _info(self) -> dict:
         """Sizes + counts for the DB Connection window."""
         path = self.active_path()
-        media_dir = self.media_dir()
+        media_dir = self.media_dir(path)
         media_bytes, media_files = folder_size(media_dir)
         payload = {
             "path": path,
@@ -222,7 +260,6 @@ class DbManager:
             "persons": 0, "messages": 0, "messages_hidden": 0, "media": 0,
             "connected": False,
             "trash_dir": self.trash_dir(),
-            **self.snapshot(),
         }
         service = self._service
         if service is None or not getattr(service.db, "is_open", False):
@@ -251,317 +288,325 @@ class DbManager:
         return payload
 
     # ── lifecycle ────────────────────────────────────────────────
-    def _new_db(self, path: str) -> HistoryDB:
-        use_fts = bool(self.service.settings().get("use_fts", True)) if self.service else True
-        return HistoryDB(path, use_fts=use_fts)
-
-    @staticmethod
-    def _stage(folder: str) -> str:
-        fd, path = tempfile.mkstemp(prefix=".cvb-", suffix=".db", dir=folder)
-        os.close(fd)
-        return path
-
-    @staticmethod
-    def _remove_owned(path: str) -> None:
-        if not path:
-            return
-        for suffix in SUFFIXES:
-            try:
-                os.unlink(path + suffix)
-            except FileNotFoundError:
-                pass
-
-    @staticmethod
-    def _publish(stage: str, destination: str) -> None:
-        # Same-folder hardlink is atomic and refuses overwrite even if another
-        # creator wins after the initial existence check (also on NTFS).
-        if existing_group(destination):
-            raise FileExistsError(f"{os.path.basename(destination)} is reserved by existing files")
-        os.link(stage, destination)
-        os.unlink(stage)
-
-    @mutation
     async def create(self, name: str) -> dict:
-        """Initialize an independent file. NEVER touch the active pipeline."""
-        path = self.location(name)
+        """Create an EMPTY world (the full schema) and connect to it.
+
+        The fresh world is seeded with the app-template settings (D9) —
+        nothing is copied from the world being left.
+        """
+        path = self.resolve(name)
         if not path:
             return {"ok": False, "error": "give the database a name"}
-        if self._protected(path):
-            return {"ok": False, "error": PROTECTED_DATABASE}
-        conflict = self._conflict(path)
-        if conflict:
-            return conflict
+        if os.path.exists(path):
+            return {"ok": False, "error": f"{os.path.basename(path)} already exists"}
         before = self.active_path()
-        stage, fresh = "", None
-        phase = "file"
+        folder = os.path.dirname(os.path.abspath(path))
         try:
-            folder = os.path.dirname(path)
             os.makedirs(folder, exist_ok=True)
-            stage = self._stage(folder)
-            fresh = self._new_db(stage)
-            phase = "schema"
-            await fresh.init()
-            await fresh.validate()
-            await fresh.close()  # checkpoint all WAL content before publishing
-            phase = "publish"
-            self._publish(stage, path)
-            self._remember(path)
-            return {"ok": True, "op": "create", "path": path,
-                    "before_path": before, "path_after": before,
-                    "active_changed": False, "schema_version": SCHEMA_VERSION}
-        except Exception as exc:
-            detail = getattr(exc, "detail", str(exc))
-            log.warning("create %s failed (%s): %s", path, phase, detail)
-            if phase == "publish":
-                conflict = self._conflict(path)
-                if conflict:
-                    return conflict
-            error = CREATE_SCHEMA_ERROR if phase == "schema" else str(exc)
-            return {"ok": False, "error": error, "detail": detail}
-        finally:
-            if fresh is not None:
-                await fresh.close()
-            self._remove_owned(stage)
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+        result = await self.load(path, create=True)
+        if result.get("ok"):
+            result["op"] = "create"
+            result["before_path"] = before
+            if self._service is not None:
+                try:
+                    await self._service.seed_app_settings()
+                except Exception as exc:               # noqa: BLE001
+                    log.warning("could not seed settings into %s: %s",
+                                os.path.basename(path), exc)
+        return result
 
-    @mutation
-    async def load(self, path: str) -> dict:
-        requested = self.location(path)
+    async def load(self, path: str, create: bool = False) -> dict:
+        """Switch the running world over to another database file."""
         target = self.resolve(path)
         if not target:
             return {"ok": False, "error": "no database selected"}
-        if self._protected(requested) or self._protected(target):
-            return {"ok": False, "error": PROTECTED_DATABASE}
-        entry = next((i for i in self.list_dbs(extra=[requested])
-                      if path_key(i["path"]) == path_key(requested)), None)
-        if entry and entry["status"] in ("alias", "broken_link"):
-            return {"ok": False, "error": ALIAS_DATABASE}
-        if not os.path.isfile(target):
+        if not create and not os.path.exists(target):
             return {"ok": False, "error": f"{target} does not exist"}
         before = self.active_path()
-        fresh = None
+        if os.path.abspath(target) == os.path.abspath(before) and not create:
+            return {"ok": True, "op": "load", "path": target,
+                    "before_path": before, "unchanged": True}
+        if self._service is None:
+            self._persist_path(target)
+            self._remember(target)
+            return {"ok": True, "op": "load", "path": target,
+                    "before_path": before, "offline": True}
         try:
-            if self.service is not None:
-                await self.service.switch_db(target)
-            else:
-                fresh = self._new_db(target)
-                await fresh.init(allow_create=False)
-                self._persist_path(target)
-        except Exception as exc:
-            detail = getattr(exc, "detail", str(exc))
-            log.warning("load %s refused: %s", target, detail)
-            return {"ok": False, "error": INCOMPATIBLE_SCHEMA, "detail": detail, "path": target}
-        finally:
-            if fresh is not None:
-                await fresh.close()
+            await self._service.switch_db(target)
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("switching to %s failed: %s", target, exc)
+            return {"ok": False, "error": str(exc), "path": target}
+        self._persist_path(target)
         self._remember(target)
-        unchanged = same_database(target, before)
-        return {"ok": True, "op": "load", "path": target, "before_path": before,
-                "path_after": target, "unchanged": unchanged,
-                "active_changed": not unchanged}
+        return {"ok": True, "op": "load", "path": target, "before_path": before}
 
-    @mutation
     async def delete(self, path: str) -> dict:
-        async with self._archive_lock:
-            requested = self.location(path)
-            target = self.resolve(path)
-            if requested and (self._protected(requested) or self._protected(target)):
-                return {"ok": False, "error": PROTECTED_DATABASE}
-            items = self.list_dbs(extra=[requested] if requested else [])
-            entry = next((i for i in items if requested and path_key(i["path"]) == path_key(requested)), None)
-            if entry and entry["status"] in ("alias", "broken_link"):
-                return {"ok": False, "error": ALIAS_DATABASE}
-            if not target or not os.path.isfile(target):
-                if target:
-                    self._forget(target)
-                return {"ok": False, "error": "that database does not exist"}
-            if self._protected(target):
-                return {"ok": False, "error": PROTECTED_DATABASE}
-            if not self._eligible(target):
-                return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
-            before = self.active_path()
-            was_active = same_database(target, before)
-            alternatives = [i["path"] for i in items
-                            if i["manageable"] and not same_database(i["path"], target)]
-            if not alternatives:
-                return {"ok": False, "error": LAST_DATABASE}
-            if was_active:
-                for fallback in alternatives:
-                    opened = await self.load(fallback)
-                    if opened.get("ok"):
-                        break
-                else:
-                    return {"ok": False, "error": LAST_DATABASE,
-                            "detail": "No other database passed activation validation."}
-            backup = self._move_to_trash(target)
-            if not backup:
-                if was_active:
-                    await self.load(before)
-                return {"ok": False, "error": "the database file is in use"}
-            self._forget(target)
-            return {"ok": True, "op": "delete", "path": target, "backup": backup,
-                    "was_active": was_active, "before_path": before,
-                    "path_after": self.active_path(), "active_changed": was_active}
+        """PERMANENTLY delete a world (file + media + every reference).
 
-    @mutation
-    async def clean(self) -> dict:
-        if self.service is None:
-            return {"ok": False, "error": "the message archive is not running"}
-        async with self._archive_lock:
-            path = self.active_path()
-            if self._protected(path):
-                return {"ok": False, "error": PROTECTED_DATABASE}
-            db = self.service.db
-            backup = ""
-            removed = {}
+        Rules (D4/D5 of the design): the last remaining world cannot be
+        deleted; deleting the active world switches away first (full world
+        restart); the media footprint is computed from the world's own
+        `media` rows, and a file is unlinked only when no OTHER existing
+        world references it; after the unlink there is nothing left that
+        points at the deleted file.
+        """
+        target = self.resolve(path)
+        if not target or not os.path.exists(target):
+            return {"ok": False, "error": "that database does not exist"}
+        target_abs = os.path.abspath(target)
+        existing = [os.path.abspath(p) for p in self.existing_worlds()]
+        if len(existing) < 2:
+            return {"ok": False,
+                    "error": "cannot delete the last database — create a "
+                             "new one first",
+                    "last_database": True}
+        was_active = target_abs == os.path.abspath(self.active_path())
+        if was_active and self._service is not None:
+            fallback = self._pick_fallback(target)
+            if not fallback:
+                return {"ok": False,
+                        "error": "no other database to switch to"}
+            # the media footprint must be read BEFORE the world closes
+            footprint = await self._world_footprint(target)
+            opened = await self.load(fallback)
+            if not opened.get("ok"):
+                return {"ok": False,
+                        "error": opened.get("error", "cannot switch away"),
+                        "path": target}
+        else:
+            footprint = await self._world_footprint(target)
+        # every connection that still points at the file must go
+        if self._service is not None and \
+                os.path.abspath(self._service.db.path) == target_abs:
             try:
-                await db.validate()
-                await db.commit()
-                backup = await self._copy_to_trash(path, tag="clean")
-                if not backup:
-                    return {"ok": False, "error": "Cannot clean database: backup failed."}
-                await db.execute("BEGIN IMMEDIATE")
-                for table in ("messages", "cursors", "gaps", "media", "persons"):
-                    removed[table] = int(await db.scalar(f"SELECT COUNT(*) FROM {table}"))
-                    await db.execute(f"DELETE FROM {table}")
-                await db.execute("DELETE FROM sqlite_sequence")
-                await db.commit()
-            except BaseException as exc:
-                await db.conn.rollback()
-                if not isinstance(exc, Exception):
-                    raise
-                log.warning("clean failed: %s", getattr(exc, "detail", str(exc)))
-                return {"ok": False, "error": str(exc), "backup": backup}
-            self.service.reset_runtime()
-            # Compaction is optional; failure cannot undo a committed clean.
-            try:
-                await db.execute("VACUUM")
-            except Exception as exc:
-                log.warning("database cleaned, compaction skipped: %s", exc)
-            return {"ok": True, "op": "clean", "path": path, "backup": backup,
-                    "removed": removed, "before_path": path, "active_changed": True}
-
-    @mutation
-    async def restore_backup(self, backup: str, target: str = "", *, activate: bool = False) -> dict:
-        """Validate a snapshot before restoration; inactive restores stay inactive."""
-        source = str(backup or "")
-        requested = self.location(target) or self.active_path()
-        destination = canonical_path(requested)
-        if self._protected(requested) or self._protected(destination):
-            return {"ok": False, "error": PROTECTED_DATABASE}
-        entry = next((i for i in self.list_dbs(extra=[requested])
-                      if path_key(i["path"]) == path_key(requested)), None)
-        if entry and entry["status"] in ("alias", "broken_link"):
-            return {"ok": False, "error": ALIAS_DATABASE}
-        if not source or not os.path.isfile(source):
-            return {"ok": False, "error": "the backup is gone"}
-        if not in_trash(source) or not inspect_archive(source):
-            return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
-        stage, candidate, displaced = "", None, ""
-        async with self._archive_lock:
-            before = self.active_path()
-            active = same_database(destination, before)
-            if os.path.exists(destination) and not self._eligible(destination):
-                return {"ok": False, "error": INCOMPATIBLE_SCHEMA}
-            try:
-                os.makedirs(os.path.dirname(destination), exist_ok=True)
-                stage = self._stage(os.path.dirname(destination))
-                # Old backups can carry WAL siblings. SQLite reads a consistent
-                # snapshot; copying just the main file would lose those rows.
-                reader = await aiosqlite.connect(Path(os.path.abspath(source)).as_uri() + "?mode=ro", uri=True)
-                try:
-                    writer = await aiosqlite.connect(stage)
-                    try:
-                        await reader.backup(writer)
-                    finally:
-                        await writer.close()
-                finally:
-                    await reader.close()
-                candidate = self._new_db(stage)
-                await candidate.init(allow_create=False)
-                if active and self.service is not None:
-                    # SQLite's backup transaction replaces contents atomically,
-                    # with no close/unlink window (important on Windows).
-                    safety = await self._copy_to_trash(destination, tag="restore")
-                    if not safety:
-                        return {"ok": False, "error": "Cannot restore database: backup failed."}
-                    await candidate.conn.backup(self.service.db.conn)
-                    self.service.db.fts_enabled = candidate.fts_enabled
-                    self.service.reset_runtime()
-                else:
-                    await candidate.close()
-                    if os.path.exists(destination):
-                        displaced = self._move_to_trash(destination)
-                        if not displaced:
-                            return {"ok": False, "error": "the database file is in use"}
-                    try:
-                        self._publish(stage, destination)
-                    except BaseException:
-                        if displaced:
-                            self._move_group(displaced, destination)
-                        raise
-                self._remember(destination)
-                if activate and not active:
-                    opened = await self.load(destination)
-                    if not opened.get("ok"):
-                        return opened
-                return {"ok": True, "path": destination, "backup": source,
-                        "before_path": before, "path_after": self.active_path(),
-                        "active_changed": active or activate}
-            except Exception as exc:
-                log.warning("restore failed: %s", getattr(exc, "detail", str(exc)))
+                await self._service.detach_db()
+            except Exception as exc:                   # noqa: BLE001
                 return {"ok": False, "error": str(exc)}
-            finally:
-                if candidate is not None:
-                    await candidate.close()
-                self._remove_owned(stage)
+        if self._service is not None and self._service.memory is not None and \
+                os.path.abspath(getattr(self._service.memory, "db_path", "") or "") \
+                == target_abs:
+            try:
+                await self._service.memory.close()
+            except Exception as exc:                   # noqa: BLE001
+                return {"ok": False, "error": str(exc)}
+        # ── the unlink ──────────────────────────────────────────
+        for suffix in SUFFIXES:
+            try:
+                if os.path.exists(target + suffix):
+                    os.unlink(target + suffix)
+            except OSError as exc:
+                return {"ok": False, "error": f"the database file is in use: {exc}",
+                        "path": target}
+        keep = await self._other_references(existing, except_abs=target_abs)
+        media_removed = await self._delete_world_media(target, footprint, keep)
+        # ── clean break: every reference to the world goes with it ─
+        self._forget(target)
+        if was_active:
+            self._persist_path(self.active_path())
+        return {"ok": True, "op": "delete", "path": target,
+                "was_active": was_active,
+                "before_path": target,
+                "media_files_removed": media_removed}
 
-    # ── backups / config ─────────────────────────────────────────
+    async def _world_footprint(self, path: str) -> set[str]:
+        """The world's media: its own folder + the files its rows name."""
+        footprint: set[str] = set()
+        world_folder = os.path.abspath(self.media_dir(path))
+        base = os.path.abspath(self.media_base_dir())
+        if world_folder == base or world_folder.startswith(base + os.sep):
+            footprint.add(world_folder)
+        for ref in await _media_references(path):
+            if ref == base:
+                continue
+            if ref.startswith(base + os.sep):
+                footprint.add(ref)
+        return footprint
+
+    async def _other_references(self, existing: list[str],
+                                except_abs: str = "") -> set[str]:
+        """What the OTHER existing worlds point at (read-only scan).
+
+        A scan of a world that cannot be read contributes nothing, so the
+        delete proceeds with the conservative rule (a file two worlds share
+        is kept, because we could not verify the other world is free of it).
+        """
+        keep: set[str] = set()
+        for world in existing:
+            if world == except_abs:
+                continue
+            keep |= await _media_references(world)
+        return keep
+
+    async def _delete_world_media(self, path: str, footprint: set[str],
+                                  keep: set[str]) -> int:
+        """Remove the world's media bytes, keeping what others reference."""
+        removed = 0
+        base = os.path.abspath(self.media_base_dir())
+        # 1 — the files the world's rows named (reference scan, D2)
+        for ref in sorted(footprint):
+            if os.path.isdir(ref):
+                continue
+            if not ref.startswith(base + os.sep):
+                continue                     # unknown location — never touch
+            if ref in keep:
+                continue                     # another world still owns it
+            try:
+                if os.path.exists(ref):
+                    os.unlink(ref)
+                    removed += 1
+                    # take away folders the unlink left empty
+                    folder = os.path.dirname(ref)
+                    while folder and folder != base and \
+                            folder.startswith(base + os.sep) and \
+                            not os.listdir(folder):
+                        try:
+                            os.rmdir(folder)
+                        except OSError:
+                            break
+                        folder = os.path.dirname(folder)
+            except OSError as exc:
+                log.debug("cannot remove media file %s: %s", ref, exc)
+        # 2 — the world's own folder (exclusive by construction)
+        world_folder = os.path.abspath(self.media_dir(path))
+        if world_folder.startswith(base + os.sep) and world_folder != base \
+                and os.path.isdir(world_folder):
+            try:
+                shutil.rmtree(world_folder)
+            except OSError as exc:
+                log.warning("cannot remove world media folder %s: %s",
+                            world_folder, exc)
+        return removed
+
+    def _forget(self, path: str) -> None:
+        """Clean break: no reference to the deleted file survives."""
+        self._prune_remembered()
+        if self._config is None:
+            return
+        stored = self._config.get("history", "db_path", default="")
+        if isinstance(stored, str) and \
+                os.path.abspath(stored) == os.path.abspath(path):
+            replacement = self.active_path()
+            if replacement and os.path.exists(replacement) and \
+                    os.path.abspath(replacement) != os.path.abspath(path):
+                history = self._config.get("history", default={}) or {}
+                if not isinstance(history, dict):
+                    history = {}
+                history = dict(history)
+                history["db_path"] = replacement
+                self._config.set("history", history)
+                self._config.save()
+
+    async def clean(self) -> dict:
+        """Empty every table, keeping the file (a backup goes to the trash).
+
+        Unlike delete, clean is an EDIT of one world: the file backup AND
+        the world's own media folder go to `db_trash/`, so Ctrl+Z restores
+        the rows and the bytes are preserved next to the backup.
+        """
+        path = self.active_path()
+        if self._service is None:
+            return {"ok": False, "error": "the message archive is not running"}
+        backup = self._copy_to_trash(path, tag="clean")
+        db = self._service.db
+        removed = {}
+        try:
+            for table in ("messages", "media", "cursors", "gaps", "persons",
+                          "users"):
+                removed[table] = int(await db.scalar(
+                    f"SELECT COUNT(*) FROM {table}", (), 0))
+                await db.execute(f"DELETE FROM {table}")
+            await db.execute("DELETE FROM sqlite_sequence")
+            if db.fts_enabled:
+                try:
+                    await db.execute(
+                        "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+                except Exception:                      # noqa: BLE001
+                    pass
+            await db.commit()
+            await db.execute("VACUUM")
+            await db.commit()
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("clean failed: %s", exc)
+            return {"ok": False, "error": str(exc), "backup": backup}
+        media_moved = ""
+        world_folder = os.path.abspath(self.media_dir(path))
+        base = os.path.abspath(self.media_base_dir())
+        if world_folder.startswith(base + os.sep) and world_folder != base \
+                and os.path.isdir(world_folder):
+            try:
+                media_moved = os.path.join(
+                    self.trash_dir(),
+                    self._stamp("clean_media", db_stem(path)))
+                shutil.move(world_folder, media_moved)
+            except OSError as exc:
+                log.warning("cannot move world media to trash: %s", exc)
+        return {"ok": True, "op": "clean", "path": path, "backup": backup,
+                "removed": removed, "before_path": path,
+                "media_moved": media_moved}
+
+    async def restore_backup(self, backup: str, target: str = "") -> dict:
+        """Put a trashed/backed-up file back (the undo half of clean)."""
+        source = str(backup or "")
+        if not source or not os.path.exists(source):
+            return {"ok": False, "error": "the backup is gone"}
+        destination = self.resolve(target) or self.active_path()
+        active = (os.path.abspath(destination) ==
+                  os.path.abspath(self.active_path()))
+        if active and self._service is not None:
+            try:
+                await self._service.detach_db()
+            except Exception as exc:                   # noqa: BLE001
+                return {"ok": False, "error": str(exc)}
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(destination)) or ".",
+                        exist_ok=True)
+            for suffix in SUFFIXES:
+                if not os.path.exists(source + suffix):
+                    continue
+                shutil.copyfile(source + suffix, destination + suffix)
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+        if self._service is not None:
+            await self._service.switch_db(destination)
+        self._persist_path(destination)
+        self._remember(destination)
+        return {"ok": True, "path": destination, "backup": source}
+
+    # ── helpers ──────────────────────────────────────────────────
     def _persist_path(self, path: str) -> None:
         if self._config is None:
             return
         history = self._config.get("history", default={}) or {}
-        history = dict(history) if isinstance(history, dict) else {}
+        if not isinstance(history, dict):
+            history = {}
+        history = dict(history)
         history["db_path"] = path
         self._config.set("history", history)
         self._config.save()
 
+    def _pick_fallback(self, deleted: str) -> str:
+        """Which database to open after the active one is deleted."""
+        for item in self.list_dbs():
+            if (os.path.abspath(item["path"]) != os.path.abspath(deleted)
+                    and item.get("exists")):
+                return item["path"]
+        return ""
+
     def _stamp(self, tag: str, name: str) -> str:
-        return f"{datetime.now():%Y%m%d-%H%M%S}_{tag}_{uuid.uuid4().hex[:12]}_{name}"
+        return (f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{tag}_{name}")
 
-    @staticmethod
-    def _move_group(source: str, destination: str) -> None:
-        moved = []
-        try:
-            for suffix in SUFFIXES:
-                if os.path.lexists(source + suffix):
-                    os.rename(source + suffix, destination + suffix)
-                    moved.append(suffix)
-        except OSError:
-            for suffix in reversed(moved):
-                os.rename(destination + suffix, source + suffix)
-            raise
-
-    def _move_to_trash(self, path: str) -> str:
+    def _copy_to_trash(self, path: str, tag: str = "backup") -> str:
         trash = self.trash_dir()
         try:
             os.makedirs(trash, exist_ok=True)
-            target = os.path.join(trash, self._stamp("deleted", os.path.basename(path)))
-            self._move_group(path, target)
+            target = os.path.join(trash,
+                                  self._stamp(tag, os.path.basename(path)))
+            for suffix in SUFFIXES:
+                if os.path.exists(path + suffix):
+                    shutil.copyfile(path + suffix, target + suffix)
             return target
         except OSError as exc:
-            log.warning("cannot trash %s: %s", path, exc)
-            return ""
-
-    async def _copy_to_trash(self, path: str, tag: str = "backup") -> str:
-        target = ""
-        try:
-            os.makedirs(self.trash_dir(), exist_ok=True)
-            target = os.path.join(self.trash_dir(), self._stamp(tag, os.path.basename(path)))
-            await self.service.db.backup_to(target)
-            return target
-        except BaseException as exc:
-            self._remove_owned(target)
-            if not isinstance(exc, Exception):
-                raise
             log.warning("cannot back up %s: %s", path, exc)
             return ""
