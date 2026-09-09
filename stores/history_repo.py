@@ -115,12 +115,18 @@ class HistoryRepo:
         if row:
             return int(row[0])
         stamp = datetime.now().isoformat(timespec="seconds")
-        cur = await self.db.execute(
-            "INSERT INTO persons(nick, nick_lc, first_seen, last_seen, "
-            "created_at) VALUES(?,?,?,?,?)",
+        # INSERT OR IGNORE: two overlapping syncs (collector heartbeat vs
+        # a manual Collect press) can both pass the SELECT above; the
+        # loser of the race re-selects the winner's row instead of
+        # crashing on the UNIQUE(nick) constraint.
+        await self.db.execute(
+            "INSERT OR IGNORE INTO persons(nick, nick_lc, first_seen, "
+            "last_seen, created_at) VALUES(?,?,?,?,?)",
             (clean, clean.lower(), stamp, stamp, stamp))
         await self.db.commit()
-        return int(cur.lastrowid)
+        row = await self.db.fetchone("SELECT id FROM persons WHERE nick=?",
+                                     (clean,))
+        return int(row[0])
 
     async def get_person(self, nick: str) -> Optional[dict]:
         row = await self.db.fetchone(

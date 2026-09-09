@@ -23,7 +23,11 @@ def load_json(path: str, default: Any = None) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
+        # UnicodeDecodeError is a ValueError, not an OSError: a file with
+        # invalid bytes (disk corruption, a crash mid-write of an older
+        # version) must degrade to the default exactly like bad JSON —
+        # it used to escape and crash ConfigManager construction.
         log.warning("config read failed for %s (%s) — using default",
                     path, exc)
         return default
