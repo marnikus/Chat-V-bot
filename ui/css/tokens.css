@@ -22,8 +22,8 @@
   --color-red-label: #ff3b30;
   --color-pink-female: #e91e8c;
   --color-blue-male: #4dabf5;
-  --color-bg-hover-danger: var(--color-bg-hover-danger);
-  --color-bg-hover-success: var(--color-bg-hover-success);
+  --color-bg-hover-danger: rgba(239, 68, 68, 0.12);
+  --color-bg-hover-success: rgba(16, 185, 129, 0.12);
   /* legacy hex aliases */
   --hex-ff2d2d: var(--color-red-find);
   --hex-ff9500: var(--color-orange-click);
