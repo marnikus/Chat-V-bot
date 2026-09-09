@@ -138,6 +138,10 @@ class StackBridge(QObject):
         self.ctx.undo.push_stack(blocks)
 
     def _emit_presets(self) -> None:
+        try:
+            self.ctx.presets.load()
+        except Exception:
+            pass
         payload = json.dumps(self.ctx.presets.list_stacks(),
                              ensure_ascii=False)
         self.preset_list_updated.emit(payload)
@@ -192,6 +196,9 @@ class StackBridge(QObject):
     @Slot(result=str)
     def list_stack_presets(self):
         try:
+            # Ensure fresh data from disk — preset save may occur via
+            # another process or bridge instance (BUG #1 visibility fix).
+            self.ctx.presets.load()
             return json.dumps(self.ctx.presets.list_stacks(),
                               ensure_ascii=False)
         except Exception as exc:                        # noqa: BLE001
