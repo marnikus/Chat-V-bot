@@ -148,7 +148,7 @@ class LayoutBridge(QObject):
     def get_app_state(self):
         """Everything the UI needs to restore the last session in one
         payload."""
-        from services.run_service import normalize_blocks
+        from services.run import normalize_blocks
         undo = self.ctx.undo
         history, h_idx = undo.history()
         stack_history, stack_idx = undo.stack_projection()
