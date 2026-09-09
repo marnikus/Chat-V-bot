@@ -206,10 +206,14 @@ class PeopleService:
         entry, or an archive delete that carried the queue row)."""
         rows = [dict(r) for r in (rows or [])]
         try:
-            await self._memory.replace_all(rows)
+            count = await self._memory.replace_all(rows)
         except Exception as exc:                        # noqa: BLE001
             self._log(f"❌ People-list restore failed: {exc}", "error")
             return Err("restore_failed", str(exc))
-        self._log(f"↩ People list restored — {len(rows)} person(s)", "info")
+        # the store reports how many rows actually landed (blank nicks are
+        # skipped there) — report that, not the raw snapshot length
+        count = int(count) if isinstance(count, int) else \
+            sum(1 for r in rows if str(r.get("nick") or "").strip())
+        self._log(f"↩ People list restored — {count} person(s)", "info")
         self._bus.emit(PeopleChanged(reason="restored"))
-        return Ok(len(rows))
+        return Ok(count)
