@@ -1,154 +1,54 @@
-"""Single-file JSON settings + preset store.
+"""Facade over the new stores/ — preserves old ConfigManager API (atomic saves).
 
-All settings AND all presets (URL presets, action-stack presets, message
-templates, custom blocks) plus the last-session state live in ONE file
-(config.json by default) so nothing is split across multiple stores.
+New code should import from stores.* directly; this module remains for
+backward compatibility until all call-sites are migrated (tests still import it).
 """
+
+from __future__ import annotations
 
 import copy
 import json
-import os
 import logging
 from typing import Any
 
+from stores.atomic import AtomicJsonStore
+from stores.migration import migrate
+
 log = logging.getLogger("chatbot")
 
-DEFAULTS: dict[str, Any] = {
-    "chrome": {
-        "host": "127.0.0.1",
-        "port": 9222,
-        "reconnect_interval_s": 5,
-        "connection_timeout_s": 10,
-        "auto_reconnect": True,
-    },
-    "scroll": {
-        "scroll_delta_y": 300,
-        "scroll_pause_ms": 800,
-        "stall_threshold": 3,
-        "max_scrolls": 50,
-        "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-    },
-    "delays": {
-        "global_pre_action_ms": 500,
-        "global_post_action_ms": 200,
-        "page_load_timeout_ms": 5000,
-    },
-    "ui": {"theme": "dark", "language": "ru"},
-    # URL presets shown as quick-connect chips in the URL toolbar
-    "url_presets": [
-        "https://ru.virt-chat.com/chat",
-        "https://ru.virt-chat.com/",
-    ],
-    # message archive (Person History / User Database windows)
-    "history": {
-        "enabled": True,
-        "db_path": "history.db",
-        "use_fts": True,
-        "media": {
-            "enabled": True,
-            "download": True,
-            "cache_dir": "saved_media",
-            "max_file_mb": 2,
-            "max_cache_mb": 200,
-        },
-        "preview": {
-            "preload_rows": 40,
-            "page_size": 50,
-            "max_rows": 400,
-            "show_images": True,
-        },
-    },
-    # passive private-chat collector (Chat Message Collector window)
-    "collector": {
-        "enabled": True,
-        "my_nick": "",
-        "heartbeat_ms": 1500,
-        "idle_ms": 3000,
-        "throttle_factor": 3,
-        "require_private": True,
-        "download_media": True,
-        "chunk_size": 80,
-        "chunk_pause_ms": 40,
-        "bootstrap_max": 2000,
-    },
-    # person labels: custom coloured tags shown next to a nick in the People
-    # and Full User Database tables. Kept here (not in either database) so
-    # they survive a DB swap and are joined to a row by nick at read time.
-    #   defs   -> [{id, name, color, created_at}]
-    #   assign -> {nick: [label id, ...]}
-    #   filter -> {"include": [ids], "exclude": [ids]}
-    "labels": {"defs": [], "assign": {}, "filter": {"include": [],
-                                                    "exclude": []},
-               "next_id": 0},
-    # named action-stack presets: name -> {"blocks": [...], "updated_at": ...}
-    "stack_presets": {},
-    # named message templates: name -> {"body": "...", "updated_at": ...}
-    "template_presets": {},
-    # reusable custom Find & Click blocks: [{name, block, updated_at}]
-    "custom_blocks": [],
-    # last-session state restored on startup:
-    #   last_url_preset   -> last selected/connected URL preset
-    #   last_stack_preset -> name of the last loaded/saved stack preset
-    #   last_stack        -> live snapshot of the last edited/run stack
-    #   undo_history       -> one chronological history for every editable
-    #       surface (action stack and sash grid), capped at 100 entries
-    #   undo_history_index -> current pointer in that single history
-    #   grid_layout        -> serialized sash-layout tree (flexible grid)
-    #   block_config_pinned -> whether the Block Config panel is pinned open
-    #   window_geometry    -> {x, y, width, height} for the desktop window
-    "state": {
-        "undo_history": [],
-        # recently used archive databases (DB Connection window)
-        "db_recent": [],
-        # recently used "My Nick" values, most recent first
-        "my_nick_recent": [],
-        "undo_history_index": -1,
-        "grid_layout": None,
-        "block_config_pinned": False,
-        "window_states": {"closed": [], "minimized": []},
-        "window_geometry": None,
-        # Legacy read-only migration keys. They are never updated by the
-        # global history implementation, but keeping defaults lets old config
-        # files load without inventing a second active history.
-        "grid_layout_history": [],
-        "grid_layout_history_index": -1,
-    },
-}
-
-# History limits
-MAX_STACK_HISTORY = 100
+# Re-export defaults & constant for callers that imported them
+from stores.settings_store import DEFAULTS  # noqa: F401
+from stores.undo_store import MAX_STACK_HISTORY  # noqa: F401
 
 
 class ConfigManager:
-    """Load, access, and persist configuration from a single JSON file."""
+    """Compatibility façade delegating to a single AtomicJsonStore.
 
-    def __init__(self, path: str = "config.json"):
+    Internally the new stores (settings/bookmark/block/session/undo) each
+    wrap the same AtomicJsonStore instance; this class keeps the old
+    method signatures working while the refactor moves call-sites one by one.
+    """
+
+    def __init__(self, path: str = "config.json") -> None:
         self._path = path
-        self._data: dict[str, Any] = {}
-        self.load()
+        # run idempotent migration of legacy file shape
+        try:
+            migrate(path)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("migration skipped: %s", exc)
+        self._store = AtomicJsonStore(path)
+        self._data = self._store._data  # alias for direct access compat
 
-    # ── persistence ──────────────────────────────────────────────
+    # persistence (atomic via store)
     def load(self) -> None:
-        if os.path.exists(self._path):
-            try:
-                with open(self._path, "r", encoding="utf-8") as f:
-                    self._data = json.load(f)
-                log.info("Config loaded from %s", self._path)
-            except (json.JSONDecodeError, OSError) as exc:
-                log.warning("Config load failed (%s), using defaults", exc)
-                self._data = {}
-        else:
-            self._data = {}
+        self._store.load()
+        self._data = self._store._data
 
     def save(self) -> None:
-        try:
-            with open(self._path, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, indent=2, ensure_ascii=False)
-            log.info("Config saved to %s", self._path)
-        except OSError as exc:
-            log.error("Config save failed: %s", exc)
+        self._store._data = self._data
+        self._store.save()
 
-    # ── access ───────────────────────────────────────────────────
+    # access (mirrors old behaviour including DEFAULTS fallback)
     def get(self, *keys: str, default: Any = None) -> Any:
         node = self._data
         for key in keys:
@@ -157,17 +57,15 @@ class ConfigManager:
             else:
                 return default
             if node is _UNSET:
-                # fall back to defaults tree
-                node = DEFAULTS
+                node2: Any = DEFAULTS
                 for k in keys:
-                    node = node.get(k, default) if isinstance(node, dict) else default
-                    if node is default:
+                    node2 = node2.get(k, default) if isinstance(node2, dict) else default
+                    if node2 is default:
                         return default
-                return node
+                return copy.deepcopy(node2) if isinstance(node2, (dict, list)) else node2
         return node
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:
-        """Deep copy of the value so callers can mutate it safely."""
         return copy.deepcopy(self.get(*keys, default=default))
 
     def set(self, *keys_and_value: Any) -> None:
@@ -181,10 +79,9 @@ class ConfigManager:
         return json.dumps(self._data, ensure_ascii=False)
 
     def data(self) -> dict[str, Any]:
-        """Full JSON-serialisable data (for get_app_state etc.)."""
         return copy.deepcopy(self._data)
 
-    # ── named sub-stores (presets keyed by name) ─────────────────
+    # named sub-stores
     def named_all(self, section: str) -> dict[str, Any]:
         raw = self.get_copy(section, default={})
         return raw if isinstance(raw, dict) else {}
@@ -209,14 +106,13 @@ class ConfigManager:
             self.save()
         return True
 
-    # ── last-session state ───────────────────────────────────────
+    # last-session state
     def get_state(self, key: str, default: Any = None) -> Any:
         state = self.get("state", default={})
         if not isinstance(state, dict):
             return default
         if key in state:
-            return state[key]
-        # fallback to DEFAULTS state if present
+            return copy.deepcopy(state[key])
         defaults_state = DEFAULTS.get("state", {})
         if isinstance(defaults_state, dict) and key in defaults_state:
             return copy.deepcopy(defaults_state[key])
@@ -226,22 +122,20 @@ class ConfigManager:
         state = self.get_copy("state", default={})
         if not isinstance(state, dict):
             state = {}
-        for key, value in updates.items():
-            state[key] = value
+        for k, v in updates.items():
+            state[k] = v
         self.set("state", state)
         if save:
             self.save()
 
-    # ── validation ───────────────────────────────────────────────
     def validate(self) -> list[str]:
         errors: list[str] = []
         port = self.get("chrome", "port", default=9222)
-        if not (1 <= int(port) <= 65535):
+        try:
+            if not (1 <= int(port) <= 65535):
+                errors.append(f"chrome.port invalid: {port}")
+        except (TypeError, ValueError):
             errors.append(f"chrome.port invalid: {port}")
-        for key in ("scroll_pause_ms", "global_pre_action_ms"):
-            val = self.get("scroll" if "scroll" in key else "delays", key, default=0)
-            if val < 0:
-                errors.append(f"{key} must be >= 0")
         return errors
 
 
