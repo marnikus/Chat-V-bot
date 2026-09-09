@@ -21,7 +21,13 @@ from backend.cdp_client import CDPClient
 from backend.user_memory import UserMemory
 from backend.criteria_engine import CriteriaEngine
 from backend.action_engine import ActionEngine
-from backend.bridge import Bridge
+try:
+    # W1 canonical: Router is the bridge (bridge/ is the source of truth)
+    from bridge import Router as Bridge  # type: ignore
+    from bridge.router import Router  # type: ignore
+except Exception:  # noqa: BLE001
+    from backend.bridge import Bridge  # type: ignore
+    Router = Bridge  # type: ignore
 from backend.history_service import HistoryService
 from core.di import Container
 from core.result import Result

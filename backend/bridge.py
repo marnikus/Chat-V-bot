@@ -1,4 +1,12 @@
-"""QWebChannel bridge: routes calls between JS and Python backend."""
+"""QWebChannel bridge: routes calls between JS and Python backend.
+
+DEPRECATED (W1): This 2478 LOC god object is being split into bridge/router.py
++ 9 domain bridges. New code should `from bridge import Router` or
+`from bridge import Bridge` (alias). This file is now a shim that keeps 13
+tests `from backend.bridge import Bridge` green while the split is on the
+critical path. Target: 2478 → 20 shim (from bridge.router import Router as Bridge).
+Do Not Touch: keep behavior identical until coverage on bridge/ reaches 90%.
+"""
 
 import asyncio
 import copy
