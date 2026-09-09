@@ -44,7 +44,14 @@ def align(dom_fps, tail_fps) -> Alignment:
 
 
 def parse_records(raw: Iterable) -> list[MessageRecord]:
-    """Normalise what the agent produced; drop anything unusable."""
+    """Normalise what the agent produced; drop anything unusable.
+
+    Accepts the agent's two answer shapes — a bare list of records or
+    the `{ok, items}` envelope (via `_payload`). Passing the envelope
+    used to iterate the dict's KEYS and silently drop every record.
+    """
+    if isinstance(raw, dict):
+        raw = _payload(raw)
     out: list[MessageRecord] = []
     for item in raw or []:
         if not isinstance(item, dict):
@@ -223,7 +230,8 @@ def _payload(result) -> list:
         except (TypeError, ValueError):
             return []
     if isinstance(result, dict):
-        return list(result.get("items") or [])
+        items = result.get("items")
+        return list(items) if isinstance(items, (list, tuple)) else []
     if isinstance(result, list):
         return result
     return []

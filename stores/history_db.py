@@ -671,13 +671,17 @@ class HistoryDB:
             return False
 
     async def close(self) -> None:
-        if self._conn is not None:
+        # Swap the connection out FIRST so a concurrent close() (two
+        # racing world switches) sees None and returns instead of
+        # committing/closing an already-closed aiosqlite connection —
+        # which used to hang the second caller forever.
+        conn, self._conn = self._conn, None
+        if conn is not None:
             try:
-                await self._conn.commit()
+                await conn.commit()
             except Exception:                       # noqa: BLE001
                 pass
-            await self._conn.close()
-            self._conn = None
+            await conn.close()
 
     # ── helpers ──────────────────────────────────────────────────
     async def execute(self, sql: str, params: Iterable[Any] = ()):
