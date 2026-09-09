@@ -277,20 +277,54 @@ cascade is stable and tested by pixel-agnostic JS tests only).
 
 ## 11. Implementation plan & LOC log
 
-LOC measured with `wc -l`, before → after each step.
+All numbers measured with `wc -l` on the working tree, before → after
+each landed step (each step ended with the suite green).
 
-| # | Step | Before | After | Δ |
+| # | Step | Before | After | Notes |
 |---|---|---|---|---|
-| 0 | delete dead `chatflow/` pycache | 0 py | — | −(dead) |
-| 1 | `core/` contracts + tests | 0 | TBD | — |
-| 2 | `stores/` config split + migration + facade | TBD | TBD | — |
-| 3 | actions registry/context split | TBD | TBD | — |
-| 4 | `services/` extraction + moves | TBD | TBD | — |
-| 5 | `bridge/` router + 9 domain bridges + shims | TBD | TBD | — |
-| 6 | `main.py` DI rewiring | 283 | TBD | — |
-| 7 | JS `ui/js/core/` + consumer dedupe | TBD | TBD | — |
-| 8 | CSS token completion | TBD | TBD | — |
-| 9 | docs + full test suite green | — | — | — |
+| 0 | delete dead `chatflow/` bytecode | 26 `.pyc`, 0 sources | — | leftovers of an aborted attempt |
+| 1 | `core/` contracts (`result`, `events`, `interfaces`, `di`) + 20 tests | 0 | 581 | new zero-dependency seam |
+| 2 | config split: 940 LOC owning ONE file (config_manager 248 + preset_store 151 + label_store 541) | one `config.json` (481 KB) | facade 313 + 9 purpose stores (961 new LOC; label_store 541 moved; migration 117) | atomic saves, one file per concern; `backend/` shims keep imports |
+| 3 | actions split: `base_action.py` 89 + `__init__.py` 20 (17 manual imports) | 109 | base 92 + registry 109 + context 78 + shim 10 + `__init__` 15 | `@register` + pkgutil scan; Open/Closed |
+| 4 | layer moves (engine 924, collector 776, history_service 867, db_manager 612, history_db 746, history_repo 1217, media_store 738, user_memory 248, history_models 185) | 6,613 in `backend/` | same 6,613 in `services/` + `stores/` (+406 lines of `backend/` shims) | dependency arrows now flow down |
+| 5 | bridge split: monolith 2,478 | 2,478 (1 file, 11 domains) | `bridge/` 3,267 total — router 455, 9 bridges 118–511 each, context 126 — plus 4 new services (people 215, undo 624, cdp 119, layout 203) | JS wire API bit-identical (35 signals, 93 slots); cross-domain effects on the EventBus |
+| 6 | `main.py` DI | 283 | 313 | container is the composition root |
+| 7 | JS `ui/js/core/` | 7 bootstrap copies, modal inside PresetsUI, chip built 2×, esc 2× | 3 modules, 205 LOC; consumers +259/−121 | BridgeReady queue, shared Dialog, one chip builder; new `test_js_core.js` (13 tests) |
+| 8 | CSS token completion | 26 hard-coded hex outside variables.css | 0 stray; variables.css 84 → 133 (7 new semantic tokens + opt-in light theme via `[data-theme]`) | `get_app_state` carries `ui.theme` |
 
-Every step ends with the full suite green (minus the pre-existing headless
-`test_sash_webengine.py` limitation).
+Headline numbers (whole app scope: `main.py` + `backend/` + `bridge/` +
+`core/` + `services/` + `stores/` + `actions/`):
+
+* total Python LOC: **15,761 → 18,607** (+18%: docstring headers on the
+  new modules, the compatibility shims (406), and the router/context
+  plumbing — the price paid for zero test churn and an unchanged wire
+  API);
+* **largest file: 2,478 → 1,217** (and 1,217 is `history_repo.py`,
+  untouched by this refactor — every file the refactor touched is now
+  ≤ 624 lines);
+* files over 800 LOC: 5 → 4 (all four are moved-but-unchanged stores).
+
+Frontend: JS 8,231 → 8,369 (+205 core modules, −121 duplicated consumer
+lines); CSS 2,456 → 2,505 (token block + light theme).
+
+Test suite at the end: **46/46 Python files pass** (~750 tests;
+`test_sash_webengine.py` still requires a real WebEngine surface —
+pre-existing, environmental), **18/18 JS files pass**. Three Python
+files (`test_db_manager`, `test_db_switch_restart`,
+`test_media_recovery_e2e`) keep an aiosqlite worker thread alive after
+the run and need a `timeout` kill — verified to behave identically at
+the base commit `eadc7e5`, i.e. pre-existing and unrelated to the
+refactor.
+
+## 12. Deviations found during implementation (added to §10)
+
+6. **`core/event-bus.js` and `core/undo-fetch.js` were cut.** The
+   shipped JS already wires every bridge signal per-module and the test
+   suite pins that wiring with source-level regex assertions
+   (RULE 8); a parallel JS bus or a fetch wrapper nothing calls would
+   be dead code. The three modules that ARE load-bearing
+   (bridge-ready, dialog, ui-helpers) shipped.
+7. **A JS-side `Dialog` + `PresetsUI` delegate pair** replaces the
+   doc's "move and update all callers" — the delegate keeps the four
+   historical `PresetsUI.confirm(...)` call sites and their tests
+   working; new code calls `Dialog` directly.
