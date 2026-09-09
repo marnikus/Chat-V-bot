@@ -19,11 +19,12 @@ except Exception:  # noqa: BLE001
     asyncSlot = lambda *a, **kw: (lambda f: f)  # type: ignore
 
 from core.result import Result
+from .grid import GridMixin
 
 log = logging.getLogger("chatbot")
 
 
-class Router(QObject):
+class Router(QObject, GridMixin):
     """Aggregates domain bridges; registered as `bridge` in QWebChannel."""
 
     # aggregated signals (re-emitted from domains for JS compatibility)
