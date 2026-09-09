@@ -8,8 +8,17 @@ import tempfile
 import sys
 import types
 sys.path.insert(0, "/home/user/Chat-V-bot")
-# Stub missing PySide6 so run_service import succeeds for path testing
-if "PySide6" not in sys.modules:
+# Stub missing PySide6 so run_service import succeeds for path testing.
+# Only stub when the real Qt is NOT importable: injecting a fake PySide6 into
+# sys.modules poisons every later importer (bridge/* subclasses the real
+# QObject) and breaks unrelated test modules in the same pytest session.
+try:
+    import PySide6.QtCore  # noqa: F401
+    _HAS_REAL_QT = True
+except Exception:  # pragma: no cover - environment dependent
+    _HAS_REAL_QT = False
+
+if not _HAS_REAL_QT:
     import types
     pyside = types.ModuleType("PySide6")
     pyside.QtCore = types.ModuleType("PySide6.QtCore")

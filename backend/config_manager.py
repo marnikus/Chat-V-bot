@@ -28,7 +28,7 @@ from typing import Any
 from stores.jsonio import config_dir_for
 from stores.migration import migrate_legacy_config
 from stores.settings_store import SettingsStore, SETTINGS_DEFAULTS
-from stores.bookmark_store import BookmarkStore, DEFAULT_BOOKMARKS
+from stores.bookmark_store import BookmarkStore, DEFAULT_URLS as DEFAULT_BOOKMARKS
 from stores.block_store import BlockStore
 from stores.session_store import SessionStore
 from stores.undo_store import UndoStore
