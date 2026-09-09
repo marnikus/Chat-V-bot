@@ -1,6 +1,6 @@
 # 📊 Code Quality Metrics — Chat-V-bot @ `arena/01a08724-chat-v-bot`
 
-**Date:** 2026-09-09 · **Measured commit:** `392fdff` + hotfix `032ae5f`
+**Date:** 2026-09-09 · **Measured commit:** `392fdff` + hotfix `6bc8ae0`
 **Scope:** `core/ actions/ backend/ bridge/ services/ stores/ app/ main.py` (108 files,
 18,250 LOC / 13,852 SLOC) + `ui/js/ backend/js/ bridge/*.js` (23 files, 8,455 SLOC)
 **Test scope:** 95 Python test files (19,413 SLOC) + 22 JS test files (6,295 SLOC)
@@ -46,8 +46,8 @@ package with I = 0.00. What is broken is the **stores ↔ `ConfigManager` contra
 
 | ID | Blocker | Evidence | Status |
 |---|---|---|---|
-| **P0-1** | `backend/config_manager.py` imported `DEFAULT_BOOKMARKS` from `stores.bookmark_store`; the store defines `DEFAULT_URLS` → **`ImportError` at app start**; 23 test modules could not import | `ImportError: cannot import name 'DEFAULT_BOOKMARKS'` | ✅ **fixed** in `032ae5f` (1 line) |
-| **P0-2** | `tests/integration/services/test_run_service_paths.py` injected a **fake `PySide6` into `sys.modules`** unconditionally → every later real-Qt import died; 13 more test modules red | `TypeError: object.__init__() takes exactly one argument` in `bridge/router.py` | ✅ **fixed** in `032ae5f` (stub only when real Qt is missing) |
+| **P0-1** | `backend/config_manager.py` imported `DEFAULT_BOOKMARKS` from `stores.bookmark_store`; the store defines `DEFAULT_URLS` → **`ImportError` at app start**; 23 test modules could not import | `ImportError: cannot import name 'DEFAULT_BOOKMARKS'` | ✅ **fixed** in `6bc8ae0` (1 line) |
+| **P0-2** | `tests/integration/services/test_run_service_paths.py` injected a **fake `PySide6` into `sys.modules`** unconditionally → every later real-Qt import died; 13 more test modules red | `TypeError: object.__init__() takes exactly one argument` in `bridge/router.py` | ✅ **fixed** in `6bc8ae0` (stub only when real Qt is missing) |
 | **P0-3** | `UndoStore` API mismatch: `config_manager`, `layout_bridge`, `router` call `undo.history()` / `undo.index()`, the store exposes `get()` / `set()` / `push()` | **124 failures** (`'UndoStore' object has no attribute 'history'`) | 🔴 open |
 | **P0-4** | `ConfigManager.save()` calls `bookmarks.save()` / `blocks.save()` / `session.save()` / `presets.save()`; `BookmarkStore`, `UndoStore`, `LabelsFileStore` have **no `save()`/`flush()`** | **101 failures** (`'BookmarkStore' object has no attribute 'save'`) | 🔴 open |
 | **P0-5** | `services/run/coordinator.py:42` calls `get_action_class(...)` but **never imports it** → `NameError` every time a stack is loaded | **50 failures**, and a real runtime crash | 🔴 open |
@@ -343,7 +343,7 @@ tests — consistent with the 19.2 % red suite.
 
 Same command, same ignore set:
 
-| | `b33e312` | HEAD (`392fdff` + `032ae5f`) | Δ |
+| | `b33e312` | HEAD (`392fdff` + `6bc8ae0`) | Δ |
 |---|---|---|---|
 | tests collected | 1,921 | 1,583 | **−338** |
 | failing | **733** | **314** | **−419 (−57 %)** |
@@ -401,7 +401,7 @@ because code got worse but because **382 tests were dropped** — which is also 
 `QT_QPA_PLATFORM=offscreen`), pytest 9.1.1, 1640 tests in ~175 s.
 
 **Caveats (honest):**
-1. Coverage/mutation/suite numbers are measured **after** the two hotfixes in `032ae5f`;
+1. Coverage/mutation/suite numbers are measured **after** the two hotfixes in `6bc8ae0`;
    at `392fdff` as committed, 24 test modules could not even be imported.
 2. radon's raw lexer chokes on 3 test files with hostile escape sequences
    (`test_message_injector_text.py`, `test_dom_probe_contract.py`,
