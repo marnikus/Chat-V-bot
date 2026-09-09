@@ -81,10 +81,13 @@ class TestSchema(ArchiveCase):
         rows = await self.db.fetchall(
             "SELECT name FROM sqlite_master WHERE type='table'")
         names = {r[0] for r in rows}
+        # v6: one DB = one complete world — the world tables live in the
+        # same file as the archive tables
         for t in ("persons", "messages", "media", "cursors", "gaps",
-                  "schema_meta"):
+                  "schema_meta", "users", "labels", "label_assigns",
+                  "undo_history", "gaze_data", "app_settings"):
             self.assertIn(t, names)
-        self.assertEqual(await self.db.get_meta("schema_version"), "5")
+        self.assertEqual(await self.db.get_meta("schema_version"), "6")
 
     async def test_reopening_an_existing_db_is_safe(self):
         await self.repo.append("Nick", convo(3), my_nick="Me", now=NOW)

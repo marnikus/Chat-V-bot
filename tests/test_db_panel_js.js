@@ -1,9 +1,11 @@
 /* Tests for the DB Connection window (ui/js/db-panel.js).
 
    The window must answer three questions at a glance — how big is the
-   database, how big is the text, how big is the images folder — and must
-   never let the user destroy data without a way back: delete and clean go
-   through the in-app confirmation and say that db_trash keeps a copy.
+   database, how big is the text, how big is the world's images folder —
+   and must guard the one truly irreversible action: DELETE is permanent
+   (its confirmation says so, and the backend's can_delete flag disables
+   the button on the last remaining world with an explanatory tooltip).
+   CLEAN stays reversible (db_trash keeps the copy, Ctrl+Z restores).
 
    Per AGENT_RULES RULE 8 this executes the REAL shipped module against a
    DOM stub that throws if a markup setter is touched (a database file name
@@ -140,6 +142,7 @@ function build() {
   DbPanel.info = null;
   DbPanel.items = [];
   DbPanel.activePath = '';
+  DbPanel._notice = '';
   calls.length = 0;
   confirms.length = 0;
   DbPanel.init();
@@ -232,15 +235,54 @@ t('creating without a name explains instead of failing silently', () => {
   ok(/name/i.test(byId.dbConnStatus.textContent), byId.dbConnStatus.textContent);
 });
 
-t('deleting is confirmed and promises the trash + undo', () => {
+t('deleting is confirmed and says it is permanent', () => {
   build();
   const rows = byId.dbFileList.querySelectorAll('.db-row');
   rows[1].querySelectorAll('.btn-small')
     .filter((b) => b.textContent === 'Delete')[0].click();
   eq(confirms.length, 1);
-  ok(/db_trash/.test(confirms[0].text), confirms[0].text);
-  ok(/Ctrl\+Z/.test(confirms[0].text), confirms[0].text);
+  ok(/PERMANENTLY/i.test(confirms[0].title + confirms[0].text),
+     confirms[0].text);
+  ok(/will NOT bring it back/i.test(confirms[0].text), confirms[0].text);
+  ok(!/db_trash/.test(confirms[0].text),
+     'a permanent delete makes no copy — do not promise one');
   eq(calls[0], ['db_delete', '/app/work.db']);
+});
+
+t('the last remaining world cannot be deleted from the window', () => {
+  build();
+  DbPanel.items = [
+    { path: '/app/only.db', name: 'only.db', bytes: 1024, exists: true,
+      active: true, can_delete: false,
+      delete_hint: 'Create a new database before deleting the last one' },
+  ];
+  DbPanel.render();
+  const rows = byId.dbFileList.querySelectorAll('.db-row');
+  const del = rows[0].querySelectorAll('.btn-small')
+    .filter((b) => b.textContent === 'Delete')[0];
+  ok(del.disabled, 'the Delete button must be disabled on the last world');
+  ok(/Create a new database/.test(del.title), del.title);
+  calls.length = 0;
+  confirms.length = 0;
+  del.click();
+  eq(calls.length, 0, 'nothing may be sent');
+  eq(confirms.length, 0, 'no confirmation either');
+  ok(/Create a new database/.test(byId.dbConnStatus.textContent),
+     byId.dbConnStatus.textContent);
+});
+
+t('a world switch is announced as a fresh world', () => {
+  build();
+  DbPanel.onChanged(JSON.stringify({
+    ok: true, action: 'load', switched: true, path: '/app/work.db',
+  }));
+  ok(/Fresh world/.test(DbPanel._notice), DbPanel._notice);
+  ok(/work\.db/.test(DbPanel._notice), DbPanel._notice);
+  // the incoming re-measure keeps the notice on screen
+  DbPanel.onInfo(DbPanel._pending, JSON.stringify(
+    Object.assign({}, INFO, { req_id: DbPanel._pending })));
+  ok(/Fresh world/.test(byId.dbConnStatus.textContent),
+     byId.dbConnStatus.textContent);
 });
 
 t('cleaning is confirmed and says a backup is kept', () => {

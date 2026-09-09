@@ -369,8 +369,11 @@ class HistoryQuery:
                 "SELECT COUNT(*) FROM messages WHERE deleted_at=''", (), 0)),
             "messages_hidden": int(await self.db.scalar(
                 "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0)),
+            # alive messages only — consistent with the `messages` count,
+            # so the read-out never mixes hidden (undoable) rows in
             "text_bytes": int(await self.db.scalar(
-                "SELECT COALESCE(SUM(LENGTH(text)),0) FROM messages", (), 0)),
+                "SELECT COALESCE(SUM(LENGTH(text)),0) FROM messages "
+                "WHERE deleted_at=''", (), 0)),
             "media": int(await self.db.scalar(
                 "SELECT COUNT(*) FROM media", (), 0)),
             "media_cached": int(await self.db.scalar(

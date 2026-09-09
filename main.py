@@ -189,7 +189,16 @@ def main() -> int:
         host=config.get("chrome", "host", default="127.0.0.1"),
         port=config.get("chrome", "port", default=9222),
     )
-    memory = UserMemory()
+    # People queue: since the unified single-DB redesign the queue's
+    # `users` table lives INSIDE the world file. A pre-redesign install
+    # still has a separate chatbot.db — start from it, the startup
+    # migration (HistoryService.migrate_install) merges it into the active
+    # world and renames it out of the way, after which the queue follows
+    # the world on every switch.
+    legacy_queue = "chatbot.db"
+    world_path = str(config.get("history", "db_path", default="history.db"))
+    queue_path = legacy_queue if os.path.exists(legacy_queue) else world_path
+    memory = UserMemory(queue_path)
     criteria = CriteriaEngine()
     engine = ActionEngine(cdp=cdp, memory=memory, criteria=criteria)
 
@@ -249,6 +258,13 @@ def main() -> int:
             history.start()
         except Exception as exc:                      # noqa: BLE001
             log.warning("Message archive unavailable: %s", exc)
+        # rebuild the unified undo timeline from both stores (config's
+        # app-level half + this world's undo_history table) and let the UI
+        # see the world that is actually live
+        try:
+            await bridge.sync_world_state()
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("world state sync failed: %s", exc)
         log.info("Backend ready")
         # Auto-fetch Chrome tabs once the UI has loaded
         await asyncio.sleep(0.5)

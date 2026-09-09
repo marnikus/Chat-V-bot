@@ -4,9 +4,19 @@
    Create · Load · Delete · Clean the message-history database, plus a
    live size read-out (whole database, text only, images folder).
 
-   Nothing here destroys data: delete and clean move the file into
-   db_trash/ first, so a single Ctrl+Z brings the database back — the
-   backend records every action on the one global undo timeline.
+   One database file = one complete world (unified single-DB redesign):
+   its messages, people queue, labels, undo history, radar state and its
+   OWN media folder all live with it.
+
+   Delete is PERMANENT — the world's file and media are removed, nothing
+   is copied anywhere, there is no Ctrl+Z for it. The backend refuses to
+   delete the last remaining database; this window mirrors that by
+   disabling the button with a tooltip. Clean stays reversible (the file
+   backup + the world's media folder go to db_trash).
+
+   After a create/load/delete the app restarts the whole world (caches,
+   counters, people list, labels, undo timeline) — the db_changed signal
+   carries `switched: true` and every window drops its cached data.
 
    createElement/textContent only; a file name is user text.
    ═══════════════════════════════════════════════════════════════ */
@@ -22,6 +32,8 @@ const DbPanel = {
   _els: {},
   _seq: 0,
   _pending: '',
+
+  _notice: '',
 
   init() {
     if (this._wired) return;
@@ -83,9 +95,12 @@ const DbPanel = {
     this.items = Array.isArray(payload.items) ? payload.items : [];
     this.activePath = payload.path || payload.db_path || this.activePath;
     this.busy = false;
-    // Keep a reported failure on screen; only clear a progress line.
-    if (!this._els.status || !this._els.status.classList.contains('error'))
-      this.setStatus('');
+    // Keep a reported failure on screen; only clear a progress line — a
+    // switch notice ("fresh world loaded") stays until the next action.
+    if (!this._els.status || !this._els.status.classList.contains('error')) {
+      if (this._notice) this.setStatus(this._notice, false);
+      else this.setStatus('');
+    }
     this.render();
   },
 
@@ -96,9 +111,23 @@ const DbPanel = {
       try { payload = JSON.parse(json); } catch (e) { payload = null; }
     }
     this.busy = false;
+    if (payload && payload.error) {
+      this._notice = '';
+      this.refresh();
+      // After refresh(), so the "measuring…" line cannot bury the failure.
+      this.setStatus('⚠ ' + payload.error, true);
+      return;
+    }
+    if (payload && payload.switched) {
+      // Stash BEFORE refresh(): the incoming db_info_ready would clear a
+      // plain progress line, but a notice set here survives the re-measure.
+      const name = payload.path ? this.baseName(payload.path) : '';
+      this._notice = 'Fresh world “' + name +
+        '” loaded — all caches cleared';
+    } else {
+      this._notice = '';
+    }
     this.refresh();
-    // After refresh(), so the "measuring…" line cannot bury the failure.
-    if (payload && payload.error) this.setStatus('⚠ ' + payload.error, true);
   },
 
   setStatus(text, isError) {
@@ -137,13 +166,23 @@ const DbPanel = {
     if (!path) return;
     const bridge = this._bridge('db_delete');
     if (!bridge) return;
+    const item = this.items.find((i) => i.path === path) || {};
+    if (item.can_delete === false) {
+      // mirrors the backend rule (D5): the last world stays
+      this.setStatus(
+        (item.delete_hint || 'Create a new database before deleting the last one') +
+        '.', true);
+      return;
+    }
     PresetsUI.confirm(
-      'Delete database?',
-      '“' + this.baseName(path) + '” moves to the db_trash folder. ' +
-      'Nothing is erased and Ctrl+Z puts it back.',
-      'Delete', () => {
+      'Delete database PERMANENTLY?',
+      '“' + this.baseName(path) + '” is a complete world: its messages, ' +
+      'people, labels, undo history and its images folder will be deleted ' +
+      'for good. Nothing is copied anywhere and Ctrl+Z will NOT bring it ' +
+      'back. Other databases are not touched.',
+      'Delete forever', () => {
         this.busy = true;
-        this.setStatus('Moving ' + this.baseName(path) + ' to db_trash…');
+        this.setStatus('Permanently deleting ' + this.baseName(path) + '…');
         bridge.db_delete(path);
       });
   },
@@ -154,8 +193,9 @@ const DbPanel = {
     const name = this.baseName(this.activePath) || 'the current database';
     PresetsUI.confirm(
       'Clean database?',
-      'Every message, person and media record in “' + name + '” is removed. ' +
-      'A full backup goes to db_trash first, so Ctrl+Z restores everything.',
+      'Every message, person, queue entry and media record in “' + name +
+      '” is removed. A full backup goes to db_trash first (along with the ' +
+      'world’s images folder), so Ctrl+Z restores everything.',
       'Clean', () => {
         this.busy = true;
         this.setStatus('Cleaning ' + name + '…');
@@ -297,8 +337,9 @@ const DbPanel = {
       del.type = 'button';
       del.className = 'btn-small danger';
       del.textContent = 'Delete';
-      del.disabled = item.exists === false;
-      del.title = 'Move this file to db_trash (undoable)';
+      del.disabled = item.exists === false || item.can_delete === false;
+      del.title = item.delete_hint ||
+        'Permanently delete this database and its media';
       del.addEventListener('click', () => this.remove(item.path));
       actions.appendChild(del);
       row.appendChild(actions);

@@ -19,12 +19,17 @@ import aiosqlite
 
 log = logging.getLogger("chatbot")
 
+#: v6 (2026-09-08): ONE DB = ONE WORLD. The file now also carries the
+#: People queue (`users` — moved in from `chatbot.db`), person labels
+#: (`labels` / `label_assigns` — moved in from config.json), the world-bound
+#: half of the undo timeline (`undo_history`), the radar/observation session
+#: state (`gaze_data`) and the per-world settings (`app_settings`).
 #: v5 (2026-09-08): full schema validation on open — an old file is repaired
 #: in place (missing columns are added, a `messages` table without
 #: `person_id` is rebuilt with its rows attributed to persons) and the
 #: version is stamped + checked. Clearing a history releases the messages'
 #: identity (dup_key) so the collector re-collects that chat from scratch.
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 
 # ── the canonical schema ─────────────────────────────────────────
 # One source of truth for BOTH paths:
@@ -124,6 +129,63 @@ TABLE_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
         ("detail", "TEXT NOT NULL DEFAULT ''"),
         ("created_at", "TEXT"),
     ),
+    # ── v6: the world tables (one DB = one complete world) ─────────
+    # People queue — moved in from chatbot.db so the queue follows the
+    # world it belongs to. Same shape as the standalone file, so
+    # UserMemory keeps working unchanged when it points at this file.
+    "users": (
+        ("id", "INTEGER PRIMARY KEY AUTOINCREMENT"),
+        ("nick", "TEXT UNIQUE NOT NULL"),
+        ("gender", "TEXT DEFAULT 'unknown'"),
+        ("registered", "BOOLEAN DEFAULT 0"),
+        ("anonymous", "BOOLEAN DEFAULT 0"),
+        ("guest", "BOOLEAN DEFAULT 0"),
+        ("first_seen", "DATETIME"),
+        ("last_seen", "DATETIME"),
+        ("messaged", "BOOLEAN DEFAULT 0"),
+        ("message_count", "INTEGER DEFAULT 0"),
+        ("last_messaged", "DATETIME"),
+        ("notes", "TEXT DEFAULT ''"),
+    ),
+    # Label definitions — moved in from config.json ("labels" section).
+    "labels": (
+        ("id", "TEXT PRIMARY KEY"),
+        ("name", "TEXT NOT NULL UNIQUE COLLATE NOCASE"),
+        ("color", "TEXT NOT NULL DEFAULT '#ff3b30'"),
+        ("created_at", "TEXT NOT NULL DEFAULT ''"),
+    ),
+    # person → label assignments (one row per pair; display order is
+    # re-read from the world on every load, not stored as a list)
+    "label_assigns": (
+        ("nick", "TEXT NOT NULL"),
+        ("label_id", "TEXT NOT NULL"),
+    ),
+    # World-bound half of the ONE undo timeline (kinds people / labels /
+    # archive / dbconn). `seq` is a global monotonic order shared with the
+    # app-level entries kept in config.json, so the interleaving survives a
+    # restart or a round-trip through another world.
+    "undo_history": (
+        ("id", "INTEGER PRIMARY KEY AUTOINCREMENT"),
+        ("seq", "INTEGER NOT NULL UNIQUE"),
+        ("kind", "TEXT NOT NULL"),
+        ("value", "TEXT NOT NULL"),
+        ("created_at", "TEXT"),
+    ),
+    # Radar / observation session state (partner nick, counters). The
+    # verified private-chat gate is deliberately NOT stored here: RULE 15
+    # fails closed, so every fresh open re-verifies from scratch.
+    "gaze_data": (
+        ("key", "TEXT PRIMARY KEY"),
+        ("value", "TEXT NOT NULL"),
+        ("updated_at", "TEXT"),
+    ),
+    # Per-world settings (my nick, media caps, preview…). Values are JSON.
+    # config.json stays the app-level template that seeds a new world.
+    "app_settings": (
+        ("key", "TEXT PRIMARY KEY"),
+        ("value", "TEXT NOT NULL"),
+        ("updated_at", "TEXT"),
+    ),
 }
 
 #: table-level constraints that a plain column list cannot express.
@@ -133,14 +195,17 @@ TABLE_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
 #: row collided with its hidden twin (Bugs 3 & 4, 2026-09-08). Deduping is
 #: the partial unique index on (person_id, dup_key), which ignores the
 #: identity-released hidden rows.
-TABLE_CONSTRAINTS: dict[str, str] = {}
+TABLE_CONSTRAINTS: dict[str, str] = {
+    "label_assigns": "PRIMARY KEY (nick, label_id)",
+}
 
 #: the constraint the pre-v5 schema carried on `messages`; files that still
 #: have it are rebuilt once on open (same columns, constraint removed)
 LEGACY_MESSAGES_CONSTRAINT = "UNIQUE(person_id, fp, day)"
 
 TABLE_ORDER = ("schema_meta", "persons", "media", "messages", "cursors",
-               "gaps")
+               "gaps", "users", "labels", "label_assigns", "undo_history",
+               "gaze_data", "app_settings")
 
 
 def _create_table_sql(name: str) -> str:
@@ -162,6 +227,10 @@ INDEX_SQL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_messages_person_ord ON messages(person_id, ord)",
     "CREATE INDEX IF NOT EXISTS idx_messages_lc ON messages(person_id, text_lc)",
     "CREATE INDEX IF NOT EXISTS idx_gaps_person ON gaps(person_id)",
+    # v6 world tables
+    "CREATE INDEX IF NOT EXISTS idx_users_messaged ON users(messaged)",
+    "CREATE INDEX IF NOT EXISTS idx_label_assigns_nick ON label_assigns(nick)",
+    "CREATE INDEX IF NOT EXISTS idx_label_assigns_id ON label_assigns(label_id)",
 )
 
 SCHEMA = "\n\n".join([TABLE_SQL[name] for name in TABLE_ORDER] +

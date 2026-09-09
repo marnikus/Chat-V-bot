@@ -401,8 +401,12 @@ class Bridge(QObject):
         return history, index
 
     def _get_global_history(self) -> tuple[list, int]:
-        history, index = self._migrate_global_history()
-        history = copy.deepcopy(history)
+        timeline = getattr(self, "_timeline", None)
+        if timeline is None:
+            history, index = self._migrate_global_history()
+            history = copy.deepcopy(history)
+        else:
+            history, index = copy.deepcopy(timeline), self._h_index
         # Server-side safety net: scrub retired block keys from every stack
         # snapshot as it is read back (undo/redo, history projections,
         # app-state restore) so dead controls can never reach the UI.
@@ -416,8 +420,136 @@ class Bridge(QObject):
         return cleaned, index
 
     def _set_global_history(self, history: list, index: int) -> None:
-        self._config.set_state(undo_history=copy.deepcopy(history),
+        self._commit_timeline(list(history), index)
+
+    def _commit_timeline(self, history: list, index: int) -> None:
+        """Persist the ONE timeline split by ownership (D8 of the design).
+
+        App-level entries (stack/grid) go to config.json — they are not a
+        world's data and survive a world switch. World-bound entries
+        (people/labels/archive/dbconn) go to the active world's
+        `undo_history` table — they die with the world and reload with it.
+        Without a live world (tests, archive off) everything stays in
+        config exactly as before.
+        """
+        for entry in history:
+            if isinstance(entry, dict) and \
+                    (not isinstance(entry.get("seq"), int) or entry["seq"] <= 0):
+                entry["seq"] = self._next_seq()
+        self._timeline = history
+        self._h_index = index
+        self._seq_next = max([e["seq"] for e in history
+                              if isinstance(e, dict)
+                              and isinstance(e.get("seq"), int)],
+                             default=0) + 1
+        service = self._archive
+        if service is None or not getattr(service.db, "is_open", False):
+            self._config.set_state(undo_history=copy.deepcopy(history),
+                                   undo_history_index=index)
+            return
+        app_entries = [e for e in history
+                       if e.get("kind") not in self.WORLD_UNDO_KINDS]
+        world_entries = [e for e in history
+                         if e.get("kind") in self.WORLD_UNDO_KINDS]
+        self._config.set_state(undo_history=copy.deepcopy(app_entries),
                                undo_history_index=index)
+        self._schedule_world_undo_save(world_entries)
+
+    def _schedule_world_undo_save(self, entries: list) -> None:
+        """Persist the world half, tracking the task so a later
+        `sync_world_state` can wait for it — a reload that raced the write
+        would rebuild the timeline from a half-written table and drop the
+        entry that was just pushed."""
+        service = self._archive
+        if service is None or not getattr(service.db, "is_open", False):
+            return
+
+        async def runner():
+            try:
+                await service.save_world_undo(entries)
+            except Exception as exc:            # noqa: BLE001
+                log.warning("world undo save failed: %s", exc)
+
+        try:
+            task = asyncio.ensure_future(runner())
+        except RuntimeError:
+            return
+        pending = getattr(self, "_undo_pendings", None)
+        if pending is None:
+            pending = self._undo_pendings = []
+        pending.append(task)
+        task.add_done_callback(pending.remove)
+
+    async def sync_world_state(self) -> None:
+        """Rebuild the unified timeline from both stores after a world
+        change (startup or switch): config's app-level half + the active
+        world's `undo_history` table, merged by `seq` — the original
+        interleaving, and nothing from any other world."""
+        # a push that just committed may still be writing its world half —
+        # wait for every pending save before reading the stores back
+        pending = list(getattr(self, "_undo_pendings", None) or [])
+        if pending:
+            try:
+                await asyncio.gather(*pending, return_exceptions=True)
+            except Exception:                    # noqa: BLE001
+                pass
+        service = self._archive
+        world_entries: list[dict] = []
+        if service is not None and getattr(service.db, "is_open", False):
+            world_entries = await service.load_world_undo()
+        app_entries: list[dict] = []
+        raw = self._config.get_state("undo_history", None)
+        if isinstance(raw, list):
+            for entry in raw:
+                if not (isinstance(entry, dict)
+                        and isinstance(entry.get("kind"), str)):
+                    continue
+                if service is not None and \
+                        entry.get("kind") in self.WORLD_UNDO_KINDS:
+                    continue                     # the world table is the truth
+                app_entries.append(copy.deepcopy(entry))
+        # seq-ordered merge; entries without a seq (pre-seq config) keep
+        # their relative order and receive fresh max seqs at commit time
+        merged = app_entries + world_entries
+        merged.sort(key=lambda e: (isinstance(e.get("seq"), int)
+                                   and e["seq"] > 0,
+                                   e.get("seq") if isinstance(e.get("seq"), int)
+                                   else 0))
+        self._commit_timeline(merged, len(merged) - 1)
+        self.history_changed.emit()
+
+    async def _restart_world(self, op: str, result: dict) -> None:
+        """After a world create/load/delete: rebuild every world-bound
+        surface of the app (D7 — the full world restart, UI half).
+
+        The service already tore the old world down and rebuilt the
+        database side (queue connection, labels, radar state, per-world
+        settings). Here the rest of the app follows: undo timeline, People
+        list, Full User Database, labels and the my-nick readout. The
+        `db_changed` signal (with `switched: true`) makes the JS windows
+        drop their caches too.
+        """
+        service = self._archive
+        if service is None:
+            return
+        if self._memory is not None:
+            try:
+                if os.path.abspath(self._memory.db_path) != \
+                        os.path.abspath(service.db.path):
+                    await self._memory.switch_db(service.db.path)
+            except Exception as exc:               # noqa: BLE001
+                log.warning("queue did not follow the world switch: %s", exc)
+        await self.sync_world_state()
+        await self._refresh_users()
+        self.userdb_changed.emit(json.dumps(
+            {"action": "db_switch", "ok": True}, ensure_ascii=False))
+        self._emit_labels()
+        try:
+            self.my_nick_changed.emit(service.my_nick)
+        except Exception:                          # noqa: BLE001
+            pass
+        log.info("world %s is live — all world state rebuilt (%s)",
+                 os.path.basename(service.db.path), op)
 
     #: Entries that are reversible COMMANDS ({before, after} or an op
     #: description) rather than full state snapshots. Undoing the tip of one
@@ -431,6 +563,17 @@ class Bridge(QObject):
                    "dbconn": "database restored"}
     HISTORY_KINDS = ("stack", "grid") + COMMAND_KINDS
 
+    #: undo kinds whose data belongs to a WORLD (a database file) rather
+    #: than to the application: they persist in the active world's
+    #: `undo_history` table, so they die with the world and come back with
+    #: it — and a world switch never carries another world's undo with it.
+    WORLD_UNDO_KINDS = ("people", "labels", "archive", "dbconn")
+
+    def _next_seq(self) -> int:
+        next_seq = getattr(self, "_seq_next", 0)
+        self._seq_next = next_seq + 1
+        return next_seq
+
     def _push_global(self, kind: str, value) -> tuple[list, int]:
         if kind not in self.HISTORY_KINDS:
             raise ValueError(f"unknown history kind: {kind}")
@@ -441,6 +584,7 @@ class Bridge(QObject):
             return history, index
         if index < len(history) - 1:
             history = history[:index + 1]
+        entry["seq"] = self._next_seq()
         history.append(entry)
         index = len(history) - 1
         if len(history) > MAX_STACK_HISTORY:
@@ -854,7 +998,13 @@ class Bridge(QObject):
         return True
 
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a DB Connection action."""
+        """Re-apply / reverse a DB Connection action.
+
+        Deletions are permanent (D4): modern deletes push no undo entry at
+        all. This legacy path only fires for pre-redesign timeline entries
+        that still carry a `db_trash` backup — undoing one restores the
+        backup when it exists, redoing one re-deletes the file.
+        """
         op = str(value.get("op") or "")
         path = str(value.get("path") or "")
         before_path = str(value.get("before_path") or "")
@@ -862,11 +1012,30 @@ class Bridge(QObject):
         manager = self.db_manager
 
         async def work():
+            if op == "delete":
+                if forward:
+                    if os.path.exists(path):
+                        result = await manager.delete(path)
+                    else:
+                        self.log_message.emit(
+                            "⚠ Nothing to re-delete — the file is already gone",
+                            "warn")
+                        return
+                else:
+                    if os.path.exists(backup):
+                        result = await manager.restore_backup(backup, path)
+                    else:
+                        self.log_message.emit(
+                            "⚠ Database deletions are permanent — "
+                            "no backup exists to restore", "warn")
+                        return
+                if result.get("ok"):
+                    await self._restart_world("delete", result)
+                self._emit_db_change("delete", result)
+                return
             if forward:
                 if op in ("create", "load"):
                     result = await manager.load(path, create=(op == "create"))
-                elif op == "delete":
-                    result = await manager.delete(path)
                 elif op == "clean":
                     result = await manager.clean()
                 else:
@@ -874,10 +1043,13 @@ class Bridge(QObject):
             else:
                 if op in ("create", "load"):
                     result = await manager.load(before_path)
-                elif op in ("delete", "clean"):
+                elif op == "clean":
                     result = await manager.restore_backup(backup, path)
                 else:
                     return
+            if op in ("create", "load") and result.get("ok") \
+                    and not result.get("unchanged"):
+                await self._restart_world(op, result)
             self._emit_db_change(op, result)
         self._run_async("db_undo", work())
         return True
@@ -885,6 +1057,11 @@ class Bridge(QObject):
     def _emit_db_change(self, action: str, result) -> None:
         payload = dict(result or {})
         payload["action"] = action
+        if action in ("create", "load", "delete") and payload.get("ok") \
+                and not payload.get("unchanged") and not payload.get("offline"):
+            # a different world is live now — every JS window that caches
+            # world data must drop it
+            payload["switched"] = True
         self.db_changed.emit(json.dumps(payload, ensure_ascii=False))
         self.userdb_changed.emit(json.dumps(
             {"action": "db_" + action, "ok": bool(payload.get("ok"))},
@@ -1610,6 +1787,19 @@ class Bridge(QObject):
         self.db_manager.attach(service)
         if service is None:
             return
+        # Labels are per-WORLD data: the store is bound to the active
+        # database and re-loaded on every world switch (the service calls
+        # `load_from_db` in init/switch_db). Mutations write through to the
+        # world's tables on this bridge's loop.
+        store = getattr(self, "_labels", None)
+        if store is None:
+            store = self.label_store
+        self._labels = store
+        store.set_scheduler(lambda coro: self._run_async("labels", coro))
+        try:
+            service.bind_labels(store)
+        except Exception as exc:                      # noqa: BLE001
+            log.warning("label store not bound: %s", exc)
         try:
             service.collector.status_changed.connect(self.collector_status.emit)
             service.collector.collector_log.connect(self.collector_log.emit)
@@ -2039,7 +2229,12 @@ class Bridge(QObject):
         self._run_async("db_info", work())
 
     def _db_action(self, op: str, runner, success: str):
-        """Run one DB action and record it as a single undo entry."""
+        """Run one DB action; reversible ones become one undo entry.
+
+        Create/load/clean are reversible and recorded on the timeline.
+        DELETE is permanent (D4) — it records nothing to undo and triggers
+        the full world restart instead.
+        """
         manager = self.db_manager
         manager.attach(self._archive)
 
@@ -2047,13 +2242,24 @@ class Bridge(QObject):
             result = await runner(manager)
             result = dict(result or {})
             result["op"] = result.get("op", op)
-            if result.get("ok") and not result.get("unchanged"):
-                self._push_global("dbconn", {
-                    "op": result["op"],
-                    "path": result.get("path", ""),
-                    "before_path": result.get("before_path", ""),
-                    "backup": result.get("backup", ""),
-                })
+            if result.get("ok") and not result.get("unchanged") \
+                    and not result.get("offline"):
+                if op in ("create", "load", "delete"):
+                    # REBUILD the timeline before recording this step: the
+                    # in-memory copy still holds the world being LEFT, and
+                    # committing world-bound entries now would write them
+                    # into the new world's table (a forbidden cross-world
+                    # transfer). sync_world_state makes the timeline match
+                    # the world that is live, and only then is the dbconn
+                    # step pushed on top of it (into the new world).
+                    await self._restart_world(op, result)
+                if op != "delete":
+                    self._push_global("dbconn", {
+                        "op": result["op"],
+                        "path": result.get("path", ""),
+                        "before_path": result.get("before_path", ""),
+                        "backup": result.get("backup", ""),
+                    })
                 self.log_message.emit(success.format(**{
                     "path": result.get("path", ""),
                     "name": os.path.basename(result.get("path", "")),
@@ -2068,19 +2274,19 @@ class Bridge(QObject):
     def db_create(self, name):
         return self._db_action(
             "create", lambda m: m.create(name),
-            "🆕 New database {name} created and connected")
+            "🆕 New database “{name}” created and connected — fresh world")
 
     @Slot(str, result=bool)
     def db_load(self, path):
         return self._db_action(
             "load", lambda m: m.load(path),
-            "🔌 Connected to {name}")
+            "🔌 Connected to “{name}” — fresh world")
 
     @Slot(str, result=bool)
     def db_delete(self, path):
         return self._db_action(
             "delete", lambda m: m.delete(path),
-            "🗑 {name} moved to db_trash — Ctrl+Z puts it back")
+            "🗑 {name} deleted permanently (database + its media)")
 
     @Slot(result=bool)
     def db_clean(self):

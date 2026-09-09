@@ -41,15 +41,44 @@ class UserMemory:
         self._db_path = db_path
         self._db: Optional[aiosqlite.Connection] = None
 
+    @property
+    def db_path(self) -> str:
+        """The file the queue currently lives in (the world file since v6)."""
+        return self._db_path
+
+    @property
+    def is_open(self) -> bool:
+        return self._db is not None
+
     async def init(self) -> None:
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
         log.info("UserMemory DB ready: %s", self._db_path)
 
+    async def switch_db(self, path: str) -> None:
+        """Point the queue at another world file (ONE DB = ONE WORLD).
+
+        The `users` table travels with the database it belongs to, so a
+        world switch must move this connection too — a queue that kept its
+        old file would show world A's people while collecting world B.
+        """
+        target = str(path or "").strip()
+        if not target:
+            raise ValueError("no database path given")
+        if self._db is not None:
+            await self._db.close()
+            self._db = None
+        self._db_path = target
+        self._db = await aiosqlite.connect(target)
+        await self._db.executescript(_SCHEMA)
+        await self._db.commit()
+        log.info("UserMemory switched to %s", target)
+
     async def close(self) -> None:
         if self._db:
             await self._db.close()
+            self._db = None
 
     async def upsert_user(self, user: UserRecord) -> str:
         now = datetime.now().isoformat(timespec="seconds")
