@@ -11,8 +11,29 @@ from stores.atomic import AtomicJsonStore
 
 
 class BlockStore:
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    def __init__(self, atomic: AtomicJsonStore | None = None,
+                 path: str = "config.json") -> None:
+        # ConfigManager passes a *path* positionally; the store tests pass
+        # an *AtomicJsonStore*. Accept either.
+        if isinstance(atomic, AtomicJsonStore):
+            self._atomic = atomic
+        elif isinstance(atomic, str) and atomic:
+            self._atomic = AtomicJsonStore(atomic)
+        else:
+            self._atomic = AtomicJsonStore(path)
+
+    # ── lifecycle (ConfigManager load()/save()) ─────────────────
+    def load(self) -> None:
+        self._atomic.load()
+
+    def reload(self) -> None:
+        self._atomic.load()
+
+    def save(self):
+        return self._atomic.save()
+
+    def flush(self):
+        return self._atomic.save()
 
     # generic named section helpers
     def named_all(self, section: str) -> dict[str, Any]:
@@ -38,6 +59,15 @@ class BlockStore:
         return ok(True) if res.is_ok else err(res.detail or res.code or "save failed")
 
     # custom_blocks is a list
+    def all(self) -> list[dict[str, Any]]:
+        """The whole custom_blocks list (ConfigManager facade view)."""
+        return self.custom_blocks()
+
+    def set_all(self, blocks: list[dict[str, Any]]) -> Result[None]:
+        self._atomic.set("custom_blocks", copy.deepcopy(blocks)
+                         if isinstance(blocks, list) else [])
+        return self._atomic.save()
+
     def custom_blocks(self) -> list[dict[str, Any]]:
         raw = self._atomic.get("custom_blocks", default=[])
         return copy.deepcopy(raw) if isinstance(raw, list) else []

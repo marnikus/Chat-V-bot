@@ -11,8 +11,29 @@ DEFAULT_BOOKMARKS = DEFAULT_URLS
 
 
 class BookmarkStore:
-    def __init__(self, atomic: AtomicJsonStore | None = None, path: str = "config.json") -> None:
-        self._atomic = atomic or AtomicJsonStore(path)
+    def __init__(self, atomic: AtomicJsonStore | None = None,
+                 path: str = "config.json") -> None:
+        # ConfigManager passes a *path* positionally; the store tests pass
+        # an *AtomicJsonStore*. Accept either.
+        if isinstance(atomic, AtomicJsonStore):
+            self._atomic = atomic
+        elif isinstance(atomic, str) and atomic:
+            self._atomic = AtomicJsonStore(atomic)
+        else:
+            self._atomic = AtomicJsonStore(path)
+
+    # ── lifecycle (ConfigManager load()/save()) ─────────────────
+    def load(self) -> None:
+        self._atomic.load()
+
+    def reload(self) -> None:
+        self._atomic.load()
+
+    def save(self):
+        return self._atomic.save()
+
+    def flush(self):
+        return self._atomic.save()
 
     def all(self) -> list[str]:
         raw = self._atomic.get("url_presets", default=None)
