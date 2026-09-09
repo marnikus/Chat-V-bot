@@ -1,6 +1,6 @@
-/* tokens.css — CSS custom properties (design tokens). Step 1 stub; full extraction in Step 7. */
+/* tokens.css — CSS custom properties (design tokens). Full extraction Step 7. */
 :root {
-  /* colors */
+  /* colors — extracted from hard-coded hex across all css */
   --color-bg: #0b0e14;
   --color-surface: #12151f;
   --color-panel: #171a26;
@@ -13,11 +13,22 @@
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
   --color-accent: #8b5cf6;
-  /* legacy hex aliases — to be replaced via var(--*) in Step 7 */
-  --hex-ff2d2d: #ff2d2d;
-  --hex-ff9500: #ff9500;
-  --hex-00c853: #00c853;
-  --hex-007acc: #007acc;
+  --color-white: #fff;
+  --color-black: #000;
+  --color-red-find: #ff2d2d;
+  --color-orange-click: #ff9500;
+  --color-green-collect: #00c853;
+  --color-blue-link: #007acc;
+  --color-red-label: #ff3b30;
+  --color-pink-female: #e91e8c;
+  --color-blue-male: #4dabf5;
+  --color-bg-hover-danger: var(--color-bg-hover-danger);
+  --color-bg-hover-success: var(--color-bg-hover-success);
+  /* legacy hex aliases */
+  --hex-ff2d2d: var(--color-red-find);
+  --hex-ff9500: var(--color-orange-click);
+  --hex-00c853: var(--color-green-collect);
+  --hex-007acc: var(--color-blue-link);
   /* radii */
   --radius-sm: 6px;
   --radius-md: 8px;
