@@ -41,4 +41,6 @@ def protected_database(path: str, *, root: str = "", memory=None) -> bool:
 
 
 def in_trash(path: str) -> bool:
-    return "db_trash" in {part.lower() for part in Path(canonical_path(path)).parts}
+    # Neither a link into trash nor a link out of it makes a backup manageable.
+    return any("db_trash" in {part.lower() for part in Path(p).parts}
+               for p in (os.path.abspath(path), canonical_path(path)))

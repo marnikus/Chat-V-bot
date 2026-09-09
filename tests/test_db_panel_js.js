@@ -100,6 +100,10 @@ global.App = {
     db_load: (p) => calls.push(['db_load', p]),
     db_delete: (p) => calls.push(['db_delete', p]),
     db_clean: () => calls.push(['db_clean']),
+    db_reveal: (p, cb) => {
+      calls.push(['db_reveal', p]);
+      cb(JSON.stringify({ ok: true, reveal_path: p }));
+    },
   },
 };
 
@@ -360,6 +364,130 @@ t('an unexpected bridge error releases busy controls and keeps the active databa
   ok(!byId.dbCreateBtn.disabled);
   eq(DbPanel.activePath, INFO.path);
   ok(/disk unavailable/.test(byId.dbConnStatus.textContent));
+});
+
+// ── visible file conflicts and native reveal ─────────────────────
+const CONFLICT = {
+  path: '/app/m.db', name: 'm.db', exists: true, main_exists: true,
+  blocking: true, manageable: false, compatible: false, kind: 'file',
+  status: 'empty', detail: 'Empty file (0 bytes); not an initialized chat archive.',
+  can_load: false, can_delete: false, can_reveal: true, reveal_path: '/app/m.db',
+};
+
+t('a real incompatible file remains visible instead of a ghost name conflict', () => {
+  build();
+  DbPanel.onChanged({ ok: false, error: 'm.db already exists',
+    items: [INFO.items[0], CONFLICT] });
+  const rows = byId.dbFileList.querySelectorAll('.db-row');
+  eq(rows.length, 2);
+  ok(/m.db/.test(rows[1].textContent));
+  ok(/Empty file/.test(rows[1].textContent));
+  eq(rows[1].querySelectorAll('.btn-small').length, 0, 'read-only, not a load/delete target');
+  eq(rows[1].querySelector('.db-row-name').tagName, 'BUTTON');
+  ok(rows[1].querySelector('.db-row-name').title.includes('/app/m.db'));
+});
+
+t('visible diagnostic rows never unlock last-valid deletion or direct Load calls', () => {
+  build();
+  DbPanel.items = [INFO.items[0], CONFLICT];
+  DbPanel.render();
+  const del = byId.dbFileList.querySelectorAll('.btn-small').find((b) => b.textContent === 'Delete');
+  ok(del.disabled);
+  DbPanel.remove(INFO.path);
+  DbPanel.load(CONFLICT.path);
+  DbPanel.remove(CONFLICT.path);
+  eq(calls.length, 0);
+  eq(confirms.length, 0);
+});
+
+t('sidecars without a main database stay visible and show the actual blocking path', () => {
+  build();
+  DbPanel.items = [INFO.items[0], Object.assign({}, CONFLICT, {
+    exists: false, main_exists: false, status: 'sidecars',
+    detail: 'm.db-wal reserves this name; m.db is missing.', reveal_path: '/app/m.db-wal',
+  })];
+  DbPanel.render();
+  const row = byId.dbFileList.querySelectorAll('.db-row')[1];
+  ok(row, 'blocking filesystem entries remain visible even with no main file');
+  ok(/Sidecar files only/.test(row.textContent));
+  ok(row.querySelector('.db-row-name').title.includes('/app/m.db-wal'));
+});
+
+t('filename clicks reveal but never Load, reset, confirm deletion or mark a mutation busy', () => {
+  build();
+  const row = byId.dbFileList.querySelectorAll('.db-row')[1];
+  row.querySelector('.db-row-name').click();
+  eq(calls, [['db_reveal', INFO.items[1].path]]);
+  eq(confirms.length, 0);
+  ok(!DbPanel.busy);
+  eq(DbPanel.activePath, INFO.path);
+  ok(byId.dbConnStatus.textContent.includes(INFO.items[1].path));
+});
+
+t('successful Create renders its new row before a stats response arrives', () => {
+  build();
+  const added = { path: '/app/new.db', name: 'new.db', exists: true,
+    manageable: true, can_load: true, can_delete: true };
+  DbPanel.onChanged({ ok: true, op: 'create', path: added.path, active_path: INFO.path,
+    items: INFO.items.concat([added]) });
+  eq(byId.dbFileList.querySelectorAll('.db-row').map((r) => r.querySelector('.db-row-name').textContent),
+     ['history.db', 'work.db', 'new.db']);
+  ok(/Click Load/.test(byId.dbConnStatus.textContent));
+  eq(DbPanel.activePath, INFO.path);
+});
+
+t('a duplicate failure snapshot survives pre-mutation replies and a later measurement', () => {
+  build();
+  const stale = DbPanel._pending;
+  const items = [INFO.items[0], CONFLICT];
+  DbPanel.onChanged({ ok: false, error: 'm.db already exists', items });
+  DbPanel.onInfo(stale, INFO);
+  ok(/m.db/.test(byId.dbFileList.textContent));
+  DbPanel.onInfo(DbPanel._pending, Object.assign({}, INFO, { items }));
+  ok(/m.db already exists/.test(byId.dbConnStatus.textContent));
+  ok(/m.db/.test(byId.dbFileList.textContent));
+});
+
+t('a stale measurement cannot undo a change even if the bridge has disappeared', () => {
+  build();
+  const stale = DbPanel._pending;
+  const bridge = App.bridge;
+  try {
+    App.bridge = null;
+    DbPanel.onChanged({ ok: false, error: 'm.db already exists', items: [INFO.items[0], CONFLICT] });
+    DbPanel.onInfo(stale, INFO);
+    ok(/m.db/.test(byId.dbFileList.textContent));
+  } finally { App.bridge = bridge; }
+});
+
+t('an inventory-read failure retains the last known file rows with an honest error', () => {
+  build();
+  DbPanel.onInfo(DbPanel._pending, { path: INFO.path, inventory_error: 'folder is unavailable' });
+  eq(byId.dbFileList.querySelectorAll('.db-row').length, 2);
+  ok(/folder is unavailable/.test(byId.dbConnStatus.textContent));
+});
+
+t('late reveal callbacks cannot overwrite a newer mutation notice', () => {
+  build();
+  const bridge = App.bridge.db_reveal;
+  let finish;
+  try {
+    App.bridge.db_reveal = (_p, cb) => { finish = cb; };
+    DbPanel.reveal(INFO.path);
+    DbPanel.onChanged({ ok: true, op: 'create', path: '/app/new.db', active_path: INFO.path });
+    finish(JSON.stringify({ ok: true, reveal_path: INFO.path }));
+    ok(/Created new.db/.test(byId.dbConnStatus.textContent));
+  } finally { App.bridge.db_reveal = bridge; }
+});
+
+t('diagnostic names and reasons render as literal text, never markup', () => {
+  build();
+  const text = '<img src=x onerror="throw new Error()">';
+  DbPanel.items = [Object.assign({}, CONFLICT, { name: text, detail: text })];
+  DbPanel.render();
+  eq(byId.dbFileList.querySelector('.db-row-name').textContent, text);
+  ok(byId.dbFileList.querySelector('.db-row-detail').textContent.includes(text));
+  eq(byId.dbFileList.querySelectorAll('img').length, 0);
 });
 
 // ── reporting ────────────────────────────────────────────────────

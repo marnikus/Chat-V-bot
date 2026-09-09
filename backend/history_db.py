@@ -605,30 +605,51 @@ def _check_shape(shape, *, allow_legacy):
                 raise SchemaError(f"incompatible FTS trigger: {name}")
 
 
-def inspect_archive(path: str, *, full: bool = False) -> bool:
-    """Read-only discovery: is this an existing, recognizable chat archive?
+def inspect_archive_details(path: str, *, full: bool = False) -> dict:
+    """Describe loadability without confusing an invalid file with no file.
 
-    No DDL, file creation, schema stamping or persistent connection. Full
-    integrity/reference validation still runs before activation.
+    No DDL, initialization or migration. SQLite may use WAL sidecars, but
+    mode=ro never creates a missing main database. Load still validates again.
     """
+    result = {"compatible": False, "status": "incompatible",
+              "detail": "", "schema_version": ""}
     if not os.path.isfile(path):
-        return False
+        return dict(result, status="missing", detail="The database file does not exist.")
     conn = None
     try:
         uri = Path(os.path.abspath(path)).as_uri() + "?mode=ro"
         conn = sqlite3.connect(uri, uri=True, timeout=0.2)
-        _check_shape(_read_shape(conn), allow_legacy=True)
+        shape = _read_shape(conn)
+        _check_shape(shape, allow_legacy=True)
         if full:
-            if list(conn.execute("PRAGMA quick_check")) != [("ok",)]:
-                return False
+            checked = list(conn.execute("PRAGMA quick_check"))
+            if checked != [("ok",)]:
+                raise SchemaError("integrity check failed: " + str(checked[:3]))
             for table, column, parent in REFERENCES:
                 if conn.execute(
                         f"SELECT 1 FROM {table} c LEFT JOIN {parent} p ON p.id=c.{column} "
                         f"WHERE c.{column} IS NOT NULL AND p.id IS NULL LIMIT 1").fetchone():
-                    return False
-        return True
-    except (sqlite3.Error, SchemaError, OSError):
-        return False
+                    raise SchemaError(f"foreign key reference missing: {table}.{column}")
+        version = shape["meta"].get("schema_version") or ""
+        return dict(result, compatible=True, schema_version=version,
+                    status="ready" if version == SCHEMA_VERSION else "legacy",
+                    detail="" if version == SCHEMA_VERSION else "Compatible older archive; upgraded only when loaded.")
+    except SchemaError as exc:
+        return dict(result, detail=exc.detail)
+    except sqlite3.Error as exc:
+        code = (getattr(exc, "sqlite_errorcode", 0) or 0) & 255
+        unavailable = code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+                               sqlite3.SQLITE_CANTOPEN, sqlite3.SQLITE_PERM,
+                               sqlite3.SQLITE_READONLY, sqlite3.SQLITE_IOERR}
+        return dict(result, status="unavailable" if unavailable else "incompatible",
+                    detail=str(exc))
+    except OSError as exc:
+        return dict(result, status="unavailable", detail=str(exc))
     finally:
         if conn is not None:
             conn.close()
+
+
+def inspect_archive(path: str, *, full: bool = False) -> bool:
+    """Compatibility boolean; diagnostics/discovery use the detailed result."""
+    return inspect_archive_details(path, full=full)["compatible"]

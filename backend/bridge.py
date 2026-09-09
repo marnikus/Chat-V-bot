@@ -988,6 +988,8 @@ class Bridge(QObject):
     def _emit_db_change(self, action: str, result) -> None:
         payload = dict(result or {})
         payload["action"] = action
+        if "items" not in payload:
+            payload.update(self.db_manager.snapshot())
         payload["active_path"] = self.db_manager.active_path()
         self.db_changed.emit(json.dumps(payload, ensure_ascii=False))
         # Independent create/delete and failed loads must not clear the
@@ -2140,8 +2142,7 @@ class Bridge(QObject):
     def db_list(self):
         try:
             return json.dumps({"active": self.db_manager.active_path(),
-                               "items": self.db_manager.list_dbs()},
-                              ensure_ascii=False)
+                               **self.db_manager.snapshot()}, ensure_ascii=False)
         except Exception as exc:                      # noqa: BLE001
             log.warning("db_list failed: %s", exc)
             return json.dumps({"active": "", "items": [], "error": str(exc)})
@@ -2154,10 +2155,27 @@ class Bridge(QObject):
         async def work():
             payload = await manager.info()
             payload["req_id"] = req_id
-            payload["items"] = manager.list_dbs()
             self.db_info_ready.emit(req_id, json.dumps(payload,
                                                        ensure_ascii=False))
         self._run_async("db_info", work())
+
+    @Slot(str, result=str)
+    def db_reveal(self, path):
+        """Filename click: select a real inventory file, without Load or Undo."""
+        from backend.file_reveal import reveal_file
+        manager = self.db_manager
+        manager.attach(self._archive)
+        try:
+            result = manager.reveal_target(path)
+            if result.get("ok"):
+                result.update(reveal_file(result["reveal_path"]))
+        except Exception as exc:
+            result = {"ok": False, "error": f"Cannot reveal the database file: {exc}"}
+        if result.get("error"):
+            self.log_message.emit("⚠ " + result["error"], "warn")
+        else:
+            self.log_message.emit("📂 File location: " + result["reveal_path"], "info")
+        return json.dumps(result, ensure_ascii=False)
 
     def _db_action(self, op: str, runner, success: str):
         """Run one DB action and record it as a single undo entry."""
