@@ -9,18 +9,33 @@ Usage in each action module:
         ...
 
 No manual import list needed; `discover()` scans the package.
+
+The registry itself lives in :mod:`actions.base_action` (next to the
+`__init_subclass__` hook that fills it) and is re-exported here, so the
+decorator path and the subclass path always fill ONE palette.
 """
 
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 from dataclasses import dataclass
-from typing import Dict, Type, Optional
 
 from backend.cdp_client import CDPClient
 
-_REGISTRY: Dict[str, type] = {}
+# Single source of truth - do NOT create a second dict here (BUG-01: the old
+# private _REGISTRY in this module was only ever fed by @register, which no
+# block uses, so actions.all_action_ids() returned [] while 15 blocks were
+# live in actions.base_action._REGISTRY).
+from actions.base_action import (  # noqa: F401
+    _REGISTRY,
+    all_action_ids,
+    get_action_class,
+    register,
+)
+
+log = logging.getLogger("chatbot")
 
 
 @dataclass
@@ -34,31 +49,12 @@ class ActionContext:
     user_nick: str = ""
 
 
-def register(block_id: str):
-    """Decorator: @register(\"BLOCK_ID\") registers the action class."""
-
-    def decorator(cls: type) -> type:
-        if not block_id:
-            raise ValueError("register: block_id must be non-empty")
-        _REGISTRY[block_id] = cls
-        cls.block_id = block_id  # type: ignore[attr-defined]
-        return cls
-
-    return decorator
-
-
-def get_action_class(block_id: str) -> Optional[type]:
-    return _REGISTRY.get(block_id)
-
-
-def all_action_ids() -> list[str]:
-    return list(_REGISTRY.keys())
-
-
 def discover(package: str = "actions") -> int:
     """Import all modules in `package` so @register decorators fire.
 
-    Returns number of newly discovered block ids.
+    Returns number of newly discovered block ids. A module that fails to
+    import is logged, never swallowed: a block silently vanishing from the
+    palette is exactly how a broken action hides from the user.
     """
     before = len(_REGISTRY)
     try:
@@ -71,7 +67,9 @@ def discover(package: str = "actions") -> int:
             continue
         try:
             importlib.import_module(name)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Action module %s failed to import - its block(s) "
+                        "are unavailable: %s", name, exc)
             continue
     return len(_REGISTRY) - before
 

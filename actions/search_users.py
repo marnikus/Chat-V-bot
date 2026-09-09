@@ -11,7 +11,8 @@ issued first when needed) and that the text really landed (value read-back).
 
 import logging
 from typing import Optional
-from actions.base_action import BaseAction, ActionResult
+from actions.base_action import (BaseAction, ActionResult,
+                                 resolve_nick)
 from backend.cdp_client import CDPClient
 from backend.message_injector import type_search
 
@@ -31,7 +32,10 @@ class SearchUsers(BaseAction):
                       engine: Optional[object] = None) -> str:
         await self.pre_delay()
         report = engine.report if engine else None
-        ok = await type_search(cdp, self.text, report)
+        # The config panel promises "{{nick}} = selected user" - honour it
+        # (BUG-04: the label was there, the expansion was not).
+        text = resolve_nick(self.text, user_nick, engine)
+        ok = await type_search(cdp, text, report)
         return ActionResult.OK if ok else ActionResult.FAIL
 
     def config_schema(self) -> dict:

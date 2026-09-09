@@ -8,8 +8,41 @@ from backend.cdp_client import CDPClient
 
 log = logging.getLogger("chatbot")
 
-# Registry of all action classes keyed by block_id
+# Registry of all action classes keyed by block_id.
+# ONE registry, two documented ways into it: the @register decorator and the
+# __init_subclass__ hook below. actions.registry re-exports these helpers, so
+# the palette the UI asks for and the palette the engine builds blocks from
+# can never drift apart again.
 _REGISTRY: dict[str, type] = {}
+
+
+def _register_class(block_id: str, cls: type) -> type:
+    """Put `cls` in the registry under `block_id`, loudly on a collision."""
+    if not block_id:
+        raise ValueError("register: block_id must be non-empty")
+    previous = _REGISTRY.get(block_id)
+    if previous is not None and previous is not cls:
+        # Shadowing a live block changes what every preset that names it
+        # will run — never do that silently.
+        log.warning("Block id %s re-registered: %s replaces %s", block_id,
+                    getattr(cls, "__name__", cls),
+                    getattr(previous, "__name__", previous))
+    _REGISTRY[block_id] = cls
+    cls.block_id = block_id  # type: ignore[attr-defined]
+    return cls
+
+
+def register(block_id: str):
+    """Decorator: @register(\"BLOCK_ID\") registers the action class.
+
+    Writes into the same registry as :meth:`BaseAction.__init_subclass__`,
+    so both documented registration mechanisms fill one palette.
+    """
+
+    def decorator(cls: type) -> type:
+        return _register_class(block_id, cls)
+
+    return decorator
 
 
 class ActionResult:
@@ -36,8 +69,11 @@ class BaseAction(ABC):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if cls.block_id:
-            _REGISTRY[cls.block_id] = cls
+        # Only a block that DECLARES an id joins the palette: a subclass that
+        # merely inherits one (a variant, a test double) must not silently
+        # replace its parent in the registry.
+        if cls.__dict__.get("block_id"):
+            _register_class(cls.__dict__["block_id"], cls)
 
     @abstractmethod
     async def execute(self, user_nick: str, cdp: CDPClient,
@@ -79,6 +115,27 @@ class BaseAction(ABC):
         if self.config:
             d.update(self.config)
         return d
+
+
+NICK_PLACEHOLDER = "{{nick}}"
+
+
+def resolve_nick(text, user_nick: str = "", engine: Optional[object] = None):
+    """Expand ``{{nick}}`` inside a block setting.
+
+    The person remembered for this run (``engine.selected_nick``, written by
+    Pick Person / Click User) wins; the queued user of this step is the
+    fallback. Anything that is not a string is returned untouched.
+
+    Every config panel that advertises "{{nick}} = selected user" has to go
+    through here — a label the block does not honour makes the user type a
+    literal ``{{nick}}`` into the page (BUG-04).
+    """
+    if not isinstance(text, str) or NICK_PLACEHOLDER not in text:
+        return text
+    nick = (getattr(engine, "selected_nick", "") or "").strip() \
+        if engine is not None else ""
+    return text.replace(NICK_PLACEHOLDER, nick or (user_nick or ""))
 
 
 def get_action_class(block_id: str) -> Optional[type]:

@@ -11,3 +11,5 @@ logs/*.jsonl
 media_cache/
 saved_media/
 history.db*
+.coverage
+.pytest_cache/

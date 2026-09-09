@@ -94,8 +94,8 @@ class ClickUser(BaseAction):
         # this run's {{nick}} memory — NOT the queued user. Never click
         # blindly: with no saved nick we fail loudly instead of guessing.
         if self.use_person_from_memory:
-            nick = (getattr(engine, "selected_nick", "") or "") if engine \
-                else ""
+            nick = ((getattr(engine, "selected_nick", "") or "").strip()
+                    if engine else "")
             if not nick:
                 if engine:
                     engine.report(
