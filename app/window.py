@@ -18,6 +18,11 @@ class MainWindow(QMainWindow):
 
     def __init__(self, config=None):
         super().__init__()
+        class_signal = getattr(type(self), "closing", None)
+        if (class_signal is not None and hasattr(class_signal, "connect")
+                and hasattr(class_signal, "emit")
+                and not hasattr(class_signal, "__get__")):
+            self.closing = class_signal.__class__()
         self._config = config
         self._bridge = None
         self._close_requested = self._close_finished = False
@@ -118,7 +123,7 @@ class MainWindow(QMainWindow):
 def create_window(config, bridge, ui_path: str | os.PathLike | None = None) -> MainWindow:
     window = MainWindow(config=config)
     window.set_bridge(bridge)
-    channel = QWebChannel(window)
+    channel = QWebChannel()
     channel.registerObject("bridge", bridge)
     window._channel = channel
     window._view.page().setWebChannel(channel)

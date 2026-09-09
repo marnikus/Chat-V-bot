@@ -46,10 +46,14 @@ class RunStateMachine:
         return self.transition(RunState.RUNNING)
 
     def mark_paused(self) -> RunState:
-        return self.transition(RunState.PAUSED)
+        if self.state == RunState.RUNNING:
+            return self.transition(RunState.PAUSED)
+        return self.state
 
     def mark_resumed(self) -> RunState:
-        return self.transition(RunState.RUNNING)
+        if self.state == RunState.PAUSED:
+            return self.transition(RunState.RUNNING)
+        return self.state
 
     def mark_stopping(self) -> RunState:
         if self.state in (RunState.RUNNING, RunState.PAUSED):

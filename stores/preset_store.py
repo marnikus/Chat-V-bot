@@ -60,12 +60,14 @@ class PresetStore:
     def load(self) -> None:
         raw = load_json(self._path, default={})
         if isinstance(raw, dict):
-            self._data = {
-                "stack_presets": raw.get("stack_presets")
-                if isinstance(raw.get("stack_presets"), dict) else {},
-                "template_presets": raw.get("template_presets")
-                if isinstance(raw.get("template_presets"), dict) else {},
-            }
+            # Unknown sections survive the round-trip: named_set() lets the
+            # facade address any section, so dropping them here would lose
+            # committed user data on every restart (PRS-03).
+            data = dict(raw)
+            for key in ("stack_presets", "template_presets"):
+                if not isinstance(data.get(key), dict):
+                    data[key] = {}
+            self._data = data
 
     def save(self, force: bool = False) -> bool:
         if not (self._dirty or force):
@@ -93,6 +95,8 @@ class PresetStore:
         name = (name or "").strip()
         if not name:
             raise ValueError("Preset name cannot be empty")
+        if blocks is not None and not isinstance(blocks, (list, tuple)):
+            raise ValueError("blocks must be a list of dicts")
         self._data["stack_presets"][name] = {
             "blocks": list(blocks or []),
             "updated_at": self._now(),
@@ -137,6 +141,8 @@ class PresetStore:
         name = (name or "").strip()
         if not name:
             raise ValueError("Template name cannot be empty")
+        if body is not None and not isinstance(body, str):
+            raise ValueError("template body must be a string")
         self._data["template_presets"][name] = {
             "body": body or "",
             "updated_at": self._now(),

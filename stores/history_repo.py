@@ -1175,8 +1175,15 @@ class HistoryRepo:
             return False
         pid = int(person["id"])
         stamp = token or (person.get("deleted_at") or "")
+        restored = 0
         if stamp:
-            await self._restore_rows(pid, str(stamp))
+            restored = await self._restore_rows(pid, str(stamp))
+        if token and str(token) != str(person.get("deleted_at") or "") \
+                and not restored:
+            # A token that matches neither the person's tombstone nor any
+            # hidden row refuses: silently undeleting the person while the
+            # rows stay hidden would strand the archive (HRP-13).
+            return False
         await self.db.execute("UPDATE persons SET deleted_at=NULL WHERE id=?",
                               (pid,))
         await self.db.commit()

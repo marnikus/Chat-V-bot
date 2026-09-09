@@ -17,7 +17,13 @@ class ApplicationLifecycle:
         self._shutdown_started = False
 
     def bind(self, window) -> None:
-        window.closing.connect(lambda: asyncio.ensure_future(self.shutdown()))
+        def schedule_shutdown() -> None:
+            coro = self.shutdown()
+            try:
+                asyncio.ensure_future(coro)
+            except RuntimeError:
+                coro.close()
+        window.closing.connect(schedule_shutdown)
 
     async def startup(self) -> None:
         await self.memory.init()

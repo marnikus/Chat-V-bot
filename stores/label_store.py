@@ -159,8 +159,12 @@ class LabelStore:
                                                 data.get("exclude") or []]}
             except (TypeError, ValueError):
                 pass
-        next_id = int(await db.scalar(
-            "SELECT value FROM schema_meta WHERE key='labels_next_id'", (), 0))
+        try:
+            next_id = int(await db.scalar(
+                "SELECT value FROM schema_meta WHERE key='labels_next_id'",
+                (), 0))
+        except (TypeError, ValueError):
+            next_id = 0  # corrupt meta must not brick the world load
         self._memory = {"defs": defs, "assign": assign,
                         "filter": filter_state, "next_id": next_id}
         return self._normalized()
@@ -533,9 +537,19 @@ class LabelStore:
     def restore(self, snapshot) -> None:
         if not isinstance(snapshot, dict):
             return
+        defs = snapshot.get("defs")
+        assign = snapshot.get("assign")
+        filt = snapshot.get("filter")
+        try:
+            next_id = int(snapshot.get("next_id") or 0)
+        except (TypeError, ValueError):
+            next_id = 0
+        # Coerce ill-typed values so garbage can neither brick reads nor be
+        # persisted back to the config file verbatim (LBL-17).
         self._save({
-            "defs": snapshot.get("defs") or [],
-            "assign": snapshot.get("assign") or {},
-            "filter": snapshot.get("filter") or {"include": [], "exclude": []},
-            "next_id": int(snapshot.get("next_id") or 0),
+            "defs": defs if isinstance(defs, list) else [],
+            "assign": assign if isinstance(assign, dict) else {},
+            "filter": filt if isinstance(filt, dict)
+            else {"include": [], "exclude": []},
+            "next_id": next_id,
         })

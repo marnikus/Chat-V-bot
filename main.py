@@ -12,9 +12,11 @@ from qasync import QEventLoop
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.bootstrap import create_container
+from app.bootstrap import create_container, queue_path as _queue_path
 from app.lifecycle import ApplicationLifecycle
-from app.window import create_window
+from app.window import MainWindow, create_window
+
+build_container = create_container
 from backend.logger import setup_logger
 
 log = logging.getLogger("chatbot")

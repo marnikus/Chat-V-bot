@@ -115,3 +115,7 @@ def migrate_legacy_config(legacy_path: str, config_dir: str) -> bool:
     log.info("config.json split into config/ (original archived as %s)",
              os.path.basename(archived))
     return True
+
+
+# Compatibility alias expected by newer callers.
+migrate = migrate_legacy_config

@@ -72,6 +72,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     },
 }
 
+DEFAULTS = SETTINGS_DEFAULTS
+
 _UNSET = object()
 
 

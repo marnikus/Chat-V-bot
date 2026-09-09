@@ -37,6 +37,7 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         self.composer_text = self.selected_nick = ""; self.history = None; self.label_filter = self.label_reason = None
 
     def load_stack(self, blocks: list[dict]) -> None:
+        from actions.base_action import get_action_class
         self._stack.clear()
         for block in normalize_blocks(blocks):
             cls = get_action_class(block.get("block_id", ""))
@@ -117,7 +118,10 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         for user in queue:
             if self._stop_requested:
                 self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
-            await self._wait_if_paused(); status = await self._execute_for_user(user, has_skip)
+            await self._wait_if_paused()
+            if self._stop_requested:
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
+            status = await self._execute_for_user(user, has_skip)
             self.progress.note_status("fail" if status == "stop" else status)
             if status == "ok" and not standalone: await self._memory.mark_messaged(user.nick); self.person_marked.emit(user.nick)
             if not standalone: self.user_complete.emit(user.nick, status == "ok")
