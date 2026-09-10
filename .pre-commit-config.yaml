@@ -1,0 +1,26 @@
+# RULE 16 — run the size & complexity gate before a commit lands.
+#
+#   pip install -r requirements-dev.txt
+#   pre-commit install
+#
+# The hook calls the same script CI calls (tools/metrics/rule16_gate.py), so
+# there is one implementation of the limits and no chance of the two
+# disagreeing. See docs/AGENT_RULES_CODE_QUALITY.md.
+#
+# One hook, not one per check: the gate already reports size, complexity,
+# duplication, dead code and stale overrides in a single pass, and splitting
+# it into several hooks would just run the same measurement repeatedly.
+#
+# It is repo-wide policy rather than a per-file lint — it measures the
+# functions in OWNED and the ratcheted classes whichever files you happen to
+# be committing — hence always_run / pass_filenames: false.
+
+repos:
+  - repo: local
+    hooks:
+      - id: rule16-gate
+        name: RULE 16 size, complexity & smell gate
+        entry: python3 tools/metrics/rule16_gate.py
+        language: system
+        always_run: true
+        pass_filenames: false

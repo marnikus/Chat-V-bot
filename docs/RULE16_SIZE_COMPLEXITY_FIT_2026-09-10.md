@@ -408,7 +408,7 @@ inflate the result; it can only shrink what is measured.
 tests/test_person_item.py            12 passed
 tests/test_person_page_request.py    20 passed
 tests/test_userdb_sort_query.py      31 passed   (23 sort + 8 envelope)
-tests/test_rule16_new_code.py         9 passed
+tests/test_rule16_new_code.py         9 passed   (15 after §9)
 full pytest (--noconftest, --deselect test_sash_webengine.py)
                                   2199 passed, 3 skipped, 1 xfailed,
                                   771 subtests, 1 collection error
@@ -423,3 +423,87 @@ will not import. That is an environment gap, not a code failure — the file
 collected and passed in the §7.4 run. `--noconftest` is used because
 `tests/conftest.py` imports the same WebEngine bindings at module scope; it
 provides only a teardown hook, and none of the suites above use its fixtures.
+
+---
+
+## 9. Enforcement — one implementation, three callers
+
+Everything above was measured by hand. That does not survive the next change,
+so the limits now live in one module that three callers share:
+
+| Artifact | Role |
+|---|---|
+| `tools/metrics/rule16_gate.py` | the limits, the policy tables (`OWNED`, `RATCHET`, `OVERRIDES`), the measurement, and a human-readable report. Exits 1 on any breach. |
+| `tests/test_rule16_new_code.py` | asserts the same module's output. Holds **no copy** of the thresholds — a second copy is how a gate starts disagreeing with itself. |
+| `.pre-commit-config.yaml` | runs the gate before a commit lands. |
+| `tools/ci/quality-gate.yml` | the CI workflow, **written but not installed** — see §9.4. |
+
+The rule itself is written down in `docs/AGENT_RULES_CODE_QUALITY.md`.
+
+### 9.4 The CI workflow could not be installed
+
+The workflow was committed at `.github/workflows/quality-gate.yml` and the push
+was refused:
+
+```
+! [remote rejected] ... (refusing to allow a GitHub App to create or update
+  workflow `.github/workflows/quality-gate.yml` without `workflows` permission)
+```
+
+A GitHub App token cannot author workflow files, and that is not something to
+route around — it is the protection working. The file was therefore moved to
+`tools/ci/quality-gate.yml`, where it stays as the record of the intended
+configuration, with the activation command in its header. Someone with
+`workflows` permission has to run:
+
+```
+mkdir -p .github/workflows
+cp tools/ci/quality-gate.yml .github/workflows/quality-gate.yml
+```
+
+**Until that happens the gate runs from the pre-commit hook only, and
+`git commit --no-verify` bypasses it unguarded.** That is a real gap, stated
+here rather than papered over: the doc's own standard is that a check must be
+wired up or recorded as not wired up.
+
+The same limitation applies to the PR bot comment and merge block from the
+proposal — both need repo/org settings that cannot be set from a commit.
+
+### 9.1 The gate checks that it is not vacuous
+
+A gate that passes because it measured nothing is worse than no gate. So the
+suite pins a **canary**: `HistoryQuery.page` is 53 LOC, over the limit, and not
+in `OWNED`. If the measurement ever stops reporting it, the suite fails.
+
+The `OVERRIDES` escape hatch is audited the same way — an entry must name a
+gated function, carry a justification of at least 40 characters that is not
+`TODO`/`noqa`, and still be *needed*. An override whose function has since been
+fixed is reported as stale and must be deleted. `OVERRIDES` is empty today.
+
+### 9.2 A defect this process caught in itself
+
+The first draft of `rule16_gate.py` shipped a `smells()` helper that was never
+called and ended in `return out if not missing else out` — both branches
+identical. Dead code, in the module that enforces "zero dead code". It was
+caught by reading the diff against the claims in the doc, wired into `run()`,
+and given a test. Worth recording because it is the failure mode the whole
+exercise is about: a check that looks present and is not.
+
+### 9.3 Verification for this section
+
+```
+python3 tools/metrics/rule16_gate.py        exit 0, all owned functions fit
+tests/test_rule16_new_code.py               15 passed
+.pre-commit-config.yaml                     parses; hook target exists
+tools/ci/quality-gate.yml                   parses; jobs rule16-gate, test-suite
+                                            (written, NOT installed — §9.4)
+full pytest (--noconftest, --deselect test_sash_webengine.py)
+                                         2205 passed, 3 skipped, 1 xfailed,
+                                         771 subtests, 1 collection error
+```
+
+2199 + 6 = 2205; the +6 is the gate suite growing from 9 to 15 tests when the
+canary and override checks were added. The single collection error is still
+`tests/unit/app/test_app_bootstrap.py` on missing `libGL.so.1` (§8.3), which is
+an environment gap on this machine — the CI workflow installs the system
+libraries PySide6 needs, so it collects there.

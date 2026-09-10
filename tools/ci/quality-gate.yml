@@ -1,0 +1,88 @@
+# RULE 16 enforcement in CI.
+#
+# NOT ACTIVE YET. This file lives in tools/ci/ rather than .github/workflows/
+# because the commit was refused:
+#
+#   remote rejected ... (refusing to allow a GitHub App to create or update
+#   workflow `.github/workflows/quality-gate.yml` without `workflows`
+#   permission)
+#
+# A GitHub App token cannot author workflow files. Someone with `workflows`
+# permission has to activate it, by copying it into place:
+#
+#   mkdir -p .github/workflows
+#   cp tools/ci/quality-gate.yml .github/workflows/quality-gate.yml
+#
+# Until that is done the gate runs from the pre-commit hook only, and a
+# --no-verify bypass is unguarded. Do not delete this file in the meantime —
+# it is the only record of the intended CI configuration.
+#
+# Runs the same gate script the pre-commit hook runs, so a bypassed hook still
+# fails the build. See docs/AGENT_RULES_CODE_QUALITY.md.
+#
+# Two jobs, deliberately split: the gate needs no system libraries at all
+# (pure AST + radon), so it must never be the thing that fails because a Qt
+# runtime dependency was missing on the runner. The suite job installs those.
+
+name: quality gate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  rule16-gate:
+    name: RULE 16 size, complexity & smells
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the measuring tools
+        run: |
+          python -m pip install --upgrade pip
+          # The gate only needs radon + cognitive_complexity + vulture +
+          # pylint; installing the whole dev set keeps one source of truth.
+          pip install -r requirements-dev.txt
+
+      - name: Measure
+        run: python tools/metrics/rule16_gate.py
+
+      - name: The gate, as a test
+        # --noconftest: tests/conftest.py imports PySide6's WebEngine bindings,
+        # which this job does not install. conftest provides only a teardown
+        # hook, and this suite uses none of it.
+        run: python -m pytest --noconftest -q tests/test_rule16_new_code.py
+
+  test-suite:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: System libraries PySide6 needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1 \
+            libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run the suite
+        env:
+          QT_QPA_PLATFORM: offscreen
+        # test_sash_webengine.py needs a real GPU/GL context and cannot run
+        # headless on a runner; it is deselected locally for the same reason.
+        run: python -m pytest -q --deselect tests/test_sash_webengine.py
