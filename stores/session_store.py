@@ -6,16 +6,18 @@ block_config_pinned, window_states, window_geometry, db_recent,
 my_nick_recent, grid_layout. The legacy read-only keys
 (stack_history, grid_layout_history, …) keep their defaults so old
 config files load without inventing a second active history.
+
+The lifecycle (`path`/`dirty`/`load`/`reload`/`save`/`flush`/`data`) is
+`JsonFileStore`'s; this file owns only the flat key/value view.
 """
 
 from __future__ import annotations
 
 import copy
 import logging
-import os
 from typing import Any
 
-from stores.jsonio import load_json, save_json
+from stores.json_store import JsonFileStore
 
 log = logging.getLogger("chatbot")
 
@@ -32,35 +34,13 @@ SESSION_DEFAULTS: dict[str, Any] = {
 }
 
 
-class SessionStore:
+class SessionStore(JsonFileStore):
     """Flat key/value session state. One file, atomic saves."""
 
-    def __init__(self, path: str, data: dict | None = None):
-        self._path = path
-        self._data: dict[str, Any] = {}
-        self._dirty = False
-        if data is not None:
-            self._data = dict(data)
-        else:
-            self.load()
+    DEFAULT_FILE = "config.json"
+    DEFAULTS: dict[str, Any] = {}
 
-    def load(self) -> None:
-        raw = load_json(self._path, default={})
-        self._data = raw if isinstance(raw, dict) else {}
-
-    def save(self, force: bool = False) -> bool:
-        if not (self._dirty or force):
-            return True
-        ok = save_json(self._path, self._data)
-        if ok:
-            self._dirty = False
-        return ok
-
-    @property
-    def dirty(self) -> bool:
-        return self._dirty
-
-    # ── API ──────────────────────────────────────────────────────
+    # ── reads ────────────────────────────────────────────────────
     def get(self, key: str, default: Any = None) -> Any:
         if key in self._data:
             return copy.deepcopy(self._data[key])
@@ -68,12 +48,18 @@ class SessionStore:
             return copy.deepcopy(SESSION_DEFAULTS[key])
         return default
 
-    def set(self, save_now: bool = True, **updates: Any) -> None:
+    # ── writes ───────────────────────────────────────────────────
+    def set(self, save: "bool | None" = None, save_now: "bool | None" = None,
+            **updates: Any) -> None:
+        """Merge `updates` into the session, then persist unless told not to.
+
+        `save` is the spelling `core/interfaces.py:SessionStoreProto`
+        documents; `save_now` is the one `ConfigManager.set_state` has always
+        used. They are the same switch — `save` wins when both are given — and
+        neither is ever stored as a session key.
+        """
         for key, value in updates.items():
             self._data[key] = copy.deepcopy(value)
-        self._dirty = True
-        if save_now:
+        self._touch()
+        if self._wants_save(save, save_now):
             self.save()
-
-    def data(self) -> dict[str, Any]:
-        return copy.deepcopy(self._data)

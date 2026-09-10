@@ -278,8 +278,21 @@ class TestSettingsStore(StoreCase):
         self.assertEqual(store.get("presets"), {"x": 1})
 
     def test_settings_survive_a_reopen(self):  # SET-08
+        # The contract is "memory first, `save()` persists" (the default the
+        # ConfigManager facade batches with, AREA B1 design §6.3): a reopen
+        # sees the write only once the store was told to put it on disk.
         store = SettingsStore(self.atomic)
         store.set("ui", "theme", "light")
+        self.assertEqual(SettingsStore(AtomicJsonStore(self.path))
+                         .get("ui", "theme"), "dark", "nothing is on disk yet")
+        self.assertTrue(store.save())
+        self.assertEqual(SettingsStore(AtomicJsonStore(self.path))
+                         .get("ui", "theme"), "light")
+
+    def test_settings_save_flag_writes_immediately(self):  # SET-08b
+        store = SettingsStore(self.atomic)
+        store.set("ui", "theme", "light", save=True)
+        self.assertFalse(store.dirty)
         self.assertEqual(SettingsStore(AtomicJsonStore(self.path))
                          .get("ui", "theme"), "light")
 

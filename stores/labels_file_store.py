@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import copy
 import logging
+from typing import Any
 
-from stores.jsonio import load_json, save_json
+from stores.json_store import JsonFileStore
 
 log = logging.getLogger("chatbot")
 
@@ -24,37 +25,34 @@ LABELS_DEFAULT: dict = {
 }
 
 
-class LabelsFileStore:
+class LabelsFileStore(JsonFileStore):
     """One JSON file holding the legacy labels section shape."""
 
-    def __init__(self, path: str):
-        self._path = path
-        self._data: dict = copy.deepcopy(LABELS_DEFAULT)
-        self._dirty = False
-        self.reload()
+    DEFAULT_FILE = "config.json"
+    DEFAULTS: dict[str, Any] = {}          # `_coerce` says what "empty" means
 
-    def reload(self) -> None:
-        raw = load_json(self._path, default=None)
-        self._data = raw if isinstance(raw, dict) else \
-            copy.deepcopy(LABELS_DEFAULT)
+    def _coerce(self, raw: Any) -> dict[str, Any]:
+        """A missing, corrupt or half-written file is the documented default.
 
-    def flush(self) -> bool:
-        if not self._dirty:
-            return True
-        ok = save_json(self._path, self._data)
-        if ok:
-            self._dirty = False
-        return ok
+        Anything else is kept verbatim: `LabelStore` normalises on read, so
+        the file must not be quietly rewritten on the way in (a round-trip
+        that "fixed" a value would make an undo restore lossy).
+        """
+        if not isinstance(raw, dict):
+            return copy.deepcopy(LABELS_DEFAULT)
+        if raw:
+            return copy.deepcopy(raw)
+        return copy.deepcopy(LABELS_DEFAULT)
 
-    @property
-    def dirty(self) -> bool:
-        return self._dirty
+    # ── reads ────────────────────────────────────────────────────
+    def get(self, key: str, default: Any = None) -> Any:
+        value = self._data.get(key, default)
+        return copy.deepcopy(value) if isinstance(value, (dict, list)) \
+            else value
 
-    # ── API ──────────────────────────────────────────────────────
-    def data(self) -> dict:
-        return copy.deepcopy(self._data)
-
-    def set_data(self, labels: dict) -> None:
+    # ── writes ───────────────────────────────────────────────────
+    def set_data(self, labels: Any) -> None:
+        """Replace the whole section (dirty until `flush()`/`save()`)."""
         self._data = copy.deepcopy(labels) if isinstance(labels, dict) \
             else copy.deepcopy(LABELS_DEFAULT)
-        self._dirty = True
+        self._touch()
