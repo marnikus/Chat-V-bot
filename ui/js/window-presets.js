@@ -11,19 +11,13 @@ const WindowPresets = {
   init() {
     if (this.initialized) return;
     this.initialized = true;
-    this._bindButton('windowPresetBtn', () => this.togglePanel());
     this._bindButton('saveWindowPresetBtn', () => this.saveCurrent());
-    this._bindButton('saveWindowPresetQuickBtn', () => this.saveCurrent());
     this._bindButton('importWindowPresetBtn', () => this._openFilePicker());
     this._bindButton('exportWindowPresetBtn', () => this.exportSelected());
     this._bindButton('windowPresetPreviewApply', () => this._applyPreview());
     this._bindButton('windowPresetPreviewCancel', () => this._closePreview());
     const input = document.getElementById('windowPresetFileInput');
     if (input) input.addEventListener('change', (event) => this._readFile(event));
-    document.addEventListener('click', (event) => {
-      if (!event.target.closest('#windowPresetPanel') &&
-          !event.target.closest('#windowPresetBtn')) this._hidePanel();
-    });
     this._loadLocal();
   },
 
@@ -63,32 +57,6 @@ const WindowPresets = {
     if (typeof App !== 'undefined' && App.bridge && App.bridge.list_window_presets) {
       App.bridge.list_window_presets((raw) => this.setPresets(raw));
     }
-  },
-
-  togglePanel() {
-    const panel = document.getElementById('windowPresetPanel');
-    if (!panel) return;
-    const show = panel.classList.contains('hidden');
-    panel.classList.toggle('hidden', !show);
-    if (show) {
-      this.render();
-      this._placePanel(panel);
-      this.refresh();
-    }
-  },
-
-  _hidePanel() {
-    const panel = document.getElementById('windowPresetPanel');
-    if (panel) panel.classList.add('hidden');
-  },
-
-  _placePanel(panel) {
-    const button = document.getElementById('windowPresetBtn');
-    if (!button) return;
-    const rect = button.getBoundingClientRect();
-    const width = 390;
-    panel.style.left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)) + 'px';
-    panel.style.top = (rect.bottom + 6) + 'px';
   },
 
   saveCurrent() {
@@ -299,6 +267,8 @@ const WindowPresets = {
     const result = SashGrid.validatePortablePreset(preset);
     if (!result.ok) { this._message('Preview unavailable: ' + result.error, 'error'); return; }
     this.pending = { document: result.document, action };
+    const menu = document.getElementById('layoutMenu');
+    if (menu) menu.classList.add('hidden');
     const modal = documentById('windowPresetPreviewModal');
     const title = documentById('windowPresetPreviewTitle');
     const meta = documentById('windowPresetPreviewMeta');

@@ -33,10 +33,8 @@
       </div>
       <button id="windowsMenuBtn" class="btn-icon"
               title="Windows — open, close, minimize and restore windows"><span class="material-icons">widgets</span></button>
-      <button id="windowPresetBtn" class="btn-icon"
-              title="Window presets — save, restore, export and import grid arrangements"><span class="material-icons">bookmarks</span></button>
       <button id="layoutMenuBtn" class="btn-icon"
-              title="Grid layouts — drag any window by its title bar, or pick a preset arrangement"><span class="material-icons">grid_view</span></button>
+              title="Grid view — layouts, bookmarks and window presets"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
         <select id="tabSelect"><option value="">— Select Chrome Tab —</option></select>
         <button id="refreshTabsBtn" class="btn-icon" title="Refresh tabs"><span class="material-icons">refresh</span></button>
@@ -46,33 +44,11 @@
     </div>
   </header>
 
-  <!-- URL PRESET TOOLBAR (FEATURE #2) -->
-  <div class="url-toolbar" id="urlToolbar">
-    <span class="url-toolbar-label" title="URL Parse Preset — matches the URL against open Chrome tabs and connects to the best one"><span class="material-icons">language</span> URL Presets</span>
-    <input id="urlInput" type="text" spellcheck="false"
-           placeholder="Paste URL or keyword — e.g. https://ru.virt-chat.com/chat"
-           autocomplete="off">
-    <button id="urlConnectBtn" class="btn-primary btn-compact"
-            title="Parse the URL / keyword, find the matching tab and connect to it">
-      <span class="material-icons">link</span> Auto-Connect</button>
-    <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a preset chip"><span class="material-icons">add</span></button>
-    <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
-  </div>
-
-  <!-- WINDOW PRESET QUICK TOOLBAR -->
-  <div class="window-preset-quickbar" id="windowPresetQuickbar">
-    <span class="window-preset-quickbar-label"><span class="material-icons">bookmarks</span> Window presets</span>
-    <button id="saveWindowPresetQuickBtn" class="btn-small" title="Save the current window arrangement as a named preset"><span class="material-icons">save</span> Save current</button>
-    <div id="windowPresetQuickChips" class="window-preset-quick-chips">
-      <span class="window-preset-empty">none saved</span>
-    </div>
-  </div>
-
   <!-- ═══════════════════════════════════════════════════════════
        FLEXIBLE GRID ("SASH LAYOUT") — FEATURE
        Every window below is draggable (title bar), splittable,
-       mergeable and resizable (sashes). The header + URL toolbar
-       above stay pinned. Presets: 📐 menu in the header.
+       mergeable and resizable (sashes). The header stays pinned.
+       Grid view contains layouts, bookmarks and window presets.
        See docs/SASH_LAYOUT_DESIGN_2026-09-05.md.
        ═══════════════════════════════════════════════════════════ -->
   <main class="sash-grid" id="sashGrid">
@@ -387,15 +363,51 @@
   </main>
 </div>
 
-<!-- LAYOUTS MENU (belongs to the pinned header, positioned fixed) -->
-<div id="layoutMenu" class="layout-menu hidden">
-  <div class="layout-menu-title">Grid layouts — or drag windows yourself</div>
-  <button data-layout="default">Default<span class="lm-sub">Classic arrangement</span></button>
-  <button data-layout="a">A — Stacked rows<span class="lm-sub">Composer / People / Log, each a full-width row</span></button>
-  <button data-layout="b">B — Split top row<span class="lm-sub">Composer | People side by side, Log below</span></button>
-  <button data-layout="c">C — Side column<span class="lm-sub">Log spans full height on the right</span></button>
+<!-- GRID VIEW MENU (layouts, bookmarks and window presets) -->
+<div id="layoutMenu" class="layout-menu grid-menu hidden">
+  <div class="layout-menu-title">Grid view — layouts, bookmarks and window presets</div>
+
+  <section class="grid-menu-section grid-layout-section">
+    <div class="grid-menu-section-title"><span class="material-icons">grid_view</span> Grid layouts</div>
+    <div class="grid-layout-buttons">
+      <button data-layout="default">Default<span class="lm-sub">Classic arrangement</span></button>
+      <button data-layout="a">A — Stacked rows<span class="lm-sub">Composer / People / Log, each a full-width row</span></button>
+      <button data-layout="b">B — Split top row<span class="lm-sub">Composer | People side by side, Log below</span></button>
+      <button data-layout="c">C — Side column<span class="lm-sub">Log spans full height on the right</span></button>
+    </div>
+    <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible (Undo with the global button)</span></button>
+  </section>
+
   <div class="layout-menu-sep"></div>
-  <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible (Undo with the global button)</span></button>
+
+  <section class="grid-menu-section url-toolbar" id="urlToolbar">
+    <div class="grid-menu-section-title url-toolbar-label" title="URL Parse Preset — matches the URL against open Chrome tabs and connects to the best one"><span class="material-icons">language</span> Bookmarks</div>
+    <input id="urlInput" type="text" spellcheck="false"
+           placeholder="Paste URL or keyword — e.g. https://ru.virt-chat.com/chat"
+           autocomplete="off">
+    <button id="urlConnectBtn" class="btn-primary btn-compact"
+            title="Parse the URL / keyword, find the matching tab and connect to it">
+      <span class="material-icons">link</span> Auto-Connect</button>
+    <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a bookmark"><span class="material-icons">add</span></button>
+    <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
+  </section>
+
+  <div class="layout-menu-sep"></div>
+
+  <section id="windowPresetPanel" class="grid-menu-section window-preset-panel">
+    <div class="grid-menu-section-title"><span class="material-icons">bookmarks</span> Window presets</div>
+    <div class="window-preset-actions">
+      <button id="saveWindowPresetBtn" class="btn-small btn-primary" title="Save the current arrangement with a name"><span class="material-icons">save</span> Save current</button>
+      <button id="importWindowPresetBtn" class="btn-small" title="Import a .json window preset"><span class="material-icons">file_upload</span> Import</button>
+      <button id="exportWindowPresetBtn" class="btn-small" title="Export the selected preset as a .json file" disabled><span class="material-icons">file_download</span> Export</button>
+    </div>
+    <input id="windowPresetFileInput" type="file" accept=".json,application/json" class="hidden">
+    <div id="windowPresetStatus" class="window-preset-status" aria-live="polite"></div>
+    <div id="windowPresetQuickChips" class="window-preset-quick-chips"></div>
+    <div id="windowPresetList" class="window-preset-list">
+      <div class="window-preset-list-empty">No saved window presets yet. Save the current grid to create one.</div>
+    </div>
+  </section>
 </div>
 
 <!-- WINDOWS MENU — lists all windows with open / minimized / closed state -->

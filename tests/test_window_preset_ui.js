@@ -21,8 +21,8 @@ class Element {
   getBoundingClientRect() { return { left: 0, right: 100, bottom: 30 }; }
 }
 
-const ids = ['windowPresetBtn', 'saveWindowPresetBtn', 'saveWindowPresetQuickBtn',
-  'importWindowPresetBtn', 'exportWindowPresetBtn', 'windowPresetPreviewApply',
+const ids = ['layoutMenu', 'saveWindowPresetBtn', 'importWindowPresetBtn',
+  'exportWindowPresetBtn', 'windowPresetPreviewApply',
   'windowPresetPreviewCancel', 'windowPresetFileInput', 'windowPresetPanel',
   'windowPresetQuickChips', 'windowPresetList', 'windowPresetStatus',
   'windowPresetPreviewModal', 'windowPresetPreviewTitle',
@@ -79,6 +79,7 @@ test('valid restore data creates a visual preview without applying it', () => {
   };
   presets._showPreview(document, 'restore');
   assert(presets.pending && presets.pending.action === 'restore', 'pending preview');
+  assert(elements.layoutMenu.className.includes('hidden'), 'grid menu closes for preview');
   assert(elements.windowPresetPreviewCanvas.children.length === 1, 'preview tile');
   assert(elements.windowPresetPreviewCanvas.children[0].textContent === 'Stats', 'tile label');
 });

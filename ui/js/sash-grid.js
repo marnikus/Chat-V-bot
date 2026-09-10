@@ -1288,8 +1288,8 @@ const SashGrid = {
     const place = () => {
       if (menu.classList.contains('hidden')) return;
       const r = btn.getBoundingClientRect();
-      let left = r.right - 240;
-      left = Math.max(8, Math.min(left, window.innerWidth - 248));
+      const width = menu.offsetWidth || Math.min(560, window.innerWidth - 16);
+      const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
       menu.style.left = left + 'px';
       menu.style.top = (r.bottom + 6) + 'px';
     };
@@ -1297,7 +1297,15 @@ const SashGrid = {
       e.stopPropagation();
       const winMenu = document.getElementById('windowsMenu');
       if (winMenu) winMenu.classList.add('hidden');
+      const willShow = menu.classList.contains('hidden');
       menu.classList.toggle('hidden');
+      if (willShow) {
+        if (typeof WindowPresets !== 'undefined') {
+          WindowPresets.render();
+          WindowPresets.refresh();
+        }
+        if (typeof UrlToolbar !== 'undefined') UrlToolbar.renderChips();
+      }
       place();
     });
     menu.querySelectorAll('button[data-layout]').forEach((b) => {
