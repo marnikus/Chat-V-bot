@@ -41,7 +41,10 @@ class RunStateMachine:
         return self.state
 
     def mark_running(self) -> RunState:
-        if self.state in (RunState.ERROR, RunState.DONE):
+        # AREA C1: tolerate a stranded STOPPING (e.g. an interrupted older
+        # path) by resetting first, like ERROR/DONE. Normal stopped runs end
+        # DONE via mark_done; this is the defensive restart path.
+        if self.state in (RunState.ERROR, RunState.DONE, RunState.STOPPING):
             self.reset()
         return self.transition(RunState.RUNNING)
 

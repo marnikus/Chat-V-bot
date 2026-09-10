@@ -5,11 +5,17 @@ element is found (with visibility/interactivity state), or the timeout with
 the last known DOM state so the failure can be traced.
 """
 
-import asyncio
 import json
 import logging
+import time
 from typing import Optional
 from actions.base_action import BaseAction, ActionResult
+from actions.cancellation import (
+    RunStopped,
+    await_with_stop,
+    check_stopped,
+    sleep_with_stop,
+)
 from backend.cdp_client import CDPClient
 from backend.dom_probe import build_probe, interpret_wait
 
@@ -24,7 +30,8 @@ class WaitPageLoad(BaseAction):
     name = "Wait for Page"
     icon = "⏳"
 
-    def __init__(self, target_selector: str = "", timeout_ms: int = 5000,
+    def __init__(self, target_selector: str = "",
+                 timeout_ms: int = 5000,
                  pre_delay_ms: int = 200, **kw):
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
         self.target_selector = target_selector or TEXTAREA_SEL
@@ -32,9 +39,27 @@ class WaitPageLoad(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
         label = f"element '{self.target_selector}'"
-        deadline = asyncio.get_event_loop().time() + self.timeout_ms / 1000
+
+        def _stopped_report() -> None:
+            if engine:
+                engine.report(
+                    f"⏹ Wait stopped on request — no longer waiting for {label}",
+                    "warn",
+                )
+
+        # Already-stopped entry: no delay, no probe (C1a).
+        try:
+            check_stopped(engine)
+        except RunStopped:
+            _stopped_report()
+            raise
+        try:
+            await sleep_with_stop(self.pre_delay_ms / 1000.0, engine)
+        except RunStopped:
+            _stopped_report()
+            raise
+        deadline = time.monotonic() + self.timeout_ms / 1000
         attempt = 0
         last_res = None
         if engine:
@@ -43,20 +68,42 @@ class WaitPageLoad(BaseAction):
         while True:
             attempt += 1
             try:
-                raw = await cdp.evaluate(build_probe(selector=self.target_selector))
+                check_stopped(engine)
+            except RunStopped:
+                _stopped_report()
+                raise
+            try:
+                raw = await await_with_stop(
+                    lambda: cdp.evaluate(
+                        build_probe(selector=self.target_selector)
+                    ),
+                    engine,
+                    slice_s=0.05,
+                    deadline_monotonic=deadline,
+                )
                 res = json.loads(raw) if raw else None
                 last_res = res
+            except RunStopped:
+                _stopped_report()
+                raise
+            except TimeoutError:
+                break
             except Exception as exc:
                 if engine and attempt % 5 == 1:
                     engine.report(f"❌ Probe error while waiting: {exc}", "error")
                 res = None
+            try:
+                check_stopped(engine)
+            except RunStopped:
+                _stopped_report()
+                raise
             if res and res.get("found"):
                 msg, level = interpret_wait(res, label)
                 if engine:
                     engine.report(msg, level)
                 log.info("Element found: %s", self.target_selector[:50])
                 return ActionResult.OK
-            now = asyncio.get_event_loop().time()
+            now = time.monotonic()
             if now >= deadline:
                 break
             # Report failed probes at most ~once per 2s so the console is readable
@@ -65,7 +112,11 @@ class WaitPageLoad(BaseAction):
                 if engine:
                     engine.report(f"⏳ {label} not present yet — matched {total} "
                                   f"node(s) (attempt {attempt})", "warn")
-            await asyncio.sleep(0.3)
+            try:
+                await sleep_with_stop(0.3, engine, slice_s=0.05)
+            except RunStopped:
+                _stopped_report()
+                raise
         total = int((last_res or {}).get("total", 0) or 0)
         if engine:
             engine.report(f"❌ Failed to find element: {label} — timeout after "

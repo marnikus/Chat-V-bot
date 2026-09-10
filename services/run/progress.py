@@ -41,6 +41,10 @@ class RunProgress:
         self.emit()
 
     def note_status(self, status: str) -> None:
+        # Wire contract (AREA C1, preserved): only ok/skip/fail increment.
+        # Cooperative "stop" is accounted as "fail" by the cycle call sites;
+        # stop identity lives in the outcome/trace/user_complete, never in a
+        # new wire counter. Unknown statuses emit without incrementing.
         if status == "ok":
             self.done += 1
         elif status == "skip":
@@ -63,6 +67,20 @@ class RunProgress:
 
     def emit(self) -> None:
         self._bus.emit(self.payload())
+
+
+def _is_stop_requested(engine) -> bool:
+    try:
+        from actions.cancellation import is_stop_requested
+    except ImportError:  # pragma: no cover - red phase
+        fn = getattr(engine, "is_stopping", None)
+        if callable(fn):
+            try:
+                return bool(fn())
+            except Exception:
+                return False
+        return bool(getattr(engine, "_stop_requested", False))
+    return bool(is_stop_requested(engine))
 
 
 class RunQueueMixin:
@@ -117,10 +135,18 @@ class RunQueueMixin:
             return 1
 
     async def _order_queue_by_column(self, queue: list[UserRecord]) -> list[UserRecord]:
+        try:
+            from actions.cancellation import RunStopped
+        except ImportError:  # pragma: no cover - red phase
+            RunStopped = None  # type: ignore
+        if _is_stop_requested(self) and RunStopped is not None:
+            raise RunStopped
         wants = any(b.block_id == "CLICK_USER" and getattr(b, "respect_order", False) and getattr(b, "enabled", True) for b in self._stack)
         if not wants or not queue:
             return queue
         rows = await self._memory.get_all()
+        if _is_stop_requested(self) and RunStopped is not None:
+            raise RunStopped
         order = self.queue_order(rows)
         by_nick = {getattr(row, "nick", ""): row for row in rows}
         ranked = [by_nick[nick] for nick in order if nick in by_nick]
@@ -135,6 +161,10 @@ class RunQueueMixin:
             await asyncio.sleep(0.2)
 
     async def _run_single_target_cycle(self, has_skip: bool, take_matched: bool) -> str:
+        try:
+            from actions.cancellation import RunStopped
+        except ImportError:  # pragma: no cover - red phase
+            RunStopped = None  # type: ignore
         take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
         if take_present and not take_matched:
             self.log_msg.emit("⚠ Use Person from Memory: Pick Person found no one to work — nothing to click this cycle")
@@ -146,12 +176,36 @@ class RunQueueMixin:
             self.debug_msg.emit("⚠ Nothing to click: Click User 'Use Person from Memory' needs a nick saved by Pick Person or an earlier Click User this run", "warn")
             self._tracer.note({"type": "run_skip", "reason": "no_memory_nick"})
             return "empty"
+        if _is_stop_requested(self):
+            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            return "stopped"
         target = self.selected_nick
         self.progress.extend_total(1)
         self.log_msg.emit(f"▶ Single-target run — working the person saved in memory: “{target}” (the user list is ignored)")
         self.debug_msg.emit("ℹ Click User 'Use Person from Memory' is on: this stack runs once per cycle against the saved nick, not once per queued person.", "info")
         self._tracer.note({"type": "run_mode", "mode": "single_target", "nick": target})
-        status = await self._execute_for_user(UserRecord(nick=target), has_skip)
+        try:
+            status = await self._execute_for_user(UserRecord(nick=target), has_skip)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if RunStopped is not None and isinstance(exc, RunStopped):
+                status = "stop"
+            else:
+                raise
+        if status == "stop":
+            # Already announced in _execute_for_user; account + return.
+            self.progress.note_status("fail")
+            self.user_complete.emit(target, False)
+            return "stopped"
+        if _is_stop_requested(self):
+            # Stop observed before the automatic-mark boundary.
+            self.progress.note_status("fail")
+            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            self.user_complete.emit(target, False)
+            return "stopped"
         self.progress.note_status(status)
         if status == "ok":
             await self._memory.mark_messaged(target)
@@ -161,13 +215,23 @@ class RunQueueMixin:
 
     async def _run_take_phase(self) -> bool:
         try:
+            from actions.cancellation import RunStopped
+        except ImportError:  # pragma: no cover - red phase
+            RunStopped = None  # type: ignore
+        if _is_stop_requested(self) and RunStopped is not None:
+            raise RunStopped
+        try:
             rows = await self._memory.get_all()
         except Exception as exc:
             log.warning("Pick Person phase could not read the list: %s", exc)
             self.debug_msg.emit(f"      ❌ Pick Person: cannot read the People list ({exc})", "error")
             return False
+        if _is_stop_requested(self) and RunStopped is not None:
+            raise RunStopped
         matched = False
         for block in self._stack:
+            if _is_stop_requested(self) and RunStopped is not None:
+                raise RunStopped
             if block.block_id != "TAKE_PERSON" or not getattr(block, "enabled", True):
                 continue
             try:
