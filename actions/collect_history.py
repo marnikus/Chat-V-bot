@@ -86,119 +86,201 @@ class CollectHistory(BaseAction):
     # ── execution ────────────────────────────────────────────────
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
-        report = getattr(engine, "report", None) or (lambda *_a, **_k: None)
+        """Archive the open conversation, and say what happened.
 
+        Four steps, in the order the run console reads them: make sure the
+        archive service is usable, work out WHO the open chat is with, read it,
+        then report the outcome. Each one owns its refusal messages — RULE 4
+        ("nothing new" is an OK with an explanation, "wrong chat" is a failure)
+        is a property of the reporting step, not something every branch has to
+        remember.
+        """
+        await self.pre_delay()
+        run = _CollectRun(self, engine)
+        if not run.attach_service():
+            return ActionResult.FAIL
+        if not await run.find_target():
+            return ActionResult.FAIL
+        await run.collect()
+        return await run.report_outcome()
+
+
+class _CollectRun:
+    """One execution of the block: the settings, the service and the result.
+
+    The steps below all need the same five things (the block, the engine's
+    `report`, the service, the nick, the sync result), which is why they are
+    methods of one small object instead of four functions with six arguments.
+    """
+
+    def __init__(self, block: CollectHistory, engine):
+        self.block = block
+        self.engine = engine
+        self.report = getattr(engine, "report", None) or (lambda *_a, **_k: None)
+        self.service = None
+        self.repo = None
+        self.parser = None
+        self.partner = ""
+        self.my_nick = ""
+        self.nick = ""
+        self.verify = False
+        self.result = None
+        self.state: dict = {}
+
+    def say(self, message: str, level: str = "info") -> None:
+        self.report(message, level)
+
+    # ── step 1: is the archive reachable? ────────────────────────
+    def attach_service(self) -> bool:
+        engine = self.engine
         service = getattr(engine, "history", None) if engine else None
         if service is None:
-            report("❌ Collect Message History: the message archive service "
-                   "is not available in this run", "error")
-            return ActionResult.FAIL
+            self.say("❌ Collect Message History: the message archive service "
+                     "is not available in this run", "error")
+            return False
         if not getattr(service, "enabled", True):
-            report("❌ Collect Message History: the archive is disabled in "
-                   "the settings — nothing was collected", "error")
-            return ActionResult.FAIL
-
+            self.say("❌ Collect Message History: the archive is disabled in "
+                     "the settings — nothing was collected", "error")
+            return False
         repo = getattr(service, "repo", None)
         parser = getattr(service, "parser", None)
         if repo is None or parser is None:
-            report("❌ Collect Message History: the archive service is "
-                   "incomplete (no repository or parser)", "error")
-            return ActionResult.FAIL
+            self.say("❌ Collect Message History: the archive service is "
+                     "incomplete (no repository or parser)", "error")
+            return False
+        self.service, self.repo, self.parser = service, repo, parser
+        return True
 
-        state = await parser.state()
+    # ── step 2: who is this conversation with? ───────────────────
+    async def find_target(self) -> bool:
+        """The page's partner, cross-checked against what the run remembers.
+
+        `target="memory_nick"` is the mode that must never file messages under
+        the wrong person, so it refuses on a mismatch instead of trusting
+        either side (RULE 6 in the house rules for this block).
+        """
+        block = self.block
+        state = await self._open_page()
+        self.partner = " ".join(str(state.get("partner") or "").split()).strip()
+        self.my_nick = (getattr(self.service, "my_nick", "")
+                        or " ".join(str(state.get("me") or "").split()).strip())
+        self.state = state
+        if block.require_private and state.get("tab") != "private":
+            self.say("❌ Collect Message History: the active tab is not a "
+                     "private chat — nothing was collected", "error")
+            return False
+        self.nick = self.partner
+        if block.target == "memory_nick" and not self._take_memory_nick():
+            return False
+        if not self.nick:
+            self.say("❌ Collect Message History: could not tell who this "
+                     "conversation is with", "error")
+            return False
+        return not self._mismatch()
+
+    async def _open_page(self) -> dict:
+        state = await self.parser.state()
         if not int(state.get("agent") or 0):
-            await parser.install()
-            state = await parser.state()
-        partner = " ".join(str(state.get("partner") or "").split()).strip()
-        my_nick = (getattr(service, "my_nick", "") or
-                   " ".join(str(state.get("me") or "").split()).strip())
+            await self.parser.install()
+            state = await self.parser.state()
+        return state
 
-        if self.require_private and state.get("tab") != "private":
-            report("❌ Collect Message History: the active tab is not a "
-                   "private chat — nothing was collected", "error")
-            return ActionResult.FAIL
-
-        nick = partner
-        verify = False
-        if self.target == "memory_nick":
-            nick = (getattr(engine, "selected_nick", "") or "").strip()
-            if not nick:
-                report("❌ Collect Message History: no nick is saved in "
-                       "memory this run — add a Pick Person / Click User "
-                       "block before it", "error")
-                return ActionResult.FAIL
-            verify = True
+    def _take_memory_nick(self) -> bool:
+        nick = (getattr(self.engine, "selected_nick", "") or "").strip()
         if not nick:
-            report("❌ Collect Message History: could not tell who this "
-                   "conversation is with", "error")
-            return ActionResult.FAIL
-        if verify and nick.strip().lower() != partner.strip().lower():
-            report(f"❌ Collect Message History: nick mismatch — memory says "
-                   f"“{nick}” but the open chat is with “{partner}”; nothing "
-                   f"was written", "error")
-            return ActionResult.FAIL
+            self.say("❌ Collect Message History: no nick is saved in "
+                     "memory this run — add a Pick Person / Click User "
+                     "block before it", "error")
+            return False
+        self.nick = nick
+        self.verify = True
+        return True
 
-        parser.chunk_size = self.chunk_size
-        parser.chunk_pause_ms = self.chunk_pause_ms
-        if self.mode == "full":
-            await repo.reset_cursor(nick)
+    def _mismatch(self) -> bool:
+        """True when memory and the open tab disagree (and the run must stop)."""
+        if not self.verify:
+            return False
+        if self.nick.strip().lower() == self.partner.strip().lower():
+            return False
+        self.say(f"❌ Collect Message History: nick mismatch — memory says "
+                 f"“{self.nick}” but the open chat is with “{self.partner}”; "
+                 f"nothing was written", "error")
+        return True
 
-        report(f"🗃 Collecting message history with “{nick}” "
-               f"({state.get('count', 0)} visible)…", "info")
+    # ── step 3: read it ──────────────────────────────────────────
+    async def collect(self) -> None:
+        block, repo, parser = self.block, self.repo, self.parser
+        parser.chunk_size = block.chunk_size
+        parser.chunk_pause_ms = block.chunk_pause_ms
+        if block.mode == "full":
+            await repo.reset_cursor(self.nick)
+        self.say(f"🗃 Collecting message history with “{self.nick}” "
+                 f"({self.state.get('count', 0)} visible)…", "info")
+        stopping = getattr(self.engine, "is_stopping", None)
+        self.result = await sync_conversation(
+            parser, repo, self.nick, my_nick=self.my_nick,
+            require_private=block.require_private, verify_partner=self.verify,
+            max_messages=block.max_messages or None,
+            chunk_pause_ms=block.chunk_pause_ms, should_stop=stopping,
+            on_progress=self._progress, now=block.now(),
+            backfill_older=(block.mode == "full"),
+            media=repo.media if block.download_media else None)
 
-        def progress(done: int, total: int) -> None:
-            report(f"🗃 “{nick}”: {done}/{total} messages read", "info")
+    def _progress(self, done: int, total: int) -> None:
+        """RULE 5: every chunk, as it lands."""
+        self.say(f"🗃 “{self.nick}”: {done}/{total} messages read", "info")
 
-        stopping = getattr(engine, "is_stopping", None)
-        result = await sync_conversation(
-            parser, repo, nick, my_nick=my_nick,
-            require_private=self.require_private, verify_partner=verify,
-            max_messages=self.max_messages or None,
-            chunk_pause_ms=self.chunk_pause_ms,
-            should_stop=stopping, on_progress=progress, now=self.now(),
-            backfill_older=(self.mode == "full"),
-            media=repo.media if self.download_media else None)
-
+    # ── step 4: what does the user see? ──────────────────────────
+    async def report_outcome(self) -> str:
+        result = self.result
         if not result.ok:
-            if result.reason == "not_private":
-                report("❌ Collect Message History: the active tab is not a "
-                       "private chat — nothing was collected", "error")
-            elif result.reason == "partner_mismatch":
-                report(f"❌ Collect Message History: nick mismatch — the open "
-                       f"chat is not with “{nick}”; nothing was written",
-                       "error")
-            else:
-                report(f"❌ Collect Message History failed: "
-                       f"{result.reason or 'unknown reason'}", "error")
-            return ActionResult.FAIL
-
-        media = getattr(service, "media", None)
-        if media is not None and self.download_media:
-            try:
-                cached = await media.process_pending()
-                if cached:
-                    report(f"🖼 Cached {cached} image(s)/GIF(s) for “{nick}”",
-                           "info")
-            except Exception as e:                    # noqa: BLE001
-                log.debug("media caching skipped: %s", e)
-
+            return self._refusal()
+        await self._cache_media()
         if result.stopped:
-            report(f"⏹ Collect Message History stopped on request — "
-                   f"{result.added} new message(s) kept for “{nick}” "
-                   f"({result.total} in the archive)", "success")
+            self.say(f"⏹ Collect Message History stopped on request — "
+                     f"{result.added} new message(s) kept for “{self.nick}” "
+                     f"({result.total} in the archive)", "success")
             return ActionResult.OK
         if result.gap:
-            report("⚠ Part of the conversation was not visible — a gap was "
-                   "recorded in the archive", "info")
+            self.say("⚠ Part of the conversation was not visible — a gap was "
+                     "recorded in the archive", "info")
         if result.added:
-            report(f"✅ Archived {result.added} new message(s) for “{nick}” "
-                   f"— {result.total} stored in total", "success")
+            self.say(f"✅ Archived {result.added} new message(s) for "
+                     f"“{self.nick}” — {result.total} stored in total",
+                     "success")
             return ActionResult.OK
-        if self.fail_if_empty:
-            report(f"❌ No new messages for “{nick}” and the block is set to "
-                   f"fail when nothing new arrives", "error")
+        if self.block.fail_if_empty:
+            self.say(f"❌ No new messages for “{self.nick}” and the block is "
+                     f"set to fail when nothing new arrives", "error")
             return ActionResult.FAIL
-        report(f"ℹ No new messages for “{nick}” — the archive already has "
-               f"all {result.total}", "success")
+        self.say(f"ℹ No new messages for “{self.nick}” — the archive already "
+                 f"has all {result.total}", "success")
         return ActionResult.OK
+
+    def _refusal(self) -> str:
+        """The sync said no: name the reason the way the run console does."""
+        result, nick = self.result, self.nick
+        if result.reason == "not_private":
+            self.say("❌ Collect Message History: the active tab is not a "
+                     "private chat — nothing was collected", "error")
+        elif result.reason == "partner_mismatch":
+            self.say(f"❌ Collect Message History: nick mismatch — the open "
+                     f"chat is not with “{nick}”; nothing was written",
+                     "error")
+        else:
+            self.say(f"❌ Collect Message History failed: "
+                     f"{result.reason or 'unknown reason'}", "error")
+        return ActionResult.FAIL
+
+    async def _cache_media(self) -> None:
+        media = getattr(self.service, "media", None)
+        if media is None or not self.block.download_media:
+            return
+        try:
+            cached = await media.process_pending()
+        except Exception as e:                        # noqa: BLE001
+            log.debug("media caching skipped: %s", e)
+            return
+        if cached:
+            self.say(f"🖼 Cached {cached} image(s)/GIF(s) for "
+                     f"“{self.nick}”", "info")

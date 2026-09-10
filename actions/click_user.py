@@ -7,6 +7,7 @@ outline on the click target, then the click — and finally confirms that a new
 chat tab actually appeared before reporting the step as done.
 """
 
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -84,37 +85,24 @@ class ClickUser(BaseAction):
             return None
         return res if isinstance(res, dict) else None
 
+    # ── execution ────────────────────────────────────────────────
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        import asyncio
+        """Open this person's chat, then prove a tab appeared.
 
+        Three steps: work out which nick to click (the queue's user or the run's
+        {{nick}} memory), click it through the shared visual-confirmation
+        runner, and confirm the chat tab. Only the last step is
+        block-specific — the find/click half is `visual_click`'s job (RULE 1),
+        and the "did the page react?" check is what makes this block refuse
+        rather than report a click nobody can see.
+        """
         await self.pre_delay()
-
-        # "Use Person from Memory": the person to click is the nick saved in
-        # this run's {{nick}} memory — NOT the queued user. Never click
-        # blindly: with no saved nick we fail loudly instead of guessing.
-        if self.use_person_from_memory:
-            nick = (getattr(engine, "selected_nick", "") or "") if engine \
-                else ""
-            if not nick:
-                if engine:
-                    engine.report(
-                        "❌ Use Person from Memory: no person is saved in "
-                        "memory this run — add a Pick Person block before "
-                        "it (or let an earlier Click User click someone) so "
-                        "{{nick}} has a value", "error")
-                log.warning("Click User (memory): no selected nick to click")
-                return ActionResult.FAIL
-        else:
-            nick = user_nick
-
+        nick = self._resolve_nick(user_nick, engine)
+        if nick is None:
+            return ActionResult.FAIL
         label = f"person “{nick}”"
-
-        # Snapshot the tabs BEFORE clicking, so "a new tab appeared" is provable.
-        before = await self._read_tabs(cdp) if self.verify_new_tab else None
-        if before is not None and engine:
-            engine.report(f"🗂 {before.get('count', 0)} chat tab(s) open before "
-                          "the click", "info")
+        before = await self._tabs_before(cdp, engine)
 
         # Find (red) → pause → click target (orange) → click, via the shared runner.
         outcome = await find_and_click_exact(
@@ -133,47 +121,92 @@ class ClickUser(BaseAction):
 
         # The click selected this person: remember the nickname for every
         # {{nick}} field in the rest of this run, until the next selection.
-        if engine is not None:
-            note = getattr(engine, "note_selected", None)
-            if note is not None:
-                note(nick)
-
+        self._remember_selection(engine, nick)
         if not self.verify_new_tab:
             return ActionResult.OK
+        return await self._verify_new_tab(cdp, engine, nick, label, before)
 
-        # Small pause so the tab has time to be created, then confirm it exists.
+    def _say(self, engine: Optional[object], message: str,
+             level: str = "info") -> None:
+        """`engine.report` when there is a run console, silence when not."""
+        report = getattr(engine, "report", None) if engine else None
+        if report is not None:
+            report(message, level)
+
+    def _resolve_nick(self, user_nick: str,
+                      engine: Optional[object]) -> Optional[str]:
+        """The person to click: memory's nick, or the queued user.
+
+        "Use Person from Memory" ignores the queue and clicks the nick saved in
+        {{nick}} this run. Never click blindly — with no saved nick the block
+        fails loudly instead of guessing at someone.
+        """
+        if not self.use_person_from_memory:
+            return user_nick
+        nick = (getattr(engine, "selected_nick", "") or "") if engine else ""
+        if nick:
+            return nick
+        self._say(engine, "❌ Use Person from Memory: no person is saved in "
+                          "memory this run — add a Pick Person block before "
+                          "it (or let an earlier Click User click someone) so "
+                          "{{nick}} has a value", "error")
+        log.warning("Click User (memory): no selected nick to click")
+        return None
+
+    async def _tabs_before(self, cdp: CDPClient,
+                           engine: Optional[object]) -> Optional[dict]:
+        """Snapshot the tabs BEFORE the click, so "a new one appeared" is provable."""
+        if not self.verify_new_tab:
+            return None
+        before = await self._read_tabs(cdp)
+        if before is not None:
+            self._say(engine, f"🗂 {before.get('count', 0)} chat tab(s) open "
+                              "before the click", "info")
+        return before
+
+    @staticmethod
+    def _remember_selection(engine: Optional[object], nick: str) -> None:
+        if engine is None:
+            return
+        note = getattr(engine, "note_selected", None)
+        if note is not None:
+            note(nick)
+
+    async def _verify_new_tab(self, cdp: CDPClient, engine, nick: str,
+                              label: str, before: Optional[dict]) -> str:
+        """The tab check: a new tab, or a tab that now carries the nick's name.
+
+        Unreadable page means the click is trusted (`OK` with a warning) — the
+        tab count is evidence, not a veto, because the click itself already
+        succeeded.
+        """
         if self.tab_pause_ms:
-            if engine:
-                engine.report(f"⏸ Waiting {self.tab_pause_ms} ms for the new tab…",
-                              "info")
+            self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
+                              "tab…", "info")
             await asyncio.sleep(self.tab_pause_ms / 1000.0)
-
         after = await self._read_tabs(cdp)
         if after is None:
-            if engine:
-                engine.report("⚠ Could not read the tab list to confirm the new "
-                              "tab — assuming the click worked", "warn")
+            self._say(engine, "⚠ Could not read the tab list to confirm the "
+                              "new tab — assuming the click worked", "warn")
             return ActionResult.OK
-
         before_count = int((before or {}).get("count", 0) or 0)
         after_count = int(after.get("count", 0) or 0)
         titles = [str(t) for t in (after.get("titles") or [])]
-        matched = any(nick and nick in t for t in titles)
+        if after_count <= before_count and not any(nick and nick in t
+                                                   for t in titles):
+            return self._no_new_tab(engine, nick, label, before_count,
+                                    after_count, titles)
+        how = (f"tab count {before_count} → {after_count}" if
+               after_count > before_count else f"a tab titled “{nick}” is open")
+        self._say(engine, f"✅ New tab confirmed for {label} ({how})", "success")
+        log.info("Opened chat tab for %s", nick)
+        return ActionResult.OK
 
-        if after_count > before_count or matched:
-            how = (f"tab count {before_count} → {after_count}" if
-                   after_count > before_count else
-                   f"a tab titled “{nick}” is open")
-            if engine:
-                engine.report(f"✅ New tab confirmed for {label} ({how})", "success")
-            log.info("Opened chat tab for %s", nick)
-            return ActionResult.OK
-
-        if engine:
-            engine.report(
-                f"❌ No new tab appeared for {label} — still {after_count} tab(s): "
-                + (", ".join(f"“{t[:24]}”" for t in titles[:5]) or "none"),
-                "error")
+    def _no_new_tab(self, engine, nick: str, label: str, before_count: int,
+                    after_count: int, titles: list) -> str:
+        listed = ", ".join(f"“{t[:24]}”" for t in titles[:5]) or "none"
+        self._say(engine, f"❌ No new tab appeared for {label} — still "
+                          f"{after_count} tab(s): {listed}", "error")
         log.warning("No new tab after clicking %s", nick)
         return ActionResult.FAIL
 
