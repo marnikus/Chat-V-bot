@@ -327,3 +327,99 @@ tests/*.js                              22/24 pass — both failures
 
 Every assertion in the 29 pre-existing query/archive tests survived the
 signature change unchanged; only the call syntax moved.
+
+---
+
+## 8. Mutation testing
+
+Added after the refactor, because a 100% coverage number on new code (§7.3)
+says the lines ran — it does not say anything checked what they produced.
+
+Tool: `mutmut==3.7.0`, configured in `setup.cfg`. Run:
+
+```bash
+.venv/bin/mutmut run --max-children 8
+.venv/bin/mutmut results --all True
+```
+
+### 8.1 It found a real hole, and the hole was mine
+
+The first run scored new code at **43.7%** (52 killed / 67 survived) against a
+70% target. `_person_item` alone survived **52 of 65** mutants. The survivors
+were not exotic:
+
+```python
+-        "message_count": int(data.get("message_count") or 0),
++        "XXmessage_countXX": int(data.get("message_count") or 0),   # survived
++        "message_count": int(data.get("message_count") and 0),      # survived
+```
+
+Renaming a payload key the UI renders broke nothing any test could see,
+because every sort test read `item["nick"]` to check *ordering* and never
+looked at the rest of the row. Coverage reported 100% the whole time.
+
+Two rounds of tests closed it:
+
+| round | added | `_person_item` | `list_persons` | new code |
+|---|---|---|---|---|
+| before | — | 13/65 (20%) | 39/54 (72%) | **43.7%** |
+| 1 | `tests/test_person_item.py` (12 tests) | 65/65 | 39/54 | **87.4%** |
+| 2 | `TestResponseEnvelope` (8 tests) | 65/65 | 55/55 | **100%** |
+
+Round 2 targeted the remaining survivors by name: the payload envelope keys
+(`"limit"` → `"XXlimitXX"`), the `has_more` boundary (`>` → `>=`, which would
+make the UI scroll for an empty page), and the `my_nicks` wiring
+(`_person_item(row, None)`).
+
+**Final: 159 killed / 0 survived** across every reachable mutant in
+`backend/history_query.py`; **120 killed / 0 survived** on the new code
+specifically. Result statuses seen were only `killed` and `no tests`.
+
+### 8.2 What mutation testing cannot see here — read this before trusting 100%
+
+`PersonPageRequest` generated **zero mutants**. Not "zero survived" — the tool
+never instrumented it. A minimal repro confirms why:
+
+```python
+@dataclass(frozen=True)
+class Req:
+    q: str = ""
+    def needle(self) -> str: ...      # -> 0 mutants
+
+def plain(x: int) -> int: ...          # -> 2 mutants
+```
+
+mutmut 3.7.0 does not mutate methods on a `@dataclass`. So the 97-LOC request
+object that holds most of the new logic — `where()`, `order()`, `columns()`,
+`resolved_dir()` — is **outside** the 100% figure entirely. Its protection is
+the 20 unit tests in `tests/test_person_page_request.py`, not mutation
+testing. Anyone citing "100% mutation score" for this feature should know it
+covers `_person_item` and `list_persons` only.
+
+The 1066 `no tests` mutants are the rest of `backend/history_query.py`
+(`page`, `around`, `search_global`, `gaps`, …) — pre-existing code the
+deliberately narrow suite in `setup.cfg` does not reach. They are excluded
+from the score rather than counted as surviving, so narrowing the suite cannot
+inflate the result; it can only shrink what is measured.
+
+### 8.3 Verification for this section
+
+```
+tests/test_person_item.py            12 passed
+tests/test_person_page_request.py    20 passed
+tests/test_userdb_sort_query.py      31 passed   (23 sort + 8 envelope)
+tests/test_rule16_new_code.py         9 passed
+full pytest (--noconftest, --deselect test_sash_webengine.py)
+                                  2199 passed, 3 skipped, 1 xfailed,
+                                  771 subtests, 1 collection error
+mutmut                            159 killed / 0 survived
+```
+
+The suite count reconciles exactly against the §7.4 figure:
+2187 + 12 (`test_person_item`) + 8 (`TestResponseEnvelope`) − 8 = 2199. The
+−8 is `tests/unit/app/test_app_bootstrap.py`, which cannot be collected on
+this machine because `libGL.so.1` is absent and PySide6's WebEngine bindings
+will not import. That is an environment gap, not a code failure — the file
+collected and passed in the §7.4 run. `--noconftest` is used because
+`tests/conftest.py` imports the same WebEngine bindings at module scope; it
+provides only a teardown hook, and none of the suites above use its fixtures.

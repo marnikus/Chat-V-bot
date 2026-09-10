@@ -371,5 +371,71 @@ class TestRealRepositoryPath(SortCase):
                          ["Nick", "Other"])
 
 
+class TestResponseEnvelope(SortCase):
+    """The paging envelope the UI reads, pinned key by key.
+
+    Mutation testing found these unpinned: renaming the payload key `"limit"`
+    to `"LIMIT"`, flipping `total > offset + len(items)` to `>=`, and dropping
+    the `my_nicks` argument all survived, because the sort tests only ever read
+    `item["nick"]` to check ordering and `page["total"]` once.
+    """
+
+    async def test_the_envelope_has_exactly_these_keys(self):
+        await self.person("Ann")
+        page = await self.q.list_persons(PersonPageRequest())
+        self.assertEqual(
+            set(page),
+            {"items", "total", "has_more", "offset", "limit", "query",
+             "sort", "dir"})
+
+    async def test_the_requested_limit_is_honoured_and_echoed(self):
+        for n in ("A", "B", "C", "D", "E"):
+            await self.person(n)
+        page = await self.q.list_persons(PersonPageRequest(limit=2))
+        self.assertEqual(page["limit"], 2)
+        self.assertEqual(len(page["items"]), 2)
+
+    async def test_the_offset_is_echoed_and_applied(self):
+        for n in ("A", "B", "C"):
+            await self.person(n)
+        page = await self.q.list_persons(PersonPageRequest(limit=2, offset=1))
+        self.assertEqual(page["offset"], 1)
+        self.assertEqual(len(page["items"]), 2)
+
+    async def test_has_more_is_false_on_exactly_the_last_page(self):
+        """`total > offset + len(items)`. At exactly the end it must be False —
+        mutating `>` to `>=` makes the UI scroll for a page that is empty."""
+        for n in ("A", "B", "C"):
+            await self.person(n)
+        page = await self.q.list_persons(PersonPageRequest(limit=3))
+        self.assertEqual(page["total"], 3)
+        self.assertFalse(page["has_more"])
+
+    async def test_has_more_is_true_while_rows_remain(self):
+        for n in ("A", "B", "C"):
+            await self.person(n)
+        page = await self.q.list_persons(PersonPageRequest(limit=2))
+        self.assertTrue(page["has_more"])
+
+    async def test_the_query_is_echoed_verbatim(self):
+        await self.person("Ann")
+        page = await self.q.list_persons(PersonPageRequest(q=" Ann "))
+        self.assertEqual(page["query"], " Ann ",
+                         "echoed as sent, not normalised")
+
+    async def test_my_nicks_reach_the_payload(self):
+        """`_person_item(row, self._my_nicks(row))` — passing None instead
+        survived mutation testing, so the wiring is asserted here."""
+        await self.person("Ann", my_nicks=["Me", "Me2"])
+        page = await self.q.list_persons(PersonPageRequest())
+        self.assertEqual(page["items"][0]["my_nicks"], ["Me", "Me2"])
+
+    async def test_an_empty_database_still_reports_a_total(self):
+        page = await self.q.list_persons(PersonPageRequest())
+        self.assertEqual(page["total"], 0)
+        self.assertEqual(page["items"], [])
+        self.assertFalse(page["has_more"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
