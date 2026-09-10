@@ -9,7 +9,7 @@ from core.events import Event, EventBus
 
 try:
     from stores.user_memory import UserRecord
-except Exception:
+except Exception:  # pragma: no cover - defensive fallback for isolated import
     @dataclass
     class UserRecord:
         nick: str
@@ -131,6 +131,7 @@ class RunQueueMixin:
         return ranked or queue
 
     async def _wait_if_paused(self) -> None:
+        """Park while paused; exits promptly on stop. Callers must re-check stop."""
         while self._paused and not self._stop_requested:
             await asyncio.sleep(0.2)
 
@@ -151,17 +152,39 @@ class RunQueueMixin:
         self.log_msg.emit(f"▶ Single-target run — working the person saved in memory: “{target}” (the user list is ignored)")
         self.debug_msg.emit("ℹ Click User 'Use Person from Memory' is on: this stack runs once per cycle against the saved nick, not once per queued person.", "info")
         self._tracer.note({"type": "run_mode", "mode": "single_target", "nick": target})
-        status = await self._execute_for_user(UserRecord(nick=target), has_skip)
-        self.progress.note_status(status)
+        from actions.cancellation import RunStopped
+        try:
+            status = await self._execute_for_user(UserRecord(nick=target), has_skip)
+        except asyncio.CancelledError:
+            raise
+        # Cooperative stop already maps to "stop" inside _execute_for_user;
+        # defence in depth for any future RunStopped leak:
+        except RunStopped:
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            return "stopped"
+        self.progress.note_status("fail" if status == "stop" else status)
+        if status == "stop":
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            self.user_complete.emit(target, False)
+            return "stopped"
         if status == "ok":
+            if getattr(self, "_stop_requested", False):
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+                self.user_complete.emit(target, False)
+                return "stopped"
             await self._memory.mark_messaged(target)
             self.person_marked.emit(target)
         self.user_complete.emit(target, status == "ok")
         return "worked"
 
     async def _run_take_phase(self) -> bool:
+        from actions.cancellation import RunStopped, raise_if_stopped
+        raise_if_stopped(self)
         try:
             rows = await self._memory.get_all()
+        except (RunStopped, asyncio.CancelledError):
+            raise
         except Exception as exc:
             log.warning("Pick Person phase could not read the list: %s", exc)
             self.debug_msg.emit(f"      ❌ Pick Person: cannot read the People list ({exc})", "error")
@@ -170,8 +193,11 @@ class RunQueueMixin:
         for block in self._stack:
             if block.block_id != "TAKE_PERSON" or not getattr(block, "enabled", True):
                 continue
+            raise_if_stopped(self)
             try:
                 nick = block.choose(rows, self)
+            except (RunStopped, asyncio.CancelledError):
+                raise
             except Exception as exc:
                 log.warning("Pick Person failed: %s", exc)
                 self.debug_msg.emit(f"      ❌ Pick Person raised: {exc}", "error")

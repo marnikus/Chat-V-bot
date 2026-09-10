@@ -41,7 +41,7 @@ class RunStateMachine:
         return self.state
 
     def mark_running(self) -> RunState:
-        if self.state in (RunState.ERROR, RunState.DONE):
+        if self.state in (RunState.ERROR, RunState.DONE, RunState.STOPPING):
             self.reset()
         return self.transition(RunState.RUNNING)
 

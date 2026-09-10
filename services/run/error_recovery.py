@@ -13,18 +13,41 @@ class RetryPolicy:
         self.base_delay = max(0.0, float(base_delay))
 
     def should_retry(self, exc: Exception, attempt: int) -> bool:
+        # Cooperative stop is never retried, even by permissive subclasses.
+        from actions.cancellation import RunStopped
+        if isinstance(exc, RunStopped):
+            return False
         transient = (TimeoutError, ConnectionError, asyncio.TimeoutError)
         return attempt < self.max_retries and isinstance(exc, transient)
 
-    async def retry_with_backoff(self, op, *, fallback=None):
+    async def retry_with_backoff(self, op, *, fallback=None, is_stopping=None):
+        """Run op() with retries. RunStopped/CancelledError always propagate.
+
+        is_stopping: optional ()->bool, keyword-only. When provided, the
+        backoff sleep is stop-aware and raises RunStopped instead of retrying.
+        """
+        from actions.cancellation import RunStopped
         attempt = 0
         while True:
+            if callable(is_stopping):
+                try:
+                    if bool(is_stopping()):
+                        raise RunStopped()
+                except RunStopped:
+                    raise
+                except Exception:
+                    pass
             try:
                 return await op()
+            except RunStopped:
+                raise
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 if not self.should_retry(exc, attempt):
                     return await fallback(exc) if fallback else (_raise(exc))
-                await asyncio.sleep(self.base_delay * (2 ** attempt))
+                await _sleep_stop_aware(self.base_delay * (2 ** attempt),
+                                        is_stopping)
                 attempt += 1
 
     async def fallback(self, exc: Exception):
@@ -35,8 +58,38 @@ def _raise(exc: Exception):
     raise exc
 
 
+async def _sleep_stop_aware(delay: float, is_stopping=None) -> None:
+    """Backoff sleep that raises RunStopped when the predicate fires."""
+    from actions.cancellation import RunStopped
+    try:
+        delay_f = max(0.0, float(delay))
+    except (TypeError, ValueError):
+        delay_f = 0.0
+    if delay_f <= 0:
+        return
+    if not callable(is_stopping):
+        await asyncio.sleep(delay_f)
+        return
+    # Short slices so stop surfaces promptly (≤50 ms granularity).
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + delay_f
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(min(0.05, remaining))
+        try:
+            if bool(is_stopping()):
+                raise RunStopped()
+        except RunStopped:
+            raise
+        except Exception:
+            pass
+
+
 class RunExecutionMixin:
     async def _run_collect_phase(self, block):
+        from actions.cancellation import RunStopped
         self.log_msg.emit("📜 Collecting people (Scroll & Parse)…")
         self._tracer.note({"type": "phase", "phase": "collect"})
         self._ctx = {"block_id": block.block_id, "block_name": block.display_name, "phase": "collect"}
@@ -48,7 +101,14 @@ class RunExecutionMixin:
         try:
             result = await self._retry.retry_with_backoff(
                 lambda: block.run_pipeline(self._cdp, self, panel_criteria=self._criteria, known_messaged=known),
-                fallback=lambda exc: self._collect_failed(block, exc))
+                fallback=lambda exc: self._collect_failed(block, exc),
+                is_stopping=getattr(self, "is_stopping", None))
+        except RunStopped:
+            self._ctx = {}
+            raise
+        except asyncio.CancelledError:
+            self._ctx = {}
+            raise
         except Exception:
             self._ctx = {}
             return []
@@ -75,12 +135,16 @@ class RunExecutionMixin:
         return [person for person in result.collected if not person.messaged]
 
     async def _collect_failed(self, block, exc: Exception):
+        from actions.cancellation import RunStopped
+        if isinstance(exc, (RunStopped, asyncio.CancelledError)):
+            raise exc
         log.exception("Collect phase failed")
         self.debug_msg.emit(f"      ❌ Scroll & Parse raised: {exc}", "error")
         self._tracer.note({"type": "phase_end", "phase": "collect", "status": "exception", "error": str(exc)})
         raise exc
 
     async def _execute_for_user(self, user, has_skip: bool) -> str:
+        from actions.cancellation import RunStopped
         if user.messaged and has_skip:
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return "skip"
@@ -99,6 +163,10 @@ class RunExecutionMixin:
                 self._tracer.note({"type": "run_end", "reason": "stopped"})
                 return "stop"
             await self._wait_if_paused()
+            if self._stop_requested:
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+                return "stop"
             if not getattr(block, "enabled", True):
                 self.debug_msg.emit(f"      ⏭ Skipped disabled block [{block.block_id}] {block.display_name}", "warn")
                 self._tracer.note({"type": "step_skip", "reason": "disabled", "block_id": block.block_id, "block_name": block.display_name, "step": idx})
@@ -118,24 +186,38 @@ class RunExecutionMixin:
             self._tracer.note({"type": "step_start", **self._ctx})
             originals = self._expand_nick_on_block(block, self.selected_nick or user.nick)
             try:
-                result = await self._retry.retry_with_backoff(
-                    lambda: block.execute(user.nick, self._cdp, self),
-                    fallback=lambda exc: self._step_failed(block, user.nick, exc))
-            except Exception:
+                try:
+                    result = await self._retry.retry_with_backoff(
+                        lambda: block.execute(user.nick, self._cdp, self),
+                        fallback=lambda exc: self._step_failed(block, user.nick, exc),
+                        is_stopping=getattr(self, "is_stopping", None))
+                except RunStopped:
+                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                    self._tracer.note({"type": "run_end", "reason": "stopped"})
+                    return "stop"
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    return "fail"
+                status = self._handle_step_result(block, user.nick, idx, started, result)
+                try:
+                    await self._call_action_hook(block, user.nick, status)
+                except (RunStopped, asyncio.CancelledError):
+                    raise
+                except Exception as hook_exc:
+                    log.warning("on_action_complete failed: %s", hook_exc)
+                if status != "ok":
+                    return status
+            finally:
                 self._restore_block_attrs(block, originals)
                 self._ctx = {}
-                return "fail"
-            self._restore_block_attrs(block, originals)
-            status = self._handle_step_result(block, user.nick, idx, started, result)
-            await self._call_action_hook(block, user.nick, status)
-            if status != "ok":
-                self._ctx = {}
-                return status
-            self._ctx = {}
         self.debug_msg.emit(f"      ✅ All steps done for {user.nick}", "success")
         return "ok"
 
     async def _step_failed(self, block, nick: str, exc: Exception):
+        from actions.cancellation import RunStopped
+        if isinstance(exc, (RunStopped, asyncio.CancelledError)):
+            raise exc
         log.exception("Block error")
         self._tracer.note({"type": "step_end", "status": "exception", "error": str(exc), **self._ctx})
         self.debug_msg.emit(f"      ❌ {block.display_name} raised: {exc}", "error")
