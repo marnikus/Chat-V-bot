@@ -1,6 +1,6 @@
 """stores/preset_store — CRUD, dirty/force semantics, legacy import.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §PS#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §PS#1–3.
 
 test_stores_split covers the migration machinery. This file pins the
 store contract itself: stacks and templates round-trip, overwrite in

@@ -1,7 +1,7 @@
 """Click the send button to submit the message.
 
 Uses the shared visual-confirmation runner (RED outline on the element found,
-pause, ORANGE outline on the click target, then click) per docs/AGENT_RULES.md,
+pause, ORANGE outline on the click target, then click) per docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES.md,
 and falls back to the mat-icon 'send' button when the submit button is absent —
 which is the one thing this block adds over the plain find-and-click family.
 """

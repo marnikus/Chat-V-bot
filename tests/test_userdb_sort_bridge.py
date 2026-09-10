@@ -10,7 +10,7 @@ request-id/signal protocol and pin:
     saved setting cannot change what the user sees;
   * a hostile `sort` / `dir` string is data, never SQL.
 
-Design: docs/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md §3.1 / §6.4
+Design: docs/archive/2026-09-10-history-push-and-sort/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md §3.1 / §6.4
 
 Run with:  python3 tests/test_userdb_sort_bridge.py
 """

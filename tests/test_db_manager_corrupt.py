@@ -1,7 +1,7 @@
 """services/db_service (backend/db_manager) — corrupt files, containment,
 concurrency.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §DB#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §DB#1–5.
 
 Promises proven here (module docstring, DB_CREATION_DELETION_REDESIGN):
 

@@ -2,8 +2,7 @@
 
 test_collector_state.py (31 tests) already pins the detection table, the
 status vocabulary, live push, throttling, self-healing and probe failure.
-This file covers the remaining seams (docs/SERVICES_TEST_DESIGN
-_2026-09-09.md §2.8): timeouts, volatile-state reset, person_cleared,
+This file covers the remaining seams (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md §2.8): timeouts, volatile-state reset, person_cleared,
 manual backfill and the memory-queue bridge in `_remember_partner`.
 
 Run with:  python3 tests/integration/services/test_services_collector_gaps.py

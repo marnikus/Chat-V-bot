@@ -1,6 +1,6 @@
 """stores/user_memory — memory/link/cycle edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §15 (UMM-01–15).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §15 (UMM-01–15).
 
 test_user_memory_unit.py pins upsert idempotency, queue order, flips,
 snapshots, world travel and reopen. This file pins the seams around it:

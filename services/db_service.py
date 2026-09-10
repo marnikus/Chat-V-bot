@@ -1,7 +1,7 @@
 """Create / load / delete / clean the archive database — ONE DB = ONE WORLD.
 
-Since the unified single-DB redesign (docs/DB_CREATION_DELETION_REDESIGN_
-DESIGN_2026-09-08.md) a database file is a complete, self-contained world
+Since the unified single-DB redesign (docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md)
+a database file is a complete, self-contained world
 (messages, people queue, labels, undo, radar state, settings, and its own
 media folder). This module owns the lifecycle rules:
 

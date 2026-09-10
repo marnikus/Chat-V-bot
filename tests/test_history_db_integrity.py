@@ -1,6 +1,6 @@
 """stores/history_db — query helpers, lifecycle, hostile inputs.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §13 (HDB-01–17).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §13 (HDB-01–17).
 
 test_history_db_unit.py pins meta/fetch-shapes/WAL-size/FTS-flag, and
 test_db_schema_migration.py pins the repair paths. This file pins the thin

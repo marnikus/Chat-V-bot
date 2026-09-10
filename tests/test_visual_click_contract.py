@@ -1,9 +1,10 @@
 """backend/visual_click — runner-level confirmation pass/fail contract.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §VC#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §VC#1–5.
 
 find_click_visual covers the probe JS; this file pins what the RUNNER
-promises every action block (docs/AGENT_RULES: "THE way blocks click"):
+promises every action block (docs/current/AGENT_RULES.md RULE 1 — "THE way
+blocks click"):
 
   * an empty selector fails BEFORE touching the page;
   * find-only mode (click disabled) succeeds on a found element and

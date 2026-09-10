@@ -3,7 +3,7 @@
 test_services_history.py and test_history_service_lifecycle.py pin the
 settings/media/gaze/migration/world-switch surfaces. This file pins the
 remaining seams the AREA C refactor extracts and must preserve
-(docs/REFACTOR_2026-09-09_AREA_C_DESIGN.md §6.3):
+(docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md §6.3):
 
   * HistoryExportService: export_chat (json/text/csv), the collector
     runtime (stop state dict / restart branches), the push-binding routing

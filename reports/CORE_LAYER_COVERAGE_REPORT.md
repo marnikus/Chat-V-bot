@@ -98,7 +98,7 @@ None for `core/`. All four modules fully covered; integration fully covered. Pre
 
 ## 6. Deliverables
 
-- `docs/plans/CORE_LAYER_UNCOVERED_DESIGN.md`
+- `docs/archive/2026-09-09-test-suite/CORE_LAYER_UNCOVERED_DESIGN.md`
 - `tests/unit/core/test_interfaces_full.py`
 - `tests/unit/core/test_core_integration.py`
 - `tests/unit/core/test_di.py` (previous)

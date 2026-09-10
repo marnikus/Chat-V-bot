@@ -1,7 +1,6 @@
 """A world switch is a FULL restart — nothing from the old world survives.
 
-Phase 3 of the redesign (docs/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-
-09-08.md, D7): creating/loading/switching databases must restart every
+Phase 3 of the redesign (docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md, D7): creating/loading/switching databases must restart every
 world-bound surface fresh, so no stale data from world A can ever be seen
 from world B — and world A must come back exactly as it was left:
 

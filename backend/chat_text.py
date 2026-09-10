@@ -76,7 +76,8 @@ def payload(result) -> list:
 
     Unwrapping is total: a string is parsed, a non-list `items` and anything
     else yields `[]`. (Iterating the envelope dict used to yield its KEYS and
-    silently drop every record — see docs/MESSAGE_HISTORY_BUGS_DESIGN.)
+    silently drop every record — see
+    docs/archive/2026-09-07-labels-and-collector/MESSAGE_HISTORY_BUGS_DESIGN_2026-09-07.md.)
     """
     if result is None:
         return []

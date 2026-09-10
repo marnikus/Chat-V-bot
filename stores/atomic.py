@@ -3,7 +3,7 @@
 One file, one writer: `load()` reads from disk, `save()` writes a `.tmp`,
 fsyncs it and renames, so a crash can never leave a half-written config.
 
-AREA B1 (docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.1) added the two
+AREA B1 (docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.1) added the two
 things every caller kept re-implementing:
 
   * it accepts **a path or another `AtomicJsonStore`** — the same coercion a

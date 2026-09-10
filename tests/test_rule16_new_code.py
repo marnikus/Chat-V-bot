@@ -19,7 +19,7 @@ SonarSource score. They are dev dependencies — `pip install -r
 requirements-dev.txt`. When they are absent the complexity checks skip loudly
 rather than silently passing.
 
-Design: docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md
+Design: docs/archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md
 
 Run with:  python3 tests/test_rule16_new_code.py
 """

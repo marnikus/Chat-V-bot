@@ -1,6 +1,6 @@
 """backend/history_query — adversarial input, pagination edges, empty DB.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §HQ#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §HQ#1–5.
 
 The existing read-path suite (test_history_query.py) covers the happy
 paging/search behaviour on both back-ends. This file attacks the seams:

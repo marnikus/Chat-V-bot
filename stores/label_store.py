@@ -1,7 +1,7 @@
 """Person labels: custom coloured tags — ONE world's data, per database.
 
-Since the unified single-DB redesign (2026-09-08, docs/
-DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md) labels belong to the
+Since the unified single-DB redesign (2026-09-08, docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md)
+labels belong to the
 WORLD they were created in: the definitions live in the `labels` table and
 the person→label mapping in `label_assigns` inside the active database file,
 so deleting a database takes its labels with it and loading another one

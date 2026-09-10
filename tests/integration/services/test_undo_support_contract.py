@@ -2,7 +2,7 @@
 
 test_services_undo.py pins push/undo/redo, the world split and the seq
 management. This file pins the seams the AREA C refactor extracts
-(docs/REFACTOR_2026-09-09_AREA_C_DESIGN.md §4):
+(docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md §4):
 
   * migrate_global_history: the stored undo_history branch (per-kind
     validation, seq preservation, index clamping) and the legacy branch

@@ -1,6 +1,6 @@
 """The small stores — block/bookmark/session/settings/undo/labels-file.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §3–§8
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §3–§8
 (BLK-01–10, BMK-01–08, SES-01–07, SET-01–08, UND-01–07, LBF-01–06).
 
 test_stores_migration.py covers one happy path per store; this file pins the

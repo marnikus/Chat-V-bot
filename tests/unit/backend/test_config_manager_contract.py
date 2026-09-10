@@ -1,6 +1,6 @@
 """backend/config_manager — contract tests (load / merge / missing / invalid).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §CF#1–7.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §CF#1–7.
 
 Promises proven here (from the module docstring + stores/jsonio):
 

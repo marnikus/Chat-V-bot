@@ -1,6 +1,6 @@
 """AREA B exit gates — file size, class size and the `stores/` layering rule.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2, §5 (criteria 2–4).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2, §5 (criteria 2–4).
 
 These are the numbers the plan asked for, written as tests so they cannot rot:
 

@@ -1,6 +1,6 @@
 """backend/tab_matcher — URL → tab scoring (pure logic, first direct tests).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §TM#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §TM#1–5.
 
 The module docstring defines the exact scoring ladder:
     url_exact +500 · url_path +300 · host +200 · keyword +60 · none 0

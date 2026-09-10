@@ -1,7 +1,6 @@
 """ONE database file = ONE fully self-contained world.
 
-The unified single-DB contract (docs/DB_CREATION_DELETION_REDESIGN_DESIGN_
-2026-09-08.md, phase 1) proven here against REAL SQLite files:
+The unified single-DB contract (docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md, phase 1) proven here against REAL SQLite files:
 
   * a newly created world contains the full v6 schema — all 12 tables, so
     messages, people queue, labels, undo, gaze and per-world settings all

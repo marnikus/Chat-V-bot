@@ -1,6 +1,6 @@
 """backend/criteria_engine — operators, compound rules, empty states.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §CE#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §CE#1–5.
 
 The engine's two "operators" are MUST_HAVE_CLASS / MUST_NOT_HAVE_CLASS
 mapped onto user attributes (female/guest/registered/anonymous); the

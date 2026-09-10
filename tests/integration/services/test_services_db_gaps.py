@@ -2,8 +2,7 @@
 
 test_db_manager.py (42 tests) already pins create/load/delete/clean against a
 real archive, the last-world rule, media sharing and the undo integration.
-This file covers the untested seams only (docs/SERVICES_TEST_DESIGN
-_2026-09-09.md §2.6): path resolution, offline modes, restore_backup, list
+This file covers the untested seams only (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md §2.6): path resolution, offline modes, restore_backup, list
 sorting and the size helpers.
 
 Run with:  python3 tests/integration/services/test_services_db_gaps.py

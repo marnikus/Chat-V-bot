@@ -15,7 +15,7 @@ The rule this enforces is asymmetric on purpose:
 Refresh the snapshot only when a change is intentional and coordinated:
     python3 tools/metrics/dump_public_api.py --write
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md §1 (frozen contracts).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md §1 (frozen contracts).
 
 Run with:  python3 tests/unit/backend/test_backend_api_snapshot.py
 """

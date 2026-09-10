@@ -1,6 +1,6 @@
 """stores/history_repo — CRUD, version conflict, lifecycle edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §14 (HRP-01–22).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §14 (HRP-01–22).
 
 test_history_repo.py (29) + test_history_repo_lifecycle.py (16) pin append
 idempotency, overlap, gaps, days, ord, counters, soft/hard delete, merge

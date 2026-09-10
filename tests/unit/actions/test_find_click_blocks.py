@@ -1,11 +1,11 @@
 """The find-and-click family: the runner's contract and the four blocks.
 
-AREA D4/D5 (`docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md` §6): `find_and_click()`
+AREA D4/D5 (`docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md` §6): `find_and_click()`
 was one 126-line function of CC 27 holding both phases, every error string and
 every pause. It becomes `ClickRequest` (the ten knobs) + `find_phase()` +
 `click_phase()` + `run_click()`, and the four clicking blocks keep reporting
 the same strings in the same order — those strings are the debugger's UI
-(`docs/AGENT_RULES.md` RULE 1/RULE 2), so they are pinned here rather than
+(`docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES.md` RULE 1/RULE 2), so they are pinned here rather than
 implied.
 
 Contracts proven here (AC#1–10):

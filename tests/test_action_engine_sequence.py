@@ -1,7 +1,7 @@
 """services/run_service (backend/action_engine) — sequence, failure-stop,
 pause/stop, normalisation, tracer.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §AE#1–7.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §AE#1–7.
 
 Promises proven here (module docstring + README "Run & Debugger"):
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dump the public API of the AREA D packages into a golden JSON snapshot.
 
-The refactor plan (docs/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md §8.3 Gate 6)
+The refactor plan (docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md §8.3 Gate 6)
 allows a branch to ADD public symbols and forbids it to CHANGE or REMOVE
 any. `tests/unit/backend/test_backend_api_snapshot.py` enforces exactly that
 against the snapshot written here, for `backend/**` and `actions/**` — the two

@@ -1,6 +1,6 @@
 """services/cdp_service — tab discovery, connection, URL matching (Result seam).
 
-The contract (docs/SERVICES_TEST_DESIGN_2026-09-09.md §2.3): every method
+The contract (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md §2.3): every method
 returns ``Result`` — no bare exception crosses the seam. Outcomes are
 announced on the EventBus (TabsReceived / ConnectionChanged / TabMatchResult
 / LogMessage) for the CdpBridge to forward.

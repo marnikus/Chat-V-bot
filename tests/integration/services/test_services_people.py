@@ -1,6 +1,6 @@
 """services/people_service — snapshot → mutate → undo entry → announce.
 
-Contract (docs/SERVICES_TEST_DESIGN_2026-09-09.md §2.4): every mutation
+Contract (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md §2.4): every mutation
 returns ``Result``; domain failures are typed, outcomes are announced on the
 EventBus (PeopleChanged / UsersDeleted / LogMessage). Queue order comes from
 the engine (fallback: get_queue), labels are joined at read time.

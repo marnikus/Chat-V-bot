@@ -4,7 +4,7 @@
 #   pip install -r requirements-dev.txt
 #
 # These are the tools the code-quality gate named in
-# docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md measures with. The gate
+# docs/archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md measures with. The gate
 # (tests/test_rule16_new_code.py) skips the complexity and smell checks when
 # they are absent rather than pretending to pass.
 #
@@ -23,7 +23,7 @@ pylint==4.0.8
 # coverage with branch analysis
 pytest-cov==7.1.0
 # mutation testing (RULE 16 wants >= 70% mutation score on new code).
-# Configured in setup.cfg; see docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md §8
+# Configured in setup.cfg; see docs/archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md §8
 # for what it can and cannot see.
 mutmut==3.7.0
 # the test runner itself

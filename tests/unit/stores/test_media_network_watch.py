@@ -1,6 +1,6 @@
 """AREA B2 — the network-capture helper the media fetcher was cut into.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2.3 (as delivered).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2.3 (as delivered).
 
 `_fetch_via_network` was the CC-32 body of `media_store.py`: 88 lines with six
 nested closures. It is now the fetcher plus `_NetworkWatch`, which owns the CDP

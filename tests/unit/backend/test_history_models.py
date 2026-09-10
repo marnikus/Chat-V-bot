@@ -1,6 +1,6 @@
 """stores/history_models — fingerprint & value-object contracts.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §HM#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §HM#1–5.
 
 The docstring's hard promise: the fingerprint is computed in TWO places
 (backend/js/chat_agent.js over charCodeAt = UTF-16 code units, and here)

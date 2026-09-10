@@ -1,6 +1,6 @@
 """stores/label_store — orphan, import/export, hostile edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §10 (LBL-01–20).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §10 (LBL-01–20).
 
 test_person_labels.py (41) pins config-mode CRUD + filter + undo, and
 test_label_store_dbmode.py (8) pins world-mode persistence. This file pins

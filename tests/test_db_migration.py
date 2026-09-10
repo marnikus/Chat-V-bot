@@ -1,7 +1,6 @@
 """Re-homing a legacy install into one-DB-per-world — once, and safely.
 
-Phase 3 of the redesign (docs/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-
-09-08.md, D6): pre-unified installs keep the people queue in a separate
+Phase 3 of the redesign (docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md, D6): pre-unified installs keep the people queue in a separate
 `chatbot.db`, person labels in config.json, and world-bound undo entries
 in config's timeline. The startup hook `HistoryService.migrate_install()`
 re-homes all of that into the active world file — and it must be:

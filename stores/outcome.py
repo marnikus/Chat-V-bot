@@ -1,6 +1,6 @@
 """Outcome / Refusal — a `Result` whose truthiness means "something changed".
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.2.
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.2.
 
 `core/result.py` is frozen for every area, and it deliberately has no
 __bool__: `Ok(None)` and `Err("…")` are both truthy there. Two callers of the

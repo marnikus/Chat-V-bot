@@ -7,7 +7,7 @@ public method of every class, and the exact `inspect.signature` text (plus the
 parameter names, so a documented *widening* can be checked for compatibility)
 are pinned by `tests/unit/stores/test_stores_public_api.py`. The only names
 allowed to change are the small-store constructors B1 widens on purpose —
-see docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §6.1.
+see docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §6.1.
 
 Run from the repo root:
     python tools/metrics/stores_api.py --write   # refresh the baseline

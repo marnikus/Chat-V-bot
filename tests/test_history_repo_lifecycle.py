@@ -1,6 +1,6 @@
 """stores/history_repo — delete/restore/purge, merge, rename, resolve_days.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §HR#1–6.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §HR#1–6.
 
 The existing write-path suite covers append/align/backfill. This file
 pins the undo/erasure lifecycle and the identity machinery:

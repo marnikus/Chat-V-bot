@@ -1,6 +1,6 @@
 """stores/media_store — path, duplicate, limit, recovery edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §11 (MED-01–21).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §11 (MED-01–21).
 
 test_media_store.py (21) + test_media_store_paths.py (12) +
 test_media_recovery_e2e.py (12) pin register/cache/duplicate/oversize/

@@ -1,6 +1,6 @@
 """backend/person_filter — tri-state contract (first direct unit tests).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §PF#1–4.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §PF#1–4.
 
 The module docstring defines the tri-state ("any"/"yes"/"no") and the
 legacy coercions; the scroll pipeline leans on `check()` verdicts,

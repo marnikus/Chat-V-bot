@@ -14,7 +14,7 @@ that happen to be in memory (design §1.1). These tests drive the real
   * that tombstones stay hidden under every sort (RULE 14);
   * that neither `sort` nor `dir` can reach SQL as text.
 
-Design: docs/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md §3 / §6.3
+Design: docs/archive/2026-09-10-history-push-and-sort/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md §3 / §6.3
 
 Run with:  python3 tests/test_userdb_sort_query.py
 """

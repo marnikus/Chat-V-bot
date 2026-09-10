@@ -1,6 +1,6 @@
 """backend/message_injector — text-handling contracts (format & failure).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §MI#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §MI#1–3.
 
 The typing-ladder fallbacks are covered by test_message_block_composer
 and test_search_users. This file pins the TEXT contracts:

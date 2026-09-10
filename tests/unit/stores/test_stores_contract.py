@@ -1,7 +1,6 @@
 """AREA B1 — the ONE contract every config-file store must satisfy.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1 (P1-3 of docs/
-REFACTOR_2026-09-09_FOUR_AREA_PLAN.md §5).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1 (P1-3 of docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md §5).
 
 The seven config-file stores grew up twice. `BlockStore`/`BookmarkStore` take an
 `AtomicJsonStore` (what the store tests build) while `SessionStore`,
@@ -395,7 +394,7 @@ class TestSessionAndSettingsFlags(StoreContractCase):
                          "flag is the keyword argument")
 
     def test_settings_data_is_the_overlay_not_the_merged_view(self):
-        # SET-04 (docs/STORES_TEST_DESIGN_2026-09-09.md §6) — pinned here as
+        # SET-04 (docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §6) — pinned here as
         # part of the contract so a refactor cannot quietly merge defaults in
         store = SettingsStore(self.fresh_path("settings-overlay.json"))
         self.assertEqual(store.data(), {})

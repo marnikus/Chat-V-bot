@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AREA D gate — complexity, size and duplication for backend/ + actions/.
 
-Reproduces the metrics the refactor plan (docs/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md
+Reproduces the metrics the refactor plan (docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md
 §6.4 exit criteria) is written against, using the SAME definitions as
 tools/metrics/deep.py so the numbers are comparable with the plan:
 

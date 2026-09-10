@@ -1,6 +1,6 @@
 """stores/media_store — slug, folder and filename contracts.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §MS#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §MS#1–3.
 
 test_media_store.py covers downloading/eviction. This file pins the
 filesystem-identity seam — where a hostile nick must never become a

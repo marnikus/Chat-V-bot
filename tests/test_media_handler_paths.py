@@ -1,6 +1,6 @@
 """backend/media_handler — pattern and path contracts (no browser).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §MH#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §MH#1–3.
 
 The download/recovery flows live in test_attach_image.py and
 test_media_recovery*.py. This file pins the pure seam every attach run

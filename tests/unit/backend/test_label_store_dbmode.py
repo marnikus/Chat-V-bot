@@ -1,6 +1,6 @@
 """stores/label_store — world-bound (db) mode and normalisation edges.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §LB#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §LB#1–5.
 
 test_person_labels.py covers config-mode CRUD + the filter logic. This
 file pins the mode the bridge uses since ONE DB = ONE WORLD:

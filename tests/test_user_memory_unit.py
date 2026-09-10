@@ -1,6 +1,6 @@
 """stores/user_memory — queue store contract (direct unit tests).
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §UM#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §UM#1–5.
 
 test_click_user_memory covers the ENGINE side. This file pins the store
 itself — the data structure every run trusts:

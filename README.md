@@ -3,6 +3,10 @@
 A Python/Qt6 desktop application for automating interactions with the
 Virt-Chat web platform (`ru.virt-chat.com`) via Chrome DevTools Protocol.
 
+> **Docs:** start at [`docs/README.md`](docs/README.md). Current behaviour,
+> invariants and flows: [`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md).
+> This file is the *user manual* (install, Chrome flags, UI tour).
+
 ---
 
 ## 1. Install Python Dependencies
@@ -202,7 +206,7 @@ stays pinned; everything below it is rearrangeable.
 
 Implementation: `ui/js/sash-core.js` (pure split-tree model),
 `ui/js/sash-grid.js` (rendering + drag/resize), `ui/css/sash-layout.css`;
-design in `docs/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
+design in `docs/archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
 `tests/test_sash_core.py` (node) and `tests/test_sash_webengine.py`
 (real Qt WebEngine).
 
@@ -453,7 +457,7 @@ moved to `db_trash/` first, the path is stored in the undo entry, and Ctrl+Z
 brings the database back and reconnects it.
 
 Design document:
-`docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
+`docs/archive/2026-09-07-labels-and-collector/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md`.
 
 ### Settings (config.json)
 
@@ -476,12 +480,14 @@ Design document:
 `max_file_mb` is the per-file cap of the media cache. Before 2026-09-07 it
 defaulted to 2 MB, which silently `skipped` every ordinary chat GIF — stored
 configs carrying a value ≤ 2 are migrated up to 25 on startup
-(`docs/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md`).
+(`docs/archive/2026-09-07-labels-and-collector/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md`).
 
-Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
-`docs/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md`,
-`docs/HISTORY_UI_WINDOWS_DESIGN_2026-09-06.md`,
-`docs/PRIVATE_GATE_AND_MEDIA_TREE_2026-09-07.md`.
+Archived design documents (historical — the current spec is
+`docs/current/SYSTEM_OF_RECORD.md`):
+`docs/archive/2026-09-06-collector-and-history/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
+`docs/archive/2026-09-06-collector-and-history/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md`,
+`docs/archive/2026-09-06-collector-and-history/HISTORY_UI_WINDOWS_DESIGN_2026-09-06.md`,
+`docs/archive/2026-09-07-labels-and-collector/PRIVATE_GATE_AND_MEDIA_TREE_2026-09-07.md`.
 
 ---
 
@@ -543,11 +549,27 @@ Design documents: `docs/MESSAGE_HISTORY_ARCHITECTURE_DESIGN_2026-09-06.md`,
 │   ├── js/color-picker.js   # Draggable 5×4 colour popup
 │   └── js/                  # stack-dnd, presets-ui, url-toolbar, composer, log…
 ├── docs/
-│   ├── ARCHITECTURE.md      # Full architecture document
-│   ├── DOM_SELECTORS.md     # DOM selector reference
-│   ├── FIXES_DESIGN_2026-09-04.md   # v1 fix design (presets/URL/debugger)
-│   ├── FIXES2_DESIGN_2026-09-04.md  # v2 fix design (exit/restore/custom blocks)
-│   ├── AGENT_RULES.md       # Rules every change must obey (undo, empty states…)
-│   └── PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md  # this feature set
+│   ├── README.md            # ← docs map: "start here"
+│   ├── current/             # the only docs that describe the code TODAY
+│   │   ├── SYSTEM_OF_RECORD.md  # behaviour, invariants, flows, links outward
+│   │   ├── AGENT_RULES.md       # RULE 1–17 every change must obey
+│   │   └── DOM_SELECTORS.md     # verified DOM selector reference
+│   └── archive/             # 78 dated design docs, grouped by date+topic
+│       └── README.md        # index of the archive
+├── reports/                 # measured code-quality snapshots (the baseline)
 └── logs/                    # Runtime log files
 ```
+
+---
+
+## Documentation
+
+* **[`docs/README.md`](docs/README.md)** — the docs map: what is current vs.
+  historical.
+* **[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md)** —
+  how the app behaves right now: surfaces, flows (plan → execute, archive write
+  path, world deletion), the 16 invariants, storage map, key modules, tests.
+* **[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md)** — the rules
+  every code change must obey (behaviour, data, testing, quality gates, docs).
+* **[`docs/archive/`](docs/archive/README.md)** — every design/plan/root-cause
+  doc ever written here, dated. Historical: read for the *why*, never as spec.

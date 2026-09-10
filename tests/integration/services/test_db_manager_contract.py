@@ -3,7 +3,7 @@
 test_db_manager.py (534 lines) pins the lifecycle and window behaviour;
 test_db_manager_corrupt.py pins corruption handling and create()
 containment. This file pins the seams the AREA C split extracts
-(docs/REFACTOR_2026-09-09_AREA_C_DESIGN.md §5):
+(docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md §5):
 
   * DbRegistry: resolve() matrix (plain / suffix / inside-root paths /
     the containment refusal for traversal and absolute escapes),

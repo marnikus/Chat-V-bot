@@ -1,6 +1,6 @@
 """stores/history_models — validation and value-object edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §12 (MDL-01–10).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §12 (MDL-01–10).
 
 tests/unit/backend/test_history_models.py pins the JS-parity constants,
 UTF-16 astral handling and the basic round-trip. This file pins the

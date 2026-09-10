@@ -1,6 +1,6 @@
 """services/layout_service — grid tree validation, migration, canonical payloads.
 
-Pure logic, no I/O. The contract (docs/SERVICES_TEST_DESIGN_2026-09-09.md
+Pure logic, no I/O. The contract (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md
 §2.2): a layout payload is ``{"v": N, "tree": {t: leaf|split}}``; older
 payloads are UPGRADED, never rejected; invalid payloads return
 ``(None, error)`` — they never raise and never destroy a stored layout.

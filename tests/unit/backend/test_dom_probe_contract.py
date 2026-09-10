@@ -1,6 +1,6 @@
 """backend/dom_probe — JS building and result interpretation contracts.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §DP#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §DP#1–3.
 
 The generated probe string is EVALUATED BY CHROME — a selector or match
 text containing quotes/backslashes/newlines must arrive escaped, or the

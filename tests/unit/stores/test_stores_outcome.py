@@ -1,6 +1,6 @@
 """AREA B1 — `stores/outcome.py`: a Result whose truthiness means something.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.2 (decision 4).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.2 (decision 4).
 
 `core/result.py` (frozen for every area) has one problem for the config
 stores: an `Ok(None)` is truthy and an `Err` is truthy too, so the two

@@ -3,7 +3,7 @@
 > **Date:** 2026-09-09  
 > **Branch:** `arena/01a08660-chat-v-bot`  
 > **Rule:** No comfortable/pass-through tests. Every assertion verifies a real behavior path.  
-> **Reference Design:** `docs/plans/UNCOVERED_LOGIC_DESIGN_2026-09-09.md`
+> **Reference Design:** `docs/archive/2026-09-09-test-suite/UNCOVERED_LOGIC_DESIGN_2026-09-09.md`
 
 ---
 
@@ -145,7 +145,7 @@
 
 | Artifacts Created | Purpose |
 |---|---|
-| `docs/plans/UNCOVERED_LOGIC_DESIGN_2026-09-09.md` | Design doc — exact paths per uncovered module, rules, order |
+| `docs/archive/2026-09-09-test-suite/UNCOVERED_LOGIC_DESIGN_2026-09-09.md` | Design doc — exact paths per uncovered module, rules, order |
 | `tests/unit/core/test_di.py` | 9 real path tests for DI container |
 | `tests/unit/core/test_events.py` | 9 real path tests for event bus (exception isolation critical) |
 | `tests/unit/backend/test_criteria_engine.py` | 9 real path tests for criteria (evaluation + filter + JSON contracts + DB deferred) |

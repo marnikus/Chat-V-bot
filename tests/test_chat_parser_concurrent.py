@@ -1,6 +1,6 @@
 """backend/chat_parser — concurrency and payload-shape contracts.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §CP#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §CP#1–3.
 
 The existing delta suite (test_chat_parser_delta.py) covers alignment,
 backfill, trimming and sequential idempotence. The gaps this file fills:

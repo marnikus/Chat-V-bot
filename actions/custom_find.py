@@ -6,7 +6,7 @@ searched, `match_text` the text to find (empty = the first one), `click_selector
 the element INSIDE to click (empty = the found element itself), and
 `click_enabled` whether to click at all. `custom_name` is what the stack shows.
 
-Execution is the shared two-phase runner (docs/AGENT_RULES.md RULE 1):
+Execution is the shared two-phase runner (docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES.md RULE 1):
 
   1. FIND  — logs success/failure and draws a thin RED outline on the detected
      element, then pauses so the user can confirm it is the right one.

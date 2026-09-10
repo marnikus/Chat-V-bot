@@ -10,7 +10,7 @@ pins the two things a SQL test cannot see clearly:
     parameters, SELECT binds WHERE + ORDER BY + limit/offset. Getting that
     wrong is a silent mis-binding, not an exception.
 
-Design: docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md §2.1
+Design: docs/archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md §2.1
 
 Run with:  python3 tests/test_person_page_request.py
 """

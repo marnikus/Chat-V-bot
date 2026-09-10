@@ -1,6 +1,6 @@
 """AREA B2 — the god classes stay facades: state, privates and behaviour.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2.1 (the pattern) and
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §2.1 (the pattern) and
 §2.2–§2.6 (what moves where).
 
 A split is only safe when three things keep being true through the facade, and

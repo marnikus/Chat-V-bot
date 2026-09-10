@@ -12,7 +12,7 @@ contract) with the exhaustive branch coverage the AREA C refactor needs:
   * RunHooks / normalize_blocks / norm_level / RunTracer / maybe_await
     branches.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_C_DESIGN.md §7.
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md §7.
 
 Run with:  python3 -m pytest tests/integration/services/test_run_state_machine_contract.py
 """

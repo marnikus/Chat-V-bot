@@ -1,6 +1,6 @@
 """AREA B — the public surface of `stores/` is frozen; only additions allowed.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §3 and §6.1;
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §3 and §6.1;
 plan §7.3 rule 1 ("No area renames, moves, or changes the signature of any
 symbol that another area imports").
 
@@ -40,7 +40,7 @@ _spec = importlib.util.spec_from_file_location(
 stores_api = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(stores_api)
 
-#: the names B1 widens ON PURPOSE (docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md
+#: the names B1 widens ON PURPOSE (docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md
 #: §6.1). Every entry must keep all of its old parameters — a widening, never
 #: a rename. Anything not on this list that differs fails the test.
 WIDENED = frozenset({

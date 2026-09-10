@@ -1,6 +1,6 @@
 """services/undo_service — the ONE global timeline: push / undo / redo / sync.
 
-Contract (docs/SERVICES_TEST_DESIGN_2026-09-09.md §2.1):
+Contract (docs/archive/2026-09-09-test-suite/SERVICES_TEST_DESIGN_2026-09-09.md §2.1):
 
 * entries are tagged ``{kind, value}`` with a monotonic ``seq``;
 * a push of the SAME value at the tip is a NO-OP (dedupe) — grid/stack

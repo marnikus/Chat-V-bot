@@ -1,6 +1,6 @@
 """backend/dom_highlight — highlight build/clear + interpreter nil-safety.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §DH#1–3.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §DH#1–3.
 
 (The JS overlay behaviour itself is covered by tests/test_find_click_
 visual.py through the node harness; this file pins the PYTHON side.)

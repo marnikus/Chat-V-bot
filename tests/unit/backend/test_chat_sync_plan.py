@@ -1,7 +1,7 @@
 """The read-decision half of a conversation sync — pure, no page, no DB.
 
 `sync_conversation()` used to make these decisions inline across 295 lines and
-46 nesting levels (AREA D task D1, docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md §3).
+46 nesting levels (AREA D task D1, docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md §3).
 The decisions now live in two objects that can be driven from a table:
 
   * `SyncOptions`  — the 11 optional knobs of the public call, one place;

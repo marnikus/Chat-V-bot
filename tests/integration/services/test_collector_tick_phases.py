@@ -3,7 +3,7 @@
 test_collector_state.py and test_services_collector_gaps.py pin the status
 vocabulary, push channel, throttling, reset and backfill seams. This file
 pins the _tick PHASE MATRIX the refactor must preserve verbatim
-(docs/REFACTOR_2026-09-09_AREA_C_DESIGN.md §3.3):
+(docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md §3.3):
 
   probe phase   — agent self-heal, last_probe payload, refusal gates;
   nick phase    — My-Nick adoption (single author, stale saved nick);

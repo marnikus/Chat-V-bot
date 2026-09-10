@@ -8,7 +8,7 @@ the log wording the UI shows, the ActionResult each path returns, the
 `pre_delay_ms` suppression the marker blocks rely on, and the exact
 `to_dict()` round-trip that keeps old presets loading.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md §6/§7 (ids AA#1–14).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md §6/§7 (ids AA#1–14).
 Rules proven: AGENT_RULES RULE 2 (report every step), RULE 4 (empty ≠
 broken), RULE 7 (stop), RULE 12/RULE 10 (marker blocks own no delay).
 

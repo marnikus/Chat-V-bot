@@ -8,7 +8,7 @@ Snapshot: `a49dd2a`, branch `arena/01a08b46-chat-v-bot`. No production code chan
 
 ### Before → now
 
-Previous values are recorded in `docs/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md`; the old checkout was not rerun. Only one commit is available in this shallow checkout.
+Previous values are recorded in `docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md`; the old checkout was not rerun. Only one commit is available in this shallow checkout.
 
 | Metric | Previous documented audit | Current | Interpretation |
 |---|---:|---:|---|

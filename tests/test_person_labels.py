@@ -2,7 +2,7 @@
 label filter that keeps an "ignored" person out of an automated run.
 
 What a user was promised (see the feature spec and
-docs/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md):
+docs/archive/2026-09-07-labels-and-collector/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md):
 
   * labels are free text with a colour, created and deleted by the user;
   * one person can carry several labels;

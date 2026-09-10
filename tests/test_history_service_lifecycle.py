@@ -1,6 +1,6 @@
 """services/history_service — lifecycle, per-world settings, world isolation.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §HS#1–6.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §HS#1–6.
 
 Promises proven here (module docstring + switch_db's own contract):
 

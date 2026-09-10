@@ -1,7 +1,6 @@
 """The DB Connection window: create / load / delete / clean, and the sizes.
 
-Since the unified single-DB redesign (docs/DB_CREATION_DELETION_REDESIGN_
-DESIGN_2026-09-08.md) the promises this proves are:
+Since the unified single-DB redesign (docs/archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md) the promises this proves are:
 
   * **delete is permanent.** "Delete DB" unlinks the file (and its
     `-wal`/`-shm` siblings), removes the world's own media folder, keeps

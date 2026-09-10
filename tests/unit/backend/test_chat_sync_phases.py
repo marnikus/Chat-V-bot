@@ -9,7 +9,7 @@ So these tests assert the call sequence on a recording fake repo — the exact
 kwargs of every `append`, when `record_gap`/`mark_backfilled` fire, which
 media passes run — and the `SyncResult` the caller gets back.
 
-Ids SY#11–24 from docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md §7.
+Ids SY#11–24 from docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md §7.
 Rules enforced: AGENT_RULES RULE 4 (empty vs broken), RULE 5 (progress per
 chunk), RULE 7 (stop honoured mid-loop), RULE 15 (the gate).
 

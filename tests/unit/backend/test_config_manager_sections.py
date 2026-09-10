@@ -6,7 +6,7 @@
 "a section that is not a dict any more" (a hand-edited file, or the arity
 misuse `set("history", "enabled")` that the ledger records).
 
-The design (docs/REFACTOR_2026-09-09_AREA_D_DESIGN.md §5) is one table:
+The design (docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md §5) is one table:
 section → owner, each owner with `read(rest, default)` / `write(rest, value)`
 / `snapshot()`. Adding a section is a new row, not a new `elif`.
 

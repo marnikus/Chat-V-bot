@@ -1,6 +1,6 @@
 """stores/preset_store — named sections, hostile names, cache edges.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §9 (PRS-01–10).
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §9 (PRS-01–10).
 
 test_preset_store_unit.py pins stack/template CRUD, overwrite, reopen,
 dirty/force and the one-time legacy import. This file pins what it does

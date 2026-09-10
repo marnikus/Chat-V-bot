@@ -7,7 +7,7 @@ this module. It guarantees one uniform, observable contract:
     Phase 2  CLICK  — log clickability, draw a thin ORANGE outline, click.
 
 Do NOT hand-roll a probe that calls ``element.click()`` inside a block; see
-``docs/AGENT_RULES.md``.
+``docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES.md``.
 
 Public API
 ----------

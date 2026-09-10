@@ -8,9 +8,9 @@ modules `services/run/cycle_loop.py` and `services/run/run_lifecycle.py`,
 plus design docs and `tools/metrics/clone_scan.py`. **Zero test files
 were modified.**
 
-Design (written first): `docs/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md`.
+Design (written first): `docs/archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md`.
 Next-round proposal (newly exposed problems):
-`docs/CC_REMAINING_TAIL_DESIGN_2026-09-10.md`.
+`docs/archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md`.
 
 ## Executive summary
 
@@ -56,7 +56,7 @@ change (`/tmp/audit_tail_done.json`); same walker
 Scope: all 141 production Python files in `core`, `actions`, `backend`,
 `bridge`, `services`, `stores`, `app`, and `main.py`; nested definitions
 scored separately. Definitions are the frozen ones in
-`docs/AGENT_RULES_CODE_QUALITY.md` §1–§2 (inclusive AST spans, kwargs
+`docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md` §1–§2 (inclusive AST spans, kwargs
 count individually, nesting = max ancestry of `if`/loops/`with`/`try`/
 `match`, cognitive-complexity 1.3 defaults).
 
@@ -244,7 +244,7 @@ for the *module-level* split proposed in the follow-up design doc.
 ## 6. Newly exposed problems (detected by this round)
 
 These are the problems this refactor surfaced or made binding; fixes are
-designed in `docs/CC_REMAINING_TAIL_DESIGN_2026-09-10.md`, not applied:
+designed in `docs/archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md`, not applied:
 
 1. **The next CC ceiling is a broad 16–28 legacy tail** across
    `stores`, `actions`, `backend`, and `services/run` (12 functions

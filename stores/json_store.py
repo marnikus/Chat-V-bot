@@ -1,6 +1,6 @@
 """`JsonFileStore` — the one lifecycle every config-file store shares.
 
-Design ref: docs/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.1 (plan P1-3).
+Design ref: docs/archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md §1.1 (plan P1-3).
 
 Seven stores in this package each own one small JSON file, and each had grown
 its own dialect of the same three operations: two constructor spellings

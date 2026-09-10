@@ -1,6 +1,6 @@
 """stores/history_db — connection-level unit contract.
 
-Design refs: docs/BACKEND_TESTS_DESIGN_2026-09-09.md §HD#1–5.
+Design refs: docs/archive/2026-09-09-test-suite/BACKEND_TESTS_DESIGN_2026-09-09.md §HD#1–5.
 
 The table shapes are pinned by test_db_schema_migration.py; the service
 lifecycle by test_history_service_lifecycle.py. This file covers the

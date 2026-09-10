@@ -1,7 +1,7 @@
 /* Regression pin for the User Memory (People) table's column sorting.
 
    The Full User Database is getting sortable headers
-   (docs/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md); this table already
+   (docs/archive/2026-09-10-history-push-and-sort/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md); this table already
    had them, from GRID_WINDOW_MEMORY_SORT_DESIGN_2026-09-05.md §5. These
    tests exist so the two tables cannot silently diverge: the same ▲▼ /
    ▲ / ▼ glyphs, the same toggle rule, the same aria-sort values, and the

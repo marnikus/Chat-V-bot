@@ -1,6 +1,6 @@
 """stores/jsonio + stores/atomic — atomic file I/O contract.
 
-Design refs: docs/STORES_TEST_DESIGN_2026-09-09.md §1 (JIO-01–12),
+Design refs: docs/archive/2026-09-09-test-suite/STORES_TEST_DESIGN_2026-09-09.md §1 (JIO-01–12),
 §2 (ATM-01–09).
 
 Every store in the package stands on these two modules: jsonio is the only

@@ -6,7 +6,7 @@ composer. Opening the dialog runs through the shared visual-confirmation
 runner (red find outline → pause → orange click outline), like every other
 find-and-click block.
 
-Settings (see docs/EXTRA_PAUSE_STATUS_AND_ATTACH_TARGETING_DESIGN_2026-09-06.md):
+Settings (see docs/archive/2026-09-06-collector-and-history/EXTRA_PAUSE_STATUS_AND_ATTACH_TARGETING_DESIGN_2026-09-06.md):
   * `file_pattern`      — comma-separated patterns/extensions
                           (default *.jpg, *.jpeg, *.png, *.gif);
   * `simulate_dialog`   — click the active chat's image button first
