@@ -13,7 +13,8 @@ class RunState(str, Enum):
 
 
 _ALLOWED = {
-    RunState.IDLE: {RunState.RUNNING},
+    # A pause may be requested before Run; mark_running clears it.
+    RunState.IDLE: {RunState.RUNNING, RunState.PAUSED},
     RunState.RUNNING: {RunState.PAUSED, RunState.STOPPING,
                        RunState.ERROR, RunState.DONE},
     RunState.PAUSED: {RunState.RUNNING, RunState.STOPPING, RunState.ERROR},

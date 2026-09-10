@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from actions.base_action import ActionResult, BaseAction  # noqa: E402
-from services.run_service import (ActionEngine, STANDALONE_NICK,  # noqa: E402
+from services.run import (ActionEngine, STANDALONE_NICK,  # noqa: E402
                                   normalize_blocks)
 from stores.user_memory import UserRecord  # noqa: E402
 

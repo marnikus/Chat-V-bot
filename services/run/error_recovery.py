@@ -88,7 +88,7 @@ class RunExecutionMixin:
         if not sum(1 for b in self._stack if getattr(b, "enabled", True)):
             self.debug_msg.emit("⚠ All blocks are disabled — nothing to run", "warn")
             self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
-            return "ok"
+            return "skip"
         for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
                 return "stop"

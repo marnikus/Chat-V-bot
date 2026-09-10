@@ -18,6 +18,8 @@ from typing import Any, Optional
 from core.events import EventBus, LogMessage, PeopleChanged, UsersDeleted
 from core.result import Err, Ok, Result
 
+from services.status_events import StatusEvents
+
 log = logging.getLogger("chatbot")
 
 
@@ -32,7 +34,7 @@ def people_row(u) -> dict:
             "last_messaged": u.last_messaged, "notes": u.notes or ""}
 
 
-class PeopleService:
+class PeopleService(StatusEvents):
     """Snapshot → mutate → undo-entry → announce, for the people queue."""
 
     def __init__(self, memory, engine=None, labels=None, undo=None,
@@ -58,8 +60,6 @@ class PeopleService:
             self._bus = bus
 
     # ── helpers ──────────────────────────────────────────────────
-    def _log(self, message: str, level: str = "info") -> None:
-        self._bus.emit(LogMessage(message=message, level=level))
 
     def labels_for_nicks(self, nicks) -> dict:
         """nick → label ids, joined at read time (never stored per DB)."""

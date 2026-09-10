@@ -19,13 +19,15 @@ from core.result import Err, Ok, Result
 
 from backend.tab_matcher import best_matches
 
+from services.status_events import StatusEvents
+
 log = logging.getLogger("chatbot")
 
 KIND_NAMES = {"url_exact": "exact URL", "url_path": "URL path",
               "host": "host", "keyword": "keyword"}
 
 
-class CdpService:
+class CdpService(StatusEvents):
     """Tab fetch / connect / URL-preset matching."""
 
     def __init__(self, cdp, bus: EventBus | None = None):
@@ -38,8 +40,6 @@ class CdpService:
         if bus is not None:
             self._bus = bus
 
-    def _log(self, message: str, level: str = "info") -> None:
-        self._bus.emit(LogMessage(message=message, level=level))
 
     def install_status_forwarding(self) -> None:
         """Re-emit the client's Qt connection signals as bus events."""
