@@ -1,150 +1,193 @@
-"""Private cooperative-stop helpers for Area C1.
+"""Private cooperative-stop helpers (AREA C1).
 
-This module is deliberately dependency-free (stdlib only: no services, no Qt,
-no actions.base*). Both action blocks (e.g. WaitPageLoad) and the run engine
-(services/run/*) import it.
-
-Contract (see docs/SAFETY_REFACTOR_AREA_C_IMPL_DESIGN_2026-09-10.md §2.1):
-
-* `RunStopped` is an ordinary `Exception` signalling cooperative stop. It is
-  distinct from `asyncio.CancelledError` (external task cancellation) and must
-  never be retried, mapped to ActionResult, or mistaken for SKIP/FAIL.
-* `is_stop_requested(engine)` prefers callable `engine.is_stopping()`, falls
-  back to truthy `engine._stop_requested` for duck-typed callers, and fails
-  open to False (engine=None, missing attrs, raising predicates).
-* `sleep_or_stop` / `await_or_stop` slice long waits into short polls so stop
-  surfaces promptly. `await_or_stop` is for READ-ONLY probes only: cancelling
-  the local await never undoes a remote side effect.
+Leaf module: stdlib only, no services/Qt imports. Actions and the run engine
+share the stop predicate through here so ``engine.is_stopping()`` stays the
+single duck-compatible query.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import time
+from typing import Any, Awaitable, Callable
 
 
 class RunStopped(Exception):
-    """Cooperative stop requested.
+    """Private cooperative-stop signal.
 
-    Raised by stop-aware waits when the engine asks to stop. Translated to
-    "stop"/"stopped" only at run-execution boundaries. Never retried.
+    Raised when ``is_stop_requested(engine)`` is true at a defined boundary.
+    Caught only at run-execution boundaries and translated to the existing
+    ``stop``/``stopped`` statuses. Never serialized, never added to
+    ``ActionResult``, never confused with ``asyncio.CancelledError`` (external
+    cancellation), which must propagate after cleanup.
     """
 
 
-def is_stop_requested(engine: Any) -> bool:
-    """True when engine asks to stop. Fails open to False."""
+def _as_predicate(stop) -> Callable[[], bool] | None:
+    """Normalise ``stop`` to a ``() -> bool`` predicate or None.
+
+    Accepts None, an engine with ``is_stopping``/``_stop_requested``, or a
+    bare callable. A broken predicate fails open to False (never crashes a
+    wait); the engine-level tests pin fail-open.
+    """
+    if stop is None:
+        return None
+    if callable(stop) and not hasattr(stop, "is_stopping") and not hasattr(
+        stop, "_stop_requested"
+    ):
+        # Bare callable predicate.
+        def _call() -> bool:
+            try:
+                return bool(stop())
+            except Exception:
+                return False
+
+        return _call
+    # Engine-like object.
+    fn = getattr(stop, "is_stopping", None)
+    if callable(fn):
+
+        def _engine() -> bool:
+            try:
+                return bool(fn())
+            except Exception:
+                return False
+
+        return _engine
+    # Compatibility fallback for old duck-typed callers.
+    def _flag() -> bool:
+        try:
+            return bool(getattr(stop, "_stop_requested", False))
+        except Exception:
+            return False
+
+    return _flag
+
+
+def is_stop_requested(engine) -> bool:
+    """True when the engine asks for cooperative stop (fail-open)."""
     if engine is None:
         return False
-    try:
-        predicate = getattr(engine, "is_stopping", None)
-        if callable(predicate):
-            return bool(predicate())
-    except Exception:
+    pred = _as_predicate(engine)
+    if pred is None:
         return False
-    try:
-        return bool(getattr(engine, "_stop_requested", False))
-    except Exception:
-        return False
+    return pred()
 
 
-def raise_if_stopped(engine: Any) -> None:
-    """Raise RunStopped when is_stop_requested(engine)."""
+def check_stopped(engine) -> None:
+    """Raise :class:`RunStopped` when stop was requested."""
     if is_stop_requested(engine):
-        raise RunStopped()
+        raise RunStopped
 
 
-async def sleep_or_stop(delay_s: float, engine: Any = None,
-                        *, slice_s: float = 0.05) -> None:
-    """Sleep `delay_s` seconds in short slices; raise RunStopped if stopped.
+async def sleep_with_stop(
+    delay_s: float, engine, *, slice_s: float = 0.02
+) -> None:
+    """Cooperative sleep: raises :class:`RunStopped` promptly on stop.
 
-    delay<=0 still performs one stop check and returns immediately.
-    slice_s is clamped to (0, delay] when delay>0.
+    Checks before/after and sleeps in slices so a stop during a long
+    pre-delay/poll-gap/backoff is honored without waiting out the delay.
+    ``delay_s <= 0`` still performs a stop check.
     """
-    raise_if_stopped(engine)
+    if is_stop_requested(engine):
+        raise RunStopped
     try:
-        delay = max(0.0, float(delay_s))
+        remaining = max(0.0, float(delay_s))
     except (TypeError, ValueError):
-        delay = 0.0
-    if delay <= 0:
+        remaining = 0.0
+    if remaining <= 0:
         return
     try:
-        sl = float(slice_s)
+        step = float(slice_s)
     except (TypeError, ValueError):
-        sl = 0.05
-    if not (sl > 0):
-        sl = 0.05
-    sl = min(sl, delay)
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + delay
+        step = 0.02
+    if step <= 0:
+        step = 0.02
+    deadline = time.monotonic() + remaining
     while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            raise_if_stopped(engine)
-            return
-        await asyncio.sleep(min(sl, remaining))
-        raise_if_stopped(engine)
+        if is_stop_requested(engine):
+            raise RunStopped
+        now = time.monotonic()
+        left = deadline - now
+        if left <= 0:
+            break
+        await asyncio.sleep(min(step, left))
+    if is_stop_requested(engine):
+        raise RunStopped
 
 
-async def _cancel_and_reap(task: "asyncio.Task") -> None:
-    """Cancel a probe we own and await it, suppressing whatever it raises.
+async def await_with_stop(
+    awaitable_factory: Callable[[], Awaitable[Any]],
+    engine,
+    *,
+    slice_s: float = 0.05,
+    deadline_monotonic: float | None = None,
+) -> Any:
+    """Await a read-only operation with stop/deadline supervision.
 
-    Awaiting after cancel is mandatory (no orphaned tasks); the probe's own
-    CancelledError — or any error it raises while tearing down — must not
-    mask the stop/cancellation that triggered the reap.
-    """
-    if task.done():
-        return
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    except Exception:
-        pass
+    Creates ONE task from ``awaitable_factory()``, polls in slices, and on
+    stop/deadline cancels + awaits it (no orphaned task). Raises
+    :class:`RunStopped` on stop, :class:`TimeoutError` on deadline expiry,
+    and propagates external ``CancelledError`` after cancelling + awaiting
+    the inner task.
 
-
-async def await_or_stop(awaitable: Any, engine: Any = None,
-                        *, slice_s: float = 0.05) -> Any:
-    """Await a read-only awaitable; raise RunStopped promptly if stopped.
-
-    Wraps the awaitable in a Task, polls for completion/stop, and on stop
-    cancels + awaits the task (suppressing its CancelledError) before raising
-    RunStopped. Probe exceptions propagate unchanged. No orphaned tasks.
-    Pre-stopped engines fail fast without starting the probe.
+    Only read-only awaits (WaitPageLoad probes) may use this: cancelling the
+    local await of a write does not undo the remote side effect.
     """
     if is_stop_requested(engine):
-        if asyncio.iscoroutine(awaitable):
-            try:
-                awaitable.close()
-            except Exception:
-                pass
-        raise RunStopped()
+        raise RunStopped
     try:
-        sl = float(slice_s)
+        step = float(slice_s)
     except (TypeError, ValueError):
-        sl = 0.05
-    if not (sl > 0):
-        sl = 0.05
-    # Ensure we own a Task we can cancel (awaitable may be a coroutine).
-    task = asyncio.ensure_future(awaitable)
+        step = 0.05
+    if step <= 0:
+        step = 0.05
+    coro = awaitable_factory()
+    # Factory may return a coroutine or an already-created future/task.
+    if asyncio.isfuture(coro) or isinstance(coro, asyncio.Task):
+        task = coro  # type: ignore[assignment]
+    else:
+        task = asyncio.ensure_future(coro)
     try:
-        while not task.done():
+        while True:
+            if is_stop_requested(engine):
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise RunStopped
+            if deadline_monotonic is not None and (
+                time.monotonic() >= deadline_monotonic
+            ):
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise TimeoutError
+            if task.done():
+                # Re-check stop before accepting a result that landed
+                # concurrently with the request (stop wins over found).
+                if is_stop_requested(engine):
+                    try:
+                        task.result()
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    raise RunStopped
+                return task.result()
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=sl)
+                await asyncio.wait_for(
+                    asyncio.shield(task), timeout=step
+                )
             except asyncio.TimeoutError:
-                pass
-            raise_if_stopped(engine)
-        return task.result()
-    except RunStopped:
-        await _cancel_and_reap(task)
-        raise
+                continue
     except asyncio.CancelledError:
-        # External cancellation while polling: cancel the probe too, then
-        # propagate (we do not own the probe's side effects, but we must not
-        # orphan the task).
-        await _cancel_and_reap(task)
+        # External cancellation: cancel + await the inner task, then propagate.
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
         raise
-
-
-__all__ = ["RunStopped", "is_stop_requested", "raise_if_stopped",
-           "sleep_or_stop", "await_or_stop"]

@@ -1,273 +1,296 @@
-"""Area C2 — cycle mode matrix through the real engine (effect traces).
+"""AREA C2 — cycle modes through the real engine (effect traces).
 
-Parent design: docs/SAFETY_REFACTOR_AREA_C_IMPL_DESIGN_2026-09-10.md §4 + §5.
-Task list: docs/SAFETY_REFACTOR_AREA_C_2026-09-10.md C2.
-
-Parity suite: non-stop rows pass before and after C1/C2 (they pin the extraction).
-Stop-pre-empts rows fail before C1 (B2/B6/B11) and pass after.
-All rows must pass identically after the C2 extraction (no silent semantic change).
+Pins the decision-precedence table + bookkeeping invariants. All pass on
+baseline except test_stop_after_first_user (C1 pre-mark gate, red until C1);
+all must pass before and after the C2 extraction (parity); the new
+pure-table tests in test_cycle_plan_unit.py are the red-then-green part.
 """
 
+from __future__ import annotations
+
 import asyncio
-import os
-import sys
-import tempfile
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))))
+from actions.base_action import ActionResult, BaseAction
+from actions.take_person import TakePerson
+from services.run.hooks import STANDALONE_NICK
+from stores.user_memory import UserRecord
 
-from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
-                                 BaseAction)
-_REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
-
-from services.run import RunCoordinator  # noqa: E402
-from services.run.hooks import STANDALONE_NICK, RunHooks  # noqa: E402
-from stores.user_memory import UserRecord  # noqa: E402
-
-
-class RecordingBlock(BaseAction):
-    block_id = "CUSTOM_FIND"
-    name = "Find & Click"
-    icon = "🔎"
-
-    def __init__(self, result=ActionResult.OK, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.calls = []
-        self._result = result
-
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        return self._result
+from tests.integration.run_safety._helpers import (
+    EngineHarness,
+    FakeMemory,
+    FailBlock,
+    SkipBlock,
+    make_ok_block,
+)
 
 
-class UserBlock(BaseAction):
-    block_id = "CLICK_USER"
-    name = "Click User"
-    icon = "👤"
+class CycleModesCase(unittest.IsolatedAsyncioTestCase):
+    async def test_multi_user_queued_marks_each_success(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            block = make_ok_block()
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertEqual(block.calls, ["a", "b"])
+            self.assertEqual(h.memory.marked, ["a", "b"])
+            self.assertEqual(h.user_done, [("a", True), ("b", True)])
+            self.assertEqual(h.engine.progress.done, 2)
 
-    def __init__(self, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.calls = []
-        self.use_person_from_memory = False
+    async def test_zero_users_with_user_blocks_is_empty(self):
+        with EngineHarness(users=[]) as h:
 
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        return ActionResult.OK
+            class NeedsUser(BaseAction):
+                block_id = "TEST_C2_NEEDS"
+                name = "needs"
+                icon = "x"
 
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.OK
 
-class MemoryClickBlock(UserBlock):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.use_person_from_memory = True
-
-
-class TakeStub:
-    block_id = "TAKE_PERSON"
-    enabled = True
-    mode_phrase = "matching person"
-
-    def __init__(self, nick=None):
-        self._nick = nick
-
-    def choose(self, rows, eng=None):
-        return self._nick
-
-
-class FakeMemory:
-    def __init__(self, users=None):
-        self._users = list(users or [])
-        self.marked = []
-
-    async def get_queue(self):
-        return [u for u in self._users if not u.messaged]
-
-    async def get_all(self):
-        return list(self._users)
-
-    async def upsert_user(self, user):
-        self._users.append(user)
-
-    async def mark_messaged(self, nick):
-        self.marked.append(nick)
-        for u in self._users:
-            if u.nick == nick:
-                u.messaged = True
-
-
-class OutcomeHooks(RunHooks):
-    def __init__(self):
-        self.outcomes = []
-
-    def post_run(self, coordinator, outcome):
-        self.outcomes.append(outcome)
-
-
-class EngineCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.old = os.getcwd()
-        self.tmp = tempfile.TemporaryDirectory()
-        os.chdir(self.tmp.name)
-        self.addCleanup(self._restore_registry)
-
-    def tearDown(self):
-        os.chdir(self.old)
-        self.tmp.cleanup()
-
-    def _restore_registry(self):
-        ActionRegistry._classes.clear()
-        ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
-
-    def make(self, users=None):
-        self.memory = FakeMemory(users)
-        self.engine = RunCoordinator(cdp=None, memory=self.memory,
-                                     criteria=None)
-        self.logs = []
-        self.debug = []
-        self.user_done = []
-        self.engine.log_msg.connect(lambda m: self.logs.append(m))
-        self.engine.debug_msg.connect(lambda m, l: self.debug.append((m, l)))
-        self.engine.user_complete.connect(
-            lambda n, ok: self.user_done.append((n, ok)))
-        self.hooks = OutcomeHooks()
-        self.engine._hooks = self.hooks
-        return self.engine
-
-
-class TestCycleModes(EngineCase):
-    async def test_memory_click_precedence_single_target_once_per_cycle(self):
-        engine = self.make([UserRecord(nick="Anna"), UserRecord(nick="Bella")])
-        take = TakeStub(nick="Bella")
-        click = MemoryClickBlock()
-        consumer = RecordingBlock()
-        engine._stack = [take, click, consumer]
-        await engine.execute()
-        self.assertEqual(click.calls, ["Bella"],
-                         "single-target runs the saved nick once, not per queue entry")
-        self.assertEqual(consumer.calls, ["Bella"])
-        self.assertEqual(self.memory.marked, ["Bella"])
-        self.assertNotIn("Anna", click.calls)
-        self.assertEqual(self.hooks.outcomes, ["worked"])
-
-    async def test_take_miss_without_user_blocks_is_empty(self):
-        # Empty queue is required for the no_take_match short-circuit; with a
-        # non-empty queue the engine correctly runs queued mode instead.
-        engine = self.make([])
-        take = TakeStub(nick=None)
-        plain = RecordingBlock()
-        engine._stack = [take, plain]
-        await engine.execute()
-        self.assertEqual(plain.calls, [],
-                         "take-miss with no user blocks must not go standalone")
-        self.assertEqual(self.hooks.outcomes, ["empty"])
-        self.assertEqual(self.memory.marked, [])
-        text = " ".join(self.logs)
-        self.assertIn("Pick Person", text)
-
-    async def test_queued_mode_runs_each_user(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
-        block = RecordingBlock()
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(block.calls, ["a", "b"])
-        self.assertEqual(self.memory.marked, ["a", "b"])
-        self.assertEqual(self.user_done, [("a", True), ("b", True)])
-        self.assertEqual(self.hooks.outcomes, ["worked"])
-
-    async def test_empty_stack_reports_empty_stack(self):
-        # Empty queue + empty stack -> empty_stack. (A non-empty queue takes
-        # precedence and runs queued mode even with an empty stack — pinned
-        # separately in the planner truth table.)
-        engine = self.make([])
-        engine._stack = []
-        await engine.execute()
-        text = " ".join(self.logs).lower()
-        self.assertIn("empty", text)
-
-    async def test_empty_queue_with_user_blocks_is_empty(self):
-        engine = self.make([])
-        block = UserBlock()
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(block.calls, [])
-        text = " ".join(m for m, _ in self.debug)
-        self.assertIn("CLICK_USER", text)
-
-    async def test_standalone_runs_once_and_never_marks_sentinel(self):
-        engine = self.make([])
-        block = RecordingBlock()
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(block.calls, [STANDALONE_NICK])
-        self.assertEqual(self.memory.marked, [],
-                         "successful standalone must not mark the sentinel nick")
-        self.assertEqual(self.user_done, [],
-                         "standalone emits no per-user completion")
+            # CLICK_USER id makes it user-scoped for the mode branch.
+            NeedsUser.block_id = "CLICK_USER"
+            blk = NeedsUser(pre_delay_ms=0)
+            # Ensure the mem-click flag is absent/False.
+            blk.use_person_from_memory = False
+            h.engine._stack = [blk]
+            await h.engine.execute(None)
+            records = h.trace_records()
+            self.assertTrue(
+                any(
+                    r.get("type") == "run_skip"
+                    and r.get("reason") == "empty_queue"
+                    for r in records
+                )
+            )
+            self.assertEqual(h.memory.marked, [])
 
     async def test_all_disabled_marks_nobody(self):
-        engine = self.make([UserRecord(nick="a")])
-        block = RecordingBlock()
-        block.enabled = False
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(self.user_done, [("a", False)])
-        self.assertEqual(self.memory.marked, [])
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            block = make_ok_block()
+            block.enabled = False
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertEqual(h.user_done, [("a", False)])
+            self.assertEqual(h.memory.marked, [])
 
-    async def test_fail_and_skip_never_auto_mark(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
+    async def test_no_stack_is_empty_stack(self):
+        # Queue must be empty for empty-stack (nonempty queue wins by design).
+        with EngineHarness(users=[]) as h:
+            h.engine._stack = []
+            await h.engine.execute(None)
+            text = " ".join(h.logs).lower()
+            self.assertIn("empty", text)
 
-        class FailThenOk(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
+    async def test_standalone_runs_once_without_mark(self):
+        with EngineHarness(users=[]) as h:
+            block = make_ok_block()
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertEqual(block.calls, [STANDALONE_NICK])
+            self.assertEqual(h.memory.marked, [])
+            self.assertEqual(h.user_done, [])
 
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-                self.calls = []
+    async def test_standalone_failure_reports_error(self):
+        with EngineHarness(users=[]) as h:
+            block = FailBlock()
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertEqual(block.calls, [STANDALONE_NICK])
+            self.assertTrue(any(lvl == "error" for _, lvl in h.debug))
 
-            async def execute(self, user_nick, cdp, engine=None):
-                self.calls.append(user_nick)
-                if user_nick == "a":
+    async def test_take_miss_without_user_blocks_is_empty(self):
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            take = TakePerson(pick_mode="random_new")
+            # Force no match by marking everyone done first.
+            for u in h.memory._users:
+                u.messaged = True
+            h.engine._stack = [take, make_ok_block()]
+            # make_ok_block is TEST_* (not user-scoped) → take-miss branch.
+            await h.engine.execute(None)
+            records = h.trace_records()
+            self.assertTrue(
+                any(
+                    r.get("type") == "run_skip"
+                    and r.get("reason") == "no_take_match"
+                    for r in records
+                )
+            )
+
+    async def test_memory_selection_present_runs_single_target_once(self):
+        with EngineHarness(
+            users=[UserRecord(nick="Anna"), UserRecord(nick="Bella")]
+        ) as h:
+
+            class PickBella(BaseAction):
+                block_id = "TAKE_PERSON"
+                name = "Pick"
+                icon = "x"
+
+                def choose(self, rows, engine=None):
+                    return "Bella"
+
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.SKIP
+
+            class MemClick(BaseAction):
+                block_id = "CLICK_USER"
+                name = "Click"
+                icon = "x"
+
+                def __init__(self, **kw):
+                    super().__init__(pre_delay_ms=0)
+                    self.use_person_from_memory = True
+                    self.calls = []
+
+                async def execute(self, nick, cdp, engine=None):
+                    self.calls.append(nick)
+                    return ActionResult.OK
+
+            click = MemClick()
+            h.engine._stack = [PickBella(pre_delay_ms=0), click]
+            await h.engine.execute(None)
+            self.assertEqual(click.calls, ["Bella"])
+            self.assertEqual(h.memory.marked, ["Bella"])
+            self.assertEqual(h.user_done, [("Bella", True)])
+
+    async def test_memory_selection_missing_is_safe_empty(self):
+        with EngineHarness(users=[UserRecord(nick="Anna")]) as h:
+
+            class MemClick(BaseAction):
+                block_id = "CLICK_USER"
+                name = "Click"
+                icon = "x"
+
+                def __init__(self, **kw):
+                    super().__init__(pre_delay_ms=0)
+                    self.use_person_from_memory = True
+                    self.calls = []
+
+                async def execute(self, nick, cdp, engine=None):
+                    self.calls.append(nick)
+                    return ActionResult.OK
+
+            click = MemClick()
+            h.engine._stack = [click]
+            await h.engine.execute(None)
+            self.assertEqual(click.calls, [])
+            self.assertEqual(h.memory.marked, [])
+            records = h.trace_records()
+            self.assertTrue(
+                any(
+                    r.get("type") == "run_skip"
+                    and r.get("reason") == "no_memory_nick"
+                    for r in records
+                )
+            )
+
+    async def test_one_failure_then_next_user(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            fail = FailBlock()
+            # Fail only for user a: flip to OK after first call.
+            orig = fail.execute
+
+            async def flaky(nick, cdp, engine=None):
+                fail.calls.append(nick)
+                if nick == "a":
                     return ActionResult.FAIL
                 return ActionResult.OK
 
-        block = FailThenOk()
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(self.user_done, [("a", False), ("b", True)])
-        self.assertEqual(self.memory.marked, ["b"])
+            fail.execute = flaky  # type: ignore
+            h.engine._stack = [fail]
+            await h.engine.execute(None)
+            self.assertEqual(h.user_done, [("a", False), ("b", True)])
+            self.assertEqual(h.memory.marked, ["b"])
 
-    async def test_stop_preempts_normal_completion(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
+    async def test_skip_stops_user_without_mark(self):
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            h.engine._stack = [SkipBlock()]
+            await h.engine.execute(None)
+            self.assertEqual(h.user_done, [("a", False)])
+            self.assertEqual(h.memory.marked, [])
 
-        class StopOnFirst(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
+    async def test_conditional_skip_for_messaged_user(self):
+        with EngineHarness(
+            users=[
+                UserRecord(nick="old", messaged=True),
+                UserRecord(nick="new", messaged=False),
+            ]
+        ) as h:
 
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-                self.calls = []
+            class CondSkip(BaseAction):
+                block_id = "CONDITIONAL_SKIP"
+                name = "Cond"
+                icon = "x"
 
-            async def execute(self, user_nick, cdp, engine=None):
-                self.calls.append(user_nick)
-                if user_nick == "a":
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.OK
+
+            block = make_ok_block()
+            h.engine._stack = [CondSkip(pre_delay_ms=0), block]
+            await h.engine.execute(None)
+            # Queue hides messaged users, so only "new" runs.
+            self.assertEqual(block.calls, ["new"])
+            self.assertEqual(h.memory.marked, ["new"])
+
+    async def test_repeat_termination_on_empty(self):
+        from actions.repeat_loop import RepeatLoop
+
+        with EngineHarness(users=[]) as h:
+
+            class NeedsUser(BaseAction):
+                block_id = "CLICK_USER"
+                name = "Click"
+                icon = "x"
+
+                def __init__(self, **kw):
+                    super().__init__(pre_delay_ms=0)
+                    self.use_person_from_memory = False
+                    self.calls = []
+
+                async def execute(self, nick, cdp, engine=None):
+                    self.calls.append(nick)
+                    return ActionResult.OK
+
+            click = NeedsUser()
+            h.engine._stack = [RepeatLoop(repeat_count=5), click]
+            await h.engine.execute(None)
+            self.assertEqual(click.calls, [])
+            self.assertTrue(any("Repeat Loop" in m for m in h.logs))
+
+    async def test_label_filter_order(self):
+        with EngineHarness(
+            users=[UserRecord(nick="keep"), UserRecord(nick="drop")]
+        ) as h:
+            h.engine.label_filter = lambda n: n != "drop"
+            block = make_ok_block()
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertEqual(block.calls, ["keep"])
+            self.assertEqual(h.memory.marked, ["keep"])
+
+    async def test_stop_after_first_user(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            block = make_ok_block()
+
+            async def stop_after_a(engine, nick):
+                if nick == "a":
                     engine.stop()
-                return ActionResult.OK
 
-        first = StopOnFirst()
-        second = RecordingBlock()
-        engine._stack = [first, second]
-        await engine.execute()
-        self.assertEqual(self.hooks.outcomes, ["stopped"],
-                         "stop must take precedence over normal completion")
-        self.assertNotIn("b", first.calls)
-        self.assertEqual(self.memory.marked, [],
-                         "stopped work must not be auto-marked")
+            block.on_run = stop_after_a
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            # Stop requested during final block of user a: with the C1
+            # pre-mark gate, user a is NOT auto-marked.
+            self.assertEqual(block.calls, ["a"])
+            self.assertEqual(h.memory.marked, [])
+            self.assertEqual(h.user_done, [("a", False)])
 
-
-ActionRegistry._classes.clear()
-ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

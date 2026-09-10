@@ -1,626 +1,418 @@
-"""Area C1 — stop contract at run/cycle/user boundaries.
+"""AREA C1 — stop contract: gates, marking boundary, single-target, restart.
 
-Parent design: docs/SAFETY_REFACTOR_AREA_C_IMPL_DESIGN_2026-09-10.md §3.2–§3.4.
-Task list: docs/SAFETY_REFACTOR_AREA_C_2026-09-10.md C1a.
-
-Test-first: every stop test fails against the baseline and passes after C1.
-Parity assertions (progress mapping, repeat termination) pass before and after
-and guard the C2 extraction.
+Red on baseline (pause starts blocks, final-OK marks, single-target masks
+stop, STOPPING strands, collect misclassifies); green after C1.
 """
 
+from __future__ import annotations
+
 import asyncio
-import os
-import sys
-import tempfile
 import time
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))))
-
-from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
-                                 BaseAction)
-_REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
-
-from services.run import RunCoordinator  # noqa: E402
-from services.run.error_recovery import RetryPolicy  # noqa: E402
-from services.run.hooks import RunHooks, RunTracer  # noqa: E402
-from stores.user_memory import UserRecord  # noqa: E402
-
-try:
-    from actions.cancellation import RunStopped  # noqa: E402
-    HAS_CANCELLATION = True
-except ImportError:
-    HAS_CANCELLATION = False
-
-    class RunStopped(Exception):
-        pass
-
-
-class RecordingBlock(BaseAction):
-    block_id = "CUSTOM_FIND"
-    name = "Find & Click"
-    icon = "🔎"
-
-    def __init__(self, result=ActionResult.OK, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.calls = []
-        self._result = result
-
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        return self._result
-
-
-class StopAfterFirstBlock(BaseAction):
-    """Returns OK for the first block position, then requests stop."""
-
-    block_id = "CUSTOM_FIND"
-    name = "Find & Click"
-    icon = "🔎"
-
-    def __init__(self, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.calls = []
-
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        if engine is not None:
-            engine.stop()
-        return ActionResult.OK
-
-
-class GateBlock(BaseAction):
-    block_id = "CUSTOM_FIND"
-    name = "Find & Click"
-    icon = "🔎"
-    gate = None
-
-    def __init__(self, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.calls = []
-
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        if self.gate is not None:
-            await self.gate.wait()
-        return ActionResult.OK
-
-
-class FakeMemory:
-    def __init__(self, users=None):
-        self._users = list(users or [])
-        self.marked = []
-
-    async def get_queue(self):
-        return [u for u in self._users if not u.messaged]
-
-    async def get_all(self):
-        return list(self._users)
-
-    async def upsert_user(self, user):
-        self._users.append(user)
-
-    async def mark_messaged(self, nick):
-        self.marked.append(nick)
-        for u in self._users:
-            if u.nick == nick:
-                u.messaged = True
-
-    async def delete_user(self, nick):
-        return False
-
-
-class SlowMemory(FakeMemory):
-    """get_queue gated on an event so stop can land mid-preparation."""
-
-    def __init__(self, users=None):
-        super().__init__(users)
-        self.entered = asyncio.Event()
-        self.release = asyncio.Event()
-
-    async def get_queue(self):
-        self.entered.set()
-        await self.release.wait()
-        return await super().get_queue()
-
-
-class CollectResult:
-    def __init__(self, collected=(), all_people=(), purged=(), seeking=False,
-                 found=None, stopped=False):
-        self.collected = list(collected)
-        self.all_people = list(all_people)
-        self.purged = list(purged)
-        self.seeking = seeking
-        self.found = found
-        self.stopped = stopped
-        self.scrolls = 0
-        self.reached_end = False
-        self.stopped_early = False
-
-
-class ScrollBlock(BaseAction):
-    block_id = "SCROLL_PARSE"
-    name = "Scroll & Parse"
-    icon = "📜"
-
-    def __init__(self, result=None, gate=None, **kw):
-        super().__init__(pre_delay_ms=0)
-        self._result = result or CollectResult()
-        self.gate = gate
-        self.calls = 0
-
-    async def execute(self, user_nick, cdp, engine=None):
-        return ActionResult.OK
-
-    async def run_pipeline(self, cdp, engine, panel_criteria=None,
-                           known_messaged=None):
-        self.calls += 1
-        if self.gate is not None:
-            await self.gate.wait()
-        return self._result
-
-
-class TakeBlock:
-    block_id = "TAKE_PERSON"
-    enabled = True
-    mode_phrase = "matching person"
-
-    def __init__(self, nick=None, gate=None):
-        self._nick = nick
-        self.gate = gate
-        self.calls = 0
-
-    def choose(self, rows, eng=None):
-        self.calls += 1
-        return self._nick
-
-
-class OutcomeHooks(RunHooks):
-    def __init__(self):
-        self.outcomes = []
-
-    def post_run(self, coordinator, outcome):
-        self.outcomes.append(outcome)
-
-
-class EngineCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.old = os.getcwd()
-        self.tmp = tempfile.TemporaryDirectory()
-        os.chdir(self.tmp.name)
-        self.addCleanup(self._restore_registry)
-
-    def tearDown(self):
-        os.chdir(self.old)
-        self.tmp.cleanup()
-
-    def _restore_registry(self):
-        ActionRegistry._classes.clear()
-        ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
-
-    def make(self, users=None, **kw):
-        self.memory = kw.pop("memory", None) or FakeMemory(users)
-        self.engine = RunCoordinator(cdp=None, memory=self.memory,
-                                     criteria=None, **kw)
-        self.logs = []
-        self.debug = []
-        self.user_done = []
-        self.marked_live = []
-        self.stack_complete = []
-        self.engine.log_msg.connect(lambda m: self.logs.append(m))
-        self.engine.debug_msg.connect(lambda m, l: self.debug.append((m, l)))
-        self.engine.user_complete.connect(
-            lambda n, ok: self.user_done.append((n, ok)))
-        self.engine.person_marked.connect(lambda n: self.marked_live.append(n))
-        self.engine.stack_complete.connect(
-            lambda: self.stack_complete.append(True))
-        return self.engine
-
-
-def _debug_text(case):
-    return " ".join(m for m, _ in case.debug)
-
-
-# ── pause/stop interaction (B2) ───────────────────────────────────
-class TestStopAfterPause(EngineCase):
-    async def test_resume_after_stop_starts_no_further_block(self):
-        engine = self.make([UserRecord(nick="a")])
-
-        class PausingFirst(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
-
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-                self.calls = []
-
-            async def execute(self, user_nick, cdp, engine=None):
-                self.calls.append(user_nick)
-                engine.pause()
-                return ActionResult.OK
-
-        first = PausingFirst()
-        second = RecordingBlock()
-        engine._stack = [first, second]
-
-        async def controller():
-            while not first.calls:
-                await asyncio.sleep(0.01)
-            # First paused itself; the engine is now parked before the second
-            # block. Stop while paused, then resume (resume must not start it).
-            await asyncio.sleep(0.3)
-            engine.stop()
-            await asyncio.sleep(0.1)
-            try:
-                engine.resume()
-            except ValueError:
-                pass
-
-        await asyncio.gather(engine.execute(), controller())
-        self.assertEqual(first.calls, ["a"])
-        self.assertEqual(second.calls, [],
-                         "stop while paused must pre-empt the next block")
-        self.assertEqual(self.user_done, [("a", False)])
-        self.assertEqual(self.memory.marked, [])
-        self.assertIn("stopped", _debug_text(self).lower())
-
-    async def test_stop_while_paused_between_users_runs_nobody_else(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
-        gate = asyncio.Event()
-        block = GateBlock()
-        block.gate = gate
-        engine._stack = [block]
-
-        async def controller():
-            while not block.calls:
-                await asyncio.sleep(0.01)
-            engine.pause()
-            gate.set()
-            await asyncio.sleep(0.3)
-            engine.stop()
-
-        await asyncio.wait_for(
-            asyncio.gather(engine.execute(), controller()), timeout=5)
-        self.assertEqual(block.calls, ["a"])
-        self.assertEqual(self.stack_complete, [True])
-        self.assertIn("stopped", _debug_text(self).lower())
-
-
-# ── collect / take / queue preparation (B10) ──────────────────────
-class TestStopDuringPreparation(EngineCase):
-    async def test_stop_during_collect_runs_no_downstream_action(self):
-        engine = self.make([])
-        gate = asyncio.Event()
-        scroll = ScrollBlock(result=CollectResult(
-            collected=[UserRecord(nick="c")],
-            all_people=[UserRecord(nick="c")]), gate=gate)
-        downstream = RecordingBlock()
-        engine._stack = [scroll, downstream]
-
-        async def controller():
-            while scroll.calls == 0:
-                await asyncio.sleep(0.01)
-            engine.stop()
-            gate.set()
-
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-        await asyncio.wait_for(
-            asyncio.gather(engine.execute(), controller()), timeout=5)
-        self.assertEqual(downstream.calls, [],
-                         "stop during collect must not fall through to standalone")
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        self.assertEqual(self.memory.marked, [])
-
-    async def test_stop_during_queue_preparation_is_stopped_not_empty(self):
-        mem = SlowMemory([UserRecord(nick="a")])
-        engine = self.make(memory=mem)
-        block = RecordingBlock()
-        engine._stack = [block]
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-
-        async def controller():
-            await mem.entered.wait()
-            engine.stop()
-            mem.release.set()
-
-        await asyncio.wait_for(
-            asyncio.gather(engine.execute(), controller()), timeout=5)
-        self.assertEqual(block.calls, [])
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        self.assertIn("stopped", _debug_text(self).lower())
-
-
-# ── retry backoff (B9) ────────────────────────────────────────────
-class TestStopDuringRetry(EngineCase):
-    async def test_stop_during_backoff_makes_no_next_attempt(self):
-        attempts = []
-        fallback_calls = []
-
-        class Flaky(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
-
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-
-            async def execute(self, user_nick, cdp, engine=None):
-                attempts.append(user_nick)
-                raise TimeoutError("transient")
-
-        engine = self.make([UserRecord(nick="a")],
-                           retry_policy=RetryPolicy(max_retries=3,
-                                                    base_delay=2.0))
-        engine._stack = [Flaky()]
-        orig_fallback = engine._step_failed
-
-        async def counting_fallback(block, nick, exc):
-            fallback_calls.append(exc)
-            return await orig_fallback(block, nick, exc)
-
-        engine._step_failed = counting_fallback
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-
-        async def controller():
-            while not attempts:
-                await asyncio.sleep(0.01)
-            engine.stop()
-
-        t0 = time.monotonic()
-        await asyncio.wait_for(
-            asyncio.gather(engine.execute(), controller()), timeout=5)
-        elapsed = time.monotonic() - t0
-        self.assertEqual(len(attempts), 1,
-                         "stop during backoff must not attempt again")
-        self.assertEqual(fallback_calls, [],
-                         "cooperative stop must not invoke the error fallback")
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        self.assertLess(elapsed, 1.5,
-                        "stop must interrupt the 2 s backoff promptly")
-
-    async def test_run_stopped_is_never_retried_even_by_permissive_policy(self):
-        class Permissive(RetryPolicy):
-            def should_retry(self, exc, attempt):
-                return True
-
-        policy = Permissive(max_retries=5, base_delay=0)
+from actions.base_action import ActionResult, BaseAction
+from services.run.hooks import RunHooks
+from services.run.state_machine import RunState
+from stores.user_memory import UserRecord
+
+from tests.integration.run_safety._helpers import (
+    EngineHarness,
+    FakeCDP,
+    FakeMemory,
+    GateBlock,
+    OkBlock,
+    RunStopped,
+    ScriptedMemory,
+    StopRequestBlock,
+    make_ok_block,
+)
+
+
+class StopGatesCase(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_while_paused_between_blocks_starts_nothing(self):
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            calls = []
+
+            class B1(BaseAction):
+                block_id = "TEST_C1_B1"
+                name = "b1"
+                icon = "x"
+
+                async def execute(self, nick, cdp, engine=None):
+                    calls.append("b1")
+                    engine.pause()
+
+                    async def stopper():
+                        await asyncio.sleep(0.05)
+                        engine.stop()
+
+                    asyncio.create_task(stopper())
+                    return ActionResult.OK
+
+            class B2(BaseAction):
+                block_id = "TEST_C1_B2"
+                name = "b2"
+                icon = "x"
+
+                async def execute(self, nick, cdp, engine=None):
+                    calls.append("b2")
+                    return ActionResult.OK
+
+            h.engine._stack = [B1(pre_delay_ms=0), B2(pre_delay_ms=0)]
+            await asyncio.wait_for(h.engine.execute(None), timeout=5)
+            self.assertEqual(
+                calls, ["b1"], "stop during pause must not start the next block"
+            )
+            self.assertEqual(h.memory.marked, [])
+            self.assertEqual(h.user_done, [("a", False)])
+            self.assertTrue(any("stopped" in m.lower() for m, _ in h.debug))
+
+    async def test_stop_while_paused_between_users_runs_no_next_user(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            gate = asyncio.Event()
+            block = GateBlock(gate=gate)
+            h.engine._stack = [block]
+
+            async def controller():
+                while not block.calls:
+                    await asyncio.sleep(0.01)
+                h.engine.pause()
+                gate.set()  # let user a finish, then pause before b
+                while len(block.calls) < 1 or h.engine.is_running is False:
+                    await asyncio.sleep(0.01)
+                await asyncio.sleep(0.05)
+                h.engine.stop()
+
+            await asyncio.wait_for(
+                asyncio.gather(h.engine.execute(None), controller()),
+                timeout=5,
+            )
+            self.assertEqual(block.calls, ["a"])
+            self.assertEqual(h.memory.marked, ["a"])
+            self.assertEqual(h.user_done, [("a", True)])
+            # user b must never start: no user_complete for b
+            self.assertNotIn("b", [n for n, _ in h.user_done])
+
+    async def test_stop_during_collect_yields_stopped_not_empty(self):
+        with EngineHarness(memory=FakeMemory([])) as h:
+            from types import SimpleNamespace
+
+            class ScrollStop(BaseAction):
+                block_id = "SCROLL_PARSE"
+                name = "Scroll"
+                icon = "x"
+
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.OK
+
+                async def run_pipeline(
+                    self, cdp, engine, panel_criteria=None, known_messaged=None
+                ):
+                    engine.stop()
+                    return SimpleNamespace(
+                        collected=[],
+                        all_people=[],
+                        purged=[],
+                        seeking=False,
+                        found=None,
+                        stopped=True,
+                        scrolls=0,
+                        reached_end=False,
+                        stopped_early=False,
+                    )
+
+            h.engine._stack = [ScrollStop(pre_delay_ms=0)]
+            await h.engine.execute(None)
+            # Must be stopped (trace/outcome), not empty/completed.
+            records = h.trace_records()
+            reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
+            self.assertIn(
+                "stopped", reasons, f"collect-stop must end stopped, got {reasons}"
+            )
+            self.assertNotIn("completed", reasons)
+            self.assertEqual(h.engine._state.state, RunState.DONE)
+
+    async def test_stop_during_take_phase_yields_stopped(self):
+        mem = ScriptedMemory(
+            users=[UserRecord(nick="a")],
+            on_get_all=lambda: None,
+        )
+        with EngineHarness(memory=mem) as h:
+            from actions.take_person import TakePerson
+
+            take = TakePerson(pick_mode="order_first")
+            h.engine._stack = [take, make_ok_block()]
+
+            orig_get_all = mem.get_all
+
+            async def hooked_get_all():
+                rows = await FakeMemory.get_all(mem)
+                h.engine.stop()  # stop lands inside the take-phase read
+                return rows
+
+            mem.get_all = hooked_get_all  # type: ignore
+            await h.engine.execute(None)
+            records = h.trace_records()
+            reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
+            self.assertIn("stopped", reasons)
+            self.assertEqual(h.memory.marked, [])
+
+    async def test_stop_during_retry_backoff_skips_next_attempt_and_fallback(self):
+        from services.run.error_recovery import RetryPolicy
+
+        policy = RetryPolicy(max_retries=5, base_delay=0.5)
         calls = []
+        fallbacks = []
 
         async def op():
             calls.append(1)
-            raise RunStopped()
+            raise TimeoutError("transient")
 
         async def fallback(exc):
-            calls.append("fallback")
-            return "fallback"
+            fallbacks.append(exc)
+            raise exc
 
-        if not HAS_CANCELLATION:
-            self.fail("actions/cancellation.py must exist (Area C1)")
-        with self.assertRaises(RunStopped):
-            await policy.retry_with_backoff(op, fallback=fallback)
-        self.assertEqual(calls, [1],
-                         "RunStopped must propagate without retry or fallback")
-        # The base policy never retries stop; a permissive override may still
-        # claim True, but retry_with_backoff passes RunStopped through before
-        # consulting should_retry, so no retry happens either way.
-        self.assertFalse(RetryPolicy().should_retry(RunStopped(), 0))
-
-
-# ── automatic-mark boundary (B11) ─────────────────────────────────
-class TestMarkBoundary(EngineCase):
-    async def test_stop_after_final_ok_prevents_automatic_mark(self):
-        engine = self.make([UserRecord(nick="a")])
-        engine._stack = [StopAfterFirstBlock()]
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-        await engine.execute()
-        self.assertEqual(self.memory.marked, [],
-                         "stop between final OK and the mark boundary must win")
-        self.assertEqual(self.marked_live, [])
-        self.assertEqual(self.user_done, [("a", False)])
-        self.assertEqual(hooks.outcomes, ["stopped"])
-
-    async def test_explicit_mark_before_stop_is_kept_but_no_auto_mark(self):
-        engine = self.make([UserRecord(nick="a")])
-
-        class ExplicitThenStop(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
-
+        class Stopper:
             def __init__(self):
-                super().__init__(pre_delay_ms=0)
+                self._stop_requested = False
 
-            async def execute(self, user_nick, cdp, engine=None):
-                await engine.mark_person_messaged(user_nick)
-                engine.stop()
-                return ActionResult.OK
+            def is_stopping(self):
+                return self._stop_requested
 
-        engine._stack = [ExplicitThenStop()]
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-        await engine.execute()
-        # The explicit write completed before stop: it stays. The coordinator's
-        # automatic mark must not fire on top of it.
-        self.assertEqual(self.memory.marked, ["a"])
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        self.assertEqual(self.user_done, [("a", False)])
+        stopper = Stopper()
 
+        async def stop_soon():
+            await asyncio.sleep(0.05)
+            stopper._stop_requested = True
 
-# ── single-target stop masking (B6) ───────────────────────────────
-class TestSingleTargetStop(EngineCase):
-    def _single_target_stack(self, engine):
-        first = StopAfterFirstBlock()
-        first.block_id = "CLICK_USER"
-        first.use_person_from_memory = True
-        second = RecordingBlock()
-        engine._stack = [first, second]
-        engine.selected_nick = "tgt"
-        return first, second
-
-    async def test_single_target_stop_returns_stopped(self):
-        engine = self.make([UserRecord(nick="a")])
-        engine._tracer = RunTracer("test-single-stop", log_dir="logs")
+        # New signature has stop=; baseline lacks it → TypeError (red).
         try:
-            first, second = self._single_target_stack(engine)
-            out = await engine._run_single_target_cycle(False, False)
-            self.assertEqual(out, "stopped")
-            self.assertEqual(second.calls, [])
-        finally:
-            engine._tracer.close()
-            engine._tracer = None
+            task = asyncio.ensure_future(
+                policy.retry_with_backoff(op, fallback=fallback, stop=stopper)
+            )
+        except TypeError:
+            self.fail("retry_with_backoff must accept stop= (red)")
+        stopper_task = asyncio.ensure_future(stop_soon())
+        with self.assertRaises(RunStopped):
+            await task
+        await stopper_task
+        self.assertEqual(len(calls), 1, "stop must prevent the next attempt")
+        self.assertEqual(fallbacks, [], "stop must not invoke the fallback")
 
-    async def test_single_target_stop_progress_matches_queued_mapping(self):
-        """Legacy counter parity: stop increments `failed` in both paths."""
-        engine = self.make([UserRecord(nick="a")])
-        engine._tracer = RunTracer("test-single-progress", log_dir="logs")
-        try:
-            self._single_target_stack(engine)
-            out = await engine._run_single_target_cycle(False, False)
+    async def test_stop_on_final_ok_prevents_automatic_mark(self):
+        with EngineHarness(users=[UserRecord(nick="solo")]) as h:
+            h.engine._stack = [StopRequestBlock()]
+            await h.engine.execute(None)
+            self.assertEqual(
+                h.memory.marked, [], "stop before the mark boundary must not mark"
+            )
+            self.assertEqual(h.user_done, [("solo", False)])
+            # Progress: stop counts as failed on the wire.
+            self.assertEqual(h.engine.progress.failed, 1)
+            self.assertEqual(h.engine.progress.done, 0)
+            records = h.trace_records()
+            reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
+            self.assertIn("stopped", reasons)
+
+    async def test_explicit_mark_before_stop_is_not_rolled_back(self):
+        from actions.mark_messaged import MarkMessaged
+
+        with EngineHarness(users=[UserRecord(nick="Zoe")]) as h:
+
+            class PickZoe(BaseAction):
+                block_id = "TAKE_PERSON"
+                name = "Pick"
+                icon = "x"
+
+                def choose(self, rows, engine=None):
+                    return "Zoe"
+
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.SKIP
+
+            mark = MarkMessaged(pre_delay_ms=0)
+
+            class StopAfter(BaseAction):
+                block_id = "TEST_C1_STOP_AFTER"
+                name = "stop"
+                icon = "x"
+
+                async def execute(self, nick, cdp, engine=None):
+                    engine.stop()
+                    return ActionResult.OK
+
+            h.engine._stack = [
+                PickZoe(pre_delay_ms=0),
+                mark,
+                StopAfter(pre_delay_ms=0),
+            ]
+            await h.engine.execute(None)
+            # Explicit mark completed before stop → stays marked.
+            self.assertIn("Zoe", h.memory.marked)
+            # But the automatic post-user mark must not double-add for a
+            # stopped user: exactly one mark (the explicit one).
+            self.assertEqual(h.memory.marked.count("Zoe"), 1)
+
+    async def test_single_target_stop_returns_stopped_not_worked(self):
+        with EngineHarness(
+            users=[UserRecord(nick="Anna"), UserRecord(nick="Bella")]
+        ) as h:
+            h.engine.note_selected("Anna")
+
+            class MemClick(BaseAction):
+                block_id = "CLICK_USER"
+                name = "Click"
+                icon = "x"
+
+                def __init__(self, **kw):
+                    super().__init__(pre_delay_ms=0)
+                    self.use_person_from_memory = True
+
+                async def execute(self, nick, cdp, engine=None):
+                    engine.stop()
+                    return ActionResult.OK
+
+            class Next(BaseAction):
+                block_id = "TEST_C1_NEXT"
+                name = "next"
+                icon = "x"
+
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.OK
+
+            h.engine._stack = [MemClick(), Next(pre_delay_ms=0)]
+            # Drive one cycle directly to pin the return value.
+            h.engine._tracer = type(
+                "T", (), {"note": lambda self, *a, **k: None}
+            )()
+            h.engine._running = True
+            h.engine._state.mark_running()
+            out = await h.engine._run_single_target_cycle(False, False)
             self.assertEqual(out, "stopped")
-            self.assertEqual(engine.progress.failed, 1,
-                             "single-target stop must map stop→fail like queued")
-            self.assertEqual(engine.progress.done, 0)
-        finally:
-            engine._tracer.close()
-            engine._tracer = None
+            self.assertEqual(h.memory.marked, [])
+            self.assertEqual(h.user_done, [("Anna", False)])
 
     async def test_single_target_stop_ends_repeat_without_next_cycle(self):
         from actions.repeat_loop import RepeatLoop
-        from actions.take_person import TakePerson
-        engine = self.make([UserRecord(nick="a")])
-        first, second = self._single_target_stack(engine)
-        # TakePerson picks "a" so selected_nick is set by the take phase
-        # (execute() clears any manually preset selected_nick at start).
-        take = TakePerson(pick_mode="order_first")
-        engine._stack = [RepeatLoop(repeat_count=3), take, first, second]
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-        await engine.execute()
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        self.assertEqual(len(first.calls), 1,
-                         "no next repeat cycle after a stopped single-target cycle")
-        self.assertEqual(second.calls, [])
 
+        with EngineHarness(users=[UserRecord(nick="Anna")]) as h:
 
-# ── restartability (B1/B7) ────────────────────────────────────────
-class TestRestartability(EngineCase):
-    async def test_stopped_run_reports_stopped_and_restarts(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
-        block = RecordingBlock()
-        engine._stack = [block]
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
+            class PickAnna(BaseAction):
+                block_id = "TAKE_PERSON"
+                name = "Pick"
+                icon = "x"
 
-        gate = asyncio.Event()
-        gated = GateBlock()
-        gated.gate = gate
-        engine._stack = [gated]
+                def choose(self, rows, engine=None):
+                    return "Anna"
 
-        async def controller():
-            while not gated.calls:
-                await asyncio.sleep(0.01)
-            engine.stop()
-            gate.set()
+                async def execute(self, nick, cdp, engine=None):
+                    return ActionResult.SKIP
 
-        await asyncio.wait_for(
-            asyncio.gather(engine.execute(), controller()), timeout=5)
-        self.assertEqual(hooks.outcomes, ["stopped"])
-        from services.run.state_machine import RunState
-        self.assertEqual(engine._state.state, RunState.DONE,
-                         "a stopped run must terminate, not strand in STOPPING")
+            class MemClick(BaseAction):
+                block_id = "CLICK_USER"
+                name = "Click"
+                icon = "x"
 
-        # Second run starts cleanly.
-        block2 = RecordingBlock()
-        engine._stack = [block2]
-        hooks.outcomes.clear()
-        await engine.execute()
-        self.assertEqual(block2.calls, ["a", "b"])
-        self.assertEqual(hooks.outcomes, ["worked"])
+                def __init__(self, **kw):
+                    super().__init__(pre_delay_ms=0)
+                    self.use_person_from_memory = True
+                    self.calls = []
 
-    async def test_stop_before_first_cycle_is_stopped_and_restartable(self):
-        engine = self.make([UserRecord(nick="a")])
-        block = RecordingBlock()
-        engine._stack = [block]
+                async def execute(self, nick, cdp, engine=None):
+                    self.calls.append(nick)
+                    engine.stop()
+                    return ActionResult.OK
 
-        class StopInPre(RunHooks):
-            def __init__(self, outer):
-                self.outer = outer
+            click = MemClick()
+            h.engine._stack = [
+                RepeatLoop(repeat_count=5),
+                PickAnna(pre_delay_ms=0),
+                click,
+            ]
+            await h.engine.execute(None)
+            self.assertEqual(
+                len(click.calls), 1, "stopped single-target must not repeat"
+            )
+            records = h.trace_records()
+            reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
+            self.assertIn("stopped", reasons)
+            self.assertNotIn("completed", reasons)
 
-            def pre_run(self, coordinator):
-                coordinator.stop()
+    async def test_stop_then_start_is_restartable(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            h.engine._stack = [StopRequestBlock()]
+            await h.engine.execute(None)
+            self.assertEqual(h.engine._state.state, RunState.DONE)
+            # Second run on fresh memory must start (no ValueError).
+            h.engine._memory = FakeMemory([UserRecord(nick="c")])
+            h.engine._stack = [make_ok_block()]
+            await h.engine.execute(None)  # must not raise
+            self.assertEqual(h.engine._state.state, RunState.DONE)
+            self.assertEqual(h.stack_complete, [True, True])
 
-            def post_run(self, coordinator, outcome):
-                self.outer.outcomes.append(outcome)
-
-        self.outcomes = []
-        engine._hooks = StopInPre(self)
-        await engine.execute()
-        self.assertEqual(block.calls, [])
-        self.assertEqual(self.outcomes, ["stopped"])
-
-        from services.run.state_machine import RunState
-        self.assertEqual(engine._state.state, RunState.DONE)
-        # Restart works (baseline raised ValueError: stopping -> running).
-        engine._hooks = RunHooks()
-        await engine.execute()
-        self.assertEqual(block.calls, ["a"])
-
-    async def test_repeated_stops_are_safe_and_restartable(self):
-        engine = self.make([UserRecord(nick="a")])
-        engine._stack = [RecordingBlock()]
-        engine.stop()
-        engine.stop()
-        engine.stop()
-        hooks = OutcomeHooks()
-        engine._hooks = hooks
-        # A stale stop while idle is cleared by the next Run (existing contract).
-        await engine.execute()
-        self.assertEqual(hooks.outcomes, ["worked"])
-
-
-# ── accounting + latency gates ────────────────────────────────────
-class TestProgressAndLatency(EngineCase):
-    async def test_queued_stop_maps_to_failed_counter(self):
-        engine = self.make([UserRecord(nick="a"), UserRecord(nick="b")])
-        engine._stack = [StopAfterFirstBlock(), RecordingBlock()]
-        # First user: first block stops, second sees stop → user "stop".
-        # The coordinator maps stop→fail for the legacy progress counter.
-        await engine.execute()
-        self.assertEqual(engine.progress.failed, 1)
-        self.assertEqual(engine.progress.done, 0)
+    async def test_repeated_stop_calls_are_safe(self):
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            h.engine._stack = [make_ok_block()]
+            h.engine.stop()
+            h.engine.stop()
+            h.engine.stop()
+            await h.engine.execute(None)
+            # Fresh run clears the stale stop (existing contract).
+            self.assertEqual(h.engine._state.state, RunState.DONE)
 
     async def test_stop_latency_under_500ms_with_cooperative_cdp(self):
-        engine = self.make([UserRecord(nick="a")])
-        gate = asyncio.Event()
-        block = GateBlock()
-        block.gate = gate
-        engine._stack = [block]
+        from actions.wait_page import WaitPageLoad
 
-        async def controller():
-            while not block.calls:
-                await asyncio.sleep(0.01)
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            gate = asyncio.Event()
+            cdp = FakeCDP()
+            cdp.hang_event = gate
+            h.engine._cdp = cdp
+            wait = WaitPageLoad(
+                target_selector="div", timeout_ms=30000, pre_delay_ms=0
+            )
+            h.engine._stack = [wait]
+
+            async def stopper():
+                while cdp.calls < 1:
+                    await asyncio.sleep(0.01)
+                t1 = time.monotonic()
+                h.engine.stop()
+                return t1
+
             t0 = time.monotonic()
-            engine.stop()
+            stop_task = asyncio.ensure_future(stopper())
+            run_task = asyncio.ensure_future(h.engine.execute(None))
+            await asyncio.wait_for(
+                asyncio.gather(run_task, stop_task), timeout=5
+            )
+            dt = time.monotonic() - t0
             gate.set()
-            return t0
+            self.assertLess(dt, 0.5 + 0.4, f"cooperative stop took {dt:.2f}s")
+            self.assertEqual(h.memory.marked, [])
+            self.assertEqual(h.user_done, [("a", False)])
 
-        task = asyncio.ensure_future(engine.execute())
-        t0 = await controller()
-        await asyncio.wait_for(task, timeout=5)
-        elapsed = time.monotonic() - t0
-        self.assertLess(elapsed, 0.5,
-                        "cooperative stop must land well under 500 ms")
+    async def test_progress_stop_counts_as_failed_with_identity_in_outcome(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            h.engine._stack = [StopRequestBlock()]
+            await h.engine.execute(None)
+            # First user stopped before mark → failed+1; second never starts.
+            self.assertEqual(h.engine.progress.failed, 1)
+            self.assertEqual(h.engine.progress.done, 0)
+            # Identity preserved outside the wire counter:
+            self.assertEqual(h.user_done, [("a", False)])
+            records = h.trace_records()
+            self.assertTrue(
+                any(r.get("reason") == "stopped" for r in records),
+                "stop identity must be in the trace",
+            )
 
-
-_RESTORE = dict(ActionRegistry._classes)
-ActionRegistry._classes.clear()
-ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

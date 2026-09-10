@@ -13,41 +13,45 @@ class RetryPolicy:
         self.base_delay = max(0.0, float(base_delay))
 
     def should_retry(self, exc: Exception, attempt: int) -> bool:
-        # Cooperative stop is never retried, even by permissive subclasses.
+        # Cooperative stop / external cancel never retry (even for permissive
+        # subclasses: retry_with_backoff checks before calling this).
+        # Local import: keeps "import services.run" light (actions/__init__
+        # scans every block module); same for the other lazy imports below.
         from actions.cancellation import RunStopped
         if isinstance(exc, RunStopped):
+            return False
+        if isinstance(exc, asyncio.CancelledError):
             return False
         transient = (TimeoutError, ConnectionError, asyncio.TimeoutError)
         return attempt < self.max_retries and isinstance(exc, transient)
 
-    async def retry_with_backoff(self, op, *, fallback=None, is_stopping=None):
-        """Run op() with retries. RunStopped/CancelledError always propagate.
+    async def retry_with_backoff(self, op, *, fallback=None, stop=None):
+        """Run ``op`` with backoff; stop-aware (AREA C1).
 
-        is_stopping: optional ()->bool, keyword-only. When provided, the
-        backoff sleep is stop-aware and raises RunStopped instead of retrying.
+        ``stop`` is None, an engine with ``is_stopping``/``_stop_requested``,
+        or a bare ``() -> bool`` predicate. Cooperative stop raises
+        ``RunStopped`` without retry/fallback; external cancel propagates.
         """
-        from actions.cancellation import RunStopped
+        from actions.cancellation import RunStopped, check_stopped, sleep_with_stop
+
         attempt = 0
         while True:
-            if callable(is_stopping):
-                try:
-                    if bool(is_stopping()):
-                        raise RunStopped()
-                except RunStopped:
-                    raise
-                except Exception:
-                    pass
+            check_stopped(stop)
             try:
                 return await op()
-            except RunStopped:
-                raise
             except asyncio.CancelledError:
+                raise
+            except RunStopped:
+                # Cooperative stop: immediate propagate, never retried, no
+                # fallback (pinned by test_permissive_retry_still_cannot_retry_stop).
                 raise
             except Exception as exc:
                 if not self.should_retry(exc, attempt):
                     return await fallback(exc) if fallback else (_raise(exc))
-                await _sleep_stop_aware(self.base_delay * (2 ** attempt),
-                                        is_stopping)
+                check_stopped(stop)
+                await sleep_with_stop(
+                    self.base_delay * (2 ** attempt), stop, slice_s=0.02
+                )
                 attempt += 1
 
     async def fallback(self, exc: Exception):
@@ -58,38 +62,8 @@ def _raise(exc: Exception):
     raise exc
 
 
-async def _sleep_stop_aware(delay: float, is_stopping=None) -> None:
-    """Backoff sleep that raises RunStopped when the predicate fires."""
-    from actions.cancellation import RunStopped
-    try:
-        delay_f = max(0.0, float(delay))
-    except (TypeError, ValueError):
-        delay_f = 0.0
-    if delay_f <= 0:
-        return
-    if not callable(is_stopping):
-        await asyncio.sleep(delay_f)
-        return
-    # Short slices so stop surfaces promptly (≤50 ms granularity).
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + delay_f
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            return
-        await asyncio.sleep(min(0.05, remaining))
-        try:
-            if bool(is_stopping()):
-                raise RunStopped()
-        except RunStopped:
-            raise
-        except Exception:
-            pass
-
-
 class RunExecutionMixin:
     async def _run_collect_phase(self, block):
-        from actions.cancellation import RunStopped
         self.log_msg.emit("📜 Collecting people (Scroll & Parse)…")
         self._tracer.note({"type": "phase", "phase": "collect"})
         self._ctx = {"block_id": block.block_id, "block_name": block.display_name, "phase": "collect"}
@@ -98,16 +72,19 @@ class RunExecutionMixin:
             known = {u.nick for u in await self._memory.get_all() if u.messaged}
         except Exception:
             known = set()
+        from actions.cancellation import RunStopped, is_stop_requested
         try:
             result = await self._retry.retry_with_backoff(
                 lambda: block.run_pipeline(self._cdp, self, panel_criteria=self._criteria, known_messaged=known),
                 fallback=lambda exc: self._collect_failed(block, exc),
-                is_stopping=getattr(self, "is_stopping", None))
-        except RunStopped:
-            self._ctx = {}
-            raise
+                stop=self)
         except asyncio.CancelledError:
             self._ctx = {}
+            raise
+        except RunStopped:
+            self._ctx = {}
+            self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
+            # run_end/stopped is noted once at the cycle boundary.
             raise
         except Exception:
             self._ctx = {}
@@ -129,22 +106,26 @@ class RunExecutionMixin:
         self._tracer.note({"type": "phase_end", "phase": "collect", "seen": len(result.all_people), "collected": len(result.collected), "scrolls": result.scrolls, "reached_end": result.reached_end, "stopped_early": result.stopped_early, "stopped": result.stopped, "seeking": result.seeking, "found": getattr(result.found, "nick", None), "purged": len(result.purged)})
         self.step_complete.emit(block.display_name, "—")
         self._ctx = {}
-        if result.stopped or self._stop_requested:
+        if is_stop_requested(self):
+            self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
+            raise RunStopped
+        if result.stopped:
+            # Pipeline-reported stop without an engine flag (test fakes /
+            # direct run_pipeline callers): legacy [] return, no raise, so the
+            # pre-existing collect-phase contract stays green. Real engine
+            # stops always set the flag (predicate is engine.is_stopping).
             self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
             return []
         return [person for person in result.collected if not person.messaged]
 
     async def _collect_failed(self, block, exc: Exception):
-        from actions.cancellation import RunStopped
-        if isinstance(exc, (RunStopped, asyncio.CancelledError)):
-            raise exc
         log.exception("Collect phase failed")
         self.debug_msg.emit(f"      ❌ Scroll & Parse raised: {exc}", "error")
         self._tracer.note({"type": "phase_end", "phase": "collect", "status": "exception", "error": str(exc)})
         raise exc
 
     async def _execute_for_user(self, user, has_skip: bool) -> str:
-        from actions.cancellation import RunStopped
+        from actions.cancellation import RunStopped, is_stop_requested
         if user.messaged and has_skip:
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return "skip"
@@ -158,12 +139,12 @@ class RunExecutionMixin:
             self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
             return "skip"
         for idx, block in enumerate(self._stack, start=1):
-            if self._stop_requested:
+            if is_stop_requested(self):
                 self.debug_msg.emit("⏹ Stack stopped by user", "warn")
                 self._tracer.note({"type": "run_end", "reason": "stopped"})
                 return "stop"
             await self._wait_if_paused()
-            if self._stop_requested:
+            if is_stop_requested(self):
                 self.debug_msg.emit("⏹ Stack stopped by user", "warn")
                 self._tracer.note({"type": "run_end", "reason": "stopped"})
                 return "stop"
@@ -190,22 +171,19 @@ class RunExecutionMixin:
                     result = await self._retry.retry_with_backoff(
                         lambda: block.execute(user.nick, self._cdp, self),
                         fallback=lambda exc: self._step_failed(block, user.nick, exc),
-                        is_stopping=getattr(self, "is_stopping", None))
-                except RunStopped:
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-                    self._tracer.note({"type": "run_end", "reason": "stopped"})
-                    return "stop"
+                        stop=self)
                 except asyncio.CancelledError:
                     raise
+                except RunStopped:
+                    self._tracer.note({"type": "step_end", "status": "stop", **self._ctx})
+                    self.debug_msg.emit(f"      ⏹ {block.display_name} stopped on request", "warn")
+                    self.step_complete.emit(block.display_name, user.nick)
+                    self._tracer.note({"type": "run_end", "reason": "stopped"})
+                    return "stop"
                 except Exception:
                     return "fail"
                 status = self._handle_step_result(block, user.nick, idx, started, result)
-                try:
-                    await self._call_action_hook(block, user.nick, status)
-                except (RunStopped, asyncio.CancelledError):
-                    raise
-                except Exception as hook_exc:
-                    log.warning("on_action_complete failed: %s", hook_exc)
+                await self._call_action_hook(block, user.nick, status)
                 if status != "ok":
                     return status
             finally:
@@ -215,9 +193,6 @@ class RunExecutionMixin:
         return "ok"
 
     async def _step_failed(self, block, nick: str, exc: Exception):
-        from actions.cancellation import RunStopped
-        if isinstance(exc, (RunStopped, asyncio.CancelledError)):
-            raise exc
         log.exception("Block error")
         self._tracer.note({"type": "step_end", "status": "exception", "error": str(exc), **self._ctx})
         self.debug_msg.emit(f"      ❌ {block.display_name} raised: {exc}", "error")
