@@ -34,7 +34,7 @@
       <button id="windowsMenuBtn" class="btn-icon"
               title="Windows — open, close, minimize and restore windows"><span class="material-icons">widgets</span></button>
       <button id="layoutMenuBtn" class="btn-icon"
-              title="Grid view — layouts, bookmarks and window presets"><span class="material-icons">grid_view</span></button>
+              title="Grid view — layouts and window presets"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
         <select id="tabSelect"><option value="">— Select Chrome Tab —</option></select>
         <button id="refreshTabsBtn" class="btn-icon" title="Refresh tabs"><span class="material-icons">refresh</span></button>
@@ -44,11 +44,26 @@
     </div>
   </header>
 
+  <!-- LANGUAGE / URL BOOKMARKS — intentionally separate from Grid view -->
+  <div id="languageBookmarks" class="language-bookmarks">
+    <div class="url-toolbar" id="urlToolbar">
+      <span class="url-toolbar-label" title="URL Parse Preset — matches the URL against open Chrome tabs and connects to the best one"><span class="material-icons">language</span> Bookmarks</span>
+      <input id="urlInput" type="text" spellcheck="false"
+             placeholder="Paste URL or keyword — e.g. https://ru.virt-chat.com/chat"
+             autocomplete="off">
+      <button id="urlConnectBtn" class="btn-primary btn-compact"
+              title="Parse the URL / keyword, find the matching tab and connect to it">
+        <span class="material-icons">link</span> Auto-Connect</button>
+      <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a bookmark"><span class="material-icons">add</span></button>
+      <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
+    </div>
+  </div>
+
   <!-- ═══════════════════════════════════════════════════════════
        FLEXIBLE GRID ("SASH LAYOUT") — FEATURE
        Every window below is draggable (title bar), splittable,
        mergeable and resizable (sashes). The header stays pinned.
-       Grid view contains layouts, bookmarks and window presets.
+       Grid view contains layouts and window presets.
        See docs/SASH_LAYOUT_DESIGN_2026-09-05.md.
        ═══════════════════════════════════════════════════════════ -->
   <main class="sash-grid" id="sashGrid">
@@ -363,9 +378,9 @@
   </main>
 </div>
 
-<!-- GRID VIEW MENU (layouts, bookmarks and window presets) -->
+<!-- GRID VIEW MENU (layouts and window presets) -->
 <div id="layoutMenu" class="layout-menu grid-menu hidden">
-  <div class="layout-menu-title">Grid view — layouts, bookmarks and window presets</div>
+  <div class="layout-menu-title">Grid view — layouts and window presets</div>
 
   <section class="grid-menu-section grid-layout-section">
     <div class="grid-menu-section-title"><span class="material-icons">grid_view</span> Grid layouts</div>
@@ -376,20 +391,6 @@
       <button data-layout="c">C — Side column<span class="lm-sub">Log spans full height on the right</span></button>
     </div>
     <button id="resetLayoutBtn" class="lm-reset" title="Restore the classic layout and show every window">↺ Reset to default<span class="lm-sub">Classic arrangement — all windows visible (Undo with the global button)</span></button>
-  </section>
-
-  <div class="layout-menu-sep"></div>
-
-  <section class="grid-menu-section url-toolbar" id="urlToolbar">
-    <div class="grid-menu-section-title url-toolbar-label" title="URL Parse Preset — matches the URL against open Chrome tabs and connects to the best one"><span class="material-icons">language</span> Bookmarks</div>
-    <input id="urlInput" type="text" spellcheck="false"
-           placeholder="Paste URL or keyword — e.g. https://ru.virt-chat.com/chat"
-           autocomplete="off">
-    <button id="urlConnectBtn" class="btn-primary btn-compact"
-            title="Parse the URL / keyword, find the matching tab and connect to it">
-      <span class="material-icons">link</span> Auto-Connect</button>
-    <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a bookmark"><span class="material-icons">add</span></button>
-    <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
   </section>
 
   <div class="layout-menu-sep"></div>
@@ -418,21 +419,6 @@
   <div class="layout-menu-row">
     <button id="windowsShowAllBtn" class="lm-mini" title="Show every window"><span class="material-icons">visibility</span> Show all</button>
     <button id="windowsHideAllBtn" class="lm-mini" title="Close every window (reopen from this menu)"><span class="material-icons">visibility_off</span> Hide all</button>
-  </div>
-</div>
-
-<!-- WINDOW PRESET PANEL -->
-<div id="windowPresetPanel" class="layout-menu window-preset-panel hidden">
-  <div class="layout-menu-title">Window presets — portable grid snapshots</div>
-  <div class="window-preset-actions">
-    <button id="saveWindowPresetBtn" class="btn-small btn-primary" title="Save the current arrangement with a name"><span class="material-icons">save</span> Save current</button>
-    <button id="importWindowPresetBtn" class="btn-small" title="Import a .json window preset"><span class="material-icons">file_upload</span> Import</button>
-    <button id="exportWindowPresetBtn" class="btn-small" title="Export the selected preset as a .json file" disabled><span class="material-icons">file_download</span> Export</button>
-  </div>
-  <input id="windowPresetFileInput" type="file" accept=".json,application/json" class="hidden">
-  <div id="windowPresetStatus" class="window-preset-status" aria-live="polite"></div>
-  <div id="windowPresetList" class="window-preset-list">
-    <div class="window-preset-list-empty">No saved window presets yet. Save the current grid to create one.</div>
   </div>
 </div>
 

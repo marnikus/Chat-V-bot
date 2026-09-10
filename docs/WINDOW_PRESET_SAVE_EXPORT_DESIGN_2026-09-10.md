@@ -47,8 +47,9 @@ the existing audit's values are the baseline above.
 6. Apply the tree's percentage allocations on the target screen; use normalized
    bounds only for preview/diagnostics, so a different resolution does not
    replay stale absolute pixels.
-7. Refresh the combined Grid view menu and its quick chips from a signal
-   immediately after save, delete, or import—no page reload.
+7. Refresh the Grid view menu and its window-preset quick chips from a signal
+   immediately after save, delete, or import—no page reload. Keep the language
+   URL-bookmark toolbar separate from Grid view.
 
 ### Non-goals
 
@@ -138,9 +139,9 @@ ui/js/window-presets.js
   Grid view menu section, quick chips, save/load/delete, download, file input,
   preview modal
 ui/js/url-toolbar.js
-  URL bookmark controls rendered in the same Grid view menu
+  language URL-bookmark controls in their separate toolbar
 ui/index.html + ui/css/*
-  combined Grid view menu, bookmark/preset controls, and preview surface
+  separate language-bookmark toolbar, Grid view menu, and preview surface
 ```
 
 `ConfigManager` wires the new store into its existing load/save lifecycle, but
@@ -160,8 +161,9 @@ and the final mutation are guarded.
    normalized bounds, and screen metadata.
 4. The bridge validates/persists the document and emits
    `window_preset_list_updated`.
-5. The combined Grid view menu and its quick chips render the new preset
-   immediately and a success log names the saved preset.
+5. The Grid view menu and its window-preset quick chips render the new preset
+   immediately and a success log names the saved preset; language bookmarks stay
+   in their separate toolbar.
 
 ### Load / export
 

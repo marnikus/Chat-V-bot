@@ -1304,7 +1304,6 @@ const SashGrid = {
           WindowPresets.render();
           WindowPresets.refresh();
         }
-        if (typeof UrlToolbar !== 'undefined') UrlToolbar.renderChips();
       }
       place();
     });
