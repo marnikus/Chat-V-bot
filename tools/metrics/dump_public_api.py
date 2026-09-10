@@ -52,9 +52,19 @@ def _sig(obj) -> str:
     return re.sub(r"0x[0-9a-fA-F]+", "0xADDR", text)
 
 
+_ADDRESS = re.compile(r"0x[0-9a-fA-F]{5,}")
+
+
 def _default_repr(value) -> str:
+    """A `repr` that survives a restart: memory addresses are blanked out.
+
+    A block's `FIELDS` tuple holds functions and sentinel objects, and their
+    repr ends in `at 0x7f…` — comparing those would make the snapshot depend on
+    where the interpreter happened to load the module instead of on what the
+    block declares.
+    """
     if isinstance(value, (str, int, float, bool, type(None), list, tuple, dict)):
-        return repr(value)
+        return _ADDRESS.sub("0x…", repr(value))
     return f"<{type(value).__name__}>"
 
 
@@ -81,16 +91,19 @@ def dump_module(qualname: str) -> dict:
         elif inspect.isclass(obj) and owner == qualname:
             out["classes"][name] = dump_class(obj)
         elif owner == qualname and not isinstance(obj, types.ModuleType):
-            if isinstance(obj, (str, int, float, bool, type(None), tuple)):
-                out["values"][name] = repr(obj)
-            elif isinstance(obj, (list, dict, set)):
+            if isinstance(obj, (list, tuple)):
+                out["values"][name] = _default_repr(obj)
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                out["values"][name] = _default_repr(obj)
+            elif isinstance(obj, (dict, set)):
                 out["values"][name] = f"<{type(obj).__name__} len={len(obj)}>"
     return out
 
 
 def dump_class(cls: type) -> dict:
     data = {"bases": [b.__name__ for b in cls.__bases__],
-            "methods": {}, "attrs": {}, "fields": {}}
+            "ancestry": [k.__name__ for k in cls.__mro__],
+            "methods": {}, "attrs": {}, "fields": {}, "inherited": {}}
     for name, obj in sorted(vars(cls).items()):
         keep_dunder = name in ("__init__", "__init_subclass__", "__bool__",
                                "__call__", "__post_init__", "__await__")
@@ -101,10 +114,24 @@ def dump_class(cls: type) -> dict:
             data["methods"][name] = _sig(fn)
         elif isinstance(obj, property):
             data["methods"][name] = "<property>"
-        elif isinstance(obj, (str, int, float, bool, type(None), tuple)):
-            data["attrs"][name] = repr(obj)
-        elif isinstance(obj, (list, dict)):
+        elif isinstance(obj, (list, tuple, dict)) or isinstance(
+                obj, (str, int, float, bool, type(None))):
             data["attrs"][name] = _default_repr(obj)
+    # A member that moved UP into a shared base is not a lost symbol: record
+    # what the class still answers to through its parents, so the snapshot can
+    # tell "the surface is in another file now" from "the surface is gone".
+    for klass in cls.__mro__[1:]:
+        if klass is object:
+            continue
+        for name, obj in vars(klass).items():
+            if name.startswith("_") or name in data["methods"]:
+                continue
+            if inspect.isfunction(obj) or isinstance(obj, (classmethod, staticmethod)):
+                fn = obj.__func__ if isinstance(obj, (classmethod, staticmethod)) else obj
+                data["inherited"][name] = _sig(fn)
+            elif isinstance(obj, property):
+                data["inherited"][name] = "<property>"
+
     if dataclasses.is_dataclass(cls):
         for f in cls.__dataclass_fields__.values():
             default = getattr(f, "default", inspect.Parameter.empty)
@@ -180,6 +207,35 @@ def build() -> dict:
     return {"public_api": api, "blocks": dump_blocks()}
 
 
+def _class_drift(qualname: str, name: str, want: dict, have: dict) -> list:
+    """What may change on a public class, and what may not.
+
+    A member that moved UP into a shared base is not a lost symbol: the class
+    still answers to it with the same signature, from `inherited`. A base class
+    may gain parents as long as every recorded one is still an ancestor — that
+    is what callers passing the object around actually rely on. Everything else
+    (own method signatures, attributes, dataclass fields) has to stay.
+    """
+    problems = []
+    for method, sig in want.get("methods", {}).items():
+        if have.get("methods", {}).get(method) == sig:
+            continue
+        if have.get("inherited", {}).get(method) == sig:
+            continue
+        problems.append(f"{qualname}.{name}.{method}: {sig!r} → "
+                        f"{have.get('methods', {}).get(method)!r}")
+    for sub in ("attrs", "fields"):
+        for key, value in want.get(sub, {}).items():
+            got = have.get(sub, {}).get(key, "<missing>")
+            if got != value:
+                problems.append(f"{qualname}.{name}.{sub}.{key}: {value!r} → "
+                                f"{got!r}")
+    for base in want.get("bases", []):
+        if base not in have.get("ancestry", [])[1:]:
+            problems.append(f"{qualname}.{name} no longer inherits {base}")
+    return problems
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true")
@@ -220,16 +276,9 @@ def main(argv=None) -> int:
                 have = now.get(kind, {})
                 if name not in have:
                     problems.append(f"{qualname}.{name} ({kind}) removed")
-                elif kind == "classes" and want != have[name]:
-                    for sub in want:
-                        if sub == "methods":
-                            for m, sig in want["methods"].items():
-                                if have[name]["methods"].get(m) != sig:
-                                    problems.append(
-                                        f"{qualname}.{name}.{m}{sig} → "
-                                        f"{have[name]['methods'].get(m)!r}")
-                        elif want[sub] != have[name].get(sub):
-                            problems.append(f"{qualname}.{name}.{sub} changed")
+                elif kind == "classes":
+                    problems.extend(_class_drift(qualname, name, want,
+                                                 have[name]))
                 elif kind != "classes" and want != have[name]:
                     problems.append(f"{qualname}.{name} ({kind}) {want!r} → "
                                     f"{have[name]!r}")

@@ -1,23 +1,32 @@
-"""Simple pause/delay action."""
+"""Simple pause/delay action.
+
+The one block that waits on purpose: it sleeps for its own `duration_ms` and
+therefore never takes a pre-delay as well (an old preset's `pre_delay_ms` is
+dropped, exactly like the other marker blocks).
+"""
 
 import asyncio
 import logging
+
 from typing import Optional
-from actions.base_action import BaseAction, ActionResult
+
+from actions.base import ActionResult, BlockField, MarkerBlock
 from backend.cdp_client import CDPClient
 
 log = logging.getLogger("chatbot")
 
 
-class Pause(BaseAction):
+class Pause(MarkerBlock):
     block_id = "PAUSE"
     name = "Custom Pause"
     icon = "⏸️"
 
+    FIELDS = (
+        BlockField("duration_ms", "number", "Duration (ms)"),
+    )
+
     def __init__(self, duration_ms: int = 1000, **kw):
-        kw.pop("pre_delay_ms", None)  # pause manages its own delay
-        super().__init__(pre_delay_ms=0, **kw)
-        self.duration_ms = duration_ms
+        super().__init__(duration_ms=duration_ms, **kw)
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
@@ -28,6 +37,3 @@ class Pause(BaseAction):
         if engine:
             engine.report("⏸ Pause finished", "info")
         return ActionResult.OK
-
-    def config_schema(self) -> dict:
-        return {"duration_ms": {"type": "number", "default": 1000, "label": "Duration (ms)"}}

@@ -339,14 +339,15 @@ conflict with any other area.
 | `tests/unit/backend/test_chat_sync_plan.py` | `ReadPlan`/`SyncPlanner` pure decisions + `SyncOptions` defaults/`from_kwargs` | `SY#1–10` |
 | `tests/unit/backend/test_chat_sync_phases.py` | `ChunkReader` (retries, stop, pacing, progress), `DeltaAligner`, `SyncPersister` against a scripted fake parser/repo | `SY#11–24` |
 | `tests/unit/backend/test_scroll_parser_options.py` | `ScrollOptions`/`from_options`, defaults parity with the 20-arg ctor, batch phases (`_consume_batch`, seek asymmetry, stall math) | `SP#1–12` |
-| `tests/unit/backend/test_dom_probe_exec.py` | every generated probe **executed** in the node harness + effect comparison (overlay count, colour, caption, stash, clicks) — RULE 8 | `DX#1–8` |
+| `tests/unit/backend/test_dom_highlight_probes.py` | the HIGHLIGHT and CLEAR probes **executed** in the node harness, asserting effects (overlay count, colour, caption, timers, stash untouched, clear_first, clicks/scrolls that must not happen) — RULE 8. Written as `test_dom_probe_exec.py` in the plan; FIND/CLICK execution stays in `tests/test_find_click_visual.py` | `DX#1–14` |
 | `tests/unit/backend/test_config_manager_sections.py` | per-section owner table, hostile nested paths, `data()` section completeness, `named_*`/`set_state` routing | `CF#8–17` |
-| `tests/unit/backend/test_message_injector_flow.py` | fake-CDP strategy ladder (value → Ctrl+V → insertText), `click_send` fallback matrix, `_rep` swallowing | `MI#1–9` |
-| `tests/unit/backend/test_logger_setup.py` | `setup_logger` idempotence, rotation kwargs, level propagation | `LG#1–3` |
-| `tests/unit/actions/test_block_base.py` | `BlockField` coercion/schema/`to_dict` derivation, `MarkerBlock`, registry round-trip for the refactored blocks | `AB#1–9` |
+| ~~`tests/unit/backend/test_message_injector_flow.py`~~ | not written: `message_injector` is at 68 % line coverage from `tests/test_message_injector_text.py` + `test_attach_image.py` and its worst function is CC 12, so the flow suite was dropped when the coverage gate passed without it | `MI#1–5` (existing) |
+| `tests/unit/backend/test_logger_setup.py` | `setup_logger`: dated file name, rotation limits, shared formatter, level on logger + handlers, handler clearing on re-setup, stdlib-only imports | `LG#1–11` |
+| `tests/unit/actions/test_block_base.py` | `BlockField` coercion + panel entry, defaults taken from the constructor, `to_dict()` key order, preset round-trip, the runner kwargs of the four clicking blocks, `CLICK_SEND`'s fallback matrix, `MarkerBlock` skip/zero-delay | `AB#1–20` |
+| `tests/unit/actions/test_click_user_tab_verify.py` | `ClickUser`'s tab ladder: memory vs queued nick, before/after snapshots, the three verdicts, unreadable page, `tab_pause_ms` | `CU#1–20` |
 | `tests/unit/actions/test_find_click_blocks.py` | the four clicking blocks against a fake CDP: pre-delay, kwargs, fallback, disabled-highlight path, `SKIP`/`FAIL`/`OK` mapping | `AC#1–10` |
 | `tests/unit/actions/test_block_actions_coverage.py` | `PAUSE`, `WAIT_PAGE_LOAD` (found/timeout/probe-error/throttle), `ATTACH_IMAGE`, `TYPE_MESSAGE`, `MARK_MESSAGED` status matrix, `TAKE_PERSON.choose` | `AA#1–14` |
-| `tests/unit/actions/test_collect_history_block_flow.py` | `COLLECT_HISTORY` failure/success/stopped/gap/media paths through a scripted service | `AH#1–8` |
+| ~~`tests/unit/actions/test_collect_history_block_flow.py`~~ | not written: `tests/test_collect_history_block.py` already covers those paths and `test_block_actions_coverage.py` the rest; `collect_history` sits at 78 % with every branch of the split exercised | `AH` (existing) |
 
 Rules these tests obey:
 
@@ -400,3 +401,48 @@ Plus the parent-plan gates: 0 new failures anywhere (51 → ≤ 51, and D's own 
 `import main` still boots, `RunCoordinator.load_stack` unaffected, and
 `git diff --name-only` confined to `backend/**`, `actions/**`, `tests/**`, `docs/**`,
 `tools/metrics/**`.
+
+---
+
+## 11. Result (measured after the last step, from the same commands)
+
+| # | criterion | measured | verdict |
+|---|---|---|---|
+| 1 | no editable function over CC 25 | worst in `backend/` + `actions/` is **CC 22** (`history_query._item`); `visual_click.find_and_click` 27 → 12, `media_handler.attach_image` 26 → 12, `scroll_parser.collect` 43 → 14, `verify_private` 43 → 11, `collect_history.execute` 35 → 15, `click_user.execute` 31 → 12 | **PASS** |
+| 1b | `sync_conversation` ≤ 15 | **CC 1** (a 12-line façade over `chat_sync.run_sync`) | **PASS** |
+| 2 | `actions` duplication < 25 % | **18.9 %** (304 clone lines / 1 610 SLOC), from 22.0 % before the block skeleton and ~57 % before the area | **PASS** |
+| 3 | `backend` ≥ 85 % line / ≥ 78 % branch | **88.9 % / 91.1 %** (baseline 83.4 / 88.9) | **PASS** |
+| 3b | `actions` branch ≥ 70 % | **86.0 %** (baseline 83.9 %, dipped to 82.6 % mid-area) | **PASS** |
+| 4 | `cdp_client.py`, `base_action.py` public APIs byte-identical | `git diff` empty on both paths; `dump_public_api --diff` reads "no removed or changed symbols" | **PASS** |
+| 5 | no new test failures | full suite **51 failed / 1 800 passed**, the same 51 as the same-conditions HEAD run (14 of them are `services/run/coordinator.py`'s `NameError: get_action_class`, another area's); AREA D's own snapshot failures were fixed on the way | **PASS** |
+| 6 | diff confined to the area | `backend/**` (7 files, 2 new modules), `actions/**` (12 files), `tests/**` (D-owned only), `docs/**`, `tools/metrics/**` | **PASS** |
+
+### 11.1 What deliberately did not happen
+
+* `history_query._item` (CC 22, 34 lines) and `tab_matcher.score_tab` (CC 20) stay as
+  they are. Both are under the gate, both are already one-idea-per-function, and §8
+  leaves their neighbours (`dom_probe`, `criteria_engine`, `person_filter`) alone for
+  the same reason: splitting a 20-CC branch table into four functions is a rename of
+  the same logic, not a simplification.
+* `actions/take_person.py` does not inherit `MarkerBlock`: its `execute()` really works
+  (it picks a person and calls `note_selected`), so only its constructor would benefit —
+  and that benefit is three lines against losing the block's own readable `__init__`.
+* The 12 `backend/*.py` compatibility shims stay, exactly as §9 of the parent plan says.
+
+### 11.2 Two rules the goldens now state explicitly
+
+`tools/metrics/dump_public_api.py` records each class's members, and the block skeleton
+made those records stricter in one place and looser in another — deliberately:
+
+* **A member that moved up is not a lost member.** `ClickBack.execute` now lives on
+  `FindClickBlock`, so the class record keeps it under `inherited` with the same
+  signature, and the snapshot test accepts either. The signature itself is still frozen.
+* **`bases` changed for seven blocks; `ancestry` is what is checked.** Every recorded
+  base must still be an ancestor (`BaseAction` is, for all of them), which is the
+  property `isinstance` callers rely on. The *wire* contract the presets and the config
+  panel use — `__init__` signature, `config_schema()` key order and defaults,
+  `to_dict()` — is unchanged to the byte: `tests/unit/actions/block_wire_snapshot.json`
+  compares equal before and after, and it was not rewritten.
+* Module-level constant records blank memory addresses (`_default_repr`), because a
+  `FIELDS` tuple holds functions and sentinels whose `repr` would otherwise change on
+  every run and make the snapshot un-reproducible.

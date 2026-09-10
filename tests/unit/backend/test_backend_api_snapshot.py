@@ -87,11 +87,20 @@ class TestPublicApiSnapshot(unittest.TestCase):
                     continue
                 have = now[name]
                 for method, sig in want["methods"].items():
-                    if method not in have["methods"]:
+                    if method in have["methods"]:
+                        if have["methods"][method] != sig:
+                            drift.append(f"{qualname}.{name}.{method}: {sig} "
+                                         f"→ {have['methods'][method]}")
+                    elif have.get("inherited", {}).get(method) == sig:
+                        continue    # moved into a shared base — same surface
+                    else:
                         drift.append(f"{qualname}.{name}.{method} removed")
-                    elif have["methods"][method] != sig:
-                        drift.append(f"{qualname}.{name}.{method}: {sig} → "
-                                     f"{have['methods'][method]}")
+                for base in want.get("bases", []):
+                    # `object` is the floor every class keeps; a base may move up
+                    # the MRO or gain parents, but must stay an ancestor
+                    if base not in have.get("ancestry", [])[1:]:
+                        drift.append(f"{qualname}.{name} no longer inherits "
+                                     f"{base}")
                 for attr, value in want["attrs"].items():
                     if attr not in have["attrs"]:
                         drift.append(f"{qualname}.{name}.{attr} removed")

@@ -1,20 +1,12 @@
 """Configurable "Find & Click" block (CUSTOM_FIND).
 
-A generic, reusable search-and-click action:
-  * `selector`        — CSS selector of the element to find (the clickable
-                        "rectangle", e.g. div[role='tab'].tab-item).
-  * `label_selector`  — CSS selector of the element INSIDE the found element
-                        whose text we search (e.g. p.chat-title).
-  * `match_text`      — text to find inside the label element (empty = first).
-  * `click_enabled`   — whether to click the element after it is found.
-  * `click_selector`  — optional element INSIDE to click (empty = click the
-                        found element itself).
-  * `custom_name`     — user-friendly name shown in the stack and logs.
-  * `highlight_enabled` — draw the visual confirmation outlines.
-  * `confirm_pause_ms`  — pause after the find phase so the user can look.
-  * `highlight_ms`      — how long each outline stays on screen.
+A generic, reusable search-and-click action: `selector` is the clickable
+rectangle to find, `label_selector` the element inside it whose text is
+searched, `match_text` the text to find (empty = the first one), `click_selector`
+the element INSIDE to click (empty = the found element itself), and
+`click_enabled` whether to click at all. `custom_name` is what the stack shows.
 
-Execution is split into two visible phases:
+Execution is the shared two-phase runner (docs/AGENT_RULES.md RULE 1):
 
   1. FIND  — logs success/failure and draws a thin RED outline on the detected
      element, then pauses so the user can confirm it is the right one.
@@ -22,23 +14,40 @@ Execution is split into two visible phases:
      over the click target area, then performs the click.
 
 The block is a constructor: every instance can be customised through the UI
-config panel and saved as a reusable preset.
+config panel and saved as a reusable preset, so its settings are declared as
+`BlockField`s and the panel schema is derived from them (RULE 4 for blocks: the
+schema and the saved dictionary come from one list and cannot drift).
 """
 
-import logging
-from typing import Optional
-from actions.base_action import BaseAction
-from actions.find_click_runner import find_and_click
-from backend.cdp_client import CDPClient
-from backend.dom_probe import MATCH_CONTAINS
-
-log = logging.getLogger("chatbot")
+from actions.base import BlockField, FindClickBlock, ms_floor
 
 
-class CustomFind(BaseAction):
+class CustomFind(FindClickBlock):
     block_id = "CUSTOM_FIND"
     name = "Find & Click"
     icon = "🔎"
+
+    FIELDS = (
+        BlockField("custom_name", "text", "Block name (shown in stack)"),
+        BlockField("selector", "text", "Element to find (CSS)",
+                   clean=lambda v: v or "", request="selector"),
+        BlockField("label_selector", "text", "Text element inside (CSS)",
+                   clean=lambda v: v or "", request="label_selector"),
+        BlockField("match_text", "text",
+                   "Text to match inside (optional — {{nick}} = selected user)",
+                   clean=lambda v: v or "", request="match_text"),
+        BlockField("click_enabled", "checkbox", "Click after found",
+                   clean=bool, request="click_enabled"),
+        BlockField("click_selector", "text", "Element inside to click (optional)",
+                   clean=lambda v: v or "", request="click_selector"),
+        BlockField("highlight_enabled", "checkbox",
+                   "Draw confirmation outlines (red = found, orange = click)",
+                   clean=bool, request="highlight_enabled"),
+        BlockField("confirm_pause_ms", "number", "Pause after found (ms)",
+                   clean=ms_floor, request="confirm_pause_ms"),
+        BlockField("highlight_ms", "number", "Outline duration (ms)",
+                   clean=ms_floor, request="highlight_ms"),
+    )
 
     def __init__(self, custom_name: str = "", selector: str = "",
                  label_selector: str = "", match_text: str = "",
@@ -46,64 +55,20 @@ class CustomFind(BaseAction):
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,
                  highlight_ms: int = 1200,
                  pre_delay_ms: int = 500, **kw):
-        super().__init__(pre_delay_ms=pre_delay_ms, **kw)
-        self.custom_name = custom_name or ""
-        self.selector = selector or ""
-        self.label_selector = label_selector or ""
-        self.match_text = match_text or ""
-        self.click_enabled = bool(click_enabled)
-        self.click_selector = click_selector or ""
-        self.highlight_enabled = bool(highlight_enabled)
-        self.confirm_pause_ms = max(0, int(confirm_pause_ms or 0))
-        self.highlight_ms = max(0, int(highlight_ms or 0))
+        super().__init__(custom_name=custom_name, selector=selector,
+                         label_selector=label_selector, match_text=match_text,
+                         click_enabled=click_enabled,
+                         click_selector=click_selector,
+                         highlight_enabled=highlight_enabled,
+                         confirm_pause_ms=confirm_pause_ms,
+                         highlight_ms=highlight_ms,
+                         pre_delay_ms=pre_delay_ms, **kw)
 
-    def _label(self) -> str:
-        """Human-readable search description used in logs."""
+    def find_label(self) -> str:
+        """Human-readable search description used in the two log lines."""
         parts = [f"element '{self.selector}'"]
         if self.label_selector:
             parts.append(f"text inside '{self.label_selector}'")
         if self.match_text:
             parts.append(f"matching \"{self.match_text}\"")
         return " ".join(parts)
-
-    async def execute(self, user_nick: str, cdp: CDPClient,
-                      engine: Optional[object] = None) -> str:
-        await self.pre_delay()
-        return await find_and_click(
-            cdp,
-            selector=self.selector,
-            label_selector=self.label_selector,
-            match_text=self.match_text,
-            match_mode=MATCH_CONTAINS,
-            click_enabled=self.click_enabled,
-            click_selector=self.click_selector,
-            highlight_enabled=self.highlight_enabled,
-            confirm_pause_ms=self.confirm_pause_ms,
-            highlight_ms=self.highlight_ms,
-            label=self._label(),
-            engine=engine,
-        )
-
-    def config_schema(self) -> dict:
-        s = super().config_schema()
-        s["custom_name"] = {"type": "text", "default": "",
-                            "label": "Block name (shown in stack)"}
-        s["selector"] = {"type": "text", "default": "",
-                         "label": "Element to find (CSS)"}
-        s["label_selector"] = {"type": "text", "default": "",
-                               "label": "Text element inside (CSS)"}
-        s["match_text"] = {"type": "text", "default": "",
-                           "label": "Text to match inside (optional — "
-                                    "{{nick}} = selected user)"}
-        s["click_enabled"] = {"type": "checkbox", "default": True,
-                              "label": "Click after found"}
-        s["click_selector"] = {"type": "text", "default": "",
-                               "label": "Element inside to click (optional)"}
-        s["highlight_enabled"] = {"type": "checkbox", "default": True,
-                                  "label": "Draw confirmation outlines "
-                                           "(red = found, orange = click)"}
-        s["confirm_pause_ms"] = {"type": "number", "default": 700,
-                                 "label": "Pause after found (ms)"}
-        s["highlight_ms"] = {"type": "number", "default": 1200,
-                             "label": "Outline duration (ms)"}
-        return s
