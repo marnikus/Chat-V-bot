@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
 from core.events import EventBus
 from actions.base_action import BaseAction, get_action_class
+from actions.cancellation import RunStopped, check_stopped, is_stop_requested
 try:
     from stores.user_memory import UserRecord
 except Exception:
@@ -25,20 +26,6 @@ from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_aw
 from .progress import RunProgress, RunQueueMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
-
-def _is_stop_requested(engine) -> bool:
-    try:
-        from actions.cancellation import is_stop_requested
-    except ImportError:  # pragma: no cover - red phase
-        fn = getattr(engine, "is_stopping", None)
-        if callable(fn):
-            try:
-                return bool(fn())
-            except Exception:
-                return False
-        return bool(getattr(engine, "_stop_requested", False))
-    return bool(is_stop_requested(engine))
-
 
 class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
     step_complete = Signal(str, str); user_complete = Signal(str, bool); person_marked = Signal(str)
@@ -75,10 +62,6 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         self.log_msg.emit(f"▶▶ Run #{run_id} started"); self.debug_msg.emit(f"📄 Trace file: {self._tracer.path}", "info")
         self._tracer.note({"type": "run_start", "blocks": [b.block_id for b in self._stack]})
         cycles, done, outcome = self._repeat_cycles(), False, "worked"
-        try:
-            from actions.cancellation import RunStopped
-        except ImportError:  # pragma: no cover - red phase
-            RunStopped = None  # type: ignore
         run_error: BaseException | None = None
         try:
             await maybe_await(self._hooks.pre_run(self))
@@ -86,10 +69,10 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
                 self.log_msg.emit(f"🔁 Repeat Loop: the stack will run {cycles} cycles — Stop ends it at any time")
                 self._tracer.note({"type": "repeat", "cycles": cycles})
             for cycle in range(1, cycles + 1):
-                if _is_stop_requested(self):
+                if is_stop_requested(self):
                     self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
                 await self._wait_if_paused()
-                if _is_stop_requested(self):
+                if is_stop_requested(self):
                     self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
                 if cycles > 1:
                     self.log_msg.emit(f"🔁 Cycle {cycle}/{cycles} — running…")
@@ -98,23 +81,21 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
                     outcome = await self._execute_cycle()
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:
-                    if RunStopped is not None and isinstance(exc, RunStopped):
-                        outcome = "stopped"
-                        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-                        try:
-                            self._tracer.note({"type": "run_end", "reason": "stopped"})
-                        except Exception:
-                            pass
-                        break
-                    raise
+                except RunStopped:
+                    outcome = "stopped"
+                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                    try:
+                        self._tracer.note({"type": "run_end", "reason": "stopped"})
+                    except Exception:
+                        pass
+                    break
                 if outcome in {"stopped", "empty_stack"}: done = outcome == "empty_stack"; break
                 if outcome == "empty":
                     if cycles > 1: self.log_msg.emit(f"🔁 No users found — Repeat Loop ends the run after cycle {cycle}")
                     done = True; break
                 if cycle >= cycles: done = True
             if done: self._state.mark_done(); self._tracer.note({"type": "run_end", "reason": "completed"})
-            elif outcome == "stopped" or _is_stop_requested(self):
+            elif outcome == "stopped" or is_stop_requested(self):
                 self._state.mark_done()
         except asyncio.CancelledError as exc:
             run_error = exc
@@ -185,15 +166,6 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         except Exception:
             pass
 
-    def _raise_if_stopped(self) -> None:
-        """Raise ``RunStopped`` when the engine stop flag is set (None-safe)."""
-        try:
-            from actions.cancellation import RunStopped as _RunStopped
-        except ImportError:  # pragma: no cover - red phase
-            _RunStopped = None  # type: ignore
-        if _RunStopped is not None and _is_stop_requested(self):
-            raise _RunStopped
-
     async def _prepare_cycle_queue(self) -> tuple[list, bool]:
         """Collect → filter → order → take; raises RunStopped on stop.
 
@@ -204,12 +176,12 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         """
         scroll = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
         queue = await self._run_collect_phase(scroll) if scroll is not None else await self._memory.get_queue()
-        self._raise_if_stopped()
+        check_stopped(self)
         queue = self.filter_by_labels(queue, announce=True)
-        self._raise_if_stopped()
+        check_stopped(self)
         queue = await self._order_queue_by_column(queue)
         take_matched = await self._run_take_phase()
-        self._raise_if_stopped()
+        check_stopped(self)
         return queue, take_matched
 
     def _announce_empty_mode(self, reason: str, needs_user: list[str]) -> str:
@@ -237,19 +209,15 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         return [UserRecord(nick=STANDALONE_NICK)], True
 
     async def _execute_one_queued_user(self, user, has_skip: bool) -> str:
-        """Run one user; maps cooperative ``RunStopped`` to ``"stop"``."""
-        try:
-            from actions.cancellation import RunStopped
-        except ImportError:  # pragma: no cover - red phase
-            RunStopped = None  # type: ignore
+        """Run one user; maps cooperative ``RunStopped`` to ``"stop"``.
+
+        ``CancelledError`` and unexpected errors propagate untouched past
+        the narrow handler below.
+        """
         try:
             return await self._execute_for_user(user, has_skip)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            if RunStopped is not None and isinstance(exc, RunStopped):
-                return "stop"
-            raise
+        except RunStopped:
+            return "stop"
 
     async def _finalize_user_status(self, user, status: str, standalone: bool) -> str | None:
         """Account + mark + emit for one user; returns ``"stopped"`` to end."""
@@ -258,7 +226,7 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
             self.progress.note_status("fail")
             if not standalone: self.user_complete.emit(user.nick, False)
             return "stopped"
-        if _is_stop_requested(self):
+        if is_stop_requested(self):
             # Stop observed before the automatic-mark boundary.
             self.progress.note_status("fail")
             if not standalone: self.user_complete.emit(user.nick, False)
@@ -271,10 +239,10 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
     async def _run_user_queue(self, queue: list, has_skip: bool, standalone: bool) -> str:
         """Run the per-user loop with stop/pause/mark gates."""
         for user in queue:
-            if _is_stop_requested(self):
+            if is_stop_requested(self):
                 self._announce_stopped(); return "stopped"
             await self._wait_if_paused()
-            if _is_stop_requested(self):
+            if is_stop_requested(self):
                 self._announce_stopped(); return "stopped"
             status = await self._execute_one_queued_user(user, has_skip)
             stopped = await self._finalize_user_status(user, status, standalone)
@@ -282,22 +250,26 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
                 return stopped
         return "worked"
 
+    async def _try_prepare_cycle_queue(self) -> tuple[list, bool] | None:
+        """Collect→filter→order→take; None when a cooperative stop won.
+
+        ``CancelledError`` propagates untouched: the handler below is narrow
+        (``RunStopped`` derives from ``Exception``), so no explicit re-raise
+        is needed. Unexpected exceptions propagate.
+        """
+        try:
+            return await self._prepare_cycle_queue()
+        except RunStopped:
+            return None
+
     async def _execute_cycle(self) -> str:
-        try:
-            from actions.cancellation import RunStopped
-        except ImportError:  # pragma: no cover - red phase
-            RunStopped = None  # type: ignore
-        try:
-            queue, take_matched = await self._prepare_cycle_queue()
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            if RunStopped is not None and isinstance(exc, RunStopped):
-                self._announce_stopped(); return "stopped"
-            raise
+        prepared = await self._try_prepare_cycle_queue()
+        if prepared is None:
+            self._announce_stopped(); return "stopped"
+        queue, take_matched = prepared
         # Inspection point B: single post-take scan, then the mode table.
         facts = inspect_stack(self._stack)
-        decision = choose_cycle_mode(facts, has_queue=bool(queue), take_matched=take_matched, stopped=_is_stop_requested(self))
+        decision = choose_cycle_mode(facts, has_queue=bool(queue), take_matched=take_matched, stopped=is_stop_requested(self))
         if decision.mode == "stopped":
             self._announce_stopped(); return "stopped"
         if decision.mode == "single_target":
