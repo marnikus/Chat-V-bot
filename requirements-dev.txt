@@ -1,0 +1,27 @@
+# Development-only tools. Nothing here is needed to run the bot —
+# `pip install -r requirements.txt` is enough for that.
+#
+#   pip install -r requirements-dev.txt
+#
+# These are the tools the code-quality gate named in
+# docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md measures with. The gate
+# (tests/test_rule16_new_code.py) skips the complexity and smell checks when
+# they are absent rather than pretending to pass.
+#
+# Versions are pinned to the ones this gate was verified against.
+
+-r requirements.txt
+
+# cyclomatic complexity (radon counting rules)
+radon==6.0.1
+# SonarSource cognitive complexity
+cognitive-complexity==1.3.0
+# dead code
+vulture==2.16
+# duplicate-code (R0801) and unused-import checks
+pylint==4.0.8
+# coverage with branch analysis
+pytest-cov==7.1.0
+# the test runner itself
+pytest==9.1.1
+pytest-asyncio==1.4.0

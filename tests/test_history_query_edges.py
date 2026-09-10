@@ -33,6 +33,7 @@ from backend.history_query import (  # noqa: E402
     _fts_query,
     _like_escape,
     HistoryQuery,
+    PersonPageRequest,
 )
 from backend.history_repo import HistoryRepo  # noqa: E402
 
@@ -125,13 +126,13 @@ class TestLikeEscape(QueryCase):
                                    my_nick="Me", now=NOW)
         # "Ann%" must find only the nick literally containing "Ann%" —
         # as a wildcard it would also return plain "Ann" and "Anndrea"
-        out = await self.q.list_persons(q="Ann%")
+        out = await self.q.list_persons(PersonPageRequest(q="Ann%"))
         self.assertEqual([i["nick"] for i in out["items"]], ["Ann%100"],
                          "% acted as a wildcard in the nick filter")
-        out = await self.q.list_persons(q="Ann_")
+        out = await self.q.list_persons(PersonPageRequest(q="Ann_"))
         self.assertEqual(sorted(i["nick"] for i in out["items"]),
                          ["Ann_200"], "_ acted as a wildcard")
-        out = await self.q.list_persons(q="Ann")
+        out = await self.q.list_persons(PersonPageRequest(q="Ann"))
         self.assertEqual(sorted(i["nick"] for i in out["items"]),
                          ["Ann", "Ann%100", "Ann_200", "Anndrea"])
 
@@ -174,7 +175,7 @@ class TestPaginationEdges(QueryCase):
         person = await self.q.search_person("Nick", "line", offset=100)
         self.assertEqual(person["items"], [])
         self.assertFalse(person["has_more"])
-        out = await self.q.list_persons(offset=100)
+        out = await self.q.list_persons(PersonPageRequest(offset=100))
         self.assertEqual(out["items"], [])
 
     async def test_around_an_ord_of_a_missing_person(self):
@@ -211,7 +212,7 @@ class TestEmptyDatabaseCounters(QueryCase):
         self.assertGreater(stats["db_bytes"], 0, "the file itself exists")
 
     async def test_list_persons_on_an_empty_db(self):
-        out = await self.q.list_persons()
+        out = await self.q.list_persons(PersonPageRequest())
         self.assertEqual(out["items"], [])
         self.assertEqual(out["total"], 0)
         self.assertFalse(out["has_more"])
@@ -222,13 +223,13 @@ class TestEmptyDatabaseCounters(QueryCase):
         await self.repo.append("a", [rec(text="x", idx=0), rec(text="y",
                                      idx=1, occ=1)],
                                my_nick="Me", now=NOW)
-        by_nick = await self.q.list_persons(sort="nick")
+        by_nick = await self.q.list_persons(PersonPageRequest(sort="nick"))
         self.assertEqual([i["nick"] for i in by_nick["items"]], ["a", "b"])
-        by_messages = await self.q.list_persons(sort="messages")
+        by_messages = await self.q.list_persons(PersonPageRequest(sort="messages"))
         self.assertEqual([i["nick"] for i in by_messages["items"]], ["a", "b"])
-        filtered = await self.q.list_persons(q="A")
+        filtered = await self.q.list_persons(PersonPageRequest(q="A"))
         self.assertEqual([i["nick"] for i in filtered["items"]], ["a"])
-        unknown_sort = await self.q.list_persons(sort="??")
+        unknown_sort = await self.q.list_persons(PersonPageRequest(sort="??"))
         self.assertEqual(len(unknown_sort["items"]), 2,
                          "an unknown sort must fall back, not fail")
 

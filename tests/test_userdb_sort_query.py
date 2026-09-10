@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
-from backend.history_query import HistoryQuery  # noqa: E402
+from backend.history_query import HistoryQuery, PersonPageRequest  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 
 NOW = datetime(2026, 9, 10, 12, 0, 0)
@@ -73,7 +73,7 @@ class SortCase(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
 
     async def nicks(self, **kwargs):
-        out = await self.q.list_persons(limit=500, **kwargs)
+        out = await self.q.list_persons(PersonPageRequest(limit=500, **kwargs))
         return [item["nick"] for item in out["items"]]
 
     async def raw_count(self):
@@ -137,10 +137,10 @@ class TestSortKeys(SortCase):
                          ["alice", "boris", "cara"])
 
     async def test_direction_is_reported_back_to_the_ui(self):
-        page = await self.q.list_persons(sort="media", dir="asc")
+        page = await self.q.list_persons(PersonPageRequest(sort="media", dir="asc"))
         self.assertEqual(page["sort"], "media")
         self.assertEqual(page["dir"], "asc")
-        page = await self.q.list_persons(sort="nick")
+        page = await self.q.list_persons(PersonPageRequest(sort="nick"))
         self.assertEqual(page["sort"], "nick")
         self.assertEqual(page["dir"], "asc", "the natural direction of nick")
 
@@ -227,7 +227,7 @@ class TestPagingIsStable(SortCase):
     async def walk(self, **kwargs):
         seen, offset = [], 0
         while True:
-            page = await self.q.list_persons(limit=5, offset=offset, **kwargs)
+            page = await self.q.list_persons(PersonPageRequest(limit=5, offset=offset, **kwargs))
             if not page["items"]:
                 break
             seen.extend(item["nick"] for item in page["items"])
@@ -273,8 +273,8 @@ class TestSearchInteraction(SortCase):
         await self.person("Aaa Ангел", messages=1, last="2026-09-07 10:00:00")
 
     async def test_a_prefix_match_still_outranks_the_column_order(self):
-        page = await self.q.list_persons(q="ангел", sort="msgs", dir="desc",
-                                         limit=10)
+        page = await self.q.list_persons(PersonPageRequest(q="ангел", sort="msgs", dir="desc",
+                                         limit=10))
         self.assertEqual(page["total"], 5)
         self.assertEqual([i["nick"] for i in page["items"][:2]],
                          ["Ангел", "Ангелина"],
@@ -285,20 +285,20 @@ class TestSearchInteraction(SortCase):
     async def test_the_closest_match_leads_its_tier(self):
         # Inside the boosted tier the existing relevance rule (shorter nick =
         # closer match) still decides; the column order must not overturn it.
-        page = await self.q.list_persons(q="ангел", sort="msgs", dir="desc",
-                                         limit=10)
+        page = await self.q.list_persons(PersonPageRequest(q="ангел", sort="msgs", dir="desc",
+                                         limit=10))
         self.assertEqual([i["nick"] for i in page["items"][:2]],
                          ["Ангел", "Ангелина"],
                          "5 letters before 8, even with fewer messages")
 
     async def test_the_column_order_decides_outside_the_relevance_tier(self):
-        down = await self.q.list_persons(q="ангел", sort="msgs", dir="desc",
-                                         limit=10)
+        down = await self.q.list_persons(PersonPageRequest(q="ангел", sort="msgs", dir="desc",
+                                         limit=10))
         self.assertEqual([i["nick"] for i in down["items"][2:]],
                          ["Мой Ангел", "Bbb Ангел", "Aaa Ангел"],
                          "900, 700, 1 messages")
-        up = await self.q.list_persons(q="ангел", sort="msgs", dir="asc",
-                                       limit=10)
+        up = await self.q.list_persons(PersonPageRequest(q="ангел", sort="msgs", dir="asc",
+                                       limit=10))
         self.assertEqual([i["nick"] for i in up["items"][2:]],
                          ["Aaa Ангел", "Bbb Ангел", "Мой Ангел"],
                          "the same tier reversed")
@@ -336,15 +336,15 @@ class TestNoSqlInjection(SortCase):
             ("nick ASC --", "asc"),
         ]
         for sort, direction in hostile:
-            page = await self.q.list_persons(sort=sort, dir=direction)
+            page = await self.q.list_persons(PersonPageRequest(sort=sort, dir=direction))
             self.assertEqual(len(page["items"]), 2, f"payload {sort!r}")
         self.assertEqual(await self.raw_count(), 2,
                          "the persons table survived a hostile sort/dir")
 
     async def test_the_order_by_never_contains_user_text(self):
         # The whitelist is the mechanism; this pins it from the outside.
-        page = await self.q.list_persons(sort="message_count DESC; --",
-                                         dir="asc")
+        page = await self.q.list_persons(PersonPageRequest(sort="message_count DESC; --",
+                                         dir="asc"))
         self.assertEqual(page["sort"], "message_count DESC; --",
                          "the request is echoed verbatim …")
         self.assertEqual([i["nick"] for i in page["items"]],
@@ -362,11 +362,11 @@ class TestRealRepositoryPath(SortCase):
                                now=NOW)
         await self.repo.append("Other", [rec(text="x", idx=0)], my_nick="Me",
                                now=NOW)
-        busiest = await self.q.list_persons(sort="msgs", dir="desc")
+        busiest = await self.q.list_persons(PersonPageRequest(sort="msgs", dir="desc"))
         self.assertEqual(busiest["items"][0]["nick"], "Nick")
-        quietest = await self.q.list_persons(sort="msgs", dir="asc")
+        quietest = await self.q.list_persons(PersonPageRequest(sort="msgs", dir="asc"))
         self.assertEqual(quietest["items"][0]["nick"], "Other")
-        alpha = await self.q.list_persons(sort="nick", dir="asc")
+        alpha = await self.q.list_persons(PersonPageRequest(sort="nick", dir="asc"))
         self.assertEqual([i["nick"] for i in alpha["items"]],
                          ["Nick", "Other"])
 

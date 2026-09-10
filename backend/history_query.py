@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass
 from typing import Optional
 
 from stores.history_db import HistoryDB
@@ -60,52 +61,6 @@ DEFAULT_SORT = "recent"
 SORT_TIEBREAK: tuple[str, ...] = ("nick_lc", "id")
 
 
-def _sort_spec(sort: str) -> tuple[tuple[str, str], ...]:
-    """The whitelisted column spec for a requested sort key."""
-    return SORT_COLUMNS.get(str(sort or ""), SORT_COLUMNS[DEFAULT_SORT])
-
-
-def _resolved_dir(sort: str, direction: str) -> str:
-    """`"asc"` / `"desc"` — the direction actually applied.
-
-    An empty (or unrecognised) `direction` means *the key's natural
-    direction*, which is the direction of its first column. Reporting the
-    resolved value back is what lets the header show the right arrow without
-    duplicating the table above in JavaScript.
-    """
-    asked = str(direction or "").strip().lower()
-    if asked in ("asc", "desc"):
-        return asked
-    return _sort_spec(sort)[0][1].lower()
-
-
-def _order_by(sort: str, direction: str) -> str:
-    """Build the `ORDER BY` body from the whitelist — never from the request.
-
-    `direction` flips **every** column of the key, so the secondary column
-    stays consistent with the primary one (`msgs` descending = busiest first,
-    and among equals the *oldest* activity last).
-    """
-    asked = str(direction or "").strip().lower()
-    parts: list[str] = []
-    used: set[str] = set()
-    for column, natural in _sort_spec(sort):
-        if column in used:
-            continue
-        used.add(column)
-        if asked in ("asc", "desc"):
-            want = asked.upper()
-        else:
-            want = natural
-        parts.append(f"{column} {want}")
-    for column in SORT_TIEBREAK:
-        if column in used:
-            continue
-        used.add(column)
-        parts.append(f"{column} ASC")
-    return ", ".join(parts)
-
-
 def _like_escape(text: str) -> str:
     return (text.replace("\\", "\\\\").replace("%", "\\%")
                 .replace("_", "\\_"))
@@ -134,6 +89,127 @@ def _snippet(text: str, needle: str, radius: int = SNIPPET_RADIUS) -> str:
     end = min(len(body), pos + len(needle) + radius)
     return ("…" if start else "") + body[start:end] + ("…" if end < len(body)
                                                        else "")
+
+
+@dataclass(frozen=True)
+class PersonPageRequest:
+    """One request for a page of the Full User Database.
+
+    The UI sends these six options together in a single JSON blob, so they
+    travel together: one frozen value instead of six parameters. Freezing it
+    also means a request cannot be mutated between the bridge and the
+    database, which makes a mismatched page impossible to explain away.
+
+    The methods here own the SQL fragments, and none of them is built from
+    request text — columns and directions are looked up in `SORT_COLUMNS`, and
+    the nick is always a bound parameter.
+    """
+
+    q: str = ""
+    limit: int = DEFAULT_LIMIT
+    offset: int = 0
+    sort: str = DEFAULT_SORT
+    dir: str = ""
+    include_deleted: bool = False
+
+    # ── the pieces the caller asks about ────────────────────────
+
+    def needle(self) -> str:
+        """The lower-cased, trimmed search text — empty means 'no filter'."""
+        return str(self.q or "").strip().lower()
+
+    def spec(self) -> tuple[tuple[str, str], ...]:
+        """The whitelisted columns for this key (the default if unknown)."""
+        return SORT_COLUMNS.get(str(self.sort or ""),
+                                SORT_COLUMNS[DEFAULT_SORT])
+
+    def resolved_dir(self) -> str:
+        """`"asc"` / `"desc"` — the direction actually applied.
+
+        An empty (or unrecognised) `dir` means *the key's natural direction*,
+        the direction of its first column. Reporting the resolved value back
+        is what lets the header show the right arrow without duplicating
+        `SORT_COLUMNS` in JavaScript.
+        """
+        asked = self._asked_dir()
+        if asked:
+            return asked
+        return self.spec()[0][1].lower()
+
+    # ── the SQL fragments ───────────────────────────────────────
+
+    def where(self) -> tuple[str, list]:
+        """The row filter and its parameters (nick bound, wildcards escaped)."""
+        clause = "1=1" if self.include_deleted else "deleted_at IS NULL"
+        needle = self.needle()
+        if not needle:
+            return clause, []
+        return (clause + " AND nick_lc LIKE ? ESCAPE '\\'",
+                ["%" + _like_escape(needle) + "%"])
+
+    def order(self) -> tuple[str, list]:
+        """The `ORDER BY` body and its parameters.
+
+        While searching, relevance stays outermost: an exact prefix outranks a
+        longer nick that merely contains the needle, and among equally good
+        matches the shorter nick wins. Inside a tier the chosen column
+        decides.
+
+        The prefix-boost `LIKE` is a literal prefix, so its parameter differs
+        from the `where()` one — callers bind this list *after* the where
+        parameters.
+        """
+        body = self.columns()
+        needle = self.needle()
+        if not needle:
+            return body, []
+        return ("(nick_lc LIKE ? ESCAPE '\\') DESC, "
+                f"LENGTH(nick_lc) ASC, {body}",
+                [_like_escape(needle) + "%"])
+
+    # ── internals ───────────────────────────────────────────────
+
+    def _asked_dir(self) -> str:
+        """The requested direction when it is a usable one, else `""`."""
+        asked = str(self.dir or "").strip().lower()
+        return asked if asked in ("asc", "desc") else ""
+
+    def columns(self) -> str:
+        """The `ORDER BY` column list — whitelist only, tiebreaker included.
+
+        An explicit direction flips **every** column of the key, so the
+        secondary column stays consistent with the primary one (`msgs`
+        descending = busiest first, and among equals the *oldest* activity
+        last).
+        """
+        asked = self._asked_dir()
+        parts = [f"{column} {asked.upper() if asked else natural}"
+                 for column, natural in self.spec()]
+        used = {column for column, _ in self.spec()}
+        parts += [f"{column} ASC"
+                  for column in SORT_TIEBREAK if column not in used]
+        return ", ".join(parts)
+
+
+def _person_item(row, my_nicks: list) -> dict:
+    """One person row, as the Full User Database shows it.
+
+    A module function rather than a method: the mapping is a pure projection
+    of one row, and `HistoryQuery` is already over its size budget.
+    """
+    data = dict(row)
+    return {
+        "id": int(data["id"]),
+        "nick": data["nick"],
+        "message_count": int(data.get("message_count") or 0),
+        "in_count": int(data.get("in_count") or 0),
+        "out_count": int(data.get("out_count") or 0),
+        "media_count": int(data.get("media_count") or 0),
+        "first_seen": data.get("first_seen") or "",
+        "last_seen": data.get("last_seen") or "",
+        "my_nicks": my_nicks,
+        "deleted": bool(data.get("deleted_at")),
+    }
 
 
 class HistoryQuery:
@@ -389,52 +465,31 @@ class HistoryQuery:
         except Exception:                             # noqa: BLE001
             return []
 
-    async def list_persons(self, q: str = "", limit: int = DEFAULT_LIMIT,
-                           offset: int = 0, sort: str = "recent",
-                           dir: str = "", include_deleted: bool = False) -> dict:
-        limit = self._clamp(limit)
-        offset = max(0, int(offset or 0))
-        where = "1=1" if include_deleted else "deleted_at IS NULL"
-        params: list = []
-        needle = (q or "").strip().lower()
-        if needle:
-            where += " AND nick_lc LIKE ? ESCAPE '\\'"
-            params.append("%" + _like_escape(needle) + "%")
+    async def list_persons(self, req: PersonPageRequest) -> dict:
+        """One page of the Full User Database, in the order the header asks.
 
-        order = _order_by(sort, dir)
-        if needle:
-            # Relevance first: an exact prefix of the needle outranks the
-            # chosen column order, but the column order still decides inside
-            # each tier.
-            order = ("(nick_lc LIKE ? ESCAPE '\\') DESC, LENGTH(nick_lc) ASC, "
-                     + order)
-            params.append(_like_escape(needle) + "%")
+        `req` carries the six options the UI sends as one blob. The response
+        echoes the sort key verbatim plus the *resolved* direction, so the UI
+        paints the right arrow without duplicating `SORT_COLUMNS` in
+        JavaScript.
 
+        The COUNT binds only the `where()` parameters; the page query binds
+        `where()` + `order()` + limit/offset, in that order.
+        """
+        limit = self._clamp(req.limit)
+        offset = max(0, int(req.offset or 0))
+        where, where_params = req.where()
+        order, order_params = req.order()
         total = int(await self.db.scalar(
-            f"SELECT COUNT(*) FROM persons WHERE {where}",
-            params[:1] if needle else [], 0))
+            f"SELECT COUNT(*) FROM persons WHERE {where}", where_params, 0))
         rows = await self.db.fetchdicts(
             f"SELECT * FROM persons WHERE {where} ORDER BY {order} "
-            "LIMIT ? OFFSET ?", params + [limit, offset])
-        items = []
-        for row in rows:
-            data = dict(row)
-            items.append({
-                "id": int(data["id"]),
-                "nick": data["nick"],
-                "message_count": int(data.get("message_count") or 0),
-                "in_count": int(data.get("in_count") or 0),
-                "out_count": int(data.get("out_count") or 0),
-                "media_count": int(data.get("media_count") or 0),
-                "first_seen": data.get("first_seen") or "",
-                "last_seen": data.get("last_seen") or "",
-                "my_nicks": self._my_nicks(row),
-                "deleted": bool(data.get("deleted_at")),
-            })
+            "LIMIT ? OFFSET ?", where_params + order_params + [limit, offset])
+        items = [_person_item(row, self._my_nicks(row)) for row in rows]
         return {"items": items, "total": total,
                 "has_more": total > offset + len(items),
-                "offset": offset, "limit": limit, "query": q, "sort": sort,
-                "dir": _resolved_dir(sort, dir)}
+                "offset": offset, "limit": limit, "query": req.q,
+                "sort": req.sort, "dir": req.resolved_dir()}
 
     async def db_stats(self) -> dict:
         persons = int(await self.db.scalar(

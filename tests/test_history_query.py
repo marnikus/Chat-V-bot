@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
-from backend.history_query import HistoryQuery  # noqa: E402
+from backend.history_query import HistoryQuery, PersonPageRequest  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
@@ -201,7 +201,7 @@ class TestUserDatabase(QueryCase):
     async def test_lists_every_person_with_counters(self):
         await self.seed("Nick", n=4)
         await self.seed("Other", n=2)
-        res = await self.q.list_persons()
+        res = await self.q.list_persons(PersonPageRequest())
         self.assertEqual(res["total"], 2)
         by_nick = {p["nick"]: p for p in res["items"]}
         self.assertEqual(by_nick["Nick"]["message_count"], 4)
@@ -211,36 +211,36 @@ class TestUserDatabase(QueryCase):
     async def test_lazy_paging_of_the_master_list(self):
         for i in range(25):
             await self.seed(f"P{i:02d}", n=1)
-        first = await self.q.list_persons(limit=10)
+        first = await self.q.list_persons(PersonPageRequest(limit=10))
         self.assertEqual(len(first["items"]), 10)
         self.assertTrue(first["has_more"])
-        last = await self.q.list_persons(offset=20, limit=10)
+        last = await self.q.list_persons(PersonPageRequest(offset=20, limit=10))
         self.assertEqual(len(last["items"]), 5)
         self.assertFalse(last["has_more"])
 
     async def test_nick_search_prefers_prefix_matches(self):
         for nick in ("Ангел", "Мой Ангел", "Ангелина"):
             await self.seed(nick, n=1)
-        res = await self.q.list_persons(q="ангел")
+        res = await self.q.list_persons(PersonPageRequest(q="ангел"))
         self.assertEqual(res["total"], 3)
         self.assertIn(res["items"][0]["nick"], ("Ангел", "Ангелина"))
-        exact = await self.q.list_persons(q="Ангелина")
+        exact = await self.q.list_persons(PersonPageRequest(q="Ангелина"))
         self.assertEqual(exact["total"], 1)
 
     async def test_sorting_options(self):
         await self.seed("Few", n=1)
         await self.seed("Many", n=9)
-        by_count = await self.q.list_persons(sort="messages")
+        by_count = await self.q.list_persons(PersonPageRequest(sort="messages"))
         self.assertEqual(by_count["items"][0]["nick"], "Many")
-        by_nick = await self.q.list_persons(sort="nick")
+        by_nick = await self.q.list_persons(PersonPageRequest(sort="nick"))
         self.assertEqual([p["nick"] for p in by_nick["items"]], ["Few", "Many"])
 
     async def test_tombstoned_people_are_hidden_unless_asked_for(self):
         await self.seed("Nick", n=2)
         await self.seed("Gone", n=2)
         await self.repo.delete_person("Gone")
-        self.assertEqual((await self.q.list_persons())["total"], 1)
-        withdel = await self.q.list_persons(include_deleted=True)
+        self.assertEqual((await self.q.list_persons(PersonPageRequest()))["total"], 1)
+        withdel = await self.q.list_persons(PersonPageRequest(include_deleted=True))
         self.assertEqual(withdel["total"], 2)
         gone = [p for p in withdel["items"] if p["nick"] == "Gone"][0]
         self.assertTrue(gone["deleted"])
