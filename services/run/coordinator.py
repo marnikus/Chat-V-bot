@@ -20,14 +20,17 @@ if TYPE_CHECKING:
     from backend.criteria_engine import CriteriaEngine
     from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
+from .cycle_loop import CycleLoopMixin
 from .cycle_plan import choose_cycle_mode, inspect_stack
 from .error_recovery import RetryPolicy, RunExecutionMixin
 from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
 from .progress import RunProgress, RunQueueMixin
+from .run_lifecycle import RunLifecycleMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
 
-class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
+class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin,
+                     CycleLoopMixin, RunLifecycleMixin):
     step_complete = Signal(str, str); user_complete = Signal(str, bool); person_marked = Signal(str)
     stack_complete = Signal(); log_msg = Signal(str); debug_msg = Signal(str, str)
     step_started = Signal(int, str, str); person_found = Signal(str); person_removed = Signal(str)
@@ -55,108 +58,34 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
     def resume(self) -> None: self._paused = False; self._state.mark_resumed()
 
     async def execute(self, scroll_parser: 'ScrollParser' | None = None) -> None:
-        if self._running: self.log_msg.emit("⚠ Already running"); return
-        self._running, self._stop_requested, self._paused = True, False, False
-        self._state.mark_running(); self.progress.reset(); self.progress.emit(); self._run_seq += 1
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{self._run_seq}"; self._tracer = RunTracer(run_id); self.selected_nick = ""
-        self.log_msg.emit(f"▶▶ Run #{run_id} started"); self.debug_msg.emit(f"📄 Trace file: {self._tracer.path}", "info")
-        self._tracer.note({"type": "run_start", "blocks": [b.block_id for b in self._stack]})
-        cycles, done, outcome = self._repeat_cycles(), False, "worked"
-        run_error: BaseException | None = None
+        if self._running:
+            self.log_msg.emit("⚠ Already running"); return
+        cycles = self._begin_run()
+        outcome, done, run_error = "worked", False, None
         try:
             await maybe_await(self._hooks.pre_run(self))
-            if cycles > 1:
-                self.log_msg.emit(f"🔁 Repeat Loop: the stack will run {cycles} cycles — Stop ends it at any time")
-                self._tracer.note({"type": "repeat", "cycles": cycles})
+            self._announce_repeat(cycles)
             for cycle in range(1, cycles + 1):
-                if is_stop_requested(self):
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
-                await self._wait_if_paused()
-                if is_stop_requested(self):
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
-                if cycles > 1:
-                    self.log_msg.emit(f"🔁 Cycle {cycle}/{cycles} — running…")
-                    self._tracer.note({"type": "cycle_start", "cycle": cycle, "total": cycles})
+                if await self._gate_before_cycle():
+                    outcome = "stopped"; break
+                self._announce_cycle_start(cycle, cycles)
                 try:
                     outcome = await self._execute_cycle()
                 except asyncio.CancelledError:
                     raise
                 except RunStopped:
-                    outcome = "stopped"
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-                    try:
-                        self._tracer.note({"type": "run_end", "reason": "stopped"})
-                    except Exception:
-                        pass
-                    break
-                if outcome in {"stopped", "empty_stack"}: done = outcome == "empty_stack"; break
-                if outcome == "empty":
-                    if cycles > 1: self.log_msg.emit(f"🔁 No users found — Repeat Loop ends the run after cycle {cycle}")
-                    done = True; break
-                if cycle >= cycles: done = True
-            if done: self._state.mark_done(); self._tracer.note({"type": "run_end", "reason": "completed"})
-            elif outcome == "stopped" or is_stop_requested(self):
-                self._state.mark_done()
+                    self._announce_stopped(); outcome = "stopped"; break
+                transition = self._cycle_transition(outcome, cycle, cycles)
+                if transition is not None:
+                    outcome, done = transition; break
+            self._mark_run_done(outcome, done)
         except asyncio.CancelledError as exc:
-            run_error = exc
-            try:
-                self._state.mark_error()
-            except ValueError:
-                pass
-            self.debug_msg.emit("⏹ Run cancelled — cleaning up…", "warn")
-            try:
-                self._tracer.note({"type": "run_end", "reason": "cancelled"})
-            except Exception:
-                pass
-            raise
+            run_error = exc; self._note_run_cancelled(); raise
         except Exception as exc:
-            run_error = exc
-            self._state.mark_error(); log.error("Stack execution error: %s", exc, exc_info=True)
-            self.log_msg.emit(f"❌ Error: {exc}"); self.debug_msg.emit(f"❌ Fatal error: {exc}", "error")
-            self._tracer.note({"type": "run_end", "reason": "exception", "error": str(exc)})
+            run_error = exc; self._note_run_exception(exc)
         finally:
-            post_error: BaseException | None = None
-            try:
-                await maybe_await(self._hooks.post_run(self, outcome))
-            except asyncio.CancelledError as exc:
-                post_error = exc
-                self.debug_msg.emit(f"⚠ post_run cancelled: {exc}", "warn")
-                try:
-                    self._tracer.note({"type": "hook_error", "hook": "post_run", "error": str(exc)})
-                except Exception:
-                    pass
-            except Exception as exc:
-                post_error = exc
-                self.debug_msg.emit(f"⚠ post_run failed: {exc}", "warn")
-                try:
-                    self._tracer.note({"type": "hook_error", "hook": "post_run", "error": str(exc)})
-                except Exception:
-                    pass
-            try:
-                if self._tracer is not None: self._tracer.close(); self._tracer = None
-            finally:
-                self._running = False; self._ctx = {}
-                try:
-                    self.stack_complete.emit()
-                finally:
-                    self.log_msg.emit("✅ Stack execution complete")
-            if isinstance(run_error, asyncio.CancelledError):
-                if post_error is not None:
-                    log.warning("post_run failed during cancelled-run cleanup: %r", post_error)
-            elif isinstance(post_error, asyncio.CancelledError):
-                try:
-                    self._state.mark_error()
-                except ValueError:
-                    pass
-                raise post_error
-            elif run_error is None and post_error is not None:
-                try:
-                    self._state.mark_error()
-                except ValueError:
-                    pass
-                raise post_error
-            elif run_error is not None and post_error is not None:
-                log.warning("post_run failed during error cleanup %r: %r", run_error, post_error)
+            post_error = await self._run_post_hook(outcome)
+            self._finish_signals(); self._resolve_cleanup_failure(run_error, post_error)
 
     def _announce_stopped(self) -> None:
         """Emit the single stopped announcement (debug + trace)."""
