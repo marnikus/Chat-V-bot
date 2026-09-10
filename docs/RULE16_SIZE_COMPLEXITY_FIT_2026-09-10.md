@@ -408,7 +408,7 @@ inflate the result; it can only shrink what is measured.
 tests/test_person_item.py            12 passed
 tests/test_person_page_request.py    20 passed
 tests/test_userdb_sort_query.py      31 passed   (23 sort + 8 envelope)
-tests/test_rule16_new_code.py         9 passed   (15 after §9)
+tests/test_rule16_new_code.py         9 passed   (15 at that point; 23 after §9)
 full pytest (--noconftest, --deselect test_sash_webengine.py)
                                   2199 passed, 3 skipped, 1 xfailed,
                                   771 subtests, 1 collection error
@@ -433,14 +433,95 @@ so the limits now live in one module that three callers share:
 
 | Artifact | Role |
 |---|---|
-| `tools/metrics/rule16_gate.py` | the limits, the policy tables (`OWNED`, `RATCHET`, `OVERRIDES`), the measurement, and a human-readable report. Exits 1 on any breach. |
+| `tools/metrics/rule16_gate.py` | the limits, the policy tables (`OWNED`, `RATCHET`, `OVERRIDES`, `CLONE_BASELINE`), the measurement, and a human-readable report. Exits 1 on any breach. |
 | `tests/test_rule16_new_code.py` | asserts the same module's output. Holds **no copy** of the thresholds — a second copy is how a gate starts disagreeing with itself. |
 | `.pre-commit-config.yaml` | runs the gate before a commit lands. |
-| `tools/ci/quality-gate.yml` | the CI workflow, **written but not installed** — see §9.4. |
+| `tools/ci/quality-gate.yml` | the CI workflow, **written but not installed** — see §9.5. |
 
 The rule itself is written down in `docs/AGENT_RULES_CODE_QUALITY.md`.
 
-### 9.4 The CI workflow could not be installed
+### 9.1 The gate checks that it is not vacuous
+
+A gate that passes because it measured nothing is worse than no gate. So the
+suite pins a **canary**: `HistoryQuery.page` is 53 LOC, over the limit, and not
+in `OWNED`. If the measurement ever stops reporting it, the suite fails.
+
+The `OVERRIDES` escape hatch is audited the same way — an entry must name a
+gated function, carry a justification of at least 40 characters that is not
+`TODO`/`noqa`, and still be *needed*. An override whose function has since been
+fixed is reported as stale and must be deleted. `OVERRIDES` is empty today.
+
+### 9.2 A defect this process caught in itself
+
+The first draft of `rule16_gate.py` shipped a `smells()` helper that was never
+called and ended in `return out if not missing else out` — both branches
+identical. Dead code, in the module that enforces "zero dead code". It was
+caught by reading the diff against the claims in the doc, wired into `run()`,
+and given a test. Worth recording because it is the failure mode the whole
+exercise is about: a check that looks present and is not.
+
+### 9.3 Verification for this section
+
+```
+python3 tools/metrics/rule16_gate.py                 exit 0 in 2.8s
+python3 tools/metrics/rule16_gate.py --with-clones   exit 0 in 23.4s
+                                                     0 new, 0 stale clone groups
+tests/test_rule16_new_code.py                        23 passed
+.pre-commit-config.yaml                              parses; hook target exists
+tools/ci/quality-gate.yml                            parses; jobs rule16-gate,
+                                                     test-suite (written, NOT
+                                                     installed — §9.5)
+full pytest (--noconftest, --deselect test_sash_webengine.py)
+                                                  2551 passed, 3 skipped,
+                                                  1 xfailed, 771 subtests,
+                                                  1 collection error
+```
+
+The suite count moved twice and both steps reconcile. 2205 was the figure
+before `origin/main` was merged in; main's four commits brought 338 tests of
+their own and this branch added 4, giving 2547. The duplication scan of §9.4
+then added 4 more: 2547 + 4 = 2551. The gate suite grew 15 → 19 (the class
+limit enforcement) → 23 (the clone baseline).
+
+The single collection error is still `tests/unit/app/test_app_bootstrap.py` on
+missing `libGL.so.1` (§8.3), which is an environment gap on this machine — the
+CI workflow installs the system libraries PySide6 needs, so it collects there.
+
+### 9.4 Duplication — the AST clone scan
+
+`docs/AGENT_RULES_CODE_QUALITY.md` §4 and §7.1 both define duplication as
+"jscpd and/or pylint `R0801`; repo also uses exact-AST clones ≥ 6 lines", and
+`tools/metrics/clone_scan.py` exists to do the AST half. The gate ran `R0801`
+only, so one of the two named checks was simply absent — the doc promised a
+check the tooling did not perform.
+
+`clones()` now delegates to the repo's own `clone_scan.py` rather than
+re-implementing a scan, so the gate and the audit report cannot drift apart.
+`CLONE_BASELINE` freezes the 12 groups already in the tree, measured by running
+the scanner. The spec fails on *new* groups, not on existing ones, so the
+baseline works the way `RATCHET` does: entries may disappear, they may not be
+joined by new ones. A baseline entry whose group is gone is reported stale, so
+the list ratchets down instead of quietly rotting into fiction.
+
+One baseline group touches an owned file — `bridge/db_bridge.py` with
+`bridge/history_bridge.py`. It is the standard import header (`from __future__`
+/ `json` / `logging` / `os` / `PySide6.QtCore`), present since the base commit
+`3820136`, verified with `git log -L 8,15:bridge/history_bridge.py`. Recorded in
+the comment so the next reader does not have to re-derive it.
+
+The scan is opt-in behind `--with-clones`. It walks every production package and
+takes ~20s, which is too slow to impose on every commit, and spec §7 puts
+duplication in CI rather than pre-commit. Measured: 2.8s without the flag,
+23.4s with it. A skipped scan prints "clone scan: SKIPPED — not a pass" and
+sets `clones_checked` false; it is never allowed to read as a clean result,
+which is the same rule the missing-tool path already follows.
+
+The test worth naming: every `CLONE_BASELINE` entry must be sorted, because
+`clones()` compares against `tuple(sorted(...))`. An unsorted entry could never
+match, so its group would be reported as new forever — a permanently red gate
+nobody could explain.
+
+### 9.5 The CI workflow could not be installed
 
 The workflow was committed at `.github/workflows/quality-gate.yml` and the push
 was refused:
@@ -468,42 +549,3 @@ wired up or recorded as not wired up.
 
 The same limitation applies to the PR bot comment and merge block from the
 proposal — both need repo/org settings that cannot be set from a commit.
-
-### 9.1 The gate checks that it is not vacuous
-
-A gate that passes because it measured nothing is worse than no gate. So the
-suite pins a **canary**: `HistoryQuery.page` is 53 LOC, over the limit, and not
-in `OWNED`. If the measurement ever stops reporting it, the suite fails.
-
-The `OVERRIDES` escape hatch is audited the same way — an entry must name a
-gated function, carry a justification of at least 40 characters that is not
-`TODO`/`noqa`, and still be *needed*. An override whose function has since been
-fixed is reported as stale and must be deleted. `OVERRIDES` is empty today.
-
-### 9.2 A defect this process caught in itself
-
-The first draft of `rule16_gate.py` shipped a `smells()` helper that was never
-called and ended in `return out if not missing else out` — both branches
-identical. Dead code, in the module that enforces "zero dead code". It was
-caught by reading the diff against the claims in the doc, wired into `run()`,
-and given a test. Worth recording because it is the failure mode the whole
-exercise is about: a check that looks present and is not.
-
-### 9.3 Verification for this section
-
-```
-python3 tools/metrics/rule16_gate.py        exit 0, all owned functions fit
-tests/test_rule16_new_code.py               15 passed
-.pre-commit-config.yaml                     parses; hook target exists
-tools/ci/quality-gate.yml                   parses; jobs rule16-gate, test-suite
-                                            (written, NOT installed — §9.4)
-full pytest (--noconftest, --deselect test_sash_webengine.py)
-                                         2205 passed, 3 skipped, 1 xfailed,
-                                         771 subtests, 1 collection error
-```
-
-2199 + 6 = 2205; the +6 is the gate suite growing from 9 to 15 tests when the
-canary and override checks were added. The single collection error is still
-`tests/unit/app/test_app_bootstrap.py` on missing `libGL.so.1` (§8.3), which is
-an environment gap on this machine — the CI workflow installs the system
-libraries PySide6 needs, so it collects there.
