@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import copy
 import logging
-import os
 from typing import Any
 
-from stores.jsonio import load_json, save_json
+from stores.json_store import JsonFileStore
 
 log = logging.getLogger("chatbot")
 
@@ -75,38 +74,16 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 _UNSET = object()
 
 
-class SettingsStore:
-    """One JSON file, one settings tree, atomic saves."""
+class SettingsStore(JsonFileStore):
+    """One JSON file, one settings tree, atomic saves.
 
-    def __init__(self, path: str, data: dict | None = None):
-        self._path = path
-        self._data: dict[str, Any] = {}
-        self._dirty = False
-        if data is not None:
-            self._data = dict(data)
-        else:
-            self.load()
+    `data()` is the *overlay* the user actually wrote — never the merged view
+    (SET-04): reads fall back to `SETTINGS_DEFAULTS`, the file does not grow a
+    copy of every default. The lifecycle itself is `JsonFileStore`'s.
+    """
 
-    # ── persistence ──────────────────────────────────────────────
-    def load(self) -> None:
-        raw = load_json(self._path, default={})
-        self._data = raw if isinstance(raw, dict) else {}
-
-    def save(self, force: bool = False) -> bool:
-        if not (self._dirty or force):
-            return True
-        ok = save_json(self._path, self._data)
-        if ok:
-            self._dirty = False
-        return ok
-
-    @property
-    def path(self) -> str:
-        return self._path
-
-    @property
-    def dirty(self) -> bool:
-        return self._dirty
+    DEFAULT_FILE = "config.json"
+    DEFAULTS: dict[str, Any] = {}
 
     # ── reads ────────────────────────────────────────────────────
     def get(self, *keys: str, default: Any = None) -> Any:
@@ -137,15 +114,30 @@ class SettingsStore:
     def data(self) -> dict[str, Any]:
         return copy.deepcopy(self._data)
 
-    # ── writes (memory only; `save()` persists) ──────────────────
-    def set(self, *keys_and_value: Any, save_now: bool = False) -> None:
+    # ── writes ───────────────────────────────────────────────────
+    def set(self, *keys_and_value: Any, save: "bool | None" = None,
+            save_now: "bool | None" = None) -> None:
+        """`set("chrome", "port", 9333)` — nested write, dirty until saved.
+
+        `save_now` is the spelling the ConfigManager facade has always used,
+        `save` the one this store documents after P1-3; they are the same
+        switch and `save` wins, and neither is ever read as a settings key.
+        The default is unchanged from before the split — memory first,
+        `save()` (or `save=True`) puts it on disk — because a settings write
+        is batched by `ConfigManager` and the store must not decide to
+        persist halfway through one of its calls.
+        """
         *keys, value = keys_and_value
+        if not keys:
+            raise ValueError("set() needs at least a key and a value")
         node = self._data
         for key in keys[:-1]:
+            if not isinstance(node, dict):
+                raise TypeError(f"cannot write into {type(node).__name__}")
             node = node.setdefault(key, {})
         node[keys[-1]] = value
-        self._dirty = True
-        if save_now:
+        self._touch()
+        if self._wants_save(save, save_now, default=False):
             self.save()
 
     # ── validation (unchanged rules from the single-file era) ────

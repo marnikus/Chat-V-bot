@@ -6,23 +6,31 @@ config.json (and, before that, in SQLite tables): a one-time import keeps
 both legacy sources working. The store is cached per file path so that a
 `PresetStore(config)` built by a bridge and the ConfigManager's own
 instance are the SAME object — two writers can never clobber each other.
+
+AREA B1 (plan P1-3) put this store on the shared `JsonFileStore` lifecycle:
+`PresetStore(atomic | path | config)`, `data()`, `load()` / `reload()`,
+`save(force=False)` / `flush()`, `dirty`. The per-path identity and the
+`config=` spelling of the constructor stay exactly as the bridges use them.
 """
 
 from __future__ import annotations
 
-import json
+import copy
 import logging
 import os
-import sqlite3
 from datetime import datetime
 from typing import Any, Optional
 
-from stores.jsonio import load_json, save_json
+from stores.atomic import AtomicJsonStore
+from stores.json_store import JsonFileStore
 
 log = logging.getLogger("chatbot")
 
+#: the sections this file owns; other sections are kept verbatim (PRS-03)
+SECTIONS = ("stack_presets", "template_presets")
 
-def _config_dir_of(config) -> str:
+
+def _config_dir_of(config: Any) -> str:
     """`…/config` derived from a ConfigManager's legacy path (or cwd)."""
     legacy = getattr(config, "_path", None) if config is not None else None
     if not legacy:
@@ -30,14 +38,35 @@ def _config_dir_of(config) -> str:
     return os.path.join(os.path.dirname(os.path.abspath(legacy)), "config")
 
 
-class PresetStore:
+def _file_for(config: Any, path: Optional[str]) -> str:
+    """The one file a `PresetStore(config=…, path=…)` call means.
+
+    Slot one is whichever of the four things a caller can hand a store this
+    is — a `ConfigManager`, an `AtomicJsonStore`, another store, or a path —
+    because `bridge/router.py` and `backend/config_manager.py` use `config=`
+    and every test uses `path=`.
+    """
+    if isinstance(config, AtomicJsonStore):
+        return config.path
+    if isinstance(config, JsonFileStore):
+        return config.path
+    if isinstance(config, (str, os.PathLike)) and str(config):
+        return os.fspath(config)
+    if path:
+        return str(path)
+    return os.path.join(_config_dir_of(config), "presets.json")
+
+
+class PresetStore(JsonFileStore):
     """CRUD for named stack presets and message templates (JSON-backed)."""
+
+    DEFAULT_FILE = os.path.join("config", "presets.json")
+    DEFAULTS: dict[str, Any] = {"stack_presets": {}, "template_presets": {}}
 
     _by_path: dict[str, "PresetStore"] = {}
 
-    def __new__(cls, config=None, path: Optional[str] = None):
-        key = os.path.abspath(path) if path else os.path.abspath(
-            os.path.join(_config_dir_of(config), "presets.json"))
+    def __new__(cls, config: Any = None, path: Optional[str] = None):
+        key = os.path.abspath(_file_for(config, path))
         cached = cls._by_path.get(key)
         if cached is not None:
             return cached
@@ -46,44 +75,29 @@ class PresetStore:
         cls._by_path[key] = instance
         return instance
 
-    def __init__(self, config=None, path: Optional[str] = None):
+    def __init__(self, config: Any = None, path: Optional[str] = None):
         if getattr(self, "_initialized", False):
-            return
+            return                # the per-path cache hands back one instance
+        from stores.preset_migration import PresetMigration
         self._initialized = True
-        self._path = self._cache_key
-        self._data: dict[str, dict[str, Any]] = {"stack_presets": {},
-                                                 "template_presets": {}}
-        self._dirty = False
-        self.load()
+        self.migration = PresetMigration(self)
+        borrowed = config if isinstance(config, AtomicJsonStore) else None
+        super().__init__(borrowed, "" if borrowed is not None
+                         else _file_for(config, path))
 
-    # ── persistence ──────────────────────────────────────────────
-    def load(self) -> None:
-        raw = load_json(self._path, default={})
-        if isinstance(raw, dict):
-            # Unknown sections survive the round-trip: named_set() lets the
-            # facade address any section, so dropping them here would lose
-            # committed user data on every restart (PRS-03).
-            data = dict(raw)
-            for key in ("stack_presets", "template_presets"):
-                if not isinstance(data.get(key), dict):
-                    data[key] = {}
-            self._data = data
+    def _coerce(self, raw: Any) -> dict[str, Any]:
+        """Keep unknown sections and guarantee the two known ones are maps.
 
-    def save(self, force: bool = False) -> bool:
-        if not (self._dirty or force):
-            return True
-        ok = save_json(self._path, self._data)
-        if ok:
-            self._dirty = False
-        return ok
-
-    @property
-    def path(self) -> str:
-        return self._path
-
-    @property
-    def dirty(self) -> bool:
-        return self._dirty
+        `named_set()` lets the ConfigManager facade address ANY section, so
+        dropping the unknown ones here would lose committed user data on the
+        first restart (PRS-03).
+        """
+        data = copy.deepcopy(raw) if isinstance(raw, dict) \
+            else copy.deepcopy(self.DEFAULTS)
+        for key in SECTIONS:
+            if not isinstance(data.get(key), dict):
+                data[key] = {}
+        return data
 
     # ── timestamp ────────────────────────────────────────────────
     @staticmethod
@@ -203,42 +217,11 @@ class PresetStore:
 
     # ── one-time legacy imports ──────────────────────────────────
     def import_legacy(self, db_path: str = "chatbot.db") -> bool:
-        """Presets from the old SQLite tables (runs at most once)."""
-        if self._data["stack_presets"] or self._data["template_presets"]:
-            return False
-        if not os.path.exists(db_path):
-            return False
-        imported = False
-        try:
-            conn = sqlite3.connect(db_path, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            try:
-                cur = conn.execute(
-                    "SELECT name, blocks FROM stacks")  # may not exist
-                for row in cur.fetchall():
-                    try:
-                        blocks = json.loads(row["blocks"])
-                        if isinstance(blocks, list):
-                            self._data["stack_presets"][row["name"]] = {
-                                "blocks": blocks,
-                                "updated_at": self._now()}
-                            imported = True
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                cur = conn.execute("SELECT name, body FROM templates")
-                for row in cur.fetchall():
-                    self._data["template_presets"][row["name"]] = {
-                        "body": row["body"], "updated_at": self._now()}
-                    imported = True
-            except sqlite3.OperationalError:
-                pass  # tables absent in this build
-            finally:
-                conn.close()
-        except sqlite3.Error as exc:
-            log.warning("Legacy preset import failed: %s", exc)
-            return False
-        if imported:
-            self._dirty = True
-            self.save()
-            log.info("Legacy presets imported into %s", self._path)
-        return imported
+        """Presets from the old SQLite tables (runs at most once).
+
+        The reading itself is `PresetMigration`'s (design §2.6): the two
+        legacy tables, the tolerant `blocks` decoding, the "only into an
+        empty store" gate. This stays the name `ConfigManager` and the
+        migration call.
+        """
+        return self.migration.import_sqlite(db_path)

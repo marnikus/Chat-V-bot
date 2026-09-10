@@ -37,9 +37,21 @@ class UserRecord:
 
 
 class UserMemory:
+    """The People table: discovery, status tracking, CRUD.
+
+    The reads are delegated to `UserQuery` (B2 split, design §2.6); the name
+    `UserMemory` stays the single entry point every caller uses, and the row
+    → `UserRecord` conversion stays here because `UserRecord` is this module's
+    value object.
+    """
+
     def __init__(self, db_path: str = "chatbot.db"):
+        from stores.user_query import UserQuery   # local: that module's rows
+        # are built by this one's `_row`, so importing it at module scope
+        # would close a cycle
         self._db_path = db_path
         self._db: Optional[aiosqlite.Connection] = None
+        self.query = UserQuery(self)
 
     @property
     def db_path(self) -> str:
@@ -123,43 +135,21 @@ class UserMemory:
             (now, nick))
         await self._db.commit()
 
+    # ── reads (delegated to UserQuery, which owns the SELECT) ────
     async def get_queue(self) -> list[UserRecord]:
-        cur = await self._db.execute(
-            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
-            "messaged,message_count,last_messaged,notes FROM users WHERE messaged=0 "
-            "ORDER BY first_seen DESC")
-        return [self._row(r) for r in await cur.fetchall()]
+        return await self.query.get_queue()
 
     async def get_all(self) -> list[UserRecord]:
-        cur = await self._db.execute(
-            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
-            "messaged,message_count,last_messaged,notes FROM users ORDER BY first_seen DESC")
-        return [self._row(r) for r in await cur.fetchall()]
+        return await self.query.get_all()
 
     async def count_unmessaged(self) -> int:
-        """Number of people still awaiting a message (the backlog).
-
-        A single COUNT rather than materialising every row through get_all().
-        """
-        cur = await self._db.execute(
-            "SELECT COUNT(*) FROM users WHERE messaged=0")
-        row = await cur.fetchone()
-        return int(row[0]) if row else 0
+        return await self.query.count_unmessaged()
 
     async def get_stats(self) -> dict:
-        cur = await self._db.execute("SELECT COUNT(*) FROM users")
-        total = (await cur.fetchone())[0]
-        cur = await self._db.execute("SELECT COUNT(*) FROM users WHERE messaged=0")
-        queued = (await cur.fetchone())[0]
-        return {"total": total, "queued": queued, "done": total - queued}
+        return await self.query.get_stats()
 
     async def get_user(self, nick: str) -> Optional[UserRecord]:
-        cur = await self._db.execute(
-            "SELECT nick,gender,registered,anonymous,guest,first_seen,last_seen,"
-            "messaged,message_count,last_messaged,notes FROM users WHERE nick=?",
-            (nick,))
-        row = await cur.fetchone()
-        return self._row(row) if row else None
+        return await self.query.get_user(nick)
 
     async def delete_user(self, nick: str) -> bool:
         """Delete a single user by nick. Returns True when a row was removed."""
