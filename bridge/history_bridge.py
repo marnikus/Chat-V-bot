@@ -159,6 +159,9 @@ class HistoryBridge(QObject):
                 limit=int(opts.get("limit") or 50),
                 offset=int(opts.get("offset") or 0),
                 sort=str(opts.get("sort") or "recent"),
+                # "" = the sort key's natural direction, so a payload written
+                # before the sortable headers existed is unchanged
+                dir=str(opts.get("dir") or ""),
                 include_deleted=bool(opts.get("include_deleted")))
             payload["req_id"] = req_id
             payload["my_nick"] = self.ctx.archive.my_nick

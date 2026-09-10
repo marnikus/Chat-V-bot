@@ -282,6 +282,31 @@
   font-weight: 600;
 }
 
+/* ── sortable columns of the Full User Database ──────────────────
+   Same control as the User Memory table: the header IS a button, so it is
+   focusable, announces `aria-sort`, and reacts to Enter/Space. The glyph
+   itself (.sort-arrow) is the shared one from table.css. */
+
+.userdb-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  padding: 0;
+  white-space: nowrap;
+  transition: color .12s, background .12s;
+}
+.userdb-table th[data-sort]:hover,
+.userdb-table th[data-sort]:focus-within,
+.userdb-table th[data-sort].sort-active {
+  color: var(--accent);
+  background: var(--bg-card-hover);
+}
+.userdb-table th[data-sort] .sort-button { padding: 4px 6px; }
+.userdb-table .sort-arrow {
+  min-width: 16px;
+  color: var(--text-muted);
+}
+.userdb-table th[data-sort].sort-active .sort-arrow { color: var(--accent); }
+
 .userdb-table td {
   padding: 3px 6px;
   border-bottom: 1px solid var(--border);

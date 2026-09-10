@@ -244,8 +244,13 @@
       <div class="userdb-list" id="userdbList">
         <table class="userdb-table" id="userdbTable">
           <thead><tr>
-            <th>Nick</th><th>Msgs</th><th>Media</th>
-            <th>First</th><th>Last</th><th>My nick</th><th>Actions</th>
+            <th data-sort="nick" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by Nick">Nick <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="msgs" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by message count">Msgs <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="media" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by media count">Media <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="first" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by first message">First <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="last" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by last message">Last <span class="sort-arrow">▲▼</span></button></th>
+            <th data-sort="my_nick" tabindex="-1" aria-sort="none"><button type="button" class="sort-button" title="Sort by the nick you answered as">My nick <span class="sort-arrow">▲▼</span></button></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody id="userdbBody"></tbody>
         </table>

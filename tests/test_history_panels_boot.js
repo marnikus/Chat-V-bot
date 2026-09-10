@@ -207,6 +207,11 @@ global.LogConsole = { log() {} };
 const load = (file, name) =>
   new Function(readUi(file) + '\nreturn ' + name + ';')();
 
+// The page loads the shared DOM helpers before any panel module (index.html
+// puts js/core/ui-helpers.js first), and history-db.js draws its header
+// arrows with UIHelpers.sortArrow — so the harness must load it too.
+new Function(readUi('js/core/ui-helpers.js'))();      // sets window.UIHelpers
+
 const modelMod = { exports: {} };
 new Function('module', 'exports', readUi('js/history-model.js'))(
   modelMod, modelMod.exports);

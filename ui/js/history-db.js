@@ -13,7 +13,18 @@ const HistoryDb = {
   hasMore: true,
   loading: false,
   query: '',
-  sort: 'recent',
+  // ── column sort ───────────────────────────────────────────────
+  // The order is decided by the database, never here: the table is paged, so
+  // sorting `rows` would only order the page that happens to be loaded.
+  // Both values live for the session (like UserTable.sort) and are sent with
+  // EVERY page request, which is what makes the choice stick.
+  sortKey: 'last',
+  sortDir: 'desc',
+  /** The direction a first click on that header gives. */
+  NATURAL: {
+    nick: 'asc', first: 'asc', my_nick: 'asc',
+    msgs: 'desc', media: 'desc', last: 'desc',
+  },
   pageSize: 50,
   preloadRows: 40,
   _seq: 0,
@@ -32,6 +43,8 @@ const HistoryDb = {
     };
     this._flashNick = '';
     if (!this._els.body) return;
+    this._wireSortHeaders();
+    this._updateSortHeaders();
     this._els.list.addEventListener('scroll', () => this._onScroll());
     this._els.body.addEventListener('click', (event) => {
       const row = event.target && event.target.closest
@@ -87,10 +100,58 @@ const HistoryDb = {
     if (preview.page_size) this.pageSize = Number(preview.page_size);
   },
 
+  // ── sortable columns ─────────────────────────────────────────
+
+  /** Attach the header handlers once. The <th> is a real <button>, so
+   *  Enter/Space arrive as keydown and must not scroll the page. */
+  _wireSortHeaders() {
+    document.querySelectorAll('#userdbTable th[data-sort]').forEach((th) => {
+      th.addEventListener('click', () => this.sortBy(th.dataset.sort));
+      th.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.sortBy(th.dataset.sort);
+        }
+      });
+    });
+  },
+
+  /** Same header as before ⇒ flip. A new header ⇒ its own natural direction,
+   *  never the one the previous column happened to be in. */
+  sortBy(key) {
+    if (!key || !Object.prototype.hasOwnProperty.call(this.NATURAL, key))
+      return;
+    if (this.sortKey === key) {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortKey = key;
+      this.sortDir = this.NATURAL[key];
+    }
+    this._updateSortHeaders();
+    this.reload();
+  },
+
+  /** ▲▼ idle · ▲ ascending · ▼ descending, and `aria-sort` to match. The
+   *  glyph comes from the SAME helper the User Memory table uses, so the two
+   *  tables can never show different arrows for the same state. */
+  _updateSortHeaders() {
+    document.querySelectorAll('#userdbTable th[data-sort]').forEach((th) => {
+      const active = th.dataset.sort === this.sortKey;
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent =
+        window.UIHelpers.sortArrow(active, this.sortDir === 'desc' ? -1 : 1);
+      th.setAttribute('aria-sort', active
+        ? (this.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+      th.classList.toggle('sort-active', active);
+    });
+  },
+
   reload() {
     this.rows = [];
     this.hasMore = true;
     this.loading = false;
+    // A new order (or a new query) makes the old scroll position meaningless.
+    if (this._els.list) this._els.list.scrollTop = 0;
     this._request(0);
     this._requestStats();
   },
@@ -101,7 +162,10 @@ const HistoryDb = {
     this.loading = true;
     const id = 'u' + (++this._seq);
     App.bridge.userdb_page(id, JSON.stringify({
-      q: this.query, limit: this.pageSize, offset: offset, sort: this.sort,
+      q: this.query, limit: this.pageSize, offset: offset,
+      // The order travels with EVERY page, including the ones fetched while
+      // scrolling — that is what keeps the sort for the whole session.
+      sort: this.sortKey, dir: this.sortDir,
     }));
   },
 

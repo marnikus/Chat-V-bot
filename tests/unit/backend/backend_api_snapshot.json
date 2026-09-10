@@ -2463,7 +2463,7 @@
       "around": "(self, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
       "db_stats": "(self) -> 'dict'",
       "gaps": "(self, person_id: 'int') -> 'list[dict]'",
-      "list_persons": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', include_deleted: 'bool' = False) -> 'dict'",
+      "list_persons": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> 'dict'",
       "page": "(self, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'",
       "person_stats": "(self, nick: 'str') -> 'dict'",
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
