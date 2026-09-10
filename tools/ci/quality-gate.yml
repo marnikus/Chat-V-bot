@@ -50,7 +50,11 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Measure
-        run: python tools/metrics/rule16_gate.py
+        # --with-clones adds the AST duplication scan (~20s). The pre-commit
+        # hook deliberately omits it: spec §7 puts duplication in CI, not in
+        # pre-commit. Without the flag the gate prints "clone scan: SKIPPED"
+        # rather than implying the check passed.
+        run: python tools/metrics/rule16_gate.py --with-clones
 
       - name: The gate, as a test
         # --noconftest: tests/conftest.py imports PySide6's WebEngine bindings,

@@ -242,5 +242,45 @@ class TestNoNewSmells(unittest.TestCase):
                           + " — this is NOT a pass")
 
 
+class TestCloneBaselineIsHonest(unittest.TestCase):
+    """The AST duplication scan main's spec §4/§7.1 requires.
+
+    The baseline is frozen pre-existing debt, so the two ways it can rot are:
+    an entry that no longer exists (fiction that hides nothing but misleads the
+    next reader), and a new group that was never added to it.
+    """
+
+    def test_baseline_is_not_empty_and_every_entry_is_sorted(self):
+        """`clones()` compares against `tuple(sorted(...))`. An unsorted
+        baseline entry could therefore never match, and its group would be
+        reported as new forever — a permanently red gate nobody can explain."""
+        self.assertTrue(gate.CLONE_BASELINE, "an empty baseline claims the repo "
+                        "has no clones at all, which is not true")
+        for sig in gate.CLONE_BASELINE:
+            self.assertEqual(list(sig), sorted(sig), f"unsorted entry: {sig}")
+            self.assertGreaterEqual(len(sig), 2, f"not a cross-file group: {sig}")
+
+    def test_the_owned_file_group_is_the_pre_existing_import_header(self):
+        """Documents why an owned file appears in the baseline at all."""
+        self.assertIn(("bridge/db_bridge.py", "bridge/history_bridge.py"),
+                      gate.CLONE_BASELINE)
+
+    def test_no_new_clone_groups_and_no_stale_baseline_entries(self):
+        result = gate.run(with_clones=True)
+        self.assertTrue(result["clones_checked"])
+        self.assertEqual(result["new_clones"], [],
+                         "new duplication:\n" + "\n".join(result["new_clones"]))
+        self.assertEqual(result["clone_stale"], [],
+                         "baseline entries that no longer exist — delete them:\n"
+                         + "\n".join(result["clone_stale"]))
+
+    def test_a_skipped_scan_is_not_reported_as_a_pass(self):
+        """The hook runs without --with-clones. That must stay visibly
+        distinguishable from a scan that ran and found nothing."""
+        result = gate.run()
+        self.assertFalse(result["clones_checked"])
+        self.assertEqual(result["new_clones"], [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

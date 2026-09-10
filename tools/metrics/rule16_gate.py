@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import json
 import os
 import subprocess
@@ -64,6 +65,33 @@ RATCHET = {
 OVERRIDES: dict[tuple, str] = {}
 
 SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
+
+# Exact-AST clone groups already in the tree at 53ba5fb, measured with
+# `python tools/metrics/clone_scan.py .`. The spec fails on *new* groups, not
+# on these, so they are frozen here the same way RATCHET freezes class size:
+# they may disappear, they may not be joined by new ones.
+#
+# One of these touches an owned file — ('bridge/db_bridge.py',
+# 'bridge/history_bridge.py'). It is the standard import header (from
+# __future__ / json / logging / os / PySide6.QtCore), present since the base
+# commit 3820136, i.e. it predates this feature. Verified with
+# `git log -L 8,15:bridge/history_bridge.py`.
+CLONE_BASELINE = frozenset({
+    ("actions/click_back.py", "actions/click_main_tab.py"),
+    ("app/lifecycle.py", "services/history/export.py"),
+    ("backend/media_handler.py", "backend/message_injector.py"),
+    ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
+    ("bridge/collector_bridge.py", "bridge/label_bridge.py",
+     "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
+    ("bridge/db_bridge.py", "bridge/history_bridge.py"),
+    ("bridge/stack_bridge.py", "services/collector_service.py"),
+    ("services/history/mutate.py", "services/undo_service.py"),
+    ("services/run/__init__.py", "services/run_service/__init__.py"),
+    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("stores/atomic.py", "stores/jsonio.py"),
+    ("stores/labels_file_store.py", "stores/session_store.py",
+     "stores/settings_store.py"),
+})
 
 
 # ── measurement ───────────────────────────────────────────────────
@@ -196,7 +224,7 @@ def class_violations(info: dict) -> list[str]:
 
 
 # ── the gate ──────────────────────────────────────────────────────
-def run() -> dict:
+def run(with_clones: bool = False) -> dict:
     breaches, stale, rows, class_rows = [], [], [], []
 
     for key in OWNED:
@@ -243,8 +271,22 @@ def run() -> dict:
     found, not_checked = smells()
     breaches += [f"smell: {f}" for f in found]
 
+    # Opt-in. clone_scan walks every production package and takes ~20s, which
+    # is too slow to impose on every commit. main's spec §7 puts duplication in
+    # CI, not in pre-commit, so the hook skips it and CI passes --with-clones.
+    # A skipped scan is reported as such rather than counted as a pass.
+    new_clones, clone_stale = [], []
+    if with_clones:
+        new_clones, clone_stale, clone_missing = clones()
+        breaches += [f"new clone group: {c}" for c in new_clones]
+        breaches += [f"clone baseline stale (group is gone, delete it): {c}"
+                     for c in clone_stale]
+        not_checked = not_checked + clone_missing
+
     return {"rows": rows, "class_rows": class_rows,
             "breaches": breaches + stale,
+            "new_clones": new_clones, "clone_stale": clone_stale,
+            "clones_checked": with_clones,
             "not_checked": not_checked,
             "limits": LIMITS, "class_limits": CLASS_LIMITS}
 
@@ -284,12 +326,46 @@ def smells() -> tuple[list[str], list[str]]:
     return findings, missing
 
 
+def clones() -> tuple[list[str], list[str], list[str]]:
+    """(new clone groups, baseline entries gone stale, tools missing).
+
+    Delegates to the repo's own `tools/metrics/clone_scan.py` rather than
+    re-implementing a scan, so this gate and the audit report cannot drift
+    apart. `CLONE_BASELINE` is pre-existing debt and is not reported; a group
+    that is *not* in it is new and is a breach. A baseline entry that no
+    longer exists is reported stale, so the baseline ratchets down instead of
+    quietly rotting into fiction.
+    """
+    path = os.path.join(ROOT, "tools", "metrics", "clone_scan.py")
+    if not os.path.exists(path):
+        return [], [], ["clone_scan"]
+
+    spec = importlib.util.spec_from_file_location("clone_scan", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    groups, _lines = module.scan(ROOT)
+
+    seen, new = set(), []
+    for g in groups:
+        where = [(os.path.relpath(p, ROOT), a) for p, a, _b in g]
+        sig = tuple(sorted(rel for rel, _a in where))
+        seen.add(sig)
+        if sig not in CLONE_BASELINE:
+            new.append(" | ".join(f"{rel}:{a}" for rel, a in where))
+
+    stale = [" | ".join(sig) for sig in sorted(CLONE_BASELINE - seen)]
+    return new, stale, []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--with-clones", action="store_true",
+                    help="also run the AST clone scan (~20s). CI passes this; "
+                         "the pre-commit hook does not, per spec §7.")
     args = ap.parse_args()
 
-    result = run()
+    result = run(with_clones=args.with_clones)
     if args.json:
         print(json.dumps(result, indent=2, default=str))
         return 1 if result["breaches"] else 0
@@ -321,6 +397,14 @@ def main() -> int:
         print("\nNOT CHECKED (tool missing — not a pass): "
               + ", ".join(result["not_checked"])
               + "   pip install -r requirements-dev.txt")
+    # A scan that did not run is stated, never implied to have passed.
+    if result["clones_checked"]:
+        print(f"\nclone scan: {len(result['new_clones'])} new group(s), "
+              f"{len(result['clone_stale'])} stale baseline entr(ies)")
+    else:
+        print("\nclone scan: SKIPPED — not a pass. Run with --with-clones "
+              "(CI does; the pre-commit hook does not, per spec §7).")
+
     for b in result["breaches"]:
         print(f"\nBREACH: {b}")
     if not result["breaches"]:
