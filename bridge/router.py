@@ -7,7 +7,7 @@ shared BridgeContext carries the dependencies, and each domain bridge
 owns its slots.
 
 The class is assembled dynamically with Shiboken.ObjectType (PySide6's
-QObject metaclass) from the nine domain bridges' metaobjects — verified
+QObject metaclass) from the domain bridges' metaobjects — verified
 to publish slots and signals exactly like a hand-written class. A build-
 time parity check guarantees nothing is silently missing.
 
@@ -35,6 +35,7 @@ from bridge.history_bridge import HistoryBridge
 from bridge.label_bridge import LabelBridge
 from bridge.layout_bridge import LayoutBridge
 from bridge.people_bridge import PeopleBridge
+from bridge.window_preset_bridge import WindowPresetBridge
 from bridge.stack_bridge import StackBridge
 from bridge.undo_bridge import UndoBridge
 from core.events import LogMessage
@@ -45,10 +46,10 @@ from stores.preset_store import PresetStore
 
 log = logging.getLogger("chatbot")
 
-#: the nine domain bridges, in wiring order
+#: the domain bridges, in wiring order
 BRIDGE_CLASSES = [CdpBridge, StackBridge, PeopleBridge, HistoryBridge,
                   LabelBridge, DbBridge, CollectorBridge, UndoBridge,
-                  LayoutBridge]
+                  LayoutBridge, WindowPresetBridge]
 
 # Qt type-name → Python type for signature rebuilding
 _QT_TYPES = {

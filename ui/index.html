@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/window-presets.css">
 <link rel="stylesheet" href="css/sash-layout.css">
 <link rel="stylesheet" href="css/stack.css">
 <link rel="stylesheet" href="css/stack-drag.css">
@@ -32,6 +33,8 @@
       </div>
       <button id="windowsMenuBtn" class="btn-icon"
               title="Windows — open, close, minimize and restore windows"><span class="material-icons">widgets</span></button>
+      <button id="windowPresetBtn" class="btn-icon"
+              title="Window presets — save, restore, export and import grid arrangements"><span class="material-icons">bookmarks</span></button>
       <button id="layoutMenuBtn" class="btn-icon"
               title="Grid layouts — drag any window by its title bar, or pick a preset arrangement"><span class="material-icons">grid_view</span></button>
       <div class="tab-select-wrap">
@@ -54,6 +57,15 @@
       <span class="material-icons">link</span> Auto-Connect</button>
     <button id="addUrlPresetBtn" class="btn-icon" title="Save the current URL as a preset chip"><span class="material-icons">add</span></button>
     <div id="urlPresetChips" class="chip-wrap chip-wrap-inline"></div>
+  </div>
+
+  <!-- WINDOW PRESET QUICK TOOLBAR -->
+  <div class="window-preset-quickbar" id="windowPresetQuickbar">
+    <span class="window-preset-quickbar-label"><span class="material-icons">bookmarks</span> Window presets</span>
+    <button id="saveWindowPresetQuickBtn" class="btn-small" title="Save the current window arrangement as a named preset"><span class="material-icons">save</span> Save current</button>
+    <div id="windowPresetQuickChips" class="window-preset-quick-chips">
+      <span class="window-preset-empty">none saved</span>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════
@@ -397,6 +409,34 @@
   </div>
 </div>
 
+<!-- WINDOW PRESET PANEL -->
+<div id="windowPresetPanel" class="layout-menu window-preset-panel hidden">
+  <div class="layout-menu-title">Window presets — portable grid snapshots</div>
+  <div class="window-preset-actions">
+    <button id="saveWindowPresetBtn" class="btn-small btn-primary" title="Save the current arrangement with a name"><span class="material-icons">save</span> Save current</button>
+    <button id="importWindowPresetBtn" class="btn-small" title="Import a .json window preset"><span class="material-icons">file_upload</span> Import</button>
+    <button id="exportWindowPresetBtn" class="btn-small" title="Export the selected preset as a .json file" disabled><span class="material-icons">file_download</span> Export</button>
+  </div>
+  <input id="windowPresetFileInput" type="file" accept=".json,application/json" class="hidden">
+  <div id="windowPresetStatus" class="window-preset-status" aria-live="polite"></div>
+  <div id="windowPresetList" class="window-preset-list">
+    <div class="window-preset-list-empty">No saved window presets yet. Save the current grid to create one.</div>
+  </div>
+</div>
+
+<!-- WINDOW PRESET PREVIEW -->
+<div id="windowPresetPreviewModal" class="modal hidden">
+  <div class="modal-content window-preset-preview-modal">
+    <h3 id="windowPresetPreviewTitle">Window preset preview</h3>
+    <div id="windowPresetPreviewMeta" class="window-preset-preview-meta"></div>
+    <div id="windowPresetPreviewCanvas" class="window-preset-preview-canvas"></div>
+    <div class="modal-actions">
+      <button id="windowPresetPreviewApply" class="btn-primary">Restore layout</button>
+      <button id="windowPresetPreviewCancel" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- CRITERIA EDITOR MODAL -->
 <div id="criteriaModal" class="modal hidden">
   <div class="modal-content">
@@ -439,6 +479,7 @@
 <script src="js/core/ui-helpers.js"></script>
 <script src="js/sash-core.js"></script>
 <script src="js/sash-grid.js"></script>
+<script src="js/window-presets.js"></script>
 <script src="js/app.js"></script>
 <script src="js/user-table.js"></script>
 <script src="js/stack-drag.js"></script>

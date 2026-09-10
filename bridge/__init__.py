@@ -1,4 +1,4 @@
-"""bridge — one router + nine domain bridges.
+"""bridge — one router + domain bridges.
 
 The Router (bridge/router.py) is the single QObject registered on the
 QWebChannel; it publishes every domain bridge's slots and re-emits every

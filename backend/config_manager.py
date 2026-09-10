@@ -34,6 +34,7 @@ from stores.session_store import SessionStore
 from stores.undo_store import UndoStore
 from stores.labels_file_store import LabelsFileStore, LABELS_DEFAULT
 from stores.preset_store import PresetStore
+from stores.window_preset_store import WindowPresetStore
 
 log = logging.getLogger("chatbot")
 
@@ -342,6 +343,7 @@ class ConfigManager:
         # PresetStore caches per path, so this is the same instance the
         # bridge constructs with PresetStore(config=self)
         self.presets = PresetStore(config=self)
+        self.window_presets = WindowPresetStore(config=self)
         self._owners = {name: owner(self, name)
                         for name, owner in _OWNERS.items()}
         log.info("Config loaded from %s", self._dir)
@@ -356,6 +358,7 @@ class ConfigManager:
         self.undo.reload()
         self.labels_file.reload()
         self.presets.load()
+        self.window_presets.load()
 
     def save(self) -> None:
         """Flush every dirty store (each save is atomic per file)."""
@@ -366,6 +369,7 @@ class ConfigManager:
         self.undo.flush()
         self.labels_file.flush()
         self.presets.save()
+        self.window_presets.save()
 
     # ── internal routing ─────────────────────────────────────────
     def _owner_for(self, section: str) -> _Owner:
