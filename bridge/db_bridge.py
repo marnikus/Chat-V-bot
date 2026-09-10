@@ -60,7 +60,12 @@ class DbBridge(QObject):
         self._run_async("db_info", work())
 
     def _db_action(self, op: str, runner, success: str) -> bool:
-        """Run one DB action; reversible ones become one undo entry."""
+        """Run one DB action; reversible ones become one undo entry.
+
+        AREA A: refresh world state when it actually changed even on partial
+        failure (world_changed), never log false success, never push delete
+        undo. `emit_db_change` is frozen; our pre-set `switched` survives.
+        """
         manager = self.db_manager
 
         async def work():
@@ -86,9 +91,26 @@ class DbBridge(QObject):
                     "path": result.get("path", ""),
                     "name": os.path.basename(result.get("path", "")),
                 }), level="success"))
-            elif result.get("error"):
-                self.ctx.bus.emit(LogMessage(
-                    message="⚠ " + str(result["error"]), level="warn"))
+            else:
+                # Even on failure, rebuild when the live world actually moved
+                # (switch-only change / partial after switch). No success log,
+                # no undo push (and never a delete push).
+                if op in ("create", "load", "delete") and \
+                        result.get("world_changed"):
+                    try:
+                        await restart_world(
+                            self.ctx.memory, self.ctx.archive,
+                            self.ctx.label_store(),
+                            self.ctx.undo, self.ctx.bus, op)
+                    except Exception as exc:             # noqa: BLE001
+                        log.warning("world refresh after %s failed: %s",
+                                    op, exc)
+                    # Tell JS to drop cached world data (emit_db_change only
+                    # adds `switched` on ok; our pre-set value survives).
+                    result["switched"] = True
+                if result.get("error"):
+                    self.ctx.bus.emit(LogMessage(
+                        message="⚠ " + str(result["error"]), level="warn"))
             emit_db_change(self.ctx.bus, op, result)
         self._run_async("db_" + op, work())
         return True

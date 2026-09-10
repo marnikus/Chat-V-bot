@@ -133,6 +133,55 @@ class DbRegistry:
         if len(kept) != len(stored):
             host._config.set_state(db_recent=kept[:12])
 
+    def deletion_inventory_sources(self, victim_abs: str = "") -> dict:
+        """Raw source lists for the AREA A deletion inventory (read-only).
+
+        Returns {"active_folder": [...], "victim_folder": [...],
+        "remembered": [...], "active": ...}. Existing methods are unchanged;
+        `services.db_deletion.build_deletion_inventory` combines these with
+        dedup + completeness tracking. Worlds outside these sources are NOT
+        scanned (see SUPPORTED_BOUNDARY).
+        """
+        try:
+            active_folder = list(self.existing_worlds() or [])
+        except Exception:  # noqa: BLE001
+            active_folder = []
+        victim_folder: list[str] = []
+        try:
+            if victim_abs:
+                vdir = os.path.dirname(os.path.abspath(str(victim_abs))) or ""
+                try:
+                    adir = os.path.dirname(
+                        os.path.abspath(self.active_path())) or ""
+                except Exception:  # noqa: BLE001
+                    adir = ""
+                if vdir and os.path.isdir(vdir) and \
+                        os.path.abspath(vdir) != os.path.abspath(adir or vdir + "_x"):
+                    for name in sorted(os.listdir(vdir)):
+                        if not name.lower().endswith(".db"):
+                            continue
+                        p = os.path.join(vdir, name)
+                        try:
+                            if os.path.isfile(p):
+                                victim_folder.append(p)
+                        except OSError:
+                            continue
+        except OSError:  # noqa: BLE001
+            pass
+        try:
+            remembered = [p for p in (self.known_paths() or [])
+                          if isinstance(p, str) and p.lower().endswith(".db")
+                          and os.path.exists(p)]
+        except Exception:  # noqa: BLE001
+            remembered = []
+        try:
+            active = self.active_path()
+        except Exception:  # noqa: BLE001
+            active = ""
+        return {"active_folder": active_folder,
+                "victim_folder": victim_folder,
+                "remembered": remembered, "active": active}
+
     def existing_worlds(self) -> list[str]:
         """Every database file that EXISTS: the folder scan + the active file."""
         active = self.active_path()

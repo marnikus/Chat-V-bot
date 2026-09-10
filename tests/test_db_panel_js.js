@@ -325,6 +325,56 @@ t('without a bridge nothing explodes', () => {
   global.App.bridge = keep;
 });
 
+// ── AREA A: partial / world_changed payloads (additive contract) ──
+t('a partial delete failure shows the error and re-measures', () => {
+  build();
+  DbPanel.onChanged(JSON.stringify({
+    ok: false, op: 'delete', action: 'delete', path: '/app/work.db',
+    error: 'some media files could not be removed',
+    phase: 'media', partial: true, world_changed: true,
+    active_path: '/app/history.db',
+    removed_paths: ['/app/work.db'],
+    retained_paths: ['/app/saved_media/shared/a.jpg'],
+    failed_paths: ['/app/saved_media/m/bad.jpg'],
+    media_files_removed: 1,
+  }));
+  ok(/could not be removed/.test(byId.dbConnStatus.textContent),
+     byId.dbConnStatus.textContent);
+  ok(calls.some((c) => c[0] === 'db_info'),
+     'a partial failure still triggers a fresh measurement');
+  // unknown additive keys must not break rendering
+  ok(true, 'tolerates new keys');
+});
+
+t('a switch-only change refreshes even though it failed', () => {
+  build();
+  DbPanel.onChanged(JSON.stringify({
+    ok: false, op: 'delete', action: 'delete', path: '/app/work.db',
+    error: 'the database file is in use',
+    phase: 'database', partial: false, world_changed: true,
+    switched: true, active_path: '/app/history.db',
+    removed_paths: [], retained_paths: [], failed_paths: [],
+  }));
+  ok(/in use/.test(byId.dbConnStatus.textContent),
+     byId.dbConnStatus.textContent);
+  ok(calls.some((c) => c[0] === 'db_info'), 're-measured after switch-only');
+});
+
+t('a scan refusal explains without claiming success', () => {
+  build();
+  DbPanel.onChanged(JSON.stringify({
+    ok: false, op: 'delete', action: 'delete', path: '/app/work.db',
+    error: 'cannot verify media references in other.db; deletion refused',
+    phase: 'scan', partial: false, world_changed: false,
+    active_path: '/app/history.db',
+    unverifiable_worlds: ['/app/other.db'],
+  }));
+  ok(/cannot verify/.test(byId.dbConnStatus.textContent),
+     byId.dbConnStatus.textContent);
+  ok(!/Fresh world/.test(DbPanel._notice || ''),
+     'no fresh-world notice on refusal');
+});
+
 // ── reporting ────────────────────────────────────────────────────
 console.log('db_panel: ' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

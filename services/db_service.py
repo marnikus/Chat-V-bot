@@ -83,10 +83,11 @@ def file_group_size(path: str) -> int:
 async def _media_references(path: str) -> set[str]:
     """Absolute `cache_path` values a world's `media` table points at.
 
-    Read-only, best effort: a world file that cannot be opened (foreign
-    format, locked, corrupt) simply contributes no references — and the
-    caller then keeps the file rather than unlinking something it could
-    not verify (never destroy what you cannot read).
+    Legacy best-effort wrapper (kept for existing info/clean callers):
+    a world file that cannot be opened contributes no references. This
+    fail-open shape MUST NOT be used for destructive deletion — deletion
+    uses `services.db_media_scan.scan_world_media` with an explicit
+    completeness flag and refuses when any required scan is incomplete.
     """
     refs: set[str] = set()
     import aiosqlite
