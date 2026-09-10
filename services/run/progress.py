@@ -4,12 +4,16 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from core.events import Event, EventBus
 
-if TYPE_CHECKING:
+try:
     from stores.user_memory import UserRecord
+except Exception:
+    @dataclass
+    class UserRecord:
+        nick: str
+        messaged: bool = False
 
 log = logging.getLogger("chatbot")
 

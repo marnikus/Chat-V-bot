@@ -30,7 +30,7 @@ from backend.config_manager import ConfigManager, MAX_STACK_HISTORY  # noqa: E40
 from core.events import (EventBus, StackLoaded, UndoHistoryChanged,  # noqa: E402
                          PeopleChanged)
 from services.layout_service import LayoutService  # noqa: E402
-from services.run_service import normalize_blocks  # noqa: E402
+from services.run import normalize_blocks  # noqa: E402
 from services.undo_service import UndoService  # noqa: E402
 
 BLOCK_A = [{"block_id": "PAUSE", "pause_ms": 5}]

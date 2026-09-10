@@ -163,7 +163,7 @@ class RestoreCase(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         from backend.config_manager import ConfigManager as CM
-        from services.history_service import HistoryService
+        from services.history import HistoryService
         self.dir = tempfile.mkdtemp()
         self.cfg = CM(os.path.join(self.dir, "config.json"))
         media_cfg = dict(self.cfg.get("history", "media", default={}) or {})

@@ -30,7 +30,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from actions.base_action import ActionResult, BaseAction  # noqa: E402
+from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
+                                 BaseAction)
+
+# Snapshot the global ActionRegistry BEFORE this module's fake blocks
+# (CUSTOM_FIND / REPEAT_LOOP) shadow the shipped classes at import time;
+# restored at module end so later test modules see the real actions.
+_REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 from backend.action_engine import (  # noqa: E402
     RETIRED_BLOCK_KEYS,
     STANDALONE_NICK,
@@ -380,6 +386,9 @@ class TestRepeatCycles(EngineCase):
         self.assertEqual(memory.marked, ["only"])
         self.assertFalse(engine.is_running)
 
+
+ActionRegistry._classes.clear()
+ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -28,8 +28,10 @@ from core.events import (EventBus, ArchiveUndoApplied, DbChanged,
                          PeopleChanged, StackLoaded, UndoHistoryChanged,
                          UserDbChanged)
 from core.result import Err, Ok, Result
-from services.layout_service import LayoutService
+from services.layout_service import LayoutService  # noqa: F401  API parity
 from services.run import normalize_blocks
+from services.service_log import emit_log
+from services.undo_support import UndoProjection, UndoWorldStore
 
 log = logging.getLogger("chatbot")
 
@@ -145,6 +147,8 @@ class UndoService:
         self._h_index = -1
         self._seq_next = 1
         self._undo_pendings: list = []
+        self._projection = UndoProjection(self._history_entry)
+        self._world_store = UndoWorldStore(self)
 
     # ── wiring (main.py / attach_history) ────────────────────────
     def attach(self, archive=None, people=None, labels=None, dbs=None,
@@ -165,7 +169,7 @@ class UndoService:
             self._bus = bus
 
     def _log(self, message: str, level: str = "info") -> None:
-        self._bus.emit(LogMessage(message=message, level=level))
+        emit_log(self._bus, message, level)
 
     # ── normalization ────────────────────────────────────────────
     @staticmethod
@@ -210,73 +214,12 @@ class UndoService:
         """Build the global timeline from pre-global-history config once."""
         raw = self._config.get_state("undo_history", None)
         if isinstance(raw, list) and raw:
-            history = []
-            for entry in raw:
-                if not isinstance(entry, dict):
-                    continue
-                if entry.get("kind") == "stack" and \
-                        isinstance(entry.get("value"), list):
-                    history.append(self._migrated_entry(entry, "stack",
-                                                        entry["value"]))
-                elif entry.get("kind") == "grid" and \
-                        isinstance(entry.get("value"), str):
-                    canonical, err = LayoutService.canonical_grid_payload(
-                        entry["value"])
-                    if not err:
-                        history.append(self._migrated_entry(entry, "grid",
-                                                            canonical))
-                elif entry.get("kind") == "people" and \
-                        isinstance(entry.get("value"), dict):
-                    value = entry["value"]
-                    if isinstance(value.get("before"), list) and \
-                            isinstance(value.get("after"), list):
-                        history.append(self._migrated_entry(entry, "people",
-                                                            value))
-                elif (entry.get("kind") in ("labels", "archive", "dbconn")
-                        and isinstance(entry.get("value"), dict)):
-                    history.append(self._migrated_entry(entry, entry["kind"],
-                                                        entry["value"]))
-            index = self._config.get_state("undo_history_index",
-                                           len(history) - 1)
-            index = index if isinstance(index, int) else len(history) - 1
-            index = max(-1, min(index, len(history) - 1))
-            return history, index
-
-        history = []
-        legacy_stacks = self._config.get_state("stack_history", [])
-        if isinstance(legacy_stacks, list):
-            history.extend(self._history_entry("stack", s)
-                           for s in legacy_stacks if isinstance(s, list))
-        legacy_grids = self._config.get_state("grid_layout_history", [])
-        if isinstance(legacy_grids, list):
-            for grid_value in legacy_grids:
-                if not isinstance(grid_value, str):
-                    continue
-                canonical, err = LayoutService.canonical_grid_payload(
-                    grid_value)
-                if not err:
-                    history.append(self._history_entry("grid", canonical))
-        grid = self._config.get_state("grid_layout", None)
-        if isinstance(grid, str) and grid:
-            canonical, err = LayoutService.canonical_grid_payload(grid)
-            if not err:
-                current = (history[-1]["value"]
-                           if history and history[-1]["kind"] == "grid"
-                           else None)
-                if canonical != current:
-                    history.append(self._history_entry("grid", canonical))
-                self._config.set_state(grid_layout=canonical)
-        if len(history) > MAX_STACK_HISTORY:
-            history = history[-MAX_STACK_HISTORY:]
-        has_grid = bool(history and history[-1].get("kind") == "grid")
-        legacy_index = self._config.get_state("stack_history_index", -1)
-        if has_grid:
-            index = len(history) - 1
-        elif isinstance(legacy_index, int):
-            index = max(-1, min(legacy_index, len(history) - 1))
-        else:
-            index = len(history) - 1
-        self._config.set_state(undo_history=history,
+            return self._projection.from_raw_history(self._config, raw)
+        history, index, canonical = self._projection.from_legacy_config(
+            self._config)
+        if canonical is not None:
+            self._config.set_state(grid_layout=canonical)
+        self._config.set_state(undo_history=copy.deepcopy(history),
                                undo_history_index=index)
         return history, index
 
@@ -289,14 +232,7 @@ class UndoService:
             history = copy.deepcopy(history)
         else:
             history, index = copy.deepcopy(timeline), self._h_index
-        cleaned = []
-        for entry in history:
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("kind") == "stack":
-                entry["value"] = self._clean_blocks(entry["value"])
-            cleaned.append(entry)
-        return cleaned, index
+        return self._projection.clean(history), index
 
     def set_history(self, history: list, index: int) -> None:
         self._commit_timeline(list(history), index)
@@ -320,51 +256,23 @@ class UndoService:
                 undo_history=copy.deepcopy(history),
                 undo_history_index=index)
             return
-        app_entries = [e for e in history
-                       if e.get("kind") not in self.WORLD_UNDO_KINDS]
-        world_entries = [e for e in history
-                         if e.get("kind") in self.WORLD_UNDO_KINDS]
+        app_entries, world_entries = self._world_store.split(history)
         self._config.set_state(undo_history=copy.deepcopy(app_entries),
                                undo_history_index=index)
-        self._schedule_world_undo_save(world_entries)
+        self._world_store.schedule_save(world_entries)
 
     def _schedule_world_undo_save(self, entries: list) -> None:
-        """Persist the world half, tracking the task so a later
+        """Persist the world half, tracking the task for a later
         `sync_world_state` can wait for it."""
-        service = self._archive
-        if service is None or not getattr(service.db, "is_open", False):
-            return
-
-        async def runner():
-            try:
-                await service.save_world_undo(entries)
-            except Exception as exc:                    # noqa: BLE001
-                log.warning("world undo save failed: %s", exc)
-
-        try:
-            task = asyncio.ensure_future(runner())
-        except RuntimeError:
-            return
-        self._undo_pendings.append(task)
-        task.add_done_callback(self._undo_pendings.remove)
+        self._world_store.schedule_save(entries)
 
     async def sync_world_state(self) -> Result[None]:
         """Rebuild the unified timeline from both stores after a world
         change (startup or switch): config's app-level half + the active
         world's `undo_history` table, merged by `seq`."""
-        pending = list(self._undo_pendings)
-        if pending:
-            try:
-                await asyncio.gather(*pending, return_exceptions=True)
-            except Exception:                            # noqa: BLE001
-                pass
+        await self._world_store.settle()
+        world_entries: list[dict] = await self._world_store.load()
         service = self._archive
-        world_entries: list[dict] = []
-        if service is not None and getattr(service.db, "is_open", False):
-            try:
-                world_entries = await service.load_world_undo()
-            except Exception as exc:                    # noqa: BLE001
-                log.warning("world undo load failed: %s", exc)
         app_entries: list[dict] = []
         raw = self._config.get_state("undo_history", None)
         if isinstance(raw, list):
@@ -421,10 +329,7 @@ class UndoService:
     def stack_projection(self) -> tuple[list, int]:
         """Compatibility projection of stack entries."""
         history, global_index = self.history()
-        stacks = [e["value"] for e in history if e.get("kind") == "stack"]
-        stack_index = sum(1 for e in history[:global_index + 1]
-                          if e.get("kind") == "stack") - 1
-        return stacks, max(-1, min(stack_index, len(stacks) - 1))
+        return self._projection.stack_projection(history, global_index)
 
     def set_stack_projection(self, history: list, index: int,
                              save: bool = True) -> None:
@@ -435,10 +340,7 @@ class UndoService:
 
     def kind_projection(self, kind: str) -> tuple[list, int]:
         history, global_index = self.history()
-        values = [e["value"] for e in history if e.get("kind") == kind]
-        local_index = sum(1 for e in history[:global_index + 1]
-                          if e.get("kind") == kind) - 1
-        return values, max(-1, min(local_index, len(values) - 1))
+        return self._projection.kind_projection(history, global_index, kind)
 
     def push_stack(self, blocks: list) -> tuple[list, int]:
         """Backward-compatible: append the stack to global history."""

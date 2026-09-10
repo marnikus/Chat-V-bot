@@ -86,11 +86,17 @@ class RunExecutionMixin:
             return "skip"
         total = len(self._stack)
         if not sum(1 for b in self._stack if getattr(b, "enabled", True)):
-            self.debug_msg.emit("⚠ All blocks are disabled — nothing to run", "warn")
+            # B5 regression guard: reporting "ok" here marks the queue
+            # person as messaged although no block ever ran. "skip" tells
+            # the coordinator the user was NOT completed.
+            self.debug_msg.emit("⚠ All blocks are disabled — nothing to run",
+                                "warn")
             self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
-            return "ok"
+            return "skip"
         for idx, block in enumerate(self._stack, start=1):
             if self._stop_requested:
+                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
                 return "stop"
             await self._wait_if_paused()
             if not getattr(block, "enabled", True):
