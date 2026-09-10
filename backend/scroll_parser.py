@@ -13,6 +13,7 @@ Every decision is reported through the log callback so the run is observable.
 """
 
 import asyncio
+import dataclasses
 import json
 import logging
 from dataclasses import dataclass, field
@@ -87,6 +88,83 @@ class CollectResult:
         return [p for p in self.collected if not p.messaged]
 
 
+#: The pipeline's pacing and appearance knobs, in one immutable place.
+#:
+#: `ScrollParser.__init__` used to take these as 17 keyword arguments, which
+#: meant every phase of the run threaded them along by hand and
+#: `actions/scroll_parse.py` had to unpack its whole block configuration into
+#: them one by one. They are data now: `ScrollOptions`, and the block can hand
+#: the same thing over as one value (`ScrollParser.from_options`).
+@dataclass(frozen=True, slots=True)
+class ScrollOptions:
+    """Configuration of one scroll-parse run."""
+
+    viewport_sel: str = "cdk-virtual-scroll-viewport.users-list-viewport"
+    scroll_dy: int = 300
+    #: pause after each wheel event, so the page can catch up
+    pause_ms: int = 800
+    #: how many quiet scrolls in a row mean "this list is done"
+    stall_threshold: int = 3
+    max_scrolls: int = 50
+    #: how long to wait for lazy-loaded people after a scroll
+    load_timeout_ms: int = 2500
+    poll_ms: int = 150
+    person_filter: PersonFilter | None = None
+    person_selector: str = "user-item"
+    nick_selector: str = ".primary-text"
+    highlight_enabled: bool = True
+    highlight_ms: int = 900
+    #: how long a drawn confirmation stays on screen
+    confirm_pause_ms: int = 500
+    #: async callback invoked right after each person is collected, so the
+    #: UI list can refresh immediately instead of at the end of the run
+    on_collect: object = None
+    #: async callback for people that FAIL the filter, so the caller can
+    #: destroy any stored record for them
+    on_reject: object = None
+    #: predicate returning True when the user asked the run to stop
+    should_stop: object = None
+    #: (message, level) callback for the debugger pane
+    log_cb: object = None
+
+    def __post_init__(self):
+        # the three knobs the old constructor normalised — same clamping,
+        # same place (a negative highlight would make the JS timer fire
+        # immediately and the user would never see the outline)
+        _set = object.__setattr__
+        _set(self, "highlight_enabled", bool(self.highlight_enabled))
+        _set(self, "highlight_ms", max(0, int(self.highlight_ms)))
+        _set(self, "confirm_pause_ms", max(0, int(self.confirm_pause_ms)))
+
+    def seconds(self, ms_attr: str) -> float:
+        return getattr(self, ms_attr) / 1000.0
+
+
+@dataclass
+class _Pass:
+    """What one scroll pass mutates, so the phases do not need 12 arguments.
+
+    `seeking` is a snapshot of "the caller handed us names", taken BEFORE the
+    loop starts shrinking `seek_nicks` — the mode must not silently flip off
+    halfway through a run (RULE 9).
+    """
+
+    result: CollectResult
+    person_filter: PersonFilter
+    options: ScrollOptions
+    seeking: bool = False
+    seek_nicks: set = field(default_factory=set)
+    known_messaged: set = field(default_factory=set)
+    min_new_users: int = 0
+    progress_cb: object = None
+    #: nicks already added in THIS run (belt and braces against a page that
+    #: renders the same person twice in one viewport)
+    collected_nicks: set = field(default_factory=set)
+    snap: dict = field(default_factory=dict)
+    new_this_scroll: int = 0
+    no_new_count: int = 0
+
+
 class ScrollParser:
     """Scroll through the virtual user list, filtering and collecting people."""
 
@@ -105,31 +183,63 @@ class ScrollParser:
                  on_reject=None,
                  should_stop=None,
                  log_cb=None):
+        self.options = ScrollOptions(
+            viewport_sel=viewport_sel, scroll_dy=scroll_dy, pause_ms=pause_ms,
+            stall_threshold=stall_threshold, max_scrolls=max_scrolls,
+            load_timeout_ms=load_timeout_ms, poll_ms=poll_ms,
+            person_filter=person_filter, person_selector=person_selector,
+            nick_selector=nick_selector, highlight_enabled=highlight_enabled,
+            highlight_ms=highlight_ms, confirm_pause_ms=confirm_pause_ms,
+            on_collect=on_collect, on_reject=on_reject,
+            should_stop=should_stop, log_cb=log_cb)
         self._cdp = cdp
         self._criteria = criteria
-        self._vp_sel = viewport_sel
-        self._scroll_dy = scroll_dy
-        self._pause_ms = pause_ms
-        self._stall = stall_threshold
-        self.max_scrolls = max_scrolls
-        self._load_timeout_ms = load_timeout_ms
-        self._poll_ms = poll_ms
         self._filter = person_filter
-        self._person_sel = person_selector
-        self._nick_sel = nick_selector
-        self._highlight_enabled = bool(highlight_enabled)
-        self._highlight_ms = max(0, int(highlight_ms))
-        self._confirm_pause_ms = max(0, int(confirm_pause_ms))
-        #: async callback invoked right after each person is collected, so the
-        #: UI list can refresh immediately instead of at the end of the run
-        self._on_collect = on_collect
-        #: async callback for people that FAIL the filter, so the caller can
-        #: destroy any stored record for them
-        self._on_reject = on_reject
-        #: predicate returning True when the user asked the run to stop
-        self._should_stop = should_stop
+        self._log_cb = log_cb                  # reassignable: set_log_cb()
         self.known_nicks: set[str] = set()
-        self._log_cb = log_cb
+
+    @classmethod
+    def from_options(cls, cdp: CDPClient, options: ScrollOptions,
+                     criteria=None) -> "ScrollParser":
+        """The constructor new code should use: one config value, not 19."""
+        return cls(cdp, criteria, **{
+            f.name: getattr(options, f.name)
+            for f in dataclasses.fields(options)})
+
+    # ── the knobs the run reads (see `ScrollOptions`) ────────────
+    @property
+    def max_scrolls(self) -> int:
+        return self.options.max_scrolls
+
+    # The three callbacks stay readable and assignable on the parser: the
+    # block wiring hands them over at construction (`ScrollParse.build_parser`)
+    # and `tests/test_filter_purge.py` inspects them to prove a disabled purge
+    # really detached the hook. Assigning writes them back into the frozen
+    # options, so there is still exactly one place that holds them.
+    @property
+    def _on_collect(self):
+        return self.options.on_collect
+
+    @_on_collect.setter
+    def _on_collect(self, callback) -> None:
+        self.options = dataclasses.replace(self.options, on_collect=callback)
+
+    @property
+    def _on_reject(self):
+        return self.options.on_reject
+
+    @_on_reject.setter
+    def _on_reject(self, callback) -> None:
+        self.options = dataclasses.replace(self.options, on_reject=callback)
+
+    @property
+    def _should_stop(self):
+        return self.options.should_stop
+
+    @_should_stop.setter
+    def _should_stop(self, predicate) -> None:
+        self.options = dataclasses.replace(self.options,
+                                           should_stop=predicate)
 
     # ── logging ──────────────────────────────────────────────────
     def set_log_cb(self, cb) -> None:
@@ -149,7 +259,7 @@ class ScrollParser:
     async def _snapshot(self) -> dict | None:
         """Read the rendered people and the scroll geometry in one probe."""
         raw = await self._cdp.evaluate(
-            _EXTRACT_JS % {"vp": json.dumps(self._vp_sel)})
+            _EXTRACT_JS % {"vp": json.dumps(self.options.viewport_sel)})
         if not raw:
             return None
         try:
@@ -183,17 +293,18 @@ class ScrollParser:
         Pure visual confirmation: it never clicks and never scrolls the
         viewport (that would corrupt the parser's scroll tracking).
         """
-        if not self._highlight_enabled:
+        options = self.options
+        if not options.highlight_enabled:
             return False
         try:
             raw = await self._cdp.evaluate(build_highlight_probe(
-                selector=self._person_sel,
-                label_selector=self._nick_sel or None,
+                selector=options.person_selector,
+                label_selector=options.nick_selector or None,
                 match_text=nick,
                 match_mode=MATCH_EXACT,
                 color=COLOR_COLLECT,
                 caption="MATCH",
-                highlight_ms=self._highlight_ms,
+                highlight_ms=options.highlight_ms,
             ))
         except Exception as exc:
             log.warning("Highlight probe failed for %s: %s", nick, exc)
@@ -206,14 +317,14 @@ class ScrollParser:
 
     async def _do_scroll(self) -> bool:
         """Dispatch a mouseWheel event on the viewport center."""
-        vp = await self._cdp.get_element_rect(self._vp_sel)
+        vp = await self._cdp.get_element_rect(self.options.viewport_sel)
         if not vp:
             self._say(f"❌ Failed to find element: scroll viewport "
-                      f"(selector '{self._vp_sel}')", "error")
+                      f"(selector '{self.options.viewport_sel}')", "error")
             return False
         cx = vp["x"] + vp["width"] / 2
         cy = vp["y"] + vp["height"] / 2
-        await self._cdp.mouse_wheel(0, self._scroll_dy, cx, cy)
+        await self._cdp.mouse_wheel(0, self.options.scroll_dy, cx, cy)
         return True
 
     async def _settle(self, seen_before: set, prev_top: float) -> dict | None:
@@ -223,23 +334,24 @@ class ScrollParser:
         scroll position has stopped moving. This is what separates "still
         loading" from "end of the list".
         """
+        options = self.options
         waited = 0
         snap = None
         stable = 0
-        while waited < self._load_timeout_ms:
+        while waited < options.load_timeout_ms:
             if self._stop_requested():
                 # Distinguish "user stopped" from "page context lost": return
                 # the last good snapshot, or the STOPPED sentinel if we never
                 # got one, so the caller does not report a bogus page error.
                 return snap if snap is not None else STOPPED
-            await asyncio.sleep(self._poll_ms / 1000.0)
-            waited += self._poll_ms
+            await asyncio.sleep(options.poll_ms / 1000.0)
+            waited += options.poll_ms
             snap = await self._snapshot()
             if snap is None:
                 return None
             nicks = {u.get("nick") for u in snap.get("users", []) if u.get("nick")}
             if nicks - seen_before:
-                if waited > self._poll_ms:
+                if waited > options.poll_ms:
                     self._say(f"⏳ New people appeared after {waited} ms of "
                               "lazy loading", "info")
                 return snap
@@ -251,16 +363,17 @@ class ScrollParser:
             else:
                 stable = 0
                 prev_top = float(snap.get("scrollTop", 0))
-        self._say(f"⏳ Still nothing new after {self._load_timeout_ms} ms — "
+        self._say(f"⏳ Still nothing new after {options.load_timeout_ms} ms — "
                   "treating as loaded", "info")
         return snap
 
     async def _notify_collected(self, record, result) -> None:
         """Tell the caller a person was added, so the UI can refresh now."""
-        if self._on_collect is None:
+        callback = self._on_collect
+        if callback is None:
             return
         try:
-            outcome = self._on_collect(record, list(result.collected))
+            outcome = callback(record, list(result.collected))
             if asyncio.iscoroutine(outcome):
                 await outcome
         except Exception as exc:      # a UI hiccup must never kill the parse
@@ -274,10 +387,11 @@ class ScrollParser:
         not pass the filter can never linger in the list from an earlier run.
         """
         result.rejected_people.append((record, reason))
-        if self._on_reject is None:
+        callback = self._on_reject
+        if callback is None:
             return
         try:
-            outcome = self._on_reject(record, reason)
+            outcome = callback(record, reason)
             if asyncio.iscoroutine(outcome):
                 outcome = await outcome
             if outcome:
@@ -287,10 +401,11 @@ class ScrollParser:
                         record.nick, exc)
 
     def _stop_requested(self) -> bool:
-        if self._should_stop is None:
+        predicate = self._should_stop
+        if predicate is None:
             return False
         try:
-            return bool(self._should_stop())
+            return bool(predicate())
         except Exception:
             return False
 
@@ -307,170 +422,231 @@ class ScrollParser:
             scroll hunting for one of these already-known nicks and stop on
             the first that passes the filter. Nothing is written or purged.
         """
-        known_messaged = known_messaged or set()
+        run = self._open(known_messaged=known_messaged, seek_nicks=seek_nicks,
+                         min_new_users=min_new_users, progress_cb=progress_cb)
+        if not await self._first_snapshot(run):
+            return run.result
+        await self._scroll_loop(run)
+        return self._finish(run)
+
+    # ── phase 1: the filter, the first snapshot, the warnings ────
+    def _open(self, *, known_messaged, seek_nicks, min_new_users,
+              progress_cb) -> _Pass:
         seeking = bool(seek_nicks)
-        person_filter = self._filter or PersonFilter(
-            female="any", registered="any", guest="any", anonymous="any",
-            panel_criteria=self._criteria)
-        result = CollectResult(seeking=seeking)
-        collected_nicks: set[str] = set()
-
-        self._say(f"🔍 Viewport selector: {self._vp_sel}", "info")
-        self._say(f"🧮 Filter: {person_filter.describe()}", "info")
+        run = _Pass(
+            result=CollectResult(seeking=seeking),
+            person_filter=self._filter or PersonFilter(
+                female="any", registered="any", guest="any", anonymous="any",
+                panel_criteria=self._criteria),
+            options=self.options, seeking=seeking,
+            seek_nicks=set(seek_nicks or ()),
+            known_messaged=known_messaged or set(),
+            min_new_users=min_new_users, progress_cb=progress_cb)
+        self._say(f"🔍 Viewport selector: {self.options.viewport_sel}", "info")
+        self._say(f"🧮 Filter: {run.person_filter.describe()}", "info")
         if seeking:
-            self._say(f"🔎 Seeking {len(seek_nicks)} un-messaged person(s) — "
-                      "no new people will be added", "warn")
+            self._say(f"🔎 Seeking {len(run.seek_nicks)} un-messaged person(s) "
+                      "— no new people will be added", "warn")
+        return run
 
+    async def _first_snapshot(self, run: _Pass) -> bool:
+        """The opening probe: False means the page has nothing to say."""
         snap = await self._snapshot()
         if snap is None:
             self._say("❌ Element search failed: no data returned from the page "
                       "(wrong page? not connected?)", "error")
-            return result
+            return False
         if not snap.get("viewport"):
-            self._say(f"⚠ Scroll viewport '{self._vp_sel}' not found — parsing "
-                      "whatever is currently rendered", "warn")
+            self._say(f"⚠ Scroll viewport '{self.options.viewport_sel}' not "
+                      "found — parsing whatever is currently rendered", "warn")
+        run.snap = snap
+        return True
 
-        no_new_count = 0
-        for scroll_i in range(self.max_scrolls):
+    # ── phase 2: judge everybody the viewport is showing ─────────
+    async def _consume_batch(self, run: _Pass) -> None:
+        """One viewport's worth of people.
+
+        The three modes are separate methods now (design doc §4): a seek only
+        looks, a stranger is rejected-and-purged, a match is confirmed and
+        announced. What every mode shares is the counting of NEWLY RENDERED
+        people — that is what the stall detector below feeds on, and a seek
+        that stopped counting would stall out before reaching its target.
+        """
+        for item in (run.snap or {}).get("users", []) or []:
+            nick = (item.get("nick") or "").strip()
+            if not nick:
+                continue
+            is_new = nick not in self.known_nicks
+            if is_new:
+                self.known_nicks.add(nick)
+                run.new_this_scroll += 1
+            if run.seeking:
+                if await self._seek_hit(nick, item, run):
+                    return
+                continue
+            if not is_new:
+                continue
+            await self._judge(nick, item, run)
+
+    async def _seek_hit(self, nick: str, item: dict, run: _Pass) -> bool:
+        """Scroll-only mode: is this the person we are hunting for?
+
+        A target is by definition ALREADY known, so the `known_nicks`
+        short-circuit in the caller would skip exactly the people we are after
+        — membership is tested instead. And a target that does not pass the
+        filter is passed over, never purged: it is not being judged for
+        membership, only for suitability right now.
+        """
+        if nick not in run.seek_nicks:
+            return False
+        verdict = run.person_filter.check(self._to_dict(item))
+        if not verdict.passed:
+            self._say(f"  ↷ “{nick}” is waiting but does not pass "
+                      f"the filter ({verdict.reason}) — skipping", "info")
+            run.seek_nicks = run.seek_nicks - {nick}
+            return False
+        record = self._to_record(item)
+        record.messaged = False
+        shown = await self._confirm_person(nick)
+        self._say(f"  🎯 Found “{nick}” on the page — {verdict.reason}"
+                  + (" — outline drawn" if shown else ""), "success")
+        await self._hold_confirmation(shown)
+        run.result.found = record
+        run.result.collected.append(record)
+        run.result.all_people.append(record)
+        return True
+
+    async def _judge(self, nick: str, item: dict, run: _Pass) -> None:
+        """Every person the page showed us is REPORTED, whoever passes.
+
+        `all_people` is the run's "seen" list — the log summary, the queue
+        builder and the debugger table all read it, so a rejected person has
+        to be in it too.
+        """
+        record = self._to_record(item)
+        run.result.all_people.append(record)
+        verdict = run.person_filter.check(self._to_dict(item))
+        if not verdict.passed:
+            await self._reject_one(record, verdict.reason, run)
+            return
+        if nick in run.collected_nicks:              # belt and braces
+            return
+        await self._collect_one(record, nick, verdict.reason, run)
+
+    async def _reject_one(self, record, reason: str, run: _Pass) -> None:
+        run.result.rejected[reason] = run.result.rejected.get(reason, 0) + 1
+        # Confirmed NOT to pass: destroy any stored record so the
+        # person cannot survive from an earlier / laxer run.
+        await self._notify_rejected(record, reason, run.result)
+
+    async def _collect_one(self, record, nick: str, reason: str,
+                           run: _Pass) -> None:
+        result = run.result
+        # Visual confirmation BEFORE adding: show the user exactly
+        # which person was detected, then hold so it can be seen.
+        shown = await self._confirm_person(nick)
+        self._say(f"  🟢 Match “{nick}” — {reason}"
+                  + (" — green outline drawn" if shown else ""), "success")
+        await self._hold_confirmation(shown)
+
+        run.collected_nicks.add(nick)
+        record.messaged = nick in run.known_messaged
+        result.collected.append(record)
+        self._say(f"  ✅ Added “{nick}” to the list "
+                  f"({len(result.collected)} collected)", "success")
+        # Refresh the UI immediately — do not wait for the scroll
+        # cycle to finish.
+        await self._notify_collected(record, result)
+
+    async def _hold_confirmation(self, shown: bool) -> None:
+        if shown and self.options.confirm_pause_ms:
+            await asyncio.sleep(self.options.seconds("confirm_pause_ms"))
+
+    # ── phase 3: report, decide, scroll, settle ─────────────────
+    async def _scroll_loop(self, run: _Pass) -> None:
+        for scroll_i in range(self.options.max_scrolls):
             if self._stop_requested():
-                result.stopped = True
+                run.result.stopped = True
                 self._say("⏹ Stopped by user — halting the scroll", "warn")
-                break
-            result.scrolls = scroll_i + 1
-            items = snap.get("users", []) or []
-            new_this_scroll = 0
+                return
+            run.result.scrolls = scroll_i + 1
+            run.new_this_scroll = 0
+            await self._consume_batch(run)
+            if run.result.found is not None:
+                run.result.stopped_early = True
+                return
+            if not await self._advance(run, scroll_i):
+                return
+        self._say(f"⏹ Reached max scrolls ({self.options.max_scrolls})", "warn")
 
-            for item in items:
-                nick = (item.get("nick") or "").strip()
-                if not nick:
-                    continue
-
-                # Track newly RENDERED people even in seek mode: this is what
-                # drives stall detection, and a seek that stopped counting
-                # would stall out before reaching a target further down.
-                is_new = nick not in self.known_nicks
-                if is_new:
-                    self.known_nicks.add(nick)
-                    new_this_scroll += 1
-
-                if seeking:
-                    # A target is by definition ALREADY known, so the
-                    # known_nicks short-circuit below would skip exactly the
-                    # people we are hunting for. Test membership instead.
-                    if nick not in seek_nicks:
-                        continue
-                    verdict = person_filter.check(self._to_dict(item))
-                    if not verdict.passed:
-                        # Not being judged for membership, only for
-                        # suitability right now — so pass over, never purge.
-                        self._say(f"  ↷ “{nick}” is waiting but does not pass "
-                                  f"the filter ({verdict.reason}) — skipping",
-                                  "info")
-                        seek_nicks = seek_nicks - {nick}
-                        continue
-                    record = self._to_record(item)
-                    record.messaged = False
-                    shown = await self._confirm_person(nick)
-                    self._say(f"  🎯 Found “{nick}” on the page — "
-                              f"{verdict.reason}"
-                              + (" — outline drawn" if shown else ""),
-                              "success")
-                    if shown and self._confirm_pause_ms:
-                        await asyncio.sleep(self._confirm_pause_ms / 1000.0)
-                    result.found = record
-                    result.collected.append(record)
-                    result.all_people.append(record)
-                    break
-
-                if not is_new:
-                    continue
-                record = self._to_record(item)
-                result.all_people.append(record)
-
-                verdict = person_filter.check(self._to_dict(item))
-                if not verdict.passed:
-                    result.rejected[verdict.reason] = \
-                        result.rejected.get(verdict.reason, 0) + 1
-                    # Confirmed NOT to pass: destroy any stored record so the
-                    # person cannot survive from an earlier / laxer run.
-                    await self._notify_rejected(record, verdict.reason, result)
-                    continue
-                if nick in collected_nicks:          # belt and braces
-                    continue
-
-                # Visual confirmation BEFORE adding: show the user exactly
-                # which person was detected, then hold so it can be seen.
-                shown = await self._confirm_person(nick)
-                self._say(
-                    f"  🟢 Match “{nick}” — {verdict.reason}"
-                    + (" — green outline drawn" if shown else ""),
-                    "success")
-                if shown and self._confirm_pause_ms:
-                    await asyncio.sleep(self._confirm_pause_ms / 1000.0)
-
-                collected_nicks.add(nick)
-                record.messaged = nick in known_messaged
-                result.collected.append(record)
-                self._say(f"  ✅ Added “{nick}” to the list "
-                          f"({len(result.collected)} collected)", "success")
-
-                # Refresh the UI immediately — do not wait for the scroll
-                # cycle to finish.
-                await self._notify_collected(record, result)
-
-            if result.found is not None:
-                result.stopped_early = True
-                break
-
-            if progress_cb:
-                progress_cb(scroll_i + 1, len(result.all_people), new_this_scroll)
-            if new_this_scroll:
-                self._say(f"📜 Scroll {scroll_i + 1}/{self.max_scrolls}: "
-                          f"+{new_this_scroll} new person(s), "
-                          f"{len(result.all_people)} seen, "
-                          f"{len(result.collected)} collected", "info")
-                no_new_count = 0
-            else:
-                no_new_count += 1
-
-            # STEP 3 early finish: enough new un-messaged people collected.
-            unmessaged = len(result.new_unmessaged)
-            if min_new_users > 0 and unmessaged >= min_new_users:
-                result.stopped_early = True
-                self._say(f"🎯 Collected {unmessaged} new un-messaged person(s) "
-                          f"(target {min_new_users}) — finishing scroll early",
-                          "success")
-                break
-
-            # End of list? Only when geometrically at the bottom and nothing new.
-            if snap.get("atBottom") and new_this_scroll == 0:
-                result.reached_end = True
-                self._say("⏹ Bottom of the list reached and no new people "
-                          "loaded — end of list", "success")
-                break
-            if no_new_count >= self._stall:
-                result.reached_end = True
-                self._say(f"⏹ No new people after {self._stall} scrolls — "
-                          "list fully parsed (stall detected)", "warn")
-                break
-
-            prev_top = float(snap.get("scrollTop", 0))
-            if not await self._do_scroll():
-                break
-            if self._pause_ms > 0:
-                await asyncio.sleep(self._pause_ms / 1000.0)
-            settled = await self._settle(set(self.known_nicks), prev_top)
-            if settled is STOPPED or self._stop_requested():
-                result.stopped = True
-                self._say("⏹ Stopped by user — halting the scroll", "warn")
-                break
-            if settled is None:
-                self._say("❌ Lost the page context while scrolling", "error")
-                break
-            snap = settled
+    async def _advance(self, run: _Pass, scroll_i: int) -> bool:
+        """False = this was the last pass (and the reason was reported)."""
+        if run.progress_cb:
+            run.progress_cb(scroll_i + 1, len(run.result.all_people),
+                            run.new_this_scroll)
+        if run.new_this_scroll:
+            self._say(f"📜 Scroll {scroll_i + 1}/{self.options.max_scrolls}: "
+                      f"+{run.new_this_scroll} new person(s), "
+                      f"{len(run.result.all_people)} seen, "
+                      f"{len(run.result.collected)} collected", "info")
+            run.no_new_count = 0
         else:
-            self._say(f"⏹ Reached max scrolls ({self.max_scrolls})", "warn")
+            run.no_new_count += 1
+        if self._target_reached(run) or self._list_is_over(run):
+            return False
+        return await self._scroll_and_settle(run)
 
+    def _target_reached(self, run: _Pass) -> bool:
+        """STEP 3 early finish: enough new un-messaged people collected."""
+        if run.min_new_users <= 0:
+            return False
+        unmessaged = len(run.result.new_unmessaged)
+        if unmessaged < run.min_new_users:
+            return False
+        run.result.stopped_early = True
+        self._say(f"🎯 Collected {unmessaged} new un-messaged person(s) "
+                  f"(target {run.min_new_users}) — finishing scroll early",
+                  "success")
+        return True
+
+    def _list_is_over(self, run: _Pass) -> bool:
+        """End of list: only when geometrically at the bottom AND quiet.
+
+        A slow response looks exactly like the end of a lazy-loaded list, so
+        neither half is enough on its own (module docstring).
+        """
+        if (run.snap or {}).get("atBottom") and run.new_this_scroll == 0:
+            run.result.reached_end = True
+            self._say("⏹ Bottom of the list reached and no new people "
+                      "loaded — end of list", "success")
+            return True
+        if run.no_new_count >= self.options.stall_threshold:
+            run.result.reached_end = True
+            self._say(f"⏹ No new people after {self.options.stall_threshold} "
+                      "scrolls — list fully parsed (stall detected)", "warn")
+            return True
+        return False
+
+    async def _scroll_and_settle(self, run: _Pass) -> bool:
+        prev_top = float((run.snap or {}).get("scrollTop", 0))
+        if not await self._do_scroll():
+            return False
+        if self.options.pause_ms > 0:
+            await asyncio.sleep(self.options.seconds("pause_ms"))
+        settled = await self._settle(set(self.known_nicks), prev_top)
+        if settled is STOPPED or self._stop_requested():
+            run.result.stopped = True
+            self._say("⏹ Stopped by user — halting the scroll", "warn")
+            return False
+        if settled is None:
+            self._say("❌ Lost the page context while scrolling", "error")
+            return False
+        run.snap = settled
+        return True
+
+    # ── phase 4: the outcome the caller and the log get ─────────
+    def _finish(self, run: _Pass) -> CollectResult:
+        result = run.result
         result.collected = sort_people(result.collected)
         if result.rejected:
             detail = ", ".join(f"{n}× {reason}"

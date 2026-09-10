@@ -1,8 +1,11 @@
 """Reading a conversation without re-reading it.
 
 `ChatParser` is the Python side of the in-page agent: a state probe, a range
-probe and a drain probe. `sync_conversation()` is the algorithm that turns
-those three into "append only what is new":
+probe and a drain probe, plus the two-step private-chat gate. `sync_conversation()`
+is the algorithm that turns those three into "append only what is new" — it is a
+façade over `backend.chat_sync`, which owns the phases (plan → read → align →
+persist). This module stays the import site for all of it, so no caller changed
+(design doc §3.1).
 
     state()                     one cheap probe
       │  nothing changed        → done, ZERO node reads
@@ -24,19 +27,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Iterable, Optional
 
-from backend import chat_agent_js
+from backend import chat_agent_js, chat_text
+from backend.chat_sync import (  # noqa: F401  (re-exported: the seam, §3.1)
+    SLICE_RETRIES, SyncOptions, merge_live as _merge_live, run_sync)
 from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+                                    AppendResult,  # noqa: F401
                                     MessageRecord,  # noqa: F401
                                     SyncResult)
 from stores.history_repo import HistoryRepo, align_batch
 
 log = logging.getLogger("chatbot")
-
-#: A virtualised pane can drop its message nodes between a state() probe and
-#: the slice() that follows. Do not archive "0" on the first read — retry the
-#: range a few times (and restore the viewport once) before giving up.
-SLICE_RETRIES = 4
-
 
 def align(dom_fps, tail_fps) -> Alignment:
     """Where a freshly read conversation continues the stored one."""
@@ -65,35 +65,14 @@ def parse_records(raw: Iterable) -> list[MessageRecord]:
     return out
 
 
-def _signature(value) -> str:
-    if isinstance(value, (list, tuple)):
-        return "|".join(str(v) for v in value)
-    return str(value or "")
-
-
-def _norm(nick: str) -> str:
-    return " ".join(str(nick or "").split()).strip().lower()
-
-
-def _merge_live(result: SyncResult, appended: AppendResult,
-                baseline: int = 0) -> None:
-    """Keep only the newest records actually inserted for a live UI update.
-
-    `baseline` is the previous archive `last_ord`: rows a backfill prepends
-    (they are *older* than everything the user already had) must not be
-    pushed through the live-append channel; only rows appended after the
-    previous tail belong there.
-    """
-    for record in (getattr(appended, "records", None) or []):
-        if len(result.records) >= MAX_LIVE_ITEMS:
-            break
-        try:
-            ord_value = int(record.get("ord") or 0)
-        except (TypeError, ValueError):
-            ord_value = 0
-        if ord_value <= baseline:
-            continue
-        result.records.append(record)
+# ── shared text helpers (design doc §3.1) ─────────────────────────
+# `_signature` / `_norm` / `_payload` / … stay importable from here: the
+# collector's live-status fast path uses `_signature`, and the module was the
+# only documented home for these names. Their behaviour is unchanged — only the
+# file they live in moved, so that `backend.chat_sync` can use them without
+# importing this module back (it is the one module that imports chat_sync).
+_signature = chat_text.signature
+_norm = chat_text.norm
 
 
 # ── the two-step private-chat gate (bug report of 2026-09-07) ─────
@@ -119,29 +98,8 @@ class PrivateCheck:
         return bool(self.ok)
 
 
-def _distinct(names) -> list:
-    out = []
-    for name in names or []:
-        clean = " ".join(str(name or "").split()).strip()
-        if clean and clean not in out:
-            out.append(clean)
-    return out
-
-
-def _authors_from_items(items) -> tuple:
-    """Split a batch of records into (inbound nicks, outbound nicks)."""
-    ins, outs = [], []
-    for item in items or []:
-        if isinstance(item, MessageRecord):
-            direction = item.direction
-            nick = item.from_nick
-        elif isinstance(item, dict):
-            direction = item.get("dir") or item.get("direction") or "in"
-            nick = item.get("from") or item.get("from_nick") or ""
-        else:
-            continue
-        (outs if direction == "out" else ins).append(nick)
-    return _distinct(ins), _distinct(outs)
+_distinct = chat_text.distinct
+_authors_from_items = chat_text.authors_from_items
 
 
 def title_matches(title: str, nick: str) -> bool:
@@ -152,89 +110,132 @@ def title_matches(title: str, nick: str) -> bool:
     return have == want or want in have
 
 
+@dataclass(frozen=True)
+class _GateNames:
+    """The five nicks the gate compares, each normalised exactly once.
+
+    The page hands these over in whatever shape its DOM had them — padded,
+    doubled spaces, non-strings — and every comparison below (and every
+    message shown to the user) must use the same collapse, or a nick that
+    reads fine to a human refuses its own chat.
+    """
+
+    target: str = ""          # the person we think we are collecting
+    partner: str = ""         # the nick the page says we are talking to
+    title: str = ""           # the raw ACTIVE TAB title
+    me_cfg: str = ""          # My Nick from the settings
+    me_state: str = ""        # the pane's own user list
+
+    @classmethod
+    def read(cls, state: dict, nick: str, my_nick: str) -> "_GateNames":
+        clean = chat_text.clean
+        return cls(target=clean(nick),
+                   partner=clean(state.get("partner")),
+                   title=str(state.get("title") or state.get("partner") or ""),
+                   me_cfg=clean(my_nick),
+                   me_state=clean(state.get("me")))
+
+    @property
+    def effective_me(self) -> str:
+        # the pane's own user list is the authoritative "me": a configured My
+        # Nick can go stale when the user renames themselves on the site, and
+        # the stale value must not make this gate refuse the chat (2026-09-08)
+        return self.me_cfg or self.me_state
+
+    def refuse(self, reason: str, detail: str) -> "PrivateCheck":
+        return PrivateCheck(False, reason, detail, self.me_cfg, self.partner)
+
+
+def _is_self_chat(names: _GateNames) -> bool:
+    """Writing to your own chat can look like a perfect conversation."""
+    effective = names.effective_me
+    return bool(effective and _norm(effective) == _norm(names.target)
+                and (not names.me_state
+                     or _norm(names.me_state) == _norm(names.target)))
+
+
+def _split_authors(state: dict, names: _GateNames) -> tuple:
+    """Some pages report only one flat `authors` list — guess the sides."""
+    everyone = _distinct(state.get("authors"))
+    ins = [a for a in everyone
+           if _norm(a) != _norm(names.effective_me or names.target)]
+    outs = [a for a in everyone if _norm(a) == _norm(names.effective_me)]
+    return ins, outs
+
+
+def _authors_of(state: dict, items, names: _GateNames) -> Optional[tuple]:
+    """Step 1's raw material: (inbound, outbound) authors, or None when the
+    page cannot tell who wrote what."""
+    if items is not None:
+        return _authors_from_items(items)
+    if not ("in_authors" in state or "out_authors" in state
+            or "authors" in state):
+        return None
+    ins = _distinct(state.get("in_authors"))
+    outs = _distinct(state.get("out_authors"))
+    return (ins, outs) if (ins or outs) else _split_authors(state, names)
+
+
+def _foreign_authors(outs, names: _GateNames) -> tuple:
+    """Who wrote outbound lines that is neither me nor my partner.
+
+    "Me" is often undetectable — the page does not always label my own
+    messages — so a single outbound author is taken to be me (that is the
+    `me` the caller reports back); more than one, and we cannot tell, so all
+    of them count as strangers.
+    """
+    me = names.me_cfg or names.me_state or (outs[0] if len(outs) == 1 else "")
+    if me:
+        return me, [a for a in outs
+                    if _norm(a) != _norm(me)
+                    and _norm(a) != _norm(names.me_state)
+                    and _norm(a) != _norm(names.target)]
+    return me, list(outs) if len(outs) > 1 else []
+
+
 def verify_private(state: dict, nick: str, my_nick: str = "",
                    items=None, require_private: bool = True) -> PrivateCheck:
-    """The gate. `ok` is False unless BOTH steps pass."""
-    state = state if isinstance(state, dict) else {}
-    target = " ".join(str(nick or "").split()).strip()
-    partner = " ".join(str(state.get("partner") or "").split()).strip()
-    title = str(state.get("title") or state.get("partner") or "")
-    me_cfg = " ".join(str(my_nick or "").split()).strip()
-    # the pane's own user list is the authoritative "me": a configured My
-    # Nick can go stale when the user renames themselves on the site, and
-    # the stale value must not make this gate refuse the chat (2026-09-08)
-    me_state = " ".join(str(state.get("me") or "").split()).strip()
+    """The gate. `ok` is False unless BOTH steps pass.
 
+    RULE 15: this is the only place the private-chat decision is made, and it
+    runs before a single record is written. Each guard keeps its own reason
+    code because the run panel shows them to the user verbatim.
+    """
+    state = state if isinstance(state, dict) else {}
+    names = _GateNames.read(state, nick, my_nick)
     if require_private and str(state.get("tab") or "") != "private":
-        return PrivateCheck(False, "not_private",
-                            "the active tab is not a private chat",
-                            me_cfg, partner)
-    if not target or not partner:
-        return PrivateCheck(False, "no_partner",
-                            "the active tab does not name a person",
-                            me_cfg, partner)
+        return names.refuse("not_private",
+                            "the active tab is not a private chat")
+    if not names.target or not names.partner:
+        return names.refuse("no_partner",
+                            "the active tab does not name a person")
     # ── step 2: the tab title ─────────────────────────────────────
-    if not title_matches(title, target):
-        return PrivateCheck(
-            False, "title_mismatch",
-            f"the active tab is “{' '.join(str(title).split())}”, "
-            f"not “{target}”", me_cfg, partner)
-    effective_me = me_cfg or me_state
-    if (effective_me and _norm(effective_me) == _norm(target)
-            and (not me_state or _norm(me_state) == _norm(target))):
-        return PrivateCheck(False, "self_chat",
-                            "the partner is my own nick", me_cfg, partner)
+    if not title_matches(names.title, names.target):
+        return names.refuse(
+            "title_mismatch",
+            f"the active tab is “{chat_text.clean(names.title)}”, "
+            f"not “{names.target}”")
+    if _is_self_chat(names):
+        return names.refuse("self_chat", "the partner is my own nick")
 
     # ── step 1: exactly two nicks ─────────────────────────────────
-    if items is not None:
-        ins, outs = _authors_from_items(items)
-    elif ("in_authors" in state or "out_authors" in state
-            or "authors" in state):
-        ins = _distinct(state.get("in_authors"))
-        outs = _distinct(state.get("out_authors"))
-        if not ins and not outs:
-            everyone = _distinct(state.get("authors"))
-            ins = [a for a in everyone
-                   if _norm(a) != _norm(effective_me or target)]
-            outs = [a for a in everyone if _norm(a) == _norm(effective_me)]
-    else:
-        return PrivateCheck(False, "no_author_data",
-                            "this page cannot tell me who wrote what",
-                            me_cfg, partner)
-
-    me = me_cfg or me_state or (outs[0] if len(outs) == 1 else "")
-    strangers = [a for a in ins if _norm(a) != _norm(target)]
-    if me:
-        strangers += [a for a in outs
-                      if _norm(a) != _norm(me)
-                      and _norm(a) != _norm(me_state)
-                      and _norm(a) != _norm(target)]
-    elif len(outs) > 1:
-        strangers += list(outs)
-    strangers = _distinct(strangers)
-    if strangers:
-        shown = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
-        return PrivateCheck(False, "strangers",
-                            f"other people write here: {shown}",
-                            me, partner, strangers)
-    return PrivateCheck(True, "ok", "", me, partner, [])
+    authors = _authors_of(state, items, names)
+    if authors is None:
+        return names.refuse("no_author_data",
+                            "this page cannot tell me who wrote what")
+    ins, outs = authors
+    me, foreign = _foreign_authors(outs, names)
+    strangers = _distinct([a for a in ins
+                           if _norm(a) != _norm(names.target)] + foreign)
+    if not strangers:
+        return PrivateCheck(True, "ok", "", me, names.partner, [])
+    shown = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
+    return PrivateCheck(False, "strangers",
+                        f"other people write here: {shown}",
+                        me, names.partner, strangers)
 
 
-def _payload(result) -> list:
-    """Agent probes may answer with a bare list or `{ok, items}`."""
-    if result is None:
-        return []
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-        except (TypeError, ValueError):
-            return []
-    if isinstance(result, dict):
-        items = result.get("items")
-        return list(items) if isinstance(items, (list, tuple)) else []
-    if isinstance(result, list):
-        return result
-    return []
+_payload = chat_text.payload
 
 
 class ChatParser:
@@ -373,280 +374,18 @@ async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
     (and put back after the read). This is the “full history from the
     beginning” path: the in-page virtualiser only keeps recent nodes, so the
     earliest lines visit the DOM only after scrolling up.
+
+    The algorithm itself is in `backend.chat_sync` (see its module docstring
+    for the phase map); this signature is the public contract of the archive
+    reader and stays put — it is what `services/collector_service` and the
+    COLLECT_HISTORY block call. The keyword arguments are gathered into a
+    `SyncOptions` and handed to `run_sync()`, which returns the same
+    `SyncResult` this function always returned.
     """
-    now = now or datetime.now()
-    pause_ms = parser.chunk_pause_ms if chunk_pause_ms is None \
-        else max(0, int(chunk_pause_ms))
-    result = SyncResult(ok=True, nick=nick, my_nick=my_nick)
-
-    state = await parser.state()
-    if not int(state.get("agent") or 0):
-        await parser.install()
-        state = await parser.state()
-    if not state.get("ok", True):
-        result.ok = False
-        result.reason = state.get("reason") or "no_agent"
-        return result
-    if require_private and state.get("tab") != "private":
-        result.ok, result.reason = False, "not_private"
-        return result
-    if verify_partner and _norm(state.get("partner")) != _norm(nick):
-        result.ok, result.reason = False, "partner_mismatch"
-        return result
-    if verify_partner:
-        # The two-step gate: nothing is written unless the pane holds only
-        # the two of us AND the active tab names this person.
-        check = verify_private(state, nick, my_nick,
-                               require_private=require_private)
-        if not check.ok:
-            result.ok, result.reason = False, check.reason
-            return result
-
-    restored_top = None
-    backfill_pending = False
-    before_count = int(state.get("count") or 0)
-    if backfill_older and not (should_stop and should_stop()):
-        scroll = state.get("scroll") or {}
-        old_top = int(scroll.get("top") or 0)
-        got = await parser.scroll_to_top()
-        if got.get("ok") and not (should_stop and should_stop()):
-            try:
-                state = await parser.settle_after_top(
-                    state, wait_ms=300, stable_polls=3,
-                    max_wait_s=max(float(backfill_wait_s or 2.0), 4.0),
-                    minimum_count=before_count)
-            except Exception:                        # noqa: BLE001
-                state = await parser.state()
-            after = state.get("scroll") or {}
-            post_count = int(state.get("count") or 0)
-            settled = bool(after.get("atTop")) and \
-                bool(state.get("_settled")) and post_count >= before_count
-            if settled:
-                result.backfilled = True
-                restored_top = old_top if old_top else None
-            elif before_count > 0 and post_count < before_count:
-                # Scroll-to-top emptied (or virtualised away) the active
-                # pane before older history re-rendered. Put the viewport
-                # back and read the window we can see now; do NOT mark the
-                # full scan complete so a later tick retries from the top.
-                backfill_pending = True
-                try:
-                    await parser.restore_scroll(old_top)
-                except Exception:                    # noqa: BLE001
-                    pass
-                fallback = await parser.state()
-                if int(fallback.get("count") or 0) > 0:
-                    state = fallback
-            else:
-                backfill_pending = True
-                result.backfill_pending = True
-        # a page that cannot scroll falls through to the normal visible range
-    result.backfill_pending = bool(result.backfill_pending or backfill_pending)
-
-    count = int(state.get("count") or 0)
-    result.count = count
-    head_sig = _signature(state.get("head"))
-    tail_sig = _signature(state.get("tail"))
-    head_any = _signature(state.get("head_any"))
-    tail_any = _signature(state.get("tail_any"))
-
-    person_id = await repo.ensure_person(nick)
-    cursor = await repo.get_cursor(person_id)
-    live_baseline = int(cursor.get("last_ord") or 0)
-    person = await repo.get_person_by_id(person_id) or {}
-    result.total = int(person.get("message_count") or 0)
-
-    if count == 0:
-        await repo.append(nick, [], my_nick=my_nick, dom_count=0,
-                          head_sig=head_sig, tail_sig=tail_sig,
-                          head_any=head_any, tail_any=tail_any, now=now)
-        scroll = state.get("scroll") or {}
-        # A truly empty conversation has no scrollable body. If the pane still
-        # reports height there were (or could be) messages that the current
-        # probe did not see — do NOT mark the full scan complete, so a later
-        # tick tries again instead of silently keeping the archive at zero.
-        truly_empty = int(scroll.get("height") or 0) <= 0
-        if result.backfilled and truly_empty and not result.stopped:
-            try:
-                await repo.mark_backfilled(person_id)
-            except Exception as e:                   # noqa: BLE001
-                log.debug("could not mark %s fully backfilled: %s", nick, e)
-        result.reason = "empty"
-        return result
-
-    # ── nothing moved: the whole point of the design ──────────────
-    if (cursor["bootstrapped"] and count == cursor["dom_count"]
-            and tail_sig and tail_sig == cursor["tail_sig"]
-            and head_sig == cursor["head_sig"]):
-        result.reason = "unchanged"
-        return result
-
-    delta = (cursor["bootstrapped"] and cursor["dom_count"]
-             and head_sig == cursor["head_sig"]
-             and count >= cursor["dom_count"])
-    start = int(cursor["dom_count"]) if delta else 0
-
-    if max_messages and (count - start) > int(max_messages):
-        start = count - int(max_messages)
-        result.gap = True
-        await repo.record_gap(person_id, await repo._last_ord(person_id),
-                              "capped",
-                              f"only the newest {int(max_messages)} messages "
-                              "were collected")
-
-    streaming = delta or not cursor["tail_fps"]
-    collected: list[MessageRecord] = []
-    scanned = 0
-    position = start
-    first = True
-
-    while position < count:
-        if should_stop and should_stop():
-            result.stopped = True
-            break
-        end = min(count, position + parser.chunk_size)
-        records = []
-        for _attempt in range(SLICE_RETRIES):
-            records = await parser.slice(position, end)
-            if records:
-                break
-            # The settle probe reported count=count, then the DOM lost the
-            # nodes between probes (a virtualised pane re-rendering). Do not
-            # give up and save nothing: restore the viewport, take the state
-            # again, and retry the same range a few times.
-            if (position == start and backfill_older and
-                    not result.backfilled and before_count > 0 and
-                    _attempt == 0):
-                try:
-                    await parser.restore_scroll(old_top)
-                except Exception:                    # noqa: BLE001
-                    pass
-                fallback = await parser.state()
-                if int(fallback.get("count") or 0) > 0:
-                    state = fallback
-                    count = int(state.get("count") or 0)
-                    result.count = count
-                    end = min(count, position + parser.chunk_size)
-                    head_sig = _signature(state.get("head"))
-                    tail_sig = _signature(state.get("tail"))
-                    result.backfill_pending = True
-            else:
-                await asyncio.sleep(0.2)
-        if not records:
-            break
-        scanned += len(records)
-        if streaming:
-            appended = await repo.append(
-                nick, records, my_nick=my_nick,
-                align=first and not delta and not result.gap,
-                expect_idx=position if (delta or not first or result.gap)
-                else None,
-                now=now)
-            result.added += appended.added
-            result.gap = result.gap or appended.gap
-            _merge_live(result, appended, live_baseline)
-        else:
-            collected.extend(records)
-        result.chunks.append({"from": position, "to": end,
-                              "added": result.added})
-        if backfill_older and media is not None and records:
-            try:
-                stats = await repo.recover_media(
-                    person_id, records, media=media, nick=nick, now=now,
-                    requeue_failed=True)
-                result.media_repaired += int(stats.get("repaired") or 0)
-                result.media_requeued += int(stats.get("requeued") or 0)
-            except Exception as e:                    # noqa: BLE001
-                log.debug("media recovery for %s failed: %s", nick, e)
-        position = end
-        first = False
-        if on_progress:
-            try:
-                on_progress(scanned, max(0, count - start))
-            except Exception:                          # noqa: BLE001
-                pass
-        if position < count and pause_ms:
-            await asyncio.sleep(pause_ms / 1000.0)
-
-    if not streaming and collected:
-        appended = await repo.append(nick, collected, my_nick=my_nick,
-                                     align=True, now=now)
-        result.added += appended.added
-        result.gap = result.gap or appended.gap
-        _merge_live(result, appended, live_baseline)
-        # anything that appeared ABOVE the part we already knew
-        tail = cursor.get("tail_keys") or cursor.get("tail_fps") or []
-        alignment = align([r.dup_key for r in collected], tail)
-        if alignment.start and not alignment.gap:
-            backfill = await repo.append(nick, collected[:alignment.start],
-                                         my_nick=my_nick, prepend=True,
-                                         now=now)
-            result.added += backfill.added
-            _merge_live(result, backfill, live_baseline)
-        if backfill_older and media is not None and collected:
-            try:
-                stats = await repo.recover_media(
-                    person_id, collected, media=media, nick=nick, now=now,
-                    requeue_failed=True)
-                result.media_repaired += int(stats.get("repaired") or 0)
-                result.media_requeued += int(stats.get("requeued") or 0)
-            except Exception as e:                    # noqa: BLE001
-                log.debug("media recovery for %s failed: %s", nick, e)
-
-    if restored_top is not None:
-        try:
-            await parser.restore_scroll(restored_top)
-        except Exception:                            # noqa: BLE001
-            log.debug("could not restore scroll position for %s", nick)
-
-    # ── the newest messages' media (Bug #2, 2026-09-07) ───────────
-    # A scroll-to-top pass (and any virtualised pane) drops the newest nodes
-    # from the DOM, so a broken media line at the BOTTOM of the chat never
-    # met its DOM record during the reads above. If anything is still
-    # repairable, read the newest window — after the viewport was put back —
-    # and run one more recovery pass over it. This also runs on ordinary
-    # ticks, which is how a media line that rendered after its first parse
-    # is repaired within one heartbeat instead of never.
-    if media is not None and not (should_stop and should_stop()):
-        try:
-            if await repo.has_repairable_media(
-                    person_id, include_failed=bool(backfill_older)):
-                tail_state = await parser.state()
-                tail_count = int(tail_state.get("count") or 0)
-                if tail_count > 0:
-                    window = max(parser.chunk_size, 80)
-                    tail_records = await parser.slice(
-                        max(0, tail_count - window), tail_count)
-                    if tail_records:
-                        stats = await repo.recover_media(
-                            person_id, tail_records, media=media, nick=nick,
-                            now=now, requeue_failed=bool(backfill_older))
-                        result.media_repaired += int(stats.get("repaired")
-                                                     or 0)
-                        result.media_requeued += int(stats.get("requeued")
-                                                     or 0)
-        except Exception as e:                        # noqa: BLE001
-            log.debug("tail media recovery for %s failed: %s", nick, e)
-
-    if result.backfilled and not result.stopped and not result.backfill_pending:
-        try:
-            await repo.mark_backfilled(person_id)
-        except Exception as e:                       # noqa: BLE001
-            log.debug("could not mark %s fully backfilled: %s", nick, e)
-
-    complete = (not result.stopped) and position >= count
-    await repo.append(nick, [], my_nick=my_nick,
-                      dom_count=position if not complete else count,
-                      head_sig=head_sig,
-                      tail_sig=tail_sig if complete else "",
-                      head_any=head_any,
-                      tail_any=tail_any if complete else "",
-                      now=now)
-
-    person = await repo.get_person_by_id(person_id) or {}
-    result.total = int(person.get("message_count") or 0)
-    result.scanned = scanned
-    if not result.reason:
-        result.reason = "stopped" if result.stopped else (
-            "added" if result.added else "no_new")
-    return result
+    options = SyncOptions.from_kwargs(
+        my_nick=my_nick, require_private=require_private,
+        verify_partner=verify_partner, max_messages=max_messages,
+        chunk_pause_ms=chunk_pause_ms, should_stop=should_stop,
+        on_progress=on_progress, now=now, backfill_older=backfill_older,
+        backfill_wait_s=backfill_wait_s, media=media)
+    return await run_sync(parser, repo, nick, options)

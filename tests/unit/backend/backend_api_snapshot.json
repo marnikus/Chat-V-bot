@@ -1,0 +1,1879 @@
+{
+ "blocks": {
+  "ATTACH_IMAGE": {
+   "class": "actions.attach_image.AttachImage",
+   "init": "(self, folder_path: str = '', file_pattern: str = '', rotation_mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 500, **kw)",
+   "schema": {
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "file_pattern": {
+     "default": "'*.jpg, *.jpeg, *.png, *.gif'",
+     "label": "'Image formats (comma separated — e.g. jpg, jpeg, png, gif)'",
+     "type": "'text'"
+    },
+    "folder_path": {
+     "default": "''",
+     "label": "'Image folder path'",
+     "type": "'text'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines (red = found, orange = click)'",
+     "type": "'checkbox'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "rotation_mode": {
+     "default": "'sequential'",
+     "label": "'Pick order'",
+     "options": "['sequential', 'random']",
+     "type": "'select'"
+    },
+    "simulate_dialog": {
+     "default": "True",
+     "label": "'Open the upload dialog first (click the image button, like a human)'",
+     "type": "'checkbox'"
+    },
+    "verify_timeout_ms": {
+     "default": "8000",
+     "label": "'Wait for the image to send (ms, 0 = skip)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "folder_path",
+    "file_pattern",
+    "rotation_mode",
+    "simulate_dialog",
+    "highlight_enabled",
+    "confirm_pause_ms",
+    "verify_timeout_ms"
+   ],
+   "to_dict": {
+    "block_id": "'ATTACH_IMAGE'",
+    "confirm_pause_ms": "700",
+    "enabled": "True",
+    "file_pattern": "'*.jpg, *.jpeg, *.png, *.gif'",
+    "folder_path": "''",
+    "highlight_enabled": "True",
+    "pre_delay_ms": "500",
+    "rotation_mode": "'sequential'",
+    "simulate_dialog": "True",
+    "verify_timeout_ms": "8000"
+   }
+  },
+  "CLICK_BACK": {
+   "class": "actions.click_back.ClickBack",
+   "init": "(self, selector: str = \"div[role='tab'].tab-item\", child_selector: str = 'p.chat-title', tab_name: str = 'Гостиная', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 800, **kw)",
+   "schema": {
+    "child_selector": {
+     "default": "'p.chat-title'",
+     "label": "'Child text selector'",
+     "type": "'text'"
+    },
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines'",
+     "type": "'checkbox'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "selector": {
+     "default": "\"div[role='tab'].tab-item\"",
+     "label": "'Tab element selector'",
+     "type": "'text'"
+    },
+    "tab_name": {
+     "default": "'Гостиная'",
+     "label": "'Tab name (text match) — {{nick}} = selected user'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "selector",
+    "child_selector",
+    "tab_name",
+    "highlight_enabled",
+    "confirm_pause_ms"
+   ],
+   "to_dict": {
+    "block_id": "'CLICK_BACK'",
+    "child_selector": "'p.chat-title'",
+    "confirm_pause_ms": "700",
+    "enabled": "True",
+    "highlight_enabled": "True",
+    "pre_delay_ms": "800",
+    "selector": "\"div[role='tab'].tab-item\"",
+    "tab_name": "'Гостиная'"
+   }
+  },
+  "CLICK_MAIN_TAB": {
+   "class": "actions.click_main_tab.ClickMainTab",
+   "init": "(self, selector: str = \"div[role='tab'].tab-item\", child_selector: str = 'p.chat-title', tab_name: str = 'Гостиная', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 500, **kw)",
+   "schema": {
+    "child_selector": {
+     "default": "'p.chat-title'",
+     "label": "'Child text selector'",
+     "type": "'text'"
+    },
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines'",
+     "type": "'checkbox'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "selector": {
+     "default": "\"div[role='tab'].tab-item\"",
+     "label": "'Tab element selector'",
+     "type": "'text'"
+    },
+    "tab_name": {
+     "default": "'Гостиная'",
+     "label": "'Tab name (text match) — {{nick}} = selected user'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "selector",
+    "child_selector",
+    "tab_name",
+    "highlight_enabled",
+    "confirm_pause_ms"
+   ],
+   "to_dict": {
+    "block_id": "'CLICK_MAIN_TAB'",
+    "child_selector": "'p.chat-title'",
+    "confirm_pause_ms": "700",
+    "enabled": "True",
+    "highlight_enabled": "True",
+    "pre_delay_ms": "500",
+    "selector": "\"div[role='tab'].tab-item\"",
+    "tab_name": "'Гостиная'"
+   }
+  },
+  "CLICK_SEND": {
+   "class": "actions.click_send.ClickSend",
+   "init": "(self, selector: str = \"button[type='submit']\", fallback_selector: str = 'button:has(mat-icon)', fallback_text: str = 'send', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 300, **kw)",
+   "schema": {
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "fallback_selector": {
+     "default": "'button:has(mat-icon)'",
+     "label": "'Fallback button selector (CSS)'",
+     "type": "'text'"
+    },
+    "fallback_text": {
+     "default": "'send'",
+     "label": "'Fallback icon text'",
+     "type": "'text'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines'",
+     "type": "'checkbox'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "selector": {
+     "default": "\"button[type='submit']\"",
+     "label": "'Send button selector (CSS)'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "selector",
+    "fallback_selector",
+    "fallback_text",
+    "highlight_enabled",
+    "confirm_pause_ms"
+   ],
+   "to_dict": {
+    "block_id": "'CLICK_SEND'",
+    "confirm_pause_ms": "700",
+    "enabled": "True",
+    "fallback_selector": "'button:has(mat-icon)'",
+    "fallback_text": "'send'",
+    "highlight_enabled": "True",
+    "pre_delay_ms": "300",
+    "selector": "\"button[type='submit']\""
+   }
+  },
+  "CLICK_USER": {
+   "class": "actions.click_user.ClickUser",
+   "init": "(self, selector: str = 'user-item', label_selector: str = '.primary-text', click_selector: str = '.user-container', tab_selector: str = \"div[role='tab'].tab-item\", tab_title_selector: str = 'p.chat-title', verify_new_tab: bool = True, tab_pause_ms: int = 800, highlight_enabled: bool = True, confirm_pause_ms: int = 700, respect_order: bool = False, use_person_from_memory: bool = False, pre_delay_ms: int = 1000, **kw)",
+   "schema": {
+    "click_selector": {
+     "default": "'.user-container'",
+     "label": "'Element to click inside (CSS)'",
+     "type": "'text'"
+    },
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines'",
+     "type": "'checkbox'"
+    },
+    "label_selector": {
+     "default": "'.primary-text'",
+     "label": "'Nickname element inside (CSS)'",
+     "type": "'text'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "respect_order": {
+     "default": "False",
+     "label": "'Respect the Order (#) column — message people 1, 2, 3… N in list order'",
+     "type": "'checkbox'"
+    },
+    "selector": {
+     "default": "'user-item'",
+     "label": "'Person row selector (CSS)'",
+     "type": "'text'"
+    },
+    "tab_pause_ms": {
+     "default": "800",
+     "label": "'Pause after click, before check (ms)'",
+     "type": "'number'"
+    },
+    "tab_selector": {
+     "default": "\"div[role='tab'].tab-item\"",
+     "label": "'Chat tab selector (for verification)'",
+     "type": "'text'"
+    },
+    "tab_title_selector": {
+     "default": "'p.chat-title'",
+     "label": "'Tab title element (CSS)'",
+     "type": "'text'"
+    },
+    "use_person_from_memory": {
+     "default": "False",
+     "label": "'Use Person from Memory — click the person saved as {{nick}} this run, not the user list (Pick Person / an earlier Click User must save the nick first)'",
+     "type": "'checkbox'"
+    },
+    "verify_new_tab": {
+     "default": "True",
+     "label": "'Confirm a new tab opened'",
+     "type": "'checkbox'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "selector",
+    "label_selector",
+    "click_selector",
+    "tab_selector",
+    "tab_title_selector",
+    "verify_new_tab",
+    "tab_pause_ms",
+    "highlight_enabled",
+    "confirm_pause_ms",
+    "respect_order",
+    "use_person_from_memory"
+   ],
+   "to_dict": {
+    "block_id": "'CLICK_USER'",
+    "click_selector": "'.user-container'",
+    "confirm_pause_ms": "700",
+    "enabled": "True",
+    "highlight_enabled": "True",
+    "label_selector": "'.primary-text'",
+    "pre_delay_ms": "1000",
+    "respect_order": "False",
+    "selector": "'user-item'",
+    "tab_pause_ms": "800",
+    "tab_selector": "\"div[role='tab'].tab-item\"",
+    "tab_title_selector": "'p.chat-title'",
+    "use_person_from_memory": "False",
+    "verify_new_tab": "True"
+   }
+  },
+  "COLLECT_HISTORY": {
+   "class": "actions.collect_history.CollectHistory",
+   "init": "(self, target: 'str' = 'active', mode: 'str' = 'incremental', require_private: 'bool' = True, max_messages: 'int' = 0, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40, download_media: 'bool' = True, fail_if_empty: 'bool' = False, **kwargs)",
+   "schema": {
+    "chunk_pause_ms": {
+     "default": "40",
+     "label": "'Pause between chunks (ms)'",
+     "type": "'number'"
+    },
+    "chunk_size": {
+     "default": "80",
+     "label": "'Chunk size'",
+     "type": "'number'"
+    },
+    "download_media": {
+     "default": "True",
+     "label": "'Cache images / GIFs'",
+     "type": "'bool'"
+    },
+    "fail_if_empty": {
+     "default": "False",
+     "label": "'Fail when nothing new'",
+     "type": "'bool'"
+    },
+    "max_messages": {
+     "default": "0",
+     "label": "'Max messages (0 = all)'",
+     "type": "'number'"
+    },
+    "mode": {
+     "default": "'incremental'",
+     "help": "'incremental = append new lines only; full = re-read the whole visible conversation'",
+     "label": "'Mode'",
+     "options": "['incremental', 'full']",
+     "type": "'select'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "require_private": {
+     "default": "True",
+     "label": "'Only private chats'",
+     "type": "'bool'"
+    },
+    "target": {
+     "default": "'active'",
+     "help": "'active = whoever the open tab is with; memory_nick = the {{nick}} of this run (refuses to file under the wrong person)'",
+     "label": "'Archive for'",
+     "options": "['active', 'memory_nick']",
+     "type": "'select'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "target",
+    "mode",
+    "require_private",
+    "max_messages",
+    "chunk_size",
+    "chunk_pause_ms",
+    "download_media",
+    "fail_if_empty"
+   ],
+   "to_dict": {
+    "block_id": "'COLLECT_HISTORY'",
+    "chunk_pause_ms": "40",
+    "chunk_size": "80",
+    "download_media": "True",
+    "enabled": "True",
+    "fail_if_empty": "False",
+    "max_messages": "0",
+    "mode": "'incremental'",
+    "pre_delay_ms": "500",
+    "require_private": "True",
+    "target": "'active'"
+   }
+  },
+  "CONDITIONAL_SKIP": {
+   "class": "actions.conditional_skip.ConditionalSkip",
+   "init": "(self, **kw)",
+   "schema": {
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms"
+   ],
+   "to_dict": {
+    "block_id": "'CONDITIONAL_SKIP'",
+    "enabled": "True",
+    "pre_delay_ms": "0"
+   }
+  },
+  "CUSTOM_FIND": {
+   "class": "actions.custom_find.CustomFind",
+   "init": "(self, custom_name: str = '', selector: str = '', label_selector: str = '', match_text: str = '', click_enabled: bool = True, click_selector: str = '', highlight_enabled: bool = True, confirm_pause_ms: int = 700, highlight_ms: int = 1200, pre_delay_ms: int = 500, **kw)",
+   "schema": {
+    "click_enabled": {
+     "default": "True",
+     "label": "'Click after found'",
+     "type": "'checkbox'"
+    },
+    "click_selector": {
+     "default": "''",
+     "label": "'Element inside to click (optional)'",
+     "type": "'text'"
+    },
+    "confirm_pause_ms": {
+     "default": "700",
+     "label": "'Pause after found (ms)'",
+     "type": "'number'"
+    },
+    "custom_name": {
+     "default": "''",
+     "label": "'Block name (shown in stack)'",
+     "type": "'text'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Draw confirmation outlines (red = found, orange = click)'",
+     "type": "'checkbox'"
+    },
+    "highlight_ms": {
+     "default": "1200",
+     "label": "'Outline duration (ms)'",
+     "type": "'number'"
+    },
+    "label_selector": {
+     "default": "''",
+     "label": "'Text element inside (CSS)'",
+     "type": "'text'"
+    },
+    "match_text": {
+     "default": "''",
+     "label": "'Text to match inside (optional — {{nick}} = selected user)'",
+     "type": "'text'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "selector": {
+     "default": "''",
+     "label": "'Element to find (CSS)'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "custom_name",
+    "selector",
+    "label_selector",
+    "match_text",
+    "click_enabled",
+    "click_selector",
+    "highlight_enabled",
+    "confirm_pause_ms",
+    "highlight_ms"
+   ],
+   "to_dict": {
+    "block_id": "'CUSTOM_FIND'",
+    "click_enabled": "True",
+    "click_selector": "''",
+    "confirm_pause_ms": "700",
+    "custom_name": "''",
+    "enabled": "True",
+    "highlight_enabled": "True",
+    "highlight_ms": "1200",
+    "label_selector": "''",
+    "match_text": "''",
+    "pre_delay_ms": "500",
+    "selector": "''"
+   }
+  },
+  "MARK_MESSAGED": {
+   "class": "actions.mark_messaged.MarkMessaged",
+   "init": "(self, pre_delay_ms: 'int' = 500, enabled: 'bool' = True, **kwargs)",
+   "schema": {
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms"
+   ],
+   "to_dict": {
+    "block_id": "'MARK_MESSAGED'",
+    "enabled": "True",
+    "pre_delay_ms": "500"
+   }
+  },
+  "PAUSE": {
+   "class": "actions.pause.Pause",
+   "init": "(self, duration_ms: int = 1000, **kw)",
+   "schema": {
+    "duration_ms": {
+     "default": "1000",
+     "label": "'Duration (ms)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "duration_ms"
+   ],
+   "to_dict": {
+    "block_id": "'PAUSE'",
+    "duration_ms": "1000",
+    "enabled": "True",
+    "pre_delay_ms": "0"
+   }
+  },
+  "REPEAT_LOOP": {
+   "class": "actions.repeat_loop.RepeatLoop",
+   "init": "(self, repeat_count: int = 2, **kw)",
+   "schema": {
+    "repeat_count": {
+     "default": "2",
+     "label": "'Number of loop cycles'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "repeat_count"
+   ],
+   "to_dict": {
+    "block_id": "'REPEAT_LOOP'",
+    "enabled": "True",
+    "pre_delay_ms": "0",
+    "repeat_count": "2"
+   }
+  },
+  "SCROLL_PARSE": {
+   "class": "actions.scroll_parse.ScrollParse",
+   "init": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
+   "schema": {
+    "confirm_pause_ms": {
+     "default": "500",
+     "label": "'Pause after detecting a person (ms)'",
+     "type": "'number'"
+    },
+    "filter_anonymous": {
+     "default": "'no'",
+     "label": "'Anonymous'",
+     "options": "['any', 'yes', 'no']",
+     "type": "'select'"
+    },
+    "filter_female": {
+     "default": "'yes'",
+     "label": "'Female'",
+     "options": "['any', 'yes', 'no']",
+     "type": "'select'"
+    },
+    "filter_guest": {
+     "default": "'yes'",
+     "label": "'Guest'",
+     "options": "['any', 'yes', 'no']",
+     "type": "'select'"
+    },
+    "filter_registered": {
+     "default": "'no'",
+     "label": "'Registered'",
+     "options": "['any', 'yes', 'no']",
+     "type": "'select'"
+    },
+    "highlight_enabled": {
+     "default": "True",
+     "label": "'Highlight each detected person'",
+     "type": "'checkbox'"
+    },
+    "highlight_ms": {
+     "default": "900",
+     "label": "'Highlight duration (ms)'",
+     "type": "'number'"
+    },
+    "load_timeout_ms": {
+     "default": "2500",
+     "label": "'Max wait for lazy load (ms)'",
+     "type": "'number'"
+    },
+    "max_scrolls": {
+     "default": "50",
+     "label": "'Max scrolls (safety cap)'",
+     "type": "'number'"
+    },
+    "min_new_users": {
+     "default": "1",
+     "label": "'Finish after N new un-messaged (0 = all)'",
+     "type": "'number'"
+    },
+    "nick_selector": {
+     "default": "'.primary-text'",
+     "label": "'Nickname element inside (CSS)'",
+     "type": "'text'"
+    },
+    "person_selector": {
+     "default": "'user-item'",
+     "label": "'Person row selector (CSS)'",
+     "type": "'text'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "purge_rejected": {
+     "default": "True",
+     "label": "'Remove people that fail the filter'",
+     "type": "'checkbox'"
+    },
+    "scroll_delta_y": {
+     "default": "300",
+     "label": "'Scroll step (px)'",
+     "type": "'number'"
+    },
+    "scroll_only": {
+     "default": "False",
+     "label": "'Only scroll, no people adding (find existing un-messaged person)'",
+     "type": "'checkbox'"
+    },
+    "scroll_pause_ms": {
+     "default": "800",
+     "label": "'Pause after each scroll (ms)'",
+     "type": "'number'"
+    },
+    "stall_threshold": {
+     "default": "3",
+     "label": "'Scrolls with no new people = end'",
+     "type": "'number'"
+    },
+    "viewport_selector": {
+     "default": "'cdk-virtual-scroll-viewport.users-list-viewport'",
+     "label": "'Scroll viewport (CSS)'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "max_scrolls",
+    "scroll_pause_ms",
+    "scroll_delta_y",
+    "viewport_selector",
+    "load_timeout_ms",
+    "stall_threshold",
+    "min_new_users",
+    "person_selector",
+    "nick_selector",
+    "highlight_enabled",
+    "highlight_ms",
+    "confirm_pause_ms",
+    "purge_rejected",
+    "scroll_only",
+    "filter_female",
+    "filter_registered",
+    "filter_guest",
+    "filter_anonymous"
+   ],
+   "to_dict": {
+    "block_id": "'SCROLL_PARSE'",
+    "confirm_pause_ms": "500",
+    "enabled": "True",
+    "filter_anonymous": "'no'",
+    "filter_female": "'yes'",
+    "filter_guest": "'yes'",
+    "filter_registered": "'no'",
+    "highlight_enabled": "True",
+    "highlight_ms": "900",
+    "last_result": "None",
+    "load_timeout_ms": "2500",
+    "max_scrolls": "50",
+    "min_new_users": "1",
+    "nick_selector": "'.primary-text'",
+    "person_selector": "'user-item'",
+    "pre_delay_ms": "300",
+    "purge_rejected": "True",
+    "scroll_delta_y": "300",
+    "scroll_only": "False",
+    "scroll_pause_ms": "800",
+    "stall_threshold": "3",
+    "viewport_selector": "'cdk-virtual-scroll-viewport.users-list-viewport'"
+   }
+  },
+  "SEARCH_USERS": {
+   "class": "actions.search_users.SearchUsers",
+   "init": "(self, text: str = '', pre_delay_ms: int = 500, **kw)",
+   "schema": {
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "text": {
+     "default": "''",
+     "label": "'Search text ({{nick}} = selected user)'",
+     "type": "'text'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "text"
+   ],
+   "to_dict": {
+    "block_id": "'SEARCH_USERS'",
+    "enabled": "True",
+    "pre_delay_ms": "500",
+    "text": "''"
+   }
+  },
+  "TAKE_PERSON": {
+   "class": "actions.take_person.TakePerson",
+   "init": "(self, pick_mode: str = 'random_new', **kw)",
+   "schema": {
+    "pick_mode": {
+     "default": "'random_new'",
+     "label": "'Pick which person to remember'",
+     "options": "['random_new', 'random_done', 'order_first']",
+     "type": "'select'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "pick_mode"
+   ],
+   "to_dict": {
+    "block_id": "'TAKE_PERSON'",
+    "enabled": "True",
+    "pick_mode": "'random_new'",
+    "pre_delay_ms": "0"
+   }
+  },
+  "TYPE_MESSAGE": {
+   "class": "actions.type_message.TypeMessage",
+   "init": "(self, message: str = '', use_composer: bool = False, typing_speed_ms: int = 30, pre_delay_ms: int = 500, **kw)",
+   "schema": {
+    "message": {
+     "default": "''",
+     "label": "'Message text — {{nick}} = selected user'",
+     "type": "'textarea'"
+    },
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "typing_speed_ms": {
+     "default": "30",
+     "label": "'Speed (ms/char)'",
+     "type": "'number'"
+    },
+    "use_composer": {
+     "default": "False",
+     "label": "'Use text from the Message Composer window (ignores the text below)'",
+     "type": "'bool'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "use_composer",
+    "message",
+    "typing_speed_ms"
+   ],
+   "to_dict": {
+    "block_id": "'TYPE_MESSAGE'",
+    "enabled": "True",
+    "message": "''",
+    "pre_delay_ms": "500",
+    "typing_speed_ms": "30",
+    "use_composer": "False"
+   }
+  },
+  "WAIT_PAGE_LOAD": {
+   "class": "actions.wait_page.WaitPageLoad",
+   "init": "(self, target_selector: str = '', timeout_ms: int = 5000, pre_delay_ms: int = 200, **kw)",
+   "schema": {
+    "pre_delay_ms": {
+     "default": "500",
+     "label": "'Pre-delay (ms)'",
+     "type": "'number'"
+    },
+    "target_selector": {
+     "default": "\"textarea[placeholder='Сообщение']\"",
+     "label": "'Target selector'",
+     "type": "'text'"
+    },
+    "timeout_ms": {
+     "default": "5000",
+     "label": "'Timeout (ms)'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "pre_delay_ms",
+    "target_selector",
+    "timeout_ms"
+   ],
+   "to_dict": {
+    "block_id": "'WAIT_PAGE_LOAD'",
+    "enabled": "True",
+    "pre_delay_ms": "200",
+    "target_selector": "\"textarea[placeholder='Сообщение']\"",
+    "timeout_ms": "5000"
+   }
+  }
+ },
+ "public_api": {
+  "actions.attach_image": {
+   "classes": {
+    "AttachImage": {
+     "attrs": {
+      "block_id": "'ATTACH_IMAGE'",
+      "icon": "'🖼️'",
+      "name": "'Attach Image'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, folder_path: str = '', file_pattern: str = '', rotation_mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 500, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.base": {
+   "classes": {
+    "ActionResult": {
+     "attrs": {
+      "FAIL": "'fail'",
+      "OK": "'ok'",
+      "SKIP": "'skip'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {}
+    },
+    "BaseAction": {
+     "attrs": {
+      "block_id": "''",
+      "icon": "''",
+      "name": "''"
+     },
+     "bases": [
+      "ABC"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, pre_delay_ms: 'int' = 500, enabled: 'bool' = True, **kwargs)",
+      "__init_subclass__": "(cls, **kwargs)",
+      "config_schema": "(self) -> 'dict'",
+      "display_name": "<property>",
+      "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
+      "pre_delay": "(self) -> 'None'",
+      "to_dict": "(self) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.base_action": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "actions.click_back": {
+   "classes": {
+    "ClickBack": {
+     "attrs": {
+      "block_id": "'CLICK_BACK'",
+      "icon": "'🔙'",
+      "name": "'Return to Main'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, selector: str = \"div[role='tab'].tab-item\", child_selector: str = 'p.chat-title', tab_name: str = 'Гостиная', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 800, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.click_main_tab": {
+   "classes": {
+    "ClickMainTab": {
+     "attrs": {
+      "block_id": "'CLICK_MAIN_TAB'",
+      "icon": "'🏠'",
+      "name": "'Click Main Tab'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, selector: str = \"div[role='tab'].tab-item\", child_selector: str = 'p.chat-title', tab_name: str = 'Гостиная', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 500, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.click_send": {
+   "classes": {
+    "ClickSend": {
+     "attrs": {
+      "block_id": "'CLICK_SEND'",
+      "icon": "'📨'",
+      "name": "'Click Send'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, selector: str = \"button[type='submit']\", fallback_selector: str = 'button:has(mat-icon)', fallback_text: str = 'send', highlight_enabled: bool = True, confirm_pause_ms: int = 700, pre_delay_ms: int = 300, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.click_user": {
+   "classes": {
+    "ClickUser": {
+     "attrs": {
+      "block_id": "'CLICK_USER'",
+      "icon": "'👤'",
+      "name": "'Click User'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, selector: str = 'user-item', label_selector: str = '.primary-text', click_selector: str = '.user-container', tab_selector: str = \"div[role='tab'].tab-item\", tab_title_selector: str = 'p.chat-title', verify_new_tab: bool = True, tab_pause_ms: int = 800, highlight_enabled: bool = True, confirm_pause_ms: int = 700, respect_order: bool = False, use_person_from_memory: bool = False, pre_delay_ms: int = 1000, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {
+    "build_tab_count_js": "(tab_selector: str, title_selector: str) -> str"
+   },
+   "values": {}
+  },
+  "actions.collect_history": {
+   "classes": {
+    "CollectHistory": {
+     "attrs": {
+      "block_id": "'COLLECT_HISTORY'",
+      "icon": "'🗃'",
+      "name": "'Collect Message History'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, target: 'str' = 'active', mode: 'str' = 'incremental', require_private: 'bool' = True, max_messages: 'int' = 0, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40, download_media: 'bool' = True, fail_if_empty: 'bool' = False, **kwargs)",
+      "config_schema": "(self) -> 'dict'",
+      "execute": "(self, user_nick: 'str', cdp: 'CDPClient', engine: 'Optional[object]' = None) -> 'str'",
+      "now": "(tz=None)",
+      "to_dict": "(self) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.conditional_skip": {
+   "classes": {
+    "ConditionalSkip": {
+     "attrs": {
+      "block_id": "'CONDITIONAL_SKIP'",
+      "icon": "'🔀'",
+      "name": "'If Already Messaged → Skip'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, **kw)",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.context": {
+   "classes": {
+    "ActionContext": {
+     "attrs": {
+      "cdp": "None",
+      "composer_text": "''",
+      "criteria": "None",
+      "history": "None",
+      "memory": "None",
+      "selected_nick": "''"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "_mark_messaged": {
+       "default": "None",
+       "type": "Optional[Callable[[str], Any]]"
+      },
+      "_queue_order": {
+       "default": "None",
+       "type": "Optional[Callable[[list], list]]"
+      },
+      "_stop_checker": {
+       "default": "None",
+       "type": "Optional[Callable[[], bool]]"
+      },
+      "_unmessaged_nicks": {
+       "default": "None",
+       "type": "Optional[Callable[[], Any]]"
+      },
+      "cdp": {
+       "default": "None",
+       "type": "Any"
+      },
+      "composer_text": {
+       "default": "''",
+       "type": "str"
+      },
+      "criteria": {
+       "default": "None",
+       "type": "Any"
+      },
+      "history": {
+       "default": "None",
+       "type": "Any"
+      },
+      "memory": {
+       "default": "None",
+       "type": "Any"
+      },
+      "report_fn": {
+       "default": "<function>",
+       "type": "Callable[..., None]"
+      },
+      "selected_nick": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "methods": {
+      "__init__": "(self, cdp: 'Any' = None, memory: 'Any' = None, criteria: 'Any' = None, history: 'Any' = None, report_fn: 'Callable[..., None]' = <function ActionContext.<lambda> at 0xADDR>, composer_text: 'str' = '', selected_nick: 'str' = '', _stop_checker: 'Optional[Callable[[], bool]]' = None, _mark_messaged: 'Optional[Callable[[str], Any]]' = None, _unmessaged_nicks: 'Optional[Callable[[], Any]]' = None, _queue_order: 'Optional[Callable[[list], list]]' = None) -> None",
+      "is_stopping": "(self) -> 'bool'",
+      "mark_person_messaged": "(self, nick: 'str') -> 'str'",
+      "note_selected": "(self, nick: 'str') -> 'None'",
+      "queue_order": "(self, users: 'list') -> 'list[str]'",
+      "report": "(self, message: 'str', level: 'str' = 'info') -> 'None'",
+      "report_fn": "(*_a, **_k)",
+      "unmessaged_nicks": "(self) -> 'set[str]'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.custom_find": {
+   "classes": {
+    "CustomFind": {
+     "attrs": {
+      "block_id": "'CUSTOM_FIND'",
+      "icon": "'🔎'",
+      "name": "'Find & Click'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, custom_name: str = '', selector: str = '', label_selector: str = '', match_text: str = '', click_enabled: bool = True, click_selector: str = '', highlight_enabled: bool = True, confirm_pause_ms: int = 700, highlight_ms: int = 1200, pre_delay_ms: int = 500, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.find_click_runner": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "actions.mark_messaged": {
+   "classes": {
+    "MarkMessaged": {
+     "attrs": {
+      "block_id": "'MARK_MESSAGED'",
+      "icon": "'✅'",
+      "name": "'Mark Person as Messaged'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.pause": {
+   "classes": {
+    "Pause": {
+     "attrs": {
+      "block_id": "'PAUSE'",
+      "icon": "'⏸️'",
+      "name": "'Custom Pause'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, duration_ms: int = 1000, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.registry": {
+   "classes": {
+    "ActionRegistry": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "all_classes": "(cls) -> 'dict[str, Type]'",
+      "all_ids": "(cls) -> 'list[str]'",
+      "clear": "(cls) -> 'None'",
+      "get": "(cls, block_id: 'str') -> 'Optional[Type]'",
+      "register": "(cls, block_id: 'str')",
+      "register_class": "(cls, klass: 'Type', block_id: 'Optional[str]' = None) -> 'None'",
+      "scan": "(cls, package=None) -> 'list[str]'"
+     }
+    }
+   },
+   "functions": {
+    "all_action_ids": "() -> 'list[str]'",
+    "get_action_class": "(block_id: 'str') -> 'Optional[Type]'"
+   },
+   "values": {}
+  },
+  "actions.repeat_loop": {
+   "classes": {
+    "RepeatLoop": {
+     "attrs": {
+      "block_id": "'REPEAT_LOOP'",
+      "icon": "'🔁'",
+      "name": "'Repeat Loop'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, repeat_count: int = 2, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.scroll_parse": {
+   "classes": {
+    "ScrollParse": {
+     "attrs": {
+      "block_id": "'SCROLL_PARSE'",
+      "icon": "'📜'",
+      "name": "'Scroll & Parse Users'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
+      "build_filter": "(self, panel_criteria=None) -> backend.person_filter.PersonFilter",
+      "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollParser",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str",
+      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None, panel_criteria=None, known_messaged: set | None = None, on_collect=None, on_reject=None, should_stop=None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.search_users": {
+   "classes": {
+    "SearchUsers": {
+     "attrs": {
+      "block_id": "'SEARCH_USERS'",
+      "icon": "'🔍'",
+      "name": "'Search Users'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, text: str = '', pre_delay_ms: int = 500, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.take_person": {
+   "classes": {
+    "TakePerson": {
+     "attrs": {
+      "block_id": "'TAKE_PERSON'",
+      "icon": "'🎯'",
+      "name": "'Pick Person'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, pick_mode: str = 'random_new', **kw)",
+      "choose": "(self, rows: list, engine: Optional[object] = None) -> Optional[str]",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str",
+      "mode_phrase": "<property>"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.type_message": {
+   "classes": {
+    "TypeMessage": {
+     "attrs": {
+      "block_id": "'TYPE_MESSAGE'",
+      "icon": "'⌨️'",
+      "name": "'Type Message'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, message: str = '', use_composer: bool = False, typing_speed_ms: int = 30, pre_delay_ms: int = 500, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.wait_page": {
+   "classes": {
+    "WaitPageLoad": {
+     "attrs": {
+      "block_id": "'WAIT_PAGE_LOAD'",
+      "icon": "'⏳'",
+      "name": "'Wait for Page'"
+     },
+     "bases": [
+      "BaseAction"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, target_selector: str = '', timeout_ms: int = 5000, pre_delay_ms: int = 200, **kw)",
+      "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.action_engine": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.bridge": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.cdp_client": {
+   "classes": {
+    "CDPClient": {
+     "attrs": {},
+     "bases": [
+      "QObject"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
+      "add_binding": "(self, name: str) -> bool",
+      "add_script_on_new_document": "(self, source: str) -> str",
+      "base_url": "<property>",
+      "click_at": "(self, x: float, y: float) -> None",
+      "connect": "(self, ws_url: str) -> bool",
+      "disconnect": "(self) -> None",
+      "evaluate": "(self, expression: str) -> Any",
+      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
+      "get_cookies": "(self, url: str = '') -> str",
+      "get_element_rect": "(self, selector: str) -> Optional[dict]",
+      "is_connected": "<property>",
+      "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
+      "off_event": "(self, method: str, callback: Optional[Callable] = None) -> None",
+      "on_event": "(self, method: str, callback: Callable) -> Callable",
+      "remove_script_on_new_document": "(self, identifier: str) -> bool",
+      "send": "(self, method: str, params: dict | None = None) -> dict",
+      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+     }
+    },
+    "CdpLease": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self) -> None",
+      "acquire": "(self, priority: int = 1) -> None",
+      "busy": "<property>",
+      "high": "(self) -> backend.cdp_client._LeaseCtx",
+      "high_waiting": "<property>",
+      "low": "(self) -> backend.cdp_client._LeaseCtx",
+      "release": "(self) -> None",
+      "waiting": "<property>"
+     }
+    },
+    "TabInfo": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "id": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "title": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "url": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "ws_url": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      }
+     },
+     "methods": {
+      "__init__": "(self, id: str, title: str, url: str, ws_url: str) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_agent_js": {
+   "classes": {},
+   "functions": {
+    "agent_source": "() -> 'str'",
+    "drain_expression": "() -> 'str'",
+    "fetch_media_expression": "(url: 'str') -> 'str'",
+    "install_expression": "() -> 'str'",
+    "restore_scroll_expression": "(top: 'int') -> 'str'",
+    "scroll_top_expression": "() -> 'str'",
+    "slice_expression": "(start: 'int', end: 'int') -> 'str'",
+    "state_expression": "() -> 'str'"
+   },
+   "values": {}
+  },
+  "backend.chat_parser": {
+   "classes": {
+    "ChatParser": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, cdp, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40)",
+      "drain": "(self) -> 'list[MessageRecord]'",
+      "ensure_agent": "(self) -> 'int'",
+      "install": "(self) -> 'int'",
+      "pause": "(self) -> 'None'",
+      "restore_scroll": "(self, top: 'int') -> 'dict'",
+      "scroll_to_top": "(self) -> 'dict'",
+      "settle_after_top": "(self, first_state: 'dict', wait_ms: 'int' = 300, stable_polls: 'int' = 3, max_wait_s: 'float' = 6.0, minimum_count: 'int' = 0) -> 'dict'",
+      "slice": "(self, start: 'int', end: 'int') -> 'list[MessageRecord]'",
+      "state": "(self) -> 'dict'"
+     }
+    },
+    "PrivateCheck": {
+     "attrs": {
+      "detail": "''",
+      "me": "''",
+      "ok": "True",
+      "partner": "''",
+      "reason": "'ok'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "detail": {
+       "default": "''",
+       "type": "str"
+      },
+      "me": {
+       "default": "''",
+       "type": "str"
+      },
+      "ok": {
+       "default": "True",
+       "type": "bool"
+      },
+      "partner": {
+       "default": "''",
+       "type": "str"
+      },
+      "reason": {
+       "default": "'ok'",
+       "type": "str"
+      },
+      "strangers": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      }
+     },
+     "methods": {
+      "__bool__": "(self) -> 'bool'",
+      "__init__": "(self, ok: 'bool' = True, reason: 'str' = 'ok', detail: 'str' = '', me: 'str' = '', partner: 'str' = '', strangers: 'list' = <factory>) -> None"
+     }
+    }
+   },
+   "functions": {
+    "align": "(dom_fps, tail_fps) -> 'Alignment'",
+    "parse_records": "(raw: 'Iterable') -> 'list[MessageRecord]'",
+    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media=None) -> 'SyncResult'",
+    "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
+    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', items=None, require_private: 'bool' = True) -> 'PrivateCheck'"
+   },
+   "values": {}
+  },
+  "backend.collector": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.config_manager": {
+   "classes": {
+    "ConfigManager": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, path: 'str' = 'config.json')",
+      "data": "(self) -> 'dict[str, Any]'",
+      "get": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "get_copy": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "get_state": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
+      "load": "(self) -> 'None'",
+      "named_all": "(self, section: 'str') -> 'dict[str, Any]'",
+      "named_delete": "(self, section: 'str', name: 'str', save: 'bool' = True) -> 'bool'",
+      "named_get": "(self, section: 'str', name: 'str', default: 'Any' = None) -> 'Any'",
+      "named_set": "(self, section: 'str', name: 'str', value: 'Any', save: 'bool' = True) -> 'None'",
+      "save": "(self) -> 'None'",
+      "set": "(self, *keys_and_value: 'Any') -> 'None'",
+      "set_state": "(self, save: 'bool' = True, **updates: 'Any') -> 'None'",
+      "state_data": "(self) -> 'dict[str, Any]'",
+      "to_dict": "(self) -> 'str'",
+      "validate": "(self) -> 'list[str]'"
+     }
+    }
+   },
+   "functions": {
+    "json_dumps": "(data: 'Any') -> 'str'"
+   },
+   "values": {}
+  },
+  "backend.criteria_engine": {
+   "classes": {
+    "CriteriaEngine": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self)",
+      "evaluate_user": "(self, user_data: dict) -> bool",
+      "filter_users": "(self, users: list[dict]) -> list[dict]",
+      "load_from_db": "(self, db: aiosqlite.core.Connection, name: str = 'default') -> bool",
+      "load_json": "(self, data: str) -> None",
+      "save_to_db": "(self, db: aiosqlite.core.Connection, name: str = 'default') -> None",
+      "to_json": "(self) -> str"
+     }
+    },
+    "Criterion": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "check_type": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "class_name": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "enabled": {
+       "default": "<_MISSING_TYPE>",
+       "type": "bool"
+      },
+      "label": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "selector": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      }
+     },
+     "methods": {
+      "__init__": "(self, label: str, enabled: bool, selector: str, class_name: str, check_type: str) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.db_manager": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.dom_highlight": {
+   "classes": {},
+   "functions": {
+    "build_clear_probe": "() -> str",
+    "build_click_probe": "(click_selector: Optional[str] = None, highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff9500', caption: str = 'CLICK', do_click: bool = True) -> str",
+    "build_find_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff2d2d', caption: str = 'FOUND', max_candidates: int = 6) -> str",
+    "build_highlight_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'exact', color: str = '#00c853', caption: str = 'MATCH', highlight_ms: int = 900, clear_first: bool = True) -> str",
+    "interpret_click": "(result, label: str = 'element') -> tuple[str, str]",
+    "interpret_click_target": "(result) -> tuple[str, str]",
+    "interpret_find": "(result, label: str = 'element') -> tuple[str, str]"
+   },
+   "values": {}
+  },
+  "backend.dom_probe": {
+   "classes": {},
+   "functions": {
+    "build_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', click: bool = False, click_selector: Optional[str] = None, click_root: bool = False, max_candidates: int = 6) -> str",
+    "interpret": "(result, label: str = 'element') -> tuple[str, str]",
+    "interpret_wait": "(result, label: str = 'element') -> tuple[str, str]"
+   },
+   "values": {}
+  },
+  "backend.history_db": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_models": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query": {
+   "classes": {
+    "HistoryQuery": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, db: 'HistoryDB')",
+      "around": "(self, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
+      "db_stats": "(self) -> 'dict'",
+      "gaps": "(self, person_id: 'int') -> 'list[dict]'",
+      "list_persons": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', include_deleted: 'bool' = False) -> 'dict'",
+      "page": "(self, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'",
+      "person_stats": "(self, nick: 'str') -> 'dict'",
+      "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
+      "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_repo": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_service": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.label_store": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.logger": {
+   "classes": {},
+   "functions": {
+    "setup_logger": "(log_dir: str = 'logs', level: int = 20) -> logging.Logger"
+   },
+   "values": {}
+  },
+  "backend.media_handler": {
+   "classes": {},
+   "functions": {
+    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str, file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None, verify_poll_ms: int = 200) -> bool",
+    "list_image_files": "(folder: str, file_pattern: str) -> list[str]",
+    "parse_patterns": "(file_pattern: str) -> list[str]"
+   },
+   "values": {}
+  },
+  "backend.media_store": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.message_injector": {
+   "classes": {},
+   "functions": {
+    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool",
+    "type_message": "(cdp: backend.cdp_client.CDPClient, text: str, typing_speed_ms: int = 30, report: Optional[Callable] = None) -> bool",
+    "type_search": "(cdp: backend.cdp_client.CDPClient, text: str, report: Optional[Callable] = None) -> bool"
+   },
+   "values": {}
+  },
+  "backend.person_filter": {
+   "classes": {
+    "FilterVerdict": {
+     "attrs": {
+      "reason": "''"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "passed": {
+       "default": "<_MISSING_TYPE>",
+       "type": "bool"
+      },
+      "reason": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "methods": {
+      "__bool__": "(self) -> bool",
+      "__init__": "(self, passed: bool, reason: str = '') -> None"
+     }
+    },
+    "PersonFilter": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__call__": "(self, person: dict) -> bool",
+      "__init__": "(self, female: str = 'yes', registered: str = 'no', guest: str = 'yes', anonymous: str = 'no', panel_criteria: Optional[object] = None)",
+      "check": "(self, person: dict) -> backend.person_filter.FilterVerdict",
+      "describe": "(self) -> str",
+      "is_empty": "<property>",
+      "rules": "(self) -> list[str]"
+     }
+    }
+   },
+   "functions": {
+    "normalize": "(value, default: str = 'any') -> str",
+    "sort_people": "(people: list) -> list"
+   },
+   "values": {}
+  },
+  "backend.preset_store": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser": {
+   "classes": {
+    "CollectResult": {
+     "attrs": {
+      "found": "None",
+      "reached_end": "False",
+      "scrolls": "0",
+      "seeking": "False",
+      "stopped": "False",
+      "stopped_early": "False"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "all_people": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "collected": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "found": {
+       "default": "None",
+       "type": "object"
+      },
+      "purged": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "reached_end": {
+       "default": "False",
+       "type": "bool"
+      },
+      "rejected": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      },
+      "rejected_people": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "scrolls": {
+       "default": "0",
+       "type": "int"
+      },
+      "seeking": {
+       "default": "False",
+       "type": "bool"
+      },
+      "stopped": {
+       "default": "False",
+       "type": "bool"
+      },
+      "stopped_early": {
+       "default": "False",
+       "type": "bool"
+      }
+     },
+     "methods": {
+      "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
+      "new_unmessaged": "<property>"
+     }
+    },
+    "ScrollParser": {
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "methods": {
+      "__init__": "(self, cdp: backend.cdp_client.CDPClient, criteria=None, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
+      "collect": "(self, progress_cb=None, min_new_users: int = 0, known_messaged: set | None = None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
+      "parse": "(self, progress_cb=None) -> tuple[list, list]",
+      "set_log_cb": "(self, cb) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.tab_matcher": {
+   "classes": {},
+   "functions": {
+    "best_matches": "(query: str, tabs: Iterable[dict], top_n: int = 5) -> list[dict]",
+    "score_tab": "(query: str, tab_url: str, tab_title: str = '') -> tuple[int, str]"
+   },
+   "values": {}
+  },
+  "backend.user_memory": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.visual_click": {
+   "classes": {},
+   "functions": {
+    "find_and_click": "(cdp: backend.cdp_client.CDPClient, *, selector: str, label_selector: str = '', match_text: str = '', match_mode: str = 'contains', click_enabled: bool = True, click_selector: str = '', highlight_enabled: bool = True, confirm_pause_ms: int = 700, highlight_ms: int = 1200, label: str = 'element', engine: Optional[object] = None) -> str",
+    "find_and_click_exact": "(cdp: backend.cdp_client.CDPClient, *, text: str, **kw) -> str"
+   },
+   "values": {}
+  }
+ }
+}
