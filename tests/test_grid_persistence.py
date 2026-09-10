@@ -360,12 +360,19 @@ class TestUIWiring(unittest.TestCase):
         self.assertNotIn("e.shiftKey", self.grid)
 
     def test_close_flushes_the_current_tree_before_shutdown(self):
-        main = open(os.path.join(os.path.dirname(__file__), "..", "main.py"),
-                    encoding="utf-8").read()
+        # The close/flush state machine moved from main.py into MainWindow
+        # (app/window.py) when the entry point was slimmed; the entry point
+        # only wires the window via create_window().
+        base = os.path.join(os.path.dirname(__file__), "..")
+        window_src = open(os.path.join(base, "app", "window.py"),
+                          encoding="utf-8").read()
+        main_src = open(os.path.join(base, "main.py"),
+                        encoding="utf-8").read()
         self.assertIn("flushPersistence", self.grid)
-        self.assertIn("_request_grid_flush", main)
-        self.assertIn("grid_layout_persisted", main)
-        self.assertIn("_layout_flush_pending", main)
+        self.assertIn("_request_grid_flush", window_src)
+        self.assertIn("grid_layout_persisted", window_src)
+        self.assertIn("_layout_flush_pending", window_src)
+        self.assertIn("create_window", main_src)
 
     def test_sortable_people_headers_cover_required_columns(self):
         for key in ("nick", "gender", "registered", "status", "first_seen",

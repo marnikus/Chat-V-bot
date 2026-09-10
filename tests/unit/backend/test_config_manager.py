@@ -15,11 +15,16 @@ from backend.config_manager import ConfigManager, DEFAULTS, MAX_STACK_HISTORY
 class TestConfigPaths(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        os.environ.setdefault("CHAT_V_BOT_CONFIG_DIR", self.tmp.name)
-        # ConfigManager uses stores that may look in config_dir; we'll use default behavior
-        self.cm = ConfigManager()
+        # Point the manager INSIDE the temp dir: otherwise save() writes
+        # config/*.json into the repo checkout (the split stores live in a
+        # `config/` dir next to the given legacy path), polluting later
+        # tests that probe the repo config (e.g. saved-tab preset tests).
+        self._cwd = os.getcwd()
+        os.chdir(self.tmp.name)
+        self.cm = ConfigManager(os.path.join(self.tmp.name, "config.json"))
 
     def tearDown(self):
+        os.chdir(self._cwd)
         self.tmp.cleanup()
 
     # Path: get/set/get_copy works; save writes; get_state returns copy

@@ -244,9 +244,17 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
                                      if line.lstrip().startswith("from stores")
                                      or " from stores." in line
                                      or "from stores import" in line)
-        self.assertEqual(count, 33,
+        # The count was 33 on the pre-refactor base AREA B was authored
+        # against. A's run-engine fix (+1, stores.user_memory now imported at
+        # runtime in services/run/progress.py) and D's chat_sync extraction
+        # (+3: SyncResult/MAX_LIVE_ITEMS/align_batch/MessageRecord) added
+        # legitimate imports *before* B was merged; the B merge itself adds
+        # zero. The invariant this pins is "the stores refactor must not
+        # force another area to edit an import" — bump this number only when
+        # another area legitimately grows the surface.
+        self.assertEqual(count, 37,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (baseline: 33)")
+                         "import in another area (integrated baseline: 37)")
 
 
 if __name__ == "__main__":
