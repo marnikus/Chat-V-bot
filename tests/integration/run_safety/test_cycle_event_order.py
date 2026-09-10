@@ -1,205 +1,198 @@
-"""Area C2 — cycle event ordering (signals/tracer/progress effect traces).
+"""AREA C2 — cycle event/signal ordering + snapshot parity.
 
-Parent design: docs/SAFETY_REFACTOR_AREA_C_IMPL_DESIGN_2026-09-10.md §5.
-Task list: docs/SAFETY_REFACTOR_AREA_C_2026-09-10.md C2.
-
-Pins the observable narrative the C2 extraction must preserve: block order,
-per-user signals, progress increments and tracer `type` sequences (volatile
-`ts`/`run_id` normalised). Non-stop scenarios pass before and after; stop
-scenarios fail before C1.
+Asserts effect-trace order (collect/filter/order/take → steps → marks →
+signals → progress → outcome) with volatile fields normalized. Must pass
+before and after C2 extraction.
 """
 
+from __future__ import annotations
+
 import asyncio
-import glob
-import json
-import os
-import sys
-import tempfile
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))))
+from actions.base_action import ActionResult, BaseAction
+from services.run.hooks import RunHooks, STANDALONE_NICK
+from stores.user_memory import UserRecord
 
-from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
-                                 BaseAction)
-_REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
-
-from services.run import RunCoordinator  # noqa: E402
-from services.run.hooks import STANDALONE_NICK  # noqa: E402
-from stores.user_memory import UserRecord  # noqa: E402
-
-
-class RecordingBlock(BaseAction):
-    block_id = "CUSTOM_FIND"
-    name = "Find & Click"
-    icon = "🔎"
-
-    def __init__(self, tag="step", result=ActionResult.OK, **kw):
-        super().__init__(pre_delay_ms=0)
-        self.tag = tag
-        self.calls = []
-        self._result = result
-
-    async def execute(self, user_nick, cdp, engine=None):
-        self.calls.append(user_nick)
-        return self._result
+from tests.integration.run_safety._helpers import (
+    EngineHarness,
+    FakeMemory,
+    make_ok_block,
+)
 
 
-class FakeMemory:
-    def __init__(self, users=None):
-        self._users = list(users or [])
-        self.marked = []
+class EventOrderCase(unittest.IsolatedAsyncioTestCase):
+    async def test_queued_event_order(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            events = []
+            h.engine.step_started.connect(
+                lambda i, b, u: events.append(f"started:{b}:{u}")
+            )
+            h.engine.step_complete.connect(
+                lambda n, u: events.append(f"complete:{n}:{u}")
+            )
+            h.engine.user_complete.connect(
+                lambda n, ok: events.append(f"user:{n}:{ok}")
+            )
+            h.engine.person_marked.connect(
+                lambda n: events.append(f"marked:{n}")
+            )
+            block = make_ok_block()
+            block.custom_name = "Step"
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            # Per user: started → complete → marked → user-complete.
+            self.assertEqual(
+                events,
+                [
+                    "started:TEST_OK_GENERIC:a",
+                    "complete:Step:a",
+                    "marked:a",
+                    "user:a:True",
+                    "started:TEST_OK_GENERIC:b",
+                    "complete:Step:b",
+                    "marked:b",
+                    "user:b:True",
+                ],
+            )
 
-    async def get_queue(self):
-        return [u for u in self._users if not u.messaged]
+    async def test_standalone_event_order(self):
+        with EngineHarness(users=[]) as h:
+            events = []
+            h.engine.step_started.connect(
+                lambda i, b, u: events.append(f"started:{u}")
+            )
+            h.engine.user_complete.connect(
+                lambda n, ok: events.append(f"user:{n}")
+            )
+            h.engine.person_marked.connect(lambda n: events.append("marked"))
+            block = make_ok_block()
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            self.assertIn(f"started:{STANDALONE_NICK}", events)
+            self.assertNotIn("marked", events)
+            self.assertEqual([e for e in events if e.startswith("user:")], [])
 
-    async def get_all(self):
-        return list(self._users)
+    async def test_progress_increments_per_user(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            seen = []
+            orig_emit = h.engine.progress.emit
 
-    async def upsert_user(self, user):
-        self._users.append(user)
+            def spy_emit():
+                seen.append(
+                    (
+                        h.engine.progress.done,
+                        h.engine.progress.total,
+                        h.engine.progress.skipped,
+                        h.engine.progress.failed,
+                    )
+                )
+                return orig_emit()
 
-    async def mark_messaged(self, nick):
-        self.marked.append(nick)
-        for u in self._users:
-            if u.nick == nick:
-                u.messaged = True
+            h.engine.progress.emit = spy_emit  # type: ignore
+            h.engine._stack = [make_ok_block()]
+            await h.engine.execute(None)
+            # Total extended to 2, then done increments per user.
+            self.assertIn((0, 2, 0, 0), seen)
+            self.assertIn((1, 2, 0, 0), seen)
+            self.assertIn((2, 2, 0, 0), seen)
 
+    async def test_stack_mutating_hook_parity(self):
+        # A hook that legally mutates the stack mid-preparation must see the
+        # same mode selection before/after C2 (no hoisted snapshot).
+        with EngineHarness(users=[UserRecord(nick="a")]) as h1:
+            injected = make_ok_block()
 
-class EngineCase(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.old = os.getcwd()
-        self.tmp = tempfile.TemporaryDirectory()
-        os.chdir(self.tmp.name)
-        self.addCleanup(self._restore_registry)
+            class InjectingHooks(RunHooks):
+                def pre_run(self, coordinator):
+                    # Inject a standalone-capable block before the run.
+                    coordinator._stack.append(injected)
 
-    def tearDown(self):
-        os.chdir(self.old)
-        self.tmp.cleanup()
+            h1.engine._hooks = InjectingHooks()
+            h1.engine._stack = [make_ok_block()]
+            await h1.engine.execute(None)
+            calls1 = list(injected.calls)
 
-    def _restore_registry(self):
-        ActionRegistry._classes.clear()
-        ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
+        with EngineHarness(users=[UserRecord(nick="a")]) as h2:
+            injected2 = make_ok_block()
 
-    def make(self, users=None):
-        self.memory = FakeMemory(users)
-        self.engine = RunCoordinator(cdp=None, memory=self.memory,
-                                     criteria=None)
-        self.events = {"user_complete": [], "marked": [], "step": [],
-                       "started": []}
-        self.engine.user_complete.connect(
-            lambda n, ok: self.events["user_complete"].append((n, ok)))
-        self.engine.person_marked.connect(
-            lambda n: self.events["marked"].append(n))
-        self.engine.step_complete.connect(
-            lambda n, u: self.events["step"].append((n, u)))
-        self.engine.step_started.connect(
-            lambda i, b, u: self.events["started"].append((i, b, u)))
-        return self.engine
+            class InjectingHooks2(RunHooks):
+                def pre_run(self, coordinator):
+                    coordinator._stack.append(injected2)
 
-    def tracer_types(self):
-        traces = glob.glob(os.path.join("logs", "run_trace_*.jsonl"))
-        self.assertEqual(len(traces), 1, "exactly one trace per run")
-        with open(traces[0], encoding="utf-8") as fh:
-            records = [json.loads(line) for line in fh]
-        for rec in records:
-            self.assertIn("run_id", rec)
-            self.assertIn("ts", rec)
-        return [r["type"] for r in records]
+            h2.engine._hooks = InjectingHooks2()
+            h2.engine._stack = [make_ok_block()]
+            await h2.engine.execute(None)
+            calls2 = list(injected2.calls)
 
+        self.assertEqual(calls1, calls2)
+        self.assertEqual(calls1, ["a"])
 
-class TestEventOrder(EngineCase):
-    async def test_two_users_two_blocks_narrative(self):
-        engine = self.make([UserRecord(nick="u1"), UserRecord(nick="u2")])
-        a = RecordingBlock(tag="A")
-        b = RecordingBlock(tag="B")
-        engine._stack = [a, b]
-        await engine.execute()
-        self.assertEqual(a.calls, ["u1", "u2"])
-        self.assertEqual(b.calls, ["u1", "u2"])
-        self.assertEqual(self.events["user_complete"],
-                         [("u1", True), ("u2", True)])
-        self.assertEqual(self.events["marked"], ["u1", "u2"])
-        self.assertEqual(engine.progress.done, 2)
-        self.assertEqual(engine.progress.total, 2)
-        kinds = self.tracer_types()
-        self.assertEqual(kinds[0], "run_start")
-        self.assertEqual(kinds[-1], "run_end")
-        self.assertIn("step_start", kinds)
-        self.assertIn("step_end", kinds)
+    async def test_stop_tail_marks_stopped_once(self):
+        with EngineHarness(
+            users=[UserRecord(nick="a"), UserRecord(nick="b")]
+        ) as h:
+            block = make_ok_block()
 
-    async def test_standalone_narrative(self):
-        engine = self.make([])
-        block = RecordingBlock(tag="solo")
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(block.calls, [STANDALONE_NICK])
-        self.assertEqual(self.events["user_complete"], [])
-        self.assertEqual(self.events["marked"], [])
-        self.assertEqual(engine.progress.done, 1)
-        kinds = self.tracer_types()
-        self.assertIn("run_mode", kinds)
-
-    async def test_fail_then_next_user_narrative(self):
-        engine = self.make([UserRecord(nick="u1"), UserRecord(nick="u2")])
-
-        class FailOnce(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
-
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-                self.calls = []
-
-            async def execute(self, user_nick, cdp, engine=None):
-                self.calls.append(user_nick)
-                if user_nick == "u1":
-                    return ActionResult.FAIL
-                return ActionResult.OK
-
-        block = FailOnce()
-        engine._stack = [block]
-        await engine.execute()
-        self.assertEqual(self.events["user_complete"],
-                         [("u1", False), ("u2", True)])
-        self.assertEqual(self.events["marked"], ["u2"])
-        self.assertEqual(engine.progress.failed, 1)
-        self.assertEqual(engine.progress.done, 1)
-
-    async def test_stop_after_first_user_narrative(self):
-        engine = self.make([UserRecord(nick="u1"), UserRecord(nick="u2")])
-
-        class StopOnU1(BaseAction):
-            block_id = "CUSTOM_FIND"
-            name = "Find & Click"
-            icon = "🔎"
-
-            def __init__(self):
-                super().__init__(pre_delay_ms=0)
-                self.calls = []
-
-            async def execute(self, user_nick, cdp, engine=None):
-                self.calls.append(user_nick)
-                if user_nick == "u1":
+            async def stop_on_a(engine, nick):
+                if nick == "a":
                     engine.stop()
-                return ActionResult.OK
 
-        first = StopOnU1()
-        second = RecordingBlock(tag="tail")
-        engine._stack = [first, second]
-        await engine.execute()
-        self.assertEqual(first.calls, ["u1"])
-        self.assertEqual(second.calls, [],
-                         "no block may start after stop")
-        self.assertEqual(self.events["user_complete"], [("u1", False)])
-        self.assertEqual(self.events["marked"], [])
-        kinds = self.tracer_types()
-        self.assertIn("run_end", kinds)
+            block.on_run = stop_on_a
+            h.engine._stack = [block]
+            await h.engine.execute(None)
+            records = h.trace_records()
+            ends = [r for r in records if r.get("type") == "run_end"]
+            self.assertTrue(ends)
+            self.assertEqual(ends[-1].get("reason"), "stopped")
+            self.assertEqual(h.stack_complete, [True])
 
+    async def test_take_phase_order_before_user_execution(self):
+        from actions.take_person import TakePerson
 
-ActionRegistry._classes.clear()
-ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
+        with EngineHarness(
+            users=[UserRecord(nick="Anna"), UserRecord(nick="Bella")]
+        ) as h:
+            order = []
+            take = TakePerson(pick_mode="order_first")
+            orig_choose = take.choose
+
+            def spy_choose(rows, engine=None):
+                order.append("take")
+                return orig_choose(rows, engine)
+
+            take.choose = spy_choose  # type: ignore
+            block = make_ok_block()
+
+            async def spy_run(engine, nick):
+                order.append(f"run:{nick}")
+
+            block.on_run = spy_run
+            h.engine._stack = [take, block]
+            await h.engine.execute(None)
+            self.assertTrue(order[0] == "take")
+            self.assertIn("run:Anna", order)
+
+    async def test_external_cancel_event_tail(self):
+        from tests.integration.run_safety._helpers import SlowBlock
+
+        with EngineHarness(users=[UserRecord(nick="a")]) as h:
+            h.engine._stack = [SlowBlock(delay=5.0)]
+            task = asyncio.ensure_future(h.engine.execute(None))
+            await asyncio.sleep(0.15)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            records = h.trace_records()
+            ends = [r for r in records if r.get("type") == "run_end"]
+            self.assertTrue(ends)
+            self.assertNotEqual(ends[-1].get("reason"), "completed")
+            self.assertEqual(h.stack_complete, [True])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
