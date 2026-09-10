@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from backend.criteria_engine import CriteriaEngine
     from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
+from .cycle_plan import choose_cycle_mode, inspect_stack
 from .error_recovery import RetryPolicy, RunExecutionMixin
-from .hooks import STANDALONE_NICK, USER_SCOPED_BLOCKS, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
+from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
 from .progress import RunProgress, RunQueueMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
@@ -176,104 +177,134 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
             elif run_error is not None and post_error is not None:
                 log.warning("post_run failed during error cleanup %r: %r", run_error, post_error)
 
+    def _announce_stopped(self) -> None:
+        """Emit the single stopped announcement (debug + trace)."""
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        try:
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+        except Exception:
+            pass
+
+    def _raise_if_stopped(self) -> None:
+        """Raise ``RunStopped`` when the engine stop flag is set (None-safe)."""
+        try:
+            from actions.cancellation import RunStopped as _RunStopped
+        except ImportError:  # pragma: no cover - red phase
+            _RunStopped = None  # type: ignore
+        if _RunStopped is not None and _is_stop_requested(self):
+            raise _RunStopped
+
+    async def _prepare_cycle_queue(self) -> tuple[list, bool]:
+        """Collect → filter → order → take; raises RunStopped on stop.
+
+        Inspection point A (scroll lookup) lives here, immediately before
+        collection. Phase ``RunStopped`` propagates untouched and the three
+        between-phase flag checks raise; the cycle boundary owns the single
+        ``run_end/stopped`` note. ``CancelledError`` propagates untouched.
+        """
+        scroll = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
+        queue = await self._run_collect_phase(scroll) if scroll is not None else await self._memory.get_queue()
+        self._raise_if_stopped()
+        queue = self.filter_by_labels(queue, announce=True)
+        self._raise_if_stopped()
+        queue = await self._order_queue_by_column(queue)
+        take_matched = await self._run_take_phase()
+        self._raise_if_stopped()
+        return queue, take_matched
+
+    def _announce_empty_mode(self, reason: str, needs_user: list[str]) -> str:
+        """Emit the take-miss / empty-stack / empty-queue announcements."""
+        if reason == "no_take_match":
+            self.log_msg.emit("⚠ Pick Person found no one this cycle — nothing left to work (a Repeat Loop ends here, like an empty queue)")
+            self.debug_msg.emit("ℹ Memory-driven cycle ended: no person matched Pick Person", "warn")
+            self._tracer.note({"type": "run_skip", "reason": "no_take_match"}); return "empty"
+        if reason == "no_stack":
+            self.log_msg.emit("⚠ The stack is empty — add at least one block"); self.debug_msg.emit("⚠ Nothing to run: the action stack is empty", "warn")
+            return "empty_stack"
+        self.log_msg.emit("⚠ No users in queue — nothing to run")
+        self.debug_msg.emit("⚠ The queue is empty and this stack contains user-dependent block(s): " + ", ".join(sorted(set(needs_user))) + ". Add a Scroll & Parse block (or reset the 'messaged' flags) so there are users to run on.", "warn")
+        self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))}); return "empty"
+
+    def _prepare_user_queue(self, queue: list, mode: str) -> tuple[list, bool]:
+        """Announce queued/standalone and return (queue, standalone)."""
+        if mode == "queued":
+            self.progress.extend_total(len(queue)); self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
+            return queue, False
+        self.progress.extend_total(1)
+        self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
+        self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
+        self._tracer.note({"type": "run_mode", "mode": "standalone"})
+        return [UserRecord(nick=STANDALONE_NICK)], True
+
+    async def _execute_one_queued_user(self, user, has_skip: bool) -> str:
+        """Run one user; maps cooperative ``RunStopped`` to ``"stop"``."""
+        try:
+            from actions.cancellation import RunStopped
+        except ImportError:  # pragma: no cover - red phase
+            RunStopped = None  # type: ignore
+        try:
+            return await self._execute_for_user(user, has_skip)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if RunStopped is not None and isinstance(exc, RunStopped):
+                return "stop"
+            raise
+
+    async def _finalize_user_status(self, user, status: str, standalone: bool) -> str | None:
+        """Account + mark + emit for one user; returns ``"stopped"`` to end."""
+        if status == "stop":
+            # Already announced in _execute_for_user; account + return.
+            self.progress.note_status("fail")
+            if not standalone: self.user_complete.emit(user.nick, False)
+            return "stopped"
+        if _is_stop_requested(self):
+            # Stop observed before the automatic-mark boundary.
+            self.progress.note_status("fail")
+            if not standalone: self.user_complete.emit(user.nick, False)
+            self._announce_stopped(); return "stopped"
+        self.progress.note_status(status)
+        if status == "ok" and not standalone: await self._memory.mark_messaged(user.nick); self.person_marked.emit(user.nick)
+        if not standalone: self.user_complete.emit(user.nick, status == "ok")
+        return None
+
+    async def _run_user_queue(self, queue: list, has_skip: bool, standalone: bool) -> str:
+        """Run the per-user loop with stop/pause/mark gates."""
+        for user in queue:
+            if _is_stop_requested(self):
+                self._announce_stopped(); return "stopped"
+            await self._wait_if_paused()
+            if _is_stop_requested(self):
+                self._announce_stopped(); return "stopped"
+            status = await self._execute_one_queued_user(user, has_skip)
+            stopped = await self._finalize_user_status(user, status, standalone)
+            if stopped is not None:
+                return stopped
+        return "worked"
+
     async def _execute_cycle(self) -> str:
         try:
             from actions.cancellation import RunStopped
         except ImportError:  # pragma: no cover - red phase
             RunStopped = None  # type: ignore
-
-        def _stopped_note():
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            try:
-                self._tracer.note({"type": "run_end", "reason": "stopped"})
-            except Exception:
-                pass
-
-        scroll = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
         try:
-            queue = await self._run_collect_phase(scroll) if scroll is not None else await self._memory.get_queue()
+            queue, take_matched = await self._prepare_cycle_queue()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             if RunStopped is not None and isinstance(exc, RunStopped):
-                _stopped_note(); return "stopped"
+                self._announce_stopped(); return "stopped"
             raise
-        if _is_stop_requested(self):
-            _stopped_note(); return "stopped"
-        queue = self.filter_by_labels(queue, announce=True)
-        if _is_stop_requested(self):
-            _stopped_note(); return "stopped"
-        try:
-            queue = await self._order_queue_by_column(queue)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            if RunStopped is not None and isinstance(exc, RunStopped):
-                _stopped_note(); return "stopped"
-            raise
-        try:
-            take_matched = await self._run_take_phase()
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            if RunStopped is not None and isinstance(exc, RunStopped):
-                _stopped_note(); return "stopped"
-            raise
-        if _is_stop_requested(self):
-            _stopped_note(); return "stopped"
-        has_skip = any(b.block_id == "CONDITIONAL_SKIP" and getattr(b, "enabled", True) for b in self._stack)
-        mem_click = next((b for b in self._stack if b.block_id == "CLICK_USER" and getattr(b, "enabled", True) and getattr(b, "use_person_from_memory", False)), None)
-        needs_user = [b.block_id for b in self._stack if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
-        take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
-        if mem_click is not None: return await self._run_single_target_cycle(has_skip, take_matched)
-        if take_present and not take_matched and not needs_user and not queue:
-            self.log_msg.emit("⚠ Pick Person found no one this cycle — nothing left to work (a Repeat Loop ends here, like an empty queue)")
-            self.debug_msg.emit("ℹ Memory-driven cycle ended: no person matched Pick Person", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "no_take_match"}); return "empty"
-        standalone = False
-        if queue:
-            self.progress.extend_total(len(queue)); self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
-        elif not self._stack:
-            self.log_msg.emit("⚠ The stack is empty — add at least one block"); self.debug_msg.emit("⚠ Nothing to run: the action stack is empty", "warn")
-            return "empty_stack"
-        elif needs_user:
-            self.log_msg.emit("⚠ No users in queue — nothing to run")
-            self.debug_msg.emit("⚠ The queue is empty and this stack contains user-dependent block(s): " + ", ".join(sorted(set(needs_user))) + ". Add a Scroll & Parse block (or reset the 'messaged' flags) so there are users to run on.", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))}); return "empty"
-        else:
-            standalone = True; self.progress.extend_total(1); queue = [UserRecord(nick=STANDALONE_NICK)]
-            self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
-            self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
-            self._tracer.note({"type": "run_mode", "mode": "standalone"})
-        for user in queue:
-            if _is_stop_requested(self):
-                _stopped_note(); return "stopped"
-            await self._wait_if_paused()
-            if _is_stop_requested(self):
-                _stopped_note(); return "stopped"
-            try:
-                status = await self._execute_for_user(user, has_skip)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                if RunStopped is not None and isinstance(exc, RunStopped):
-                    status = "stop"
-                else:
-                    raise
-            if status == "stop":
-                # Already announced in _execute_for_user; account + return.
-                self.progress.note_status("fail")
-                if not standalone: self.user_complete.emit(user.nick, False)
-                return "stopped"
-            if _is_stop_requested(self):
-                # Stop observed before the automatic-mark boundary.
-                self.progress.note_status("fail")
-                if not standalone: self.user_complete.emit(user.nick, False)
-                _stopped_note(); return "stopped"
-            self.progress.note_status(status)
-            if status == "ok" and not standalone: await self._memory.mark_messaged(user.nick); self.person_marked.emit(user.nick)
-            if not standalone: self.user_complete.emit(user.nick, status == "ok")
-            if status == "stop": self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
-        return "worked"
+        # Inspection point B: single post-take scan, then the mode table.
+        facts = inspect_stack(self._stack)
+        decision = choose_cycle_mode(facts, has_queue=bool(queue), take_matched=take_matched, stopped=_is_stop_requested(self))
+        if decision.mode == "stopped":
+            self._announce_stopped(); return "stopped"
+        if decision.mode == "single_target":
+            return await self._run_single_target_cycle(facts.has_conditional_skip, take_matched)
+        if decision.mode in ("empty", "empty_stack"):
+            return self._announce_empty_mode(decision.reason, list(facts.user_scoped_ids))
+        queue, standalone = self._prepare_user_queue(queue, decision.mode)
+        return await self._run_user_queue(queue, facts.has_conditional_skip, standalone)
 
 ActionEngine = RunCoordinator
