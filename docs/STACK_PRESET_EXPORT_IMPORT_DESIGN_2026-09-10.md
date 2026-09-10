@@ -352,9 +352,13 @@ Fix (this revision):
 
 * The four controls moved from the window-title row to a dedicated
   `.preset-toolbar` row with **plain-text labels**
-  (`Select Preset ▾` / `Save` / `Export` / `Import ⬇`) — visible with or
+  (`Select Preset ▾` / `Save` / `Export` / `Import`) — visible with or
   without the icon font. Same button ids → the existing JS wiring is
-  unchanged; `Import ⬇` is the "Download" control from the report.
+  unchanged; the plain "Import" is the "Download" control from the
+  report. There is deliberately NO separate Download button: Export
+  (file out) and Import (file in) are the two distinct file operations;
+  the earlier ⬇/download arrow on Import was removed because it made
+  the button look like a duplicate of Export.
 * New behaviour required by the report: an applied import (Replace or
   Merge) also registers the imported file as a **named preset**
   (`save_imported_preset` in `bridge/file_bridge.py`:

@@ -217,9 +217,9 @@ design in `docs/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
 
 ### Export / Import Presets (portable `.json` files)
 The Action Stack panel has a dedicated, **text-labeled** preset row:
-**[ Select Preset ▾ ]  [ Save ]  [ Export ]  [ Import ⬇ ]** (labels are
-plain text on purpose — the controls stay visible even when the icon web
-font cannot load, e.g. on offline machines).
+**[ Select Preset ▾ ]  [ Save ]  [ Export ]  [ Import ]** — four
+distinct controls (labels are plain text on purpose, so the row stays
+visible even when the icon web font cannot load, e.g. offline).
 - **Select Preset ▾** — list of every saved preset (name, save date,
   block count); click **Load** to restore its full stack.
 - **Save** — name the current stack and it is stored with **every** block
@@ -228,7 +228,7 @@ font cannot load, e.g. on offline machines).
   standalone `.json` file (native save dialog). The Select Preset list has
   an **Export** button per saved preset, and the **⬇ on a Custom Block
   chip** exports that one block.
-- **Import ⬇** — pick a `.json` preset file: the app first shows a
+- **Import** — pick a `.json` preset file: the app first shows a
   **preview** (block list + compatibility warnings: newer app version,
   unknown block type, a Find & Click block without its selector) and only
   then applies. Choose **Replace** (overwrites the current stack; ↩ Undo
