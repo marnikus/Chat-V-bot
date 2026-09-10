@@ -140,6 +140,47 @@ class TestRequestObjectIsSmall(unittest.TestCase):
                              f"PersonPageRequest has {info['methods']} methods")
 
 
+class TestClassLimitsAreEnforced(unittest.TestCase):
+    """`CLASS_LIMITS` used to be decoration: declared, echoed into the report,
+    and never actually checked. These tests pin the enforcement."""
+
+    def test_synthetic_over_cap_class_is_flagged_on_both_axes(self):
+        v = gate.class_violations({"loc": 999, "methods": 99})
+        self.assertEqual(len(v), 2, v)
+        self.assertTrue(any("loc" in x for x in v), v)
+        self.assertTrue(any("methods" in x for x in v), v)
+
+    def test_synthetic_fitting_class_is_clean(self):
+        self.assertEqual(
+            gate.class_violations({"loc": gate.CLASS_LIMITS["loc"],
+                                   "methods": gate.CLASS_LIMITS["methods"]}),
+            [], "a class exactly at the cap must pass — the limit is 'fail if >'")
+
+    def test_the_owned_request_object_is_reported_and_clean(self):
+        rows = {r["target"]: r for r in gate.run()["class_rows"]}
+        key = "backend/history_query.py::PersonPageRequest"
+        self.assertIn(key, rows, "class enforcement did not scan the owned file")
+        self.assertEqual(rows[key]["violations"], [])
+
+    def test_enforcement_actually_fires_on_real_oversized_classes(self):
+        """The strongest check: with the ratchet lifted, the two genuinely
+        oversized legacy classes must be reported. Proves the loop is wired to
+        real measurement rather than passing because nothing was examined."""
+        saved = dict(gate.RATCHET)
+        gate.RATCHET.clear()
+        try:
+            breaches = gate.run()["breaches"]
+        finally:
+            gate.RATCHET.update(saved)
+        self.assertTrue(
+            any("HistoryQuery" in b and "loc" in b for b in breaches),
+            "with the ratchet lifted, HistoryQuery (340 LOC) must breach the "
+            f"{gate.CLASS_LIMITS['loc']} cap; got: {breaches}")
+        self.assertTrue(
+            any("HistoryBridge" in b for b in breaches),
+            f"HistoryBridge must breach too; got: {breaches}")
+
+
 class TestPreExistingDebtDoesNotGrow(unittest.TestCase):
     def test_class_ratchet(self):
         grew = []

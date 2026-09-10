@@ -54,7 +54,13 @@ class CdpBridge(QObject):
         self._schedule(self._do_connect(ws_url))
 
     async def _do_connect(self, ws_url):
-        result = await self.ctx.cdp_service.connect(ws_url)
+        try:
+            result = await self.ctx.cdp_service.connect(ws_url)
+        except Exception as exc:                        # noqa: BLE001
+            # a raising service must be observed, never an unhandled task
+            self.ctx.bus.emit(LogMessage(
+                message=f"❌ Connect failed: {exc}", level="error"))
+            return
         if result.is_ok and result.value:
             # a fresh explicit connect refills the people list
             from core.events import PeopleChanged

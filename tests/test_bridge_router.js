@@ -59,10 +59,12 @@ test('every UI bridge call has a Python def on a domain bridge', () => {
   assert(missing.length === 0, 'UI calls missing on Python: ' + missing.join(', '));
 });
 
-test('WebChannel object name is still "bridge"', () => {
-  const main = fs.readFileSync(path.join(root, 'main.py'), 'utf8');
-  assert(/registerObject\(\s*"bridge"/.test(main), 'main.py must registerObject("bridge")');
-});
+// The "registerObject(\"bridge\")" source assertion that used to live here is
+// replaced by a behavioral test:
+// tests/unit/app/test_webchannel_registration_contract.py runs the real
+// app.window.create_window and asserts the exact bridge is registered under
+// "bridge", the channel is installed on the page and kept on the window, the
+// local UI URL is loaded, and the window is shown.
 
 if (failed) {
   console.error(`bridge_router: ${passed} passed, ${failed} failed`);

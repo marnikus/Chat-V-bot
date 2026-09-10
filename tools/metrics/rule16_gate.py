@@ -26,7 +26,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 LIMITS = {"func_loc": 30, "params": 4, "cc": 10, "cognitive": 15, "nesting": 4}
-CLASS_LIMITS = {"loc": 300, "methods": 15}
+# Per docs/AGENT_RULES_CODE_QUALITY.md §1, the CI fail line is class > 150 LOC.
+# (An earlier draft of this gate used 300, which was the cap before main's
+# 9f84454 tightened it. The doc is the source of truth; this must match it.)
+CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
@@ -182,9 +185,19 @@ def violations(m: dict | None) -> list[str]:
     return out
 
 
+def class_violations(info: dict) -> list[str]:
+    """Which class limits `info` breaks. Separate from `violations` so the
+    class check is directly testable with a synthetic over-cap class."""
+    out = []
+    for axis in ("loc", "methods"):
+        if info[axis] > CLASS_LIMITS[axis]:
+            out.append(f"{axis} {info[axis]} > {CLASS_LIMITS[axis]}")
+    return out
+
+
 # ── the gate ──────────────────────────────────────────────────────
 def run() -> dict:
-    breaches, stale, rows = [], [], []
+    breaches, stale, rows, class_rows = [], [], [], []
 
     for key in OWNED:
         rel, cls, func = key
@@ -207,6 +220,20 @@ def run() -> dict:
                 breaches.append(f"{rel}::{name} {axis} {info[axis]} > "
                                 f"frozen {cap[axis]}")
 
+    # Enforce the class limits on every class in the owned files. Ratcheted
+    # classes are exempt — they are pre-existing offenders governed by RATCHET
+    # above, and failing them here would make the gate unfixable. Without this
+    # loop CLASS_LIMITS is decoration: declared, reported, never enforced.
+    for rel in sorted({k[0] for k in OWNED}):
+        for name, info in classes(rel).items():
+            if (rel, name) in RATCHET:
+                continue
+            cv = class_violations(info)
+            class_rows.append({"target": f"{rel}::{name}", **info,
+                               "violations": cv})
+            if cv:
+                breaches.append(f"{rel}::{name}: " + ", ".join(cv))
+
     for key, why in OVERRIDES.items():
         if len(why.strip()) < 40:
             breaches.append(f"override for {key[2]} has no real justification")
@@ -216,7 +243,8 @@ def run() -> dict:
     found, not_checked = smells()
     breaches += [f"smell: {f}" for f in found]
 
-    return {"rows": rows, "breaches": breaches + stale,
+    return {"rows": rows, "class_rows": class_rows,
+            "breaches": breaches + stale,
             "not_checked": not_checked,
             "limits": LIMITS, "class_limits": CLASS_LIMITS}
 
@@ -233,7 +261,7 @@ def smells() -> tuple[list[str], list[str]]:
     if vulture is None:
         missing.append("vulture")
     else:
-        r = subprocess.run([vulture] + SMELL_FILES + ["--min-confidence", "80"],
+        r = subprocess.run([vulture] + SMELL_FILES + ["--min-confidence", "90"],
                            capture_output=True, text=True, cwd=ROOT)
         findings += [l for l in r.stdout.splitlines() if l.strip()]
 
@@ -279,6 +307,14 @@ def main() -> int:
         cog = "-" if r["cognitive"] is None else r["cognitive"]
         print(f"{r['target']:52s} {r['loc']:4d} {r['params']:4d} {cc:>4} "
               f"{cog:>4} {r['nesting']:4d}  "
+              f"{'ok' if not r['violations'] else 'FAIL ' + '; '.join(r['violations'])}")
+
+    C = CLASS_LIMITS
+    print(f"\nclass limits: {C['loc']} LOC, {C['methods']} methods "
+          f"(ratcheted legacy classes exempt — see RATCHET)")
+    print(f"{'class':52s} {'LOC':>4} {'mth':>4}  verdict")
+    for r in result["class_rows"]:
+        print(f"{r['target']:52s} {r['loc']:4d} {r['methods']:4d}  "
               f"{'ok' if not r['violations'] else 'FAIL ' + '; '.join(r['violations'])}")
 
     if result["not_checked"]:

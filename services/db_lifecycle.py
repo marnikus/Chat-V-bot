@@ -9,18 +9,27 @@ this collaborator calls them through its host.
 Every rule from the ONE DB = ONE WORLD design is preserved verbatim
 (permanent delete, last-world protection, fail-closed switching, clean
 with a trash backup).
+
+AREA A (2026-09-10): deletion is fail-closed and serialized. Scans happen
+before any switch/unlink; any incomplete scan refuses; per-file keep is never
+bypassed by rmtree; partial work is reported truthfully; overlapping lifecycle
+ops serialize via per-manager + root-global locks with unlocked delegates.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
 from datetime import datetime
 
-from services.db_service import SUFFIXES, db_stem, _media_references
+from services.db_service import SUFFIXES, db_stem
 
 log = logging.getLogger("chatbot")
+
+# Root-keyed global locks for cross-manager serialization (same process).
+_GLOBAL_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 class DbLifecycle:
@@ -28,6 +37,7 @@ class DbLifecycle:
 
     def __init__(self, host):
         self._host = host
+        self._op_lock: asyncio.Lock | None = None
 
     # ── convenience over the host ────────────────────────────────
     @property
@@ -42,13 +52,59 @@ class DbLifecycle:
     def _config(self):
         return self._host._config
 
-    # ── lifecycle ────────────────────────────────────────────────
+    # ── serialization ────────────────────────────────────────────
+    def _get_locks(self):
+        """(global_root_lock, local_manager_lock), created lazily."""
+        try:
+            root = os.path.abspath(getattr(self._host, "root", "") or os.getcwd())
+        except Exception:  # noqa: BLE001
+            root = os.getcwd()
+        g = _GLOBAL_LOCKS.get(root)
+        if g is None:
+            g = asyncio.Lock()
+            _GLOBAL_LOCKS[root] = g
+        if self._op_lock is None:
+            self._op_lock = asyncio.Lock()
+        return g, self._op_lock
+
+    async def _guarded(self, coro_fn, *args, **kwargs):
+        """Run one lifecycle op under global+local locks (fixed order)."""
+        g, l = self._get_locks()
+        async with g:
+            async with l:
+                return await coro_fn(*args, **kwargs)
+
+    # ── lifecycle (public, serialized) ───────────────────────────
     async def create(self, name: str) -> dict:
         """Create an EMPTY world (the full schema) and connect to it.
 
         The fresh world is seeded with the app-template settings (D9) —
         nothing is copied from the world being left.
         """
+        return await self._guarded(self._create_unlocked, name)
+
+    async def load(self, path: str, create: bool = False) -> dict:
+        """Switch the running world over to another database file."""
+        return await self._guarded(self._load_unlocked, path, create)
+
+    async def delete(self, path: str) -> dict:
+        """PERMANENTLY delete a world (file + media + every reference).
+
+        Fail-closed phases: validate → scan → switch → detach → database →
+        media → finalize. See _delete_unlocked for the full contract.
+        """
+        return await self._guarded(self._delete_unlocked, path)
+
+    async def clean(self) -> dict:
+        """Empty every table, keeping the file (a backup goes to the trash)."""
+        return await self._guarded(self._clean_unlocked)
+
+    async def restore_backup(self, backup: str, target: str = "") -> dict:
+        """Put a trashed/backed-up file back (the undo half of clean)."""
+        return await self._guarded(self._restore_unlocked, backup, target)
+
+    # ── unlocked delegates (internal; delete calls _load_unlocked) ─
+    async def _create_unlocked(self, name: str) -> dict:
         path = self._registry.resolve(name)
         if not path:
             if str(name or "").strip():
@@ -63,7 +119,7 @@ class DbLifecycle:
             os.makedirs(folder, exist_ok=True)
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
-        result = await self.load(path, create=True)
+        result = await self._load_unlocked(path, create=True)
         if result.get("ok"):
             result["op"] = "create"
             result["before_path"] = before
@@ -75,8 +131,7 @@ class DbLifecycle:
                                 os.path.basename(path), exc)
         return result
 
-    async def load(self, path: str, create: bool = False) -> dict:
-        """Switch the running world over to another database file."""
+    async def _load_unlocked(self, path: str, create: bool = False) -> dict:
         target = self._registry.resolve(path)
         if not target:
             return {"ok": False, "error": "no database selected"}
@@ -100,147 +155,24 @@ class DbLifecycle:
         self._registry._remember(target)
         return {"ok": True, "op": "load", "path": target, "before_path": before}
 
-    async def delete(self, path: str) -> dict:
-        """PERMANENTLY delete a world (file + media + every reference).
+    async def _delete_unlocked(self, path: str) -> dict:
+        """Fail-closed permanent deletion with truthful partial results.
 
-        Rules (D4/D5 of the design): the last remaining world cannot be
-        deleted; deleting the active world switches away first (full world
-        restart); the media footprint is computed from the world's own
-        `media` rows, and a file is unlinked only when no OTHER existing
-        world references it; after the unlink there is nothing left that
-        points at the deleted file.
+        Contract (master plan §3.2): ok only when fully completed; phase in
+        validate/scan/switch/detach/database/media/finalize; partial True when
+        some irreversible work happened but not all; world_changed distinct
+        from partial; active_path observed; removed/retained/failed exact;
+        media_files_removed counts actual unlinks.
+
+        The read-only scan phase lives in `services.db_deletion_scan` and
+        the mutating phases in `services.db_deletion_flow` (one small
+        function per phase); this delegate stays thin so the irreversible
+        path is not one large, untestable method.
         """
-        target = self._registry.resolve(path)
-        if not target or not os.path.exists(target):
-            return {"ok": False, "error": "that database does not exist"}
-        target_abs = os.path.abspath(target)
-        existing = [os.path.abspath(p)
-                    for p in self._registry.existing_worlds()]
-        if len(existing) < 2:
-            return {"ok": False,
-                    "error": "cannot delete the last database — create a "
-                             "new one first",
-                    "last_database": True}
-        was_active = target_abs == os.path.abspath(
-            self._registry.active_path())
-        if was_active and self._service is not None:
-            fallback = self._pick_fallback(target)
-            if not fallback:
-                return {"ok": False,
-                        "error": "no other database to switch to"}
-            # the media footprint must be read BEFORE the world closes
-            footprint = await self._world_footprint(target)
-            opened = await self.load(fallback)
-            if not opened.get("ok"):
-                return {"ok": False,
-                        "error": opened.get("error", "cannot switch away"),
-                        "path": target}
-        else:
-            footprint = await self._world_footprint(target)
-        # every connection that still points at the file must go
-        if self._service is not None and \
-                os.path.abspath(self._service.db.path) == target_abs:
-            try:
-                await self._service.detach_db()
-            except Exception as exc:                   # noqa: BLE001
-                return {"ok": False, "error": str(exc)}
-        if self._service is not None and \
-                self._service.memory is not None and \
-                os.path.abspath(getattr(self._service.memory, "db_path", "")
-                                or "") == target_abs:
-            try:
-                await self._service.memory.close()
-            except Exception as exc:                   # noqa: BLE001
-                return {"ok": False, "error": str(exc)}
-        # ── the unlink ──────────────────────────────────────────
-        for suffix in SUFFIXES:
-            try:
-                if os.path.exists(target + suffix):
-                    os.unlink(target + suffix)
-            except OSError as exc:
-                return {"ok": False,
-                        "error": f"the database file is in use: {exc}",
-                        "path": target}
-        keep = await self._other_references(existing, except_abs=target_abs)
-        media_removed = await self._delete_world_media(target, footprint,
-                                                       keep)
-        # ── clean break: every reference to the world goes with it ─
-        self._forget(target)
-        if was_active:
-            self._persist_path(self._registry.active_path())
-        return {"ok": True, "op": "delete", "path": target,
-                "was_active": was_active,
-                "before_path": target,
-                "media_files_removed": media_removed}
-
-    async def _world_footprint(self, path: str) -> set[str]:
-        """The world's media: its own folder + the files its rows name."""
-        footprint: set[str] = set()
-        world_folder = os.path.abspath(self._registry.media_dir(path))
-        base = os.path.abspath(self._registry.media_base_dir())
-        if world_folder == base or world_folder.startswith(base + os.sep):
-            footprint.add(world_folder)
-        for ref in await _media_references(path):
-            if ref == base:
-                continue
-            if ref.startswith(base + os.sep):
-                footprint.add(ref)
-        return footprint
-
-    async def _other_references(self, existing: list[str],
-                                except_abs: str = "") -> set[str]:
-        """What the OTHER existing worlds point at (read-only scan).
-
-        A scan of a world that cannot be read contributes nothing, so the
-        delete proceeds with the conservative rule (a file two worlds share
-        is kept, because we could not verify the other world is free of it).
-        """
-        keep: set[str] = set()
-        for world in existing:
-            if world == except_abs:
-                continue
-            keep |= await _media_references(world)
-        return keep
-
-    async def _delete_world_media(self, path: str, footprint: set[str],
-                                  keep: set[str]) -> int:
-        """Remove the world's media bytes, keeping what others reference."""
-        removed = 0
-        base = os.path.abspath(self._registry.media_base_dir())
-        # 1 — the files the world's rows named (reference scan, D2)
-        for ref in sorted(footprint):
-            if os.path.isdir(ref):
-                continue
-            if not ref.startswith(base + os.sep):
-                continue                     # unknown location — never touch
-            if ref in keep:
-                continue                     # another world still owns it
-            try:
-                if os.path.exists(ref):
-                    os.unlink(ref)
-                    removed += 1
-                    # take away folders the unlink left empty
-                    folder = os.path.dirname(ref)
-                    while folder and folder != base and \
-                            folder.startswith(base + os.sep) and \
-                            not os.listdir(folder):
-                        try:
-                            os.rmdir(folder)
-                        except OSError:
-                            break
-                        folder = os.path.dirname(folder)
-            except OSError as exc:
-                log.debug("cannot remove media file %s: %s", ref, exc)
-        # 2 — the world's own folder (exclusive by construction)
-        world_folder = os.path.abspath(self._registry.media_dir(path))
-        if world_folder.startswith(base + os.sep) and world_folder != base \
-                and os.path.isdir(world_folder):
-            try:
-                shutil.rmtree(world_folder)
-            except OSError as exc:
-                log.warning("cannot remove world media folder %s: %s",
-                            world_folder, exc)
-        return removed
+        # function-local import: keeps the module import graph identical to
+        # the previous inline version (db_service imports lifecycle lazily).
+        from services.db_deletion_flow import delete_world
+        return await delete_world(self, path)
 
     def _forget(self, path: str) -> None:
         """Clean break: no reference to the deleted file survives."""
@@ -261,13 +193,8 @@ class DbLifecycle:
                 self._config.set("history", history)
                 self._config.save()
 
-    async def clean(self) -> dict:
-        """Empty every table, keeping the file (a backup goes to the trash).
-
-        Unlike delete, clean is an EDIT of one world: the file backup AND
-        the world's own media folder go to `db_trash/`, so Ctrl+Z restores
-        the rows and the bytes are preserved next to the backup.
-        """
+    async def _clean_unlocked(self) -> dict:
+        """Empty every table, keeping the file (a backup goes to the trash)."""
         path = self._registry.active_path()
         if self._service is None:
             return {"ok": False, "error": "the message archive is not running"}
@@ -309,7 +236,7 @@ class DbLifecycle:
                 "removed": removed, "before_path": path,
                 "media_moved": media_moved}
 
-    async def restore_backup(self, backup: str, target: str = "") -> dict:
+    async def _restore_unlocked(self, backup: str, target: str = "") -> dict:
         """Put a trashed/backed-up file back (the undo half of clean)."""
         source = str(backup or "")
         if not source or not os.path.exists(source):

@@ -30,8 +30,8 @@ column is the same measurement at commit `3820136` — so "mine" and
 | `_order_by` | — | *(did not exist)* | 25 LOC · 2 prm · CC 7 · cog 10 · nest 2 | ✅ new, fits |
 | `HistoryQuery.list_persons` | 30 / 4 / 10 | **47 LOC · 5 prm · CC 15** | **46 LOC · 6 prm · CC 14** | ❌ fails — and already failed |
 | `HistoryBridge.userdb_page` | 30 / 4 / 10 | 21 LOC · 2 prm · CC 2 | 24 LOC · 2 prm · CC 2 | ✅ fits |
-| `class HistoryQuery` | 300 LOC / 15 methods | **362 LOC** · 14 methods | **361 LOC** · 14 methods | ❌ pre-existing |
-| `class HistoryBridge` | 300 LOC / 15 methods | **490 LOC · 45 methods** | **493 LOC · 45 methods** | ❌ pre-existing |
+| `class HistoryQuery` | 150 LOC / 15 methods | **362 LOC** · 14 methods | **361 LOC** · 14 methods | ❌ pre-existing |
+| `class HistoryBridge` | 150 LOC / 15 methods | **490 LOC · 45 methods** | **493 LOC · 45 methods** | ❌ pre-existing |
 | line coverage, new lines | ≥ 80% | — | **96.6%** (28/29) | ✅ |
 | branch coverage, new lines | ≥ 75% | — | **91.7%** (11/12) | ✅ |
 | new duplicated blocks | 0 | 2 pre-existing pairs | **0 new** | ✅ |
@@ -84,7 +84,7 @@ this change, for two concrete repo-specific reasons:
 
 This feature *shrinks* `HistoryQuery` (362 → 340 LOC, measured) as a side
 effect. Getting
-either class under 300 is a separate refactor with its own design doc.
+either class under 150 is a separate refactor with its own design doc.
 
 ---
 
@@ -207,7 +207,7 @@ branch coverage both reach 100%.
    so this cannot silently rot:
    * every function this feature owns is ≤30 LOC, ≤4 params, CC ≤10,
      cognitive ≤15, nesting ≤4 — hard fail;
-   * `PersonPageRequest` itself is ≤300 LOC / ≤15 methods;
+   * `PersonPageRequest` itself is ≤150 LOC / ≤15 methods;
    * a **ratchet** on the two pre-existing oversized classes: their LOC and
      method count must not exceed the recorded baseline, so debt cannot grow
      quietly while the rule is "known failing";
@@ -281,8 +281,8 @@ inside limits.
 
 | Class | Baseline | Now | Still failing |
 |---|---|---|---|
-| `HistoryQuery` | 362 LOC / 14 methods | **340 LOC** / 14 methods | LOC > 300 |
-| `HistoryBridge` | 490 LOC / 45 methods | **486 LOC** / 45 methods | LOC > 300, methods > 15 |
+| `HistoryQuery` | 362 LOC / 14 methods | **340 LOC** / 14 methods | LOC > 150 |
+| `HistoryBridge` | 490 LOC / 45 methods | **486 LOC** / 45 methods | LOC > 150, methods > 15 |
 
 Both shrank. Neither is fixed, for the contract reasons in §1.3. The ratchet in
 `tests/test_rule16_new_code.py` pins these numbers so they cannot creep back up.

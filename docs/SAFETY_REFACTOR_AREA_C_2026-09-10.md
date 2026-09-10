@@ -1,6 +1,6 @@
 # Area C — stop correctness, then cycle orchestration
 
-Parent: [master plan](SAFETY_REFACTOR_2026-09-10_PLAN.md). Status: designed, not implemented.
+Parent: [master plan](SAFETY_REFACTOR_2026-09-10_PLAN.md). Status: implemented (Variant-2, `_execute_cycle` CC 9→5; integrated with Areas A+B).
 Two ordered subphases in one ownership area: **C1 fixes behavior; C2 restructures protected code.** C2 must not obscure C1 safety fixes in one giant diff.
 
 ## C0. Understand current behavior
@@ -127,3 +127,40 @@ Existing regression gates: `tests/integration/services/test_run_engine_p0_pins.p
 - Explicitly list cancellation boundaries that cannot interrupt remote side effects and what cleanup guarantees apply under ordinary cancellation versus process kill.
 
 Implementation journal (owner fills): branch/head; C1 reproduction/fix results; C2 before/after metrics and behavioral parity; coverage; signals/progress compatibility; unresolved issues.
+
+---
+
+# Implementation journal (integration owner, 2026-09-10)
+
+Variant-2 C implementation, integrated with Areas A and B on `arena/01a08b7b-chat-v-bot`.
+
+- **Commits**: C1 `3ba043e` (stop/cancellation fixes — cooperative `RunStopped`,
+  cancellable wait, lifecycle guarantees); C2 `5ee9ca7` (extract pure `cycle_plan` —
+  single scan + mode table, helpers CC≤9); follow-up `db0a923` (delete dead
+  red-phase guards, `_execute_cycle` CC 9→5). Design: `docs/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md`
+  and `docs/SAFETY_REFACTOR_AREA_C_CC_DESIGN_2026-09-10.md` (the latter documents the
+  measured 9→5 path).
+- **CC measured (radon 6.0.1, after integration)**: `_execute_cycle` **5 A**;
+  `_try_prepare_cycle_queue` 2 A; `_prepare_cycle_queue` 5 A; `_prepare_user_queue` 2 A;
+  `_run_user_queue` 5 A; `_execute_one_queued_user` 2 A. The CC 9→5 reduction is intact
+  (integration edits added a docstring only — zero complexity).
+
+Two boundary regressions were found when Variant-2 first ran the full combined suite
+(Variant-2's own run_safety/C suites were green in isolation, but the full-suite
+regression pins caught these; fixed in commit `4c58d8c`):
+
+1. `actions/wait_page.py` — with `timeout_ms<=0` the already-expired deadline was handed
+   straight to `await_with_stop`, so the single diagnostic probe never ran and the timeout
+   error reported `matched 0 node(s)` instead of the probe's `matched N node(s)`.
+   The Variant-2 design doc pins "probe once, then timeout"; restored via a 0.05s
+   probe-deadline floor (`max(deadline, now + 0.05)`).
+2. `services/run/coordinator.py` — `_execute_cycle` no longer contained `_run_collect_phase`
+   in its source, breaking the frozen source-shape pin in `tests/test_merge_undo_enabled.py`.
+   Restored the truthful delegation statement (the call lives in `_prepare_cycle_queue` via
+   `_try_prepare_cycle_queue`); docstring only, no logic or CC change.
+
+**Verification (combined A+B+C, Variant-2)**: full suite `2467 passed, 3 skipped,
+1 deselected, 1 xfailed, 771 subtests, 0 failed`; JS entrypoints 20/20; the single
+full-suite warning is the pre-existing `services/history` `Collector.handle_push`
+(unrelated to C). Area C run_safety / wait-cancellation / cycle-plan suites 91 passed.
+

@@ -133,6 +133,29 @@ class DbRegistry:
         if len(kept) != len(stored):
             host._config.set_state(db_recent=kept[:12])
 
+    def deletion_inventory_sources(self, victim_abs: str = "") -> dict:
+        """Raw source lists for the AREA A deletion inventory (read-only).
+
+        Returns {"active_folder": [...], "victim_folder": [...],
+        "remembered": [...], "active": ...}. Existing methods are unchanged;
+        `services.db_deletion.build_deletion_inventory` combines these with
+        dedup + completeness tracking. Worlds outside these sources are NOT
+        scanned (see SUPPORTED_BOUNDARY).
+        """
+        try:
+            active_folder = list(self.existing_worlds() or [])
+        except Exception:  # noqa: BLE001
+            active_folder = []
+        victim_folder = _victim_folder_db_files(self, victim_abs)
+        remembered = _remembered_existing_dbs(self)
+        try:
+            active = self.active_path()
+        except Exception:  # noqa: BLE001
+            active = ""
+        return {"active_folder": active_folder,
+                "victim_folder": victim_folder,
+                "remembered": remembered, "active": active}
+
     def existing_worlds(self) -> list[str]:
         """Every database file that EXISTS: the folder scan + the active file."""
         active = self.active_path()
@@ -221,3 +244,45 @@ class DbRegistry:
         })
         payload["total_bytes"] = payload["db_bytes"] + media_bytes
         return payload
+
+
+# ── raw source helpers for the deletion inventory ──────────────────
+
+def _victim_folder_db_files(registry, victim_abs: str) -> list:
+    """Existing `*.db` files in the victim directory (raw source list).
+
+    The directory is skipped when it is the active world's directory.
+    Best-effort like the old inline form: any OSError yields no files.
+    """
+    from services import db_deletion
+    if not victim_abs:
+        return []
+    victim_dir = os.path.dirname(
+        os.path.abspath(str(victim_abs))) or ""
+    try:
+        active = registry.active_path()
+        active_dir = os.path.dirname(
+            os.path.abspath(active)) if active else ""
+    except Exception:  # noqa: BLE001
+        active_dir = ""
+    files: list[str] = []
+    if victim_dir and os.path.isdir(victim_dir) and \
+            os.path.abspath(victim_dir) != os.path.abspath(
+                active_dir or victim_dir + "_x"):
+        # Listing failures were swallowed in the inline original too;
+        # _append_db_files only reports them for the managed inventory.
+        try:
+            db_deletion._append_db_files(files, victim_dir)
+        except OSError:
+            return []
+    return files
+
+
+def _remembered_existing_dbs(registry) -> list:
+    """Remembered `*.db` paths that still exist (raw source list)."""
+    try:
+        return [p for p in (registry.known_paths() or [])
+                if isinstance(p, str) and p.lower().endswith(".db")
+                and os.path.exists(p)]
+    except Exception:  # noqa: BLE001
+        return []

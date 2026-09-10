@@ -288,3 +288,19 @@ Media follows the same ownership rule: bytes are filed under the
 conversation they belong to (`saved_media/<Latin nick>/images|gifs/
 YYYY-MM-DD_NNN.ext`), never in an anonymous global pile, and the UI shows
 the saved file rather than the remote URL.
+
+---
+
+## RULE 16 — Code quality gates on every production change
+
+> **Full text (thresholds, counting rules, overrides, CI):**  
+> `docs/AGENT_RULES_CODE_QUALITY.md`
+
+New production Python must stay within: function **≤ 30 LOC**, class
+**≤ 150 LOC**, **≤ 4** params (excluding `self`/`cls`), **≤ 15** methods
+per class, Radon CC **≤ 10**, cognitive **≤ 15**, nesting **≤ 4**. Tests
+must cover new paths; overall line coverage **≥ 80%** and branch **≥ 75%**
+must not drop vs the last report. Do not game metrics with dummy helpers.
+Legacy offenders must not get worse. Overrides require
+
+`# quality-override: <metric>=<value> reason=<constraint>`.
