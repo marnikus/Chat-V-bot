@@ -10,6 +10,9 @@ const PresetsUI = {
   stackPresets: [],
   templatePresets: [],
   customBlocks: [],
+  // the parsed, not-yet-applied file behind the import preview modal
+  _importPreview: null,
+  _importKeyHandler: null,
 
   // ── escaping / tiny helpers ─────────────────────────────────
   // the implementations live in js/core/ui-helpers.js; these thin
@@ -80,6 +83,7 @@ const PresetsUI = {
          <span class="pp-name" title="${this.esc(p.name)}">📄 ${this.esc(p.name)}</span>
          <span class="pp-meta">${p.blocks || 0} blk · ${this.esc(this._date(p.updated_at))}</span>
          <button class="pp-load" data-name="${this.esc(p.name)}">Load</button>
+         <button class="pp-export" data-name="${this.esc(p.name)}" title="Export this preset to a .json file">Export</button>
          <span class="pp-del material-icons" data-name="${this.esc(p.name)}" title="Delete">delete</span>
        </div>`).join('')
       || '<div class="pp-empty">No saved presets yet. Click 💾 Save to create one.</div>';
@@ -89,6 +93,13 @@ const PresetsUI = {
       b.addEventListener('click', () => {
         picker.classList.add('hidden');
         this.loadStack(b.dataset.name);
+      });
+    });
+    picker.querySelectorAll('.pp-export').forEach((b) => {
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        picker.classList.add('hidden');
+        this.exportPreset(b.dataset.name);
       });
     });
     picker.querySelectorAll('.pp-del').forEach((b) => {
@@ -188,11 +199,13 @@ const PresetsUI = {
       const blk = c.block || {};
       const label = blk.custom_name || c.name || 'Custom block';
       const icon = '🔎';
-      const chip = this._makeChip(
-        `${icon} ${label}`, '',
-        () => this.addCustomBlock(c),
-        () => this.deleteCustomBlock(c.name || label)
-      );
+      const chip = this._makeChip({
+        title: `${icon} ${label}`, meta: '',
+        onLoad: () => this.addCustomBlock(c),
+        onDelete: () => this.deleteCustomBlock(c.name || label),
+        onExport: () => this.exportBlock(c.name || label),
+        exportTitle: 'Export this block to a .json file',
+      });
       chip.title = 'Add this Find & Click block to the stack';
       el.appendChild(chip);
     });
@@ -212,9 +225,14 @@ const PresetsUI = {
   },
 
   // ── shared ──────────────────────────────────────────────────
-  _makeChip(title, meta, onLoad, onDelete) {
-    // one chip implementation for every panel (js/core/ui-helpers.js)
-    return window.UIHelpers.chip({ title, meta, onLoad, onDelete });
+  _makeChip(a, b, c, d) {
+    // one chip implementation for every panel (js/core/ui-helpers.js);
+    // accepts the historical (title, meta, onLoad, onDelete) tuple or
+    // one opts object (chips that also export need the extra keys)
+    const opts = (a && typeof a === 'object')
+      ? a
+      : { title: a, meta: b, onLoad: c, onDelete: d };
+    return window.UIHelpers.chip(opts);
   },
 
   _placePicker(picker, anchorBtn) {
@@ -235,6 +253,191 @@ const PresetsUI = {
     App.bridge.list_stack_presets((json) => this.setStackPresets(json));
     App.bridge.list_template_presets((json) => this.setTemplatePresets(json));
     App.bridge.list_custom_blocks((json) => this.setCustomBlocksJson(json));
+  },
+
+  // ── portable export / import (FEATURE) ───────────────────────
+  // The backend owns the file format and validation (services/preset_io);
+  // the UI only moves JSON across the bridge and shows what it got back.
+  exportCurrentStack() {
+    if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+    if (!StackDnD || !StackDnD.stack || !StackDnD.stack.length) {
+      LogConsole.log('⚠ Stack is empty — nothing to export', 'warn');
+      return;
+    }
+    LogConsole.log('📤 Exporting stack + custom blocks… choose the location in the dialog', 'info');
+    App.bridge.export_stack(JSON.stringify(StackDnD.stack), (res) => this.onFileResult(res));
+  },
+
+  exportPreset(name) {
+    if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+    App.bridge.export_stack_preset(name, (res) => this.onFileResult(res));
+  },
+
+  exportBlock(name) {
+    if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+    App.bridge.export_custom_block(name, (res) => this.onFileResult(res));
+  },
+
+  importStack() {
+    if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+    LogConsole.log('📥 Import stack — choose a .json preset file', 'info');
+    App.bridge.import_file('stack', (res) => this.onImportPreview(res));
+  },
+
+  importBlock() {
+    if (!App.bridge) { LogConsole.log('⚠ Not connected to backend', 'warn'); return; }
+    App.bridge.import_file('block', (res) => this.onImportPreview(res));
+  },
+
+  _parseResult(res) {
+    try { return JSON.parse(res); }
+    catch (e) {
+      LogConsole.log('❌ Bad result from the backend', 'error');
+      return null;
+    }
+  },
+
+  onFileResult(res) {
+    const r = this._parseResult(res);
+    if (!r) return;
+    if (r.ok) LogConsole.log(`✅ Exported to ${r.path}`, 'success');
+    else if (r.canceled) LogConsole.log('⏹ Export cancelled', 'info');
+    else LogConsole.log(`❌ ${r.error}`, 'error');
+  },
+
+  onImportPreview(res) {
+    const r = this._parseResult(res);
+    if (!r) return;
+    if (!r.ok) {
+      LogConsole.log(r.canceled ? '⏹ Import cancelled' : `❌ ${r.error}`,
+                    r.canceled ? 'info' : 'error');
+      return;
+    }
+    this.showImportPreview(r);
+  },
+
+  showImportPreview(preview) {
+    this._importPreview = preview;
+    const modal = document.getElementById('importPreviewModal');
+    if (!modal) return;
+    const isStack = preview.kind === 'stack';
+    document.getElementById('importPreviewTitle').textContent =
+      (isStack ? 'Import stack ' : 'Import block ') + `“${preview.name}”`;
+    const meta = [];
+    if (preview.exported_at) meta.push(`exported ${preview.exported_at}`);
+    if (preview.app_version) meta.push(`app ${preview.app_version}`);
+    if (isStack) meta.push(`${(preview.stack || []).length} step(s), ` +
+                            `${(preview.custom_blocks || []).length} custom block(s)`);
+    document.getElementById('importPreviewMeta').textContent = meta.join(' · ');
+    const warnEl = document.getElementById('importPreviewWarnings');
+    warnEl.innerHTML = '';
+    (preview.warnings || []).forEach((w) => {
+      warnEl.appendChild(this.escText('⚠ ' + w, 'div'));
+    });
+    warnEl.classList.toggle('hidden', !(preview.warnings || []).length);
+    const list = document.getElementById('importPreviewBlocks');
+    list.innerHTML = '';
+    if (isStack) {
+      (preview.stack || []).forEach((b, i) => {
+        list.appendChild(this._importRow(i + 1, b));
+      });
+    } else if (preview.block) {
+      list.appendChild(this._importRow(1, preview.block, preview.name));
+    }
+    document.getElementById('importPreviewMerge')
+      .classList.toggle('hidden', !isStack);
+    document.getElementById('importPreviewReplace')
+      .classList.toggle('hidden', !isStack);
+    document.getElementById('importPreviewAdd')
+      .classList.toggle('hidden', isStack);
+    modal.classList.remove('hidden');
+    this._wireImportButtons();
+  },
+
+  _importRow(idx, block, label) {
+    const row = UIHelpers.el('div', 'ibl-row');
+    row.appendChild(UIHelpers.el('span', 'ibl-idx', String(idx)));
+    row.appendChild(UIHelpers.el('span', 'ibl-name',
+      label || block.custom_name || block.block_id || 'block'));
+    const meta = [];
+    if (block.selector) meta.push(block.selector);
+    if (block.match_text) meta.push(`match “${block.match_text}”`);
+    if (block.text) meta.push(String(block.text).slice(0, 60));
+    if (block.enabled === false) meta.push('disabled');
+    row.appendChild(UIHelpers.el('span', 'ibl-meta', meta.join(' · ')));
+    return row;
+  },
+
+  escText(text, tag) {
+    const node = document.createElement(tag || 'div');
+    node.textContent = text;
+    return node;
+  },
+
+  _wireImportButtons() {
+    document.getElementById('importPreviewCancel').onclick = () => {
+      this.closeImportPreview();
+      LogConsole.log('⏹ Import cancelled — nothing changed', 'warn');
+    };
+    document.getElementById('importPreviewMerge').onclick =
+      () => this.applyImported('merge');
+    document.getElementById('importPreviewReplace').onclick =
+      () => this.applyImported('replace');
+    document.getElementById('importPreviewAdd').onclick =
+      () => this.applyImported('add');
+    this._importKeyHandler = (e) => {
+      if (e.key === 'Escape') this.closeImportPreview();
+    };
+    document.addEventListener('keydown', this._importKeyHandler, true);
+  },
+
+  closeImportPreview() {
+    const modal = document.getElementById('importPreviewModal');
+    if (modal) modal.classList.add('hidden');
+    if (this._importKeyHandler) {
+      document.removeEventListener('keydown', this._importKeyHandler, true);
+      this._importKeyHandler = null;
+    }
+    this._importPreview = null;
+  },
+
+  applyImported(mode) {
+    const preview = this._importPreview;
+    this.closeImportPreview();
+    if (!preview || !App.bridge) return;
+    // Record the pre-import stack first, exactly like loadStack does —
+    // one Undo step must return to it (RULE 12, one global history).
+    if (preview.kind === 'stack' && StackDnD &&
+        typeof StackDnD.pushHistory === 'function' &&
+        StackDnD.stack && StackDnD.stack.length) {
+      StackDnD.pushHistory(StackDnD.stack, {force: false});
+    }
+    const stackJson = (StackDnD && StackDnD.stack)
+      ? JSON.stringify(StackDnD.stack) : '[]';
+    App.bridge.apply_imported(JSON.stringify(preview), mode, stackJson,
+      (res) => {
+        const r = this._parseResult(res);
+        if (!r) return;
+        if (!r.ok) {
+          LogConsole.log(`❌ Import failed: ${r.error}`, 'error');
+          return;
+        }
+        if (preview.kind === 'stack' &&
+            StackDnD && typeof StackDnD.setStack === 'function' &&
+            Array.isArray(r.stack)) {
+          StackDnD.setStack(r.stack);
+        }
+        if (preview.kind === 'stack') {
+          LogConsole.log(
+            `✅ Imported “${preview.name}” (${mode}) — ${r.stack.length} ` +
+            `block(s) in the stack, ${r.blocks_added || 0} custom block(s) ` +
+            `added, ${r.blocks_replaced || 0} replaced (↩ Undo to return)`,
+            'success');
+        } else {
+          LogConsole.log(`✅ Block “${r.name}” imported into the ` +
+                         'Custom Blocks library', 'success');
+        }
+      });
   },
 
   // ── modals (Qt WebEngine doesn't support prompt()/confirm()) ──

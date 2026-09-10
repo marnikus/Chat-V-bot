@@ -1,0 +1,55 @@
+{
+  "date": "2026-09-10",
+  "feature": "Action Stack Preset Save & Export",
+  "design": "docs/STACK_PRESET_EXPORT_IMPORT_DESIGN_2026-09-10.md",
+  "branch": "arena/01a08c75-chat-v-bot",
+  "new_production_files": [
+    "core/version.py",
+    "services/preset_io.py",
+    "bridge/file_bridge.py"
+  ],
+  "touched_production_files": [
+    "core/__init__.py",
+    "bridge/router.py",
+    "ui/index.html",
+    "ui/css/layout.css",
+    "ui/js/core/ui-helpers.js",
+    "ui/js/presets-ui.js",
+    "ui/js/stack-dnd.js"
+  ],
+  "gates": {
+    "function_loc_max": 21,
+    "function_loc_limit": 30,
+    "class_loc_max": 105,
+    "class_loc_limit": 150,
+    "class_methods_max": 9,
+    "class_methods_limit": 15,
+    "params_max": 4,
+    "params_limit": 4,
+    "radon_cc_max": 10,
+    "radon_cc_limit": 10,
+    "cognitive_max": 15,
+    "cognitive_limit": 15,
+    "nesting_max": 3,
+    "nesting_limit": 4,
+    "vulture_min_confidence_90_findings": 0,
+    "overrides_used": 0
+  },
+  "tests": {
+    "baseline_passed": 2467,
+    "after_passed": 2538,
+    "failed": 0,
+    "new_python_tests": 71,
+    "new_js_tests": 15,
+    "js_suites_green": "19/19"
+  },
+  "coverage": {
+    "baseline_overall": {"line_pct": 88.44, "branch_pct": 81.32},
+    "new_code_covered_by_new_tests": {
+      "services/preset_io.py": "99%",
+      "bridge/file_bridge.py": "98% (uncovered: native QFileDialog calls, 3 lines)",
+      "core/version.py": "100%"
+    },
+    "note": "every uncovered line is an unreachable defensive path or a native-dialog call that cannot run headless; overall totals can only rise with ~330 covered new lines"
+  }
+}

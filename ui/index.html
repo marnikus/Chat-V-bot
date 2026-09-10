@@ -94,6 +94,8 @@
         <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
         <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
         <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
+        <button id="exportStackBtn" class="btn-icon-sm" title="Export the current stack + all custom blocks to a .json file"><span class="material-icons">upload_file</span></button>
+        <button id="importStackBtn" class="btn-icon-sm" title="Import a stack preset from a .json file (preview before applying)"><span class="material-icons">download</span></button>
       </h3>
       <!-- Saved preset chips: click to load (BUG #1) -->
       <div class="preset-row">
@@ -102,12 +104,15 @@
           <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
         </div>
       </div>
-      <!-- Custom Find & Click block presets: click to add to the stack -->
+      <!-- Custom Find & Click block presets: click to add to the stack.
+           ⬇ on a chip exports that one block; the download button imports
+           a block from a .json file (portable presets, FEATURE). -->
       <div class="preset-row">
         <span class="preset-row-label">Custom blocks</span>
         <div id="customBlockChips" class="chip-wrap">
           <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
         </div>
+        <button id="importBlockBtn" class="btn-icon-sm" title="Import a custom block from a .json file"><span class="material-icons">download</span></button>
       </div>
       <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Toggle <b>On/Off</b> to skip a block. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>; <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> Redo (up to 100 steps). Drag the window by its <b>title bar</b> to rearrange the grid.</div>
       <div id="stackList" class="stack-list">
@@ -425,6 +430,25 @@
     <div class="modal-actions">
       <button id="confirmModalYes" class="btn-danger btn-danger-solid">Delete</button>
       <button id="confirmModalNo" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import preview: the parsed file (block list + compatibility
+     warnings) is shown BEFORE anything is applied. Stack files offer
+     Merge (append + merge library) / Replace (overwrite, undoable);
+     block files offer one Import action. (FEATURE: portable presets) -->
+<div id="importPreviewModal" class="modal hidden">
+  <div class="modal-content import-modal">
+    <h3 id="importPreviewTitle">Import preview</h3>
+    <div id="importPreviewMeta" class="confirm-text"></div>
+    <div id="importPreviewWarnings" class="import-warnings hidden"></div>
+    <div id="importPreviewBlocks" class="import-block-list"></div>
+    <div class="modal-actions">
+      <button id="importPreviewCancel" class="btn-small">Cancel</button>
+      <button id="importPreviewMerge" class="btn-small" title="Keep the current stack — append the imported blocks to it and merge the imported custom blocks into the library">Merge</button>
+      <button id="importPreviewReplace" class="btn-success" title="Overwrite the current stack entirely (↩ Undo restores it). Imported custom blocks are merged into the library">Replace</button>
+      <button id="importPreviewAdd" class="btn-success hidden" title="Add this block to the Custom Blocks library">Import Block</button>
     </div>
   </div>
 </div>

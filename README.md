@@ -215,6 +215,24 @@ design in `docs/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
 - **Save Template / Load Template ▾** work the same way for message templates.
 - Deletion is confirmed through an in-app dialog (no browser dialogs needed).
 
+### Export / Import Presets (portable `.json` files)
+- **⬆ Export** (Action Stack header) writes the **current stack + every
+  custom block** as one standalone `.json` file — open a native save
+  dialog, done. The **folder picker** has an **Export** button per saved
+  preset, and the **⬇ on a Custom Block chip** exports that one block.
+- **⬇ Import** opens the same format back: the app first shows a
+  **preview** — the block list, compatibility warnings (newer app version,
+  unknown block type, a Find & Click block without its selector) — and only
+  then applies. Choose **Replace** (overwrites the current stack; ↩ Undo
+  returns to it) or **Merge** (appends the imported blocks and merges the
+  imported custom blocks into your library, same name = same block).
+  The download button on the Custom Blocks row imports a single block.
+- The file carries `format` / `format_version` / `app_version`, so a file
+  made by a newer app is refused with a clear message instead of silently
+  losing steps, and invalid files are rejected before anything is applied.
+  The file has no absolute paths or local state — copy it to another
+  machine or install and import it there.
+
 ### Session restore on startup
 On every start the app restores the previous session from the same single
 `config.json` store:

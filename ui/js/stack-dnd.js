@@ -805,6 +805,22 @@ const StackDnD = {
         PresetsUI.toggleStackPicker(document.getElementById('loadStackBtn'));
       });
     });
+
+    // Portable export/import (FEATURE) — the format and validation live
+    // in the backend (services/preset_io); PresetsUI moves the JSON and
+    // renders the preview.
+    const exportBtn = document.getElementById('exportStackBtn');
+    if (exportBtn) exportBtn.addEventListener('click', () => {
+      PresetsUI.exportCurrentStack();
+    });
+    const importBtn = document.getElementById('importStackBtn');
+    if (importBtn) importBtn.addEventListener('click', () => {
+      PresetsUI.importStack();
+    });
+    const importBlockBtn = document.getElementById('importBlockBtn');
+    if (importBlockBtn) importBlockBtn.addEventListener('click', () => {
+      PresetsUI.importBlock();
+    });
   },
 
   // ── Block Config pin / keep-open ─────────────────────────────

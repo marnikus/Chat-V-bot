@@ -33,7 +33,7 @@ window.UIHelpers = {
   /**
    * The standard removable chip.
    * opts: { title, meta, icon, selected, tooltip, onLoad, onDelete,
-   *         deleteTitle }
+   *         deleteTitle, onExport, exportTitle }
    */
   chip(opts) {
     const o = opts || {};
@@ -48,6 +48,11 @@ window.UIHelpers = {
       const meta = this.el('span', 'chip-meta', o.meta);
       node.appendChild(meta);
     }
+    if (typeof o.onExport === 'function') {
+      const exp = this.el('span', 'chip-export', '⬇');
+      exp.title = o.exportTitle || 'Export to file';
+      node.appendChild(exp);
+    }
     const x = this.el('span', 'chip-x', '×');
     x.title = o.deleteTitle || 'Delete';
     node.appendChild(x);
@@ -58,6 +63,12 @@ window.UIHelpers = {
       x.addEventListener('click', (ev) => {
         ev.stopPropagation();
         o.onDelete(ev);
+      });
+    }
+    if (typeof o.onExport === 'function') {
+      node.querySelector('.chip-export').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        o.onExport(ev);
       });
     }
     return node;
