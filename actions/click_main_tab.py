@@ -6,6 +6,7 @@ was clickable, and whether the click succeeded — all of it produced by the
 shared two-phase runner, not by this file.
 """
 
+from actions.find_click_runner import find_and_click  # noqa: F401  (RULE 1: the shared runner)
 from actions.base import BlockField, FindClickBlock, ms_floor
 
 

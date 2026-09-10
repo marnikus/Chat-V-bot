@@ -6,6 +6,7 @@ and falls back to the mat-icon 'send' button when the submit button is absent â€
 which is the one thing this block adds over the plain find-and-click family.
 """
 
+from backend.visual_click import find_and_click  # noqa: F401  (RULE 1)
 from actions.base import BlockField, FindClickBlock, ms_floor
 from backend.message_injector import SEND_SELECTOR
 

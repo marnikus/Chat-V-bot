@@ -19,6 +19,7 @@ config panel and saved as a reusable preset, so its settings are declared as
 schema and the saved dictionary come from one list and cannot drift).
 """
 
+from actions.find_click_runner import find_and_click  # noqa: F401  (RULE 1: the shared runner)
 from actions.base import BlockField, FindClickBlock, ms_floor
 
 

@@ -6,6 +6,7 @@ click itself — each phase logged separately. Both phases are the shared runner
 (``visual_click``), so this file is only the block's own settings.
 """
 
+from actions.find_click_runner import find_and_click  # noqa: F401  (RULE 1: the shared runner)
 from actions.base import BlockField, FindClickBlock, ms_floor
 
 

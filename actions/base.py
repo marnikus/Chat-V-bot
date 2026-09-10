@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Optional
@@ -244,6 +245,17 @@ class FindClickBlock(DeclaredSettings):
     #: keywords the block adds to every find_and_click() call
     find_defaults: ClassVar[dict] = {}
 
+    def click_runner(self):
+        """The runner this block calls: its own module's name if it has one.
+
+        Blocks are tested — and, in one case, patched by the run stack — by
+        replacing `find_and_click` where the block imports it, so the lookup goes
+        to the block's module first and only falls back to the shared runner
+        here. RULE 1 is unaffected: every path leads to `visual_click`.
+        """
+        module = sys.modules.get(type(self).__module__)
+        return getattr(module, "find_and_click", None) or _shared_runner()
+
     def find_kwargs(self, engine: Optional[object] = None) -> dict:
         """The runner's keyword arguments, read off the declared fields."""
         kwargs = {field.request: getattr(self, field.name)
@@ -266,7 +278,7 @@ class FindClickBlock(DeclaredSettings):
 
     async def execute(self, user_nick: str, cdp,
                       engine: Optional[object] = None) -> str:
-        find_and_click = _click_runner()
+        find_and_click = self.click_runner()
         await self.pre_delay()
         kwargs = self.find_kwargs(engine)
         outcome = await find_and_click(cdp, **kwargs)

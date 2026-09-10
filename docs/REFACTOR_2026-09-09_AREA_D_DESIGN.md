@@ -408,13 +408,13 @@ Plus the parent-plan gates: 0 new failures anywhere (51 → ≤ 51, and D's own 
 
 | # | criterion | measured | verdict |
 |---|---|---|---|
-| 1 | no editable function over CC 25 | worst in `backend/` + `actions/` is **CC 22** (`history_query._item`); `visual_click.find_and_click` 27 → 12, `media_handler.attach_image` 26 → 12, `scroll_parser.collect` 43 → 14, `verify_private` 43 → 11, `collect_history.execute` 35 → 15, `click_user.execute` 31 → 12 | **PASS** |
+| 1 | no editable function over CC 25 | worst in `backend/` + `actions/` is **CC 22** (`history_query._item`); `visual_click.find_and_click` 27 → 12, `media_handler.attach_image` 26 → 12, `scroll_parser.collect` 43 → 14, `verify_private` 43 → 11, `collect_history.execute` 35 → 15, `click_user.execute` 31 → 12, `mark_messaged.execute` 16/nest-14 → 5, `dom_highlight.interpret_find` 17 → 13 | **PASS** |
 | 1b | `sync_conversation` ≤ 15 | **CC 1** (a 12-line façade over `chat_sync.run_sync`) | **PASS** |
-| 2 | `actions` duplication < 25 % | **18.9 %** (304 clone lines / 1 610 SLOC), from 22.0 % before the block skeleton and ~57 % before the area | **PASS** |
+| 2 | `actions` duplication < 25 % | **19.1 %** (from 22.0 % before the block skeleton and ~57 % before the area), 308 clone lines / 1 616 SLOC | **PASS** |
 | 3 | `backend` ≥ 85 % line / ≥ 78 % branch | **88.9 % / 91.1 %** (baseline 83.4 / 88.9) | **PASS** |
 | 3b | `actions` branch ≥ 70 % | **86.0 %** (baseline 83.9 %, dipped to 82.6 % mid-area) | **PASS** |
 | 4 | `cdp_client.py`, `base_action.py` public APIs byte-identical | `git diff` empty on both paths; `dump_public_api --diff` reads "no removed or changed symbols" | **PASS** |
-| 5 | no new test failures | full suite **51 failed / 1 800 passed**, the same 51 as the same-conditions HEAD run (14 of them are `services/run/coordinator.py`'s `NameError: get_action_class`, another area's); AREA D's own snapshot failures were fixed on the way | **PASS** |
+| 5 | no new test failures | full suite **50 failed / 1 801 passed** against **54 / 1 672** for the same-conditions merge-base run: every remaining failure lives in another area's file (`test_stores_small_stores` 16, `test_scroll_only_seek` 7, `test_filter_purge` 7 — 14 of the 50 are `services/run/coordinator.py`'s `NameError: get_action_class` — …) plus one `test_db_manager_corrupt` flake that alternates at the merge base too. Two failures the area *fixed* on the way: the `backend_api_snapshot` order-dependence (D3) and `test_nick_placeholder::TestRealCustomFindWiring` (D6b) | **PASS** |
 | 6 | diff confined to the area | `backend/**` (7 files, 2 new modules), `actions/**` (12 files), `tests/**` (D-owned only), `docs/**`, `tools/metrics/**` | **PASS** |
 
 ### 11.1 What deliberately did not happen
@@ -446,3 +446,15 @@ made those records stricter in one place and looser in another — deliberately:
 * Module-level constant records blank memory addresses (`_default_repr`), because a
   `FIELDS` tuple holds functions and sentinels whose `repr` would otherwise change on
   every run and make the snapshot un-reproducible.
+
+### 11.3 One thing the skeleton had to give back
+
+`tests/test_scroll_parse_pipeline.py::TestSharedModuleRule` greps each clicking
+block's source for `find_and_click` (RULE 1 — no block may hand-roll a probe),
+and `tests/test_nick_placeholder.py` patches `actions.custom_find.find_and_click`
+to watch what the runner is handed. Moving `execute()` onto `FindClickBlock`
+removed both names from the block modules, and the full suite caught it. So each
+block keeps its own `find_and_click` import, and `FindClickBlock.click_runner()`
+resolves the name **on the block's module first**, falling back to the shared
+one — the patch surface the rest of the codebase and its tests use stays exactly
+where it was, and RULE 1 stays readable in the files it applies to.
