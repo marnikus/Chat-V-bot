@@ -24,13 +24,13 @@ from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
 # later test modules see the real actions.
 _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
-from backend.action_engine import (  # noqa: E402
+from services.run import (  # noqa: E402
     STANDALONE_NICK,
     USER_SCOPED_BLOCKS,
     ActionEngine,
-    get_action_class,
 )
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from actions.base_action import get_action_class  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 from actions.repeat_loop import RepeatLoop  # noqa: E402
 
 UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
@@ -167,7 +167,7 @@ class TestRepeatLoopQueueMode(unittest.TestCase):
                 engine, logs = build_engine(mem)
                 engine._stack = [block, RepeatLoop(repeat_count=2)]
 
-                await engine.execute(None)
+                await engine.execute()
 
                 self.assertEqual(sorted(block.calls),
                                  ["alice", "bob", "carla", "dave"],
@@ -189,7 +189,7 @@ class TestRepeatLoopQueueMode(unittest.TestCase):
                 block = NeedsUserBlock()
                 engine, _ = build_engine(mem)
                 engine._stack = [block]
-                await engine.execute(None)
+                await engine.execute()
                 self.assertEqual(sorted(block.calls), ["alice", "bob"])
         run(go())
 
@@ -202,7 +202,7 @@ class TestRepeatLoopQueueMode(unittest.TestCase):
                 engine, logs = build_engine(mem)
                 engine._stack = [block, RepeatLoop(repeat_count=9,
                                                    enabled=False)]
-                await engine.execute(None)
+                await engine.execute()
                 self.assertEqual(block.calls, ["alice"])
                 self.assertEqual(cycle_logs(logs), [],
                                  "disabled marker must not loop")
@@ -216,7 +216,7 @@ class TestRepeatLoopQueueMode(unittest.TestCase):
                 block = NeedsUserBlock()
                 engine, logs = build_engine(mem)
                 engine._stack = [block, RepeatLoop(repeat_count=1)]
-                await engine.execute(None)
+                await engine.execute()
                 self.assertEqual(block.calls, ["alice"])
                 self.assertEqual(cycle_logs(logs), [])
         run(go())
@@ -227,7 +227,7 @@ class TestRepeatLoopQueueMode(unittest.TestCase):
                 block = NeedsUserBlock()
                 engine, logs = build_engine(mem)
                 engine._stack = [block, RepeatLoop(repeat_count=5)]
-                await engine.execute(None)
+                await engine.execute()
                 self.assertEqual(block.calls, [])
                 text = " ".join(str(e[1]) for e in logs)
                 self.assertEqual(text.count("No users in queue"), 1,
@@ -247,7 +247,7 @@ class TestRepeatLoopBatches(unittest.TestCase):
                                UserRecord(nick="dave")]])
         engine, logs = build_engine(memory)
         engine._stack = [block, RepeatLoop(repeat_count=2)]
-        run_sync(engine.execute(None))
+        run_sync(engine.execute())
         self.assertEqual(block.calls, ["alice", "bob", "carla", "dave"],
                          "cycle 1 works batch 1, cycle 2 works batch 2")
         self.assertEqual(sorted(memory.marked),
@@ -262,7 +262,7 @@ class TestRepeatLoopStandalone(unittest.TestCase):
         block = RecordingStandaloneBlock()
         engine, logs = build_engine(FakeMemory(queue=[]))
         engine._stack = [block, RepeatLoop(repeat_count=3)]
-        run_sync(engine.execute(None))
+        run_sync(engine.execute())
         self.assertEqual(block.calls, [STANDALONE_NICK] * 3)
         banners = cycle_logs(logs)
         self.assertTrue(any(b.startswith("🔁 Cycle 1/3") for b in banners))
@@ -272,7 +272,7 @@ class TestRepeatLoopStandalone(unittest.TestCase):
         block = StopAfterFirstCallBlock()
         engine, _ = build_engine(FakeMemory(queue=[]))
         engine._stack = [block, RepeatLoop(repeat_count=5)]
-        run_sync(engine.execute(None))
+        run_sync(engine.execute())
         self.assertEqual(block.calls, [STANDALONE_NICK],
                          "stop requested inside cycle 1 must end the run")
 

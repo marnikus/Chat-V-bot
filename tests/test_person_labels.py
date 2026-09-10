@@ -30,10 +30,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PySide6.QtCore import QObject  # noqa: E402
 
-from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.label_store import PALETTE, LabelStore  # noqa: E402
+from stores.label_store import PALETTE, LabelStore  # noqa: E402
 
 
 def make_config():

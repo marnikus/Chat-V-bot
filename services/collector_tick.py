@@ -396,7 +396,7 @@ class CollectorTick:
     Parser helpers are injected so this module adds no `backend.*` import:
     `signature` and `verify_private` come from `backend.chat_parser`
     (already imported by the host), `agent_version` from
-    `backend.chat_agent_js`.
+    `core.chat_agent_js`.
     """
 
     def __init__(self, host, *, signature, verify_private, agent_version):

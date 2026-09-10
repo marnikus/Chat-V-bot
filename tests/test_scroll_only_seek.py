@@ -25,10 +25,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.scroll_parse import ScrollParse  # noqa: E402
-from backend.action_engine import ActionEngine, RunTracer  # noqa: E402
+from services.run import ActionEngine, RunTracer  # noqa: E402
 from backend.criteria_engine import CriteriaEngine  # noqa: E402
 from backend.scroll_parser import ScrollParser  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
 
@@ -472,7 +472,7 @@ class TestBlockContract(unittest.TestCase):
 # ── backend safety net: stacks entering the engine are cleaned ───
 class TestBackendBlockNormalization(unittest.TestCase):
     def test_normalize_blocks_strips_retired_keys(self):
-        from backend.action_engine import normalize_blocks
+        from services.run import normalize_blocks
         out = normalize_blocks([
             {"block_id": "SCROLL_PARSE", "use_panel_filters": True,
              "skip_if_backlog": True, "backlog_threshold": 3,

@@ -33,8 +33,8 @@ from backend.chat_parser import (  # noqa: E402
     parse_records,
     sync_conversation,
 )
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
 from test_chat_parser_delta import FakePage, NOW, raw  # noqa: E402
 
 

@@ -6,6 +6,11 @@ hand to `Runtime.evaluate`. Each probe is tagged with a marker comment
 (`/*CVB_STATE*/` …) so the tests — and anyone reading a CDP log — can tell at
 a glance which probe is running, and arguments travel inside a single
 `/*ARGS:{…}*/` block comment rather than being pasted into the source.
+
+Home: `core/` (moved from `backend/` by INTEGRATION-01/I3). The module is a
+pure leaf — stdlib only — imported from three packages, so the bottom layer
+is the only home that is downward for all of them. The JS asset deliberately
+stays in `backend/js/`: the Node suite reads it by that path.
 """
 
 from __future__ import annotations
@@ -15,14 +20,16 @@ import os
 
 #: The version the shipped agent declares. Python refuses to trust an older
 #: agent (it predates the pane-scoped parser and the author report) and
-#: re-installs instead — see backend/collector.py. v10 (2026-09-08): the
-#: node cache is invalidated whenever ANY parsed field changed live, not
-#: only the media URL — a text span that rendered after the first parse no
-#: longer stays an empty '' forever (Bug 2 of 2026-09-08).
+#: re-installs instead — see services/collector_service.py.
+#: v10 (2026-09-08): the node cache is invalidated whenever ANY parsed field
+#: changed live, not only the media URL — a text span that rendered after
+#: the first parse no longer stays an empty '' forever (Bug 2 of 2026-09-08).
 AGENT_VERSION = 11
 
-AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
-                          "chat_agent.js")
+#: Repo-root-relative on purpose: this module lives in core/ now, the asset
+#: in backend/js/ (see above). Pure path math — core must not import backend.
+AGENT_PATH = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "backend", "js", "chat_agent.js")
 
 _CACHE: dict[str, str] = {}
 

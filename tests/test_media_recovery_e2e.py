@@ -25,11 +25,11 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
-from backend.collector import Collector  # noqa: E402
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from services.collector_service import Collector  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
+from stores.media_store import MediaStore  # noqa: E402
 
 NOW = datetime(2026, 9, 7, 16, 30, 0)
 ME = "Хорошо Все"
@@ -519,7 +519,7 @@ class TestServiceCapMigration(unittest.TestCase):
     """RC1: the stored 2 MB default must be migrated up."""
 
     def test_old_default_cap_is_raised(self):
-        from backend.history_service import (HISTORY_DEFAULTS,
+        from services.history import (HISTORY_DEFAULTS,
                                              MAX_FILE_MB_DEFAULT,
                                              HistoryService, _merge)
         self.assertEqual(HISTORY_DEFAULTS["media"]["max_file_mb"],

@@ -26,7 +26,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from backend import chat_agent_js
+from core import chat_agent_js
 from backend.chat_parser import (ChatParser, _signature, sync_conversation,
                                  verify_private)
 from backend.history_query import HistoryQuery

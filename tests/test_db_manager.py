@@ -37,9 +37,9 @@ from PySide6.QtCore import QObject  # noqa: E402
 
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.db_manager import (DbManager, file_group_size,  # noqa: E402
+from services.db_service import (DbManager, file_group_size,  # noqa: E402
                                 folder_size, safe_db_name)
-from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryService  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402

@@ -879,23 +879,6 @@
   },
   "actions.base": {
    "classes": {
-    "ActionResult": {
-     "ancestry": [
-      "ActionResult",
-      "object"
-     ],
-     "attrs": {
-      "FAIL": "'fail'",
-      "OK": "'ok'",
-      "SKIP": "'skip'"
-     },
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {}
-    },
     "BaseAction": {
      "ancestry": [
       "BaseAction",
@@ -1031,6 +1014,7 @@
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
+      "click_runner": "(self)",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
@@ -1102,6 +1086,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1145,6 +1130,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1187,6 +1173,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1416,6 +1403,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1750,11 +1738,6 @@
    "functions": {},
    "values": {}
   },
-  "backend.action_engine": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
   "backend.bridge": {
    "classes": {},
    "functions": {},
@@ -1852,20 +1835,6 @@
     }
    },
    "functions": {},
-   "values": {}
-  },
-  "backend.chat_agent_js": {
-   "classes": {},
-   "functions": {
-    "agent_source": "() -> 'str'",
-    "drain_expression": "() -> 'str'",
-    "fetch_media_expression": "(url: 'str') -> 'str'",
-    "install_expression": "() -> 'str'",
-    "restore_scroll_expression": "(top: 'int') -> 'str'",
-    "scroll_top_expression": "() -> 'str'",
-    "slice_expression": "(start: 'int', end: 'int') -> 'str'",
-    "state_expression": "() -> 'str'"
-   },
    "values": {}
   },
   "backend.chat_parser": {
@@ -2302,11 +2271,6 @@
    },
    "values": {}
   },
-  "backend.collector": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
   "backend.config_manager": {
    "classes": {
     "ConfigManager": {
@@ -2408,11 +2372,6 @@
    "functions": {},
    "values": {}
   },
-  "backend.db_manager": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
   "backend.dom_highlight": {
    "classes": {},
    "functions": {
@@ -2433,16 +2392,6 @@
     "interpret": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_wait": "(result, label: str = 'element') -> tuple[str, str]"
    },
-   "values": {}
-  },
-  "backend.history_db": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
-  "backend.history_models": {
-   "classes": {},
-   "functions": {},
    "values": {}
   },
   "backend.history_query": {
@@ -2471,21 +2420,6 @@
      }
     }
    },
-   "functions": {},
-   "values": {}
-  },
-  "backend.history_repo": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
-  "backend.history_service": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
-  "backend.label_store": {
-   "classes": {},
    "functions": {},
    "values": {}
   },
@@ -2561,11 +2495,6 @@
    },
    "values": {}
   },
-  "backend.media_store": {
-   "classes": {},
-   "functions": {},
-   "values": {}
-  },
   "backend.message_injector": {
    "classes": {},
    "functions": {
@@ -2629,11 +2558,6 @@
     "normalize": "(value, default: str = 'any') -> str",
     "sort_people": "(people: list) -> list"
    },
-   "values": {}
-  },
-  "backend.preset_store": {
-   "classes": {},
-   "functions": {},
    "values": {}
   },
   "backend.scroll_parser": {
@@ -2822,11 +2746,6 @@
     "best_matches": "(query: str, tabs: Iterable[dict], top_n: int = 5) -> list[dict]",
     "score_tab": "(query: str, tab_url: str, tab_title: str = '') -> tuple[int, str]"
    },
-   "values": {}
-  },
-  "backend.user_memory": {
-   "classes": {},
-   "functions": {},
    "values": {}
   },
   "backend.visual_click": {

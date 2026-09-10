@@ -25,7 +25,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from actions.base_action import ActionResult
+from core.action_result import ActionResult
 from backend.cdp_client import CDPClient
 from backend.dom_highlight import (
     build_click_probe,

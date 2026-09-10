@@ -24,7 +24,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
 def urec(nick, gender="f", registered=False, guest=True):

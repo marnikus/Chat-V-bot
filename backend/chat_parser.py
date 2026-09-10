@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Iterable, Optional
 
-from backend import chat_agent_js, chat_text
+from backend import chat_text
+from core import chat_agent_js
 from backend.chat_sync import (  # noqa: F401  (re-exported: the seam, §3.1)
     SLICE_RETRIES, SyncOptions, merge_live as _merge_live, run_sync)
 from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401

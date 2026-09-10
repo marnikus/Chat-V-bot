@@ -37,7 +37,7 @@ from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
 # (CUSTOM_FIND / REPEAT_LOOP) shadow the shipped classes at import time;
 # restored at module end so later test modules see the real actions.
 _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
-from backend.action_engine import (  # noqa: E402
+from services.run import (  # noqa: E402
     RETIRED_BLOCK_KEYS,
     STANDALONE_NICK,
     ActionEngine,
@@ -45,7 +45,7 @@ from backend.action_engine import (  # noqa: E402
     norm_level,
     normalize_blocks,
 )
-from backend.user_memory import UserRecord  # noqa: E402
+from stores.user_memory import UserRecord  # noqa: E402
 
 
 class Step(BaseAction):
@@ -141,7 +141,7 @@ class TestSequence(EngineCase):
         engine, memory, events = self.build(("u1", "u2"))
         engine._stack = [a, b, c]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(
             trace,
@@ -155,7 +155,7 @@ class TestSequence(EngineCase):
         engine, memory, events = self.build(("solo",))
         engine._stack = [a]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(memory.marked, ["solo"])
         self.assertEqual(events["marked_live"], ["solo"])
@@ -174,7 +174,7 @@ class TestFailureStop(EngineCase):
         engine, memory, events = self.build(("u1", "u2"))
         engine._stack = [ok1, boom, never]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(never.calls, [],
                          "a failed step must stop the user's remaining steps")
@@ -187,7 +187,7 @@ class TestFailureStop(EngineCase):
         engine, memory, events = self.build(("u1",))
         engine._stack = [boom]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(memory.marked, [],
                          "a failed user must stay in the queue")
@@ -199,7 +199,7 @@ class TestFailureStop(EngineCase):
         engine, memory, events = self.build(("u1",))
         engine._stack = [skipper, never]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(never.calls, [])
         self.assertEqual(memory.marked, [],
@@ -213,7 +213,7 @@ class TestFailureStop(EngineCase):
         engine, memory, events = self.build(("u1", "u2"))
         engine._stack = [head, raiser]
 
-        self._run(engine.execute(None))          # must not raise
+        self._run(engine.execute())          # must not raise
 
         # u1 died at the raiser, yet the run went on and worked u2:
         self.assertEqual(head.calls, ["u1", "u2"],
@@ -235,7 +235,7 @@ class TestStopAndPause(EngineCase):
         engine, memory, events = self.build(("u1", "u2"))
         engine._stack = [stopper, never]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(stopper.calls, ["u1"])
         self.assertEqual(never.calls, [],
@@ -256,7 +256,7 @@ class TestStopAndPause(EngineCase):
         engine._stack = [gate, tail]
 
         async def scenario():
-            task = asyncio.ensure_future(engine.execute(None))
+            task = asyncio.ensure_future(engine.execute())
             for _ in range(100):                 # wait until gate ran
                 await asyncio.sleep(0.02)
                 if gate.calls:
@@ -320,7 +320,7 @@ class TestRunTracer(EngineCase):
         engine, memory, events = self.build(("u1",))
         engine._stack = [a, b]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         traces = glob.glob(os.path.join("logs", "run_trace_*.jsonl"))
         self.assertEqual(len(traces), 1, "exactly one trace per run")
@@ -367,7 +367,7 @@ class TestRepeatCycles(EngineCase):
         engine, memory, events = self.build(())
         engine._stack = [RepeatMarker(3), block]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         self.assertEqual(block.calls, [STANDALONE_NICK] * 3,
                          "the whole stack must run once per repeat cycle")
@@ -378,7 +378,7 @@ class TestRepeatCycles(EngineCase):
         engine, memory, events = self.build(("only",))
         engine._stack = [RepeatMarker(5), block]
 
-        self._run(engine.execute(None))
+        self._run(engine.execute())
 
         # cycle 1 works the user and marks them; cycle 2 finds the queue
         # empty and ends the run instead of spinning 4 more times

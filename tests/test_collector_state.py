@@ -29,10 +29,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
-from backend.collector import Collector, CollectorState  # noqa: E402
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import fingerprint  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
+from services.collector_service import Collector, CollectorState  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_models import fingerprint  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402

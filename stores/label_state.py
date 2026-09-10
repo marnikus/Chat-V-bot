@@ -73,6 +73,15 @@ class LabelState:
 
     def _normalized(self) -> dict:
         raw = self._raw()
+        defs, seen_ids = self._normalize_defs(raw)
+        assign = self._normalize_assign(raw, seen_ids)
+        include, exclude = self._normalize_filter(raw, seen_ids)
+        return {"defs": defs, "assign": assign,
+                "filter": {"include": include, "exclude": exclude},
+                "next_id": int(raw.get("next_id") or 0)}
+
+    @staticmethod
+    def _normalize_defs(raw: dict) -> tuple[list, set]:
         defs, seen_ids, seen_names = [], set(), set()
         for item in raw.get("defs") or []:
             if not isinstance(item, dict):
@@ -92,7 +101,10 @@ class LabelState:
                 "color": normalize_color(item.get("color")),
                 "created_at": str(item.get("created_at") or ""),
             })
+        return defs, seen_ids
 
+    @staticmethod
+    def _normalize_assign(raw: dict, seen_ids: set) -> dict:
         assign: dict[str, list[str]] = {}
         raw_assign = raw.get("assign")
         if isinstance(raw_assign, dict):
@@ -105,7 +117,10 @@ class LabelState:
                 kept = list(dict.fromkeys(kept))
                 if kept:
                     assign[clean_nick] = kept
+        return assign
 
+    @staticmethod
+    def _normalize_filter(raw: dict, seen_ids: set) -> tuple[list, list]:
         raw_filter = raw.get("filter") if isinstance(raw.get("filter"), dict) else {}
         include = [str(i) for i in (raw_filter.get("include") or [])
                    if str(i) in seen_ids]
@@ -117,7 +132,4 @@ class LabelState:
         # stale include tick.
         exclude = [i for i in dict.fromkeys(exclude)]
         include = [i for i in include if i not in exclude]
-
-        return {"defs": defs, "assign": assign,
-                "filter": {"include": include, "exclude": exclude},
-                "next_id": int(raw.get("next_id") or 0)}
+        return include, exclude

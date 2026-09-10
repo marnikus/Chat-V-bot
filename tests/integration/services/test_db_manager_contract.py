@@ -28,8 +28,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.db_manager import DbManager  # noqa: E402
-from backend.history_service import HistoryService  # noqa: E402
+from services.db_service import DbManager  # noqa: E402
+from services.history import HistoryService  # noqa: E402
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
 
 

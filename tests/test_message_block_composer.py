@@ -25,13 +25,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import actions.type_message as type_message_mod  # noqa: E402
 from actions.base_action import ActionResult  # noqa: E402
 from actions.type_message import TypeMessage  # noqa: E402
-from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
 import backend.message_injector as injector  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.cdp_client import CDPClient  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.criteria_engine import CriteriaEngine  # noqa: E402
-from backend.user_memory import UserMemory  # noqa: E402
+from stores.user_memory import UserMemory  # noqa: E402
 
 UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
 

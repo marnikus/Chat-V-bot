@@ -26,12 +26,12 @@ from actions.base_action import (ActionResult, ActionRegistry,  # noqa: E402
 # later test modules see the real actions.
 _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
-from backend.action_engine import (  # noqa: E402
+from services.run import (  # noqa: E402
     STANDALONE_NICK,
     USER_SCOPED_BLOCKS,
     ActionEngine,
 )
-from backend.user_memory import UserRecord  # noqa: E402
+from stores.user_memory import UserRecord  # noqa: E402
 
 
 class RecordingBlock(BaseAction):
@@ -108,7 +108,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, logs = build_engine(memory)
         engine._stack = [block]
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         self.assertEqual(block.calls, [STANDALONE_NICK],
                          "the block must execute exactly once")
@@ -125,7 +125,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, logs = build_engine(FakeMemory(queue=[]))
         engine._stack = [block]
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         self.assertEqual(block.calls, [])
         warnings = [m for kind, m, lvl in logs if lvl == "warn" or "⚠" in m]
@@ -141,7 +141,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, _ = build_engine(memory)
         engine._stack = [block]
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         self.assertEqual(block.calls, ["alice", "bob"])
         self.assertEqual(memory.marked, ["alice", "bob"])
@@ -151,7 +151,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, logs = build_engine(FakeMemory(queue=[]))
         engine._stack = [block]
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         self.assertEqual(block.calls, [STANDALONE_NICK])
         errors = [m for _, m, lvl in logs if lvl == "error"]
@@ -161,7 +161,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, logs = build_engine(FakeMemory(queue=[]))
         engine._stack = []
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         text = " ".join(m for _, m, _ in logs)
         self.assertIn("empty", text.lower())
@@ -172,7 +172,7 @@ class TestStandaloneRun(unittest.TestCase):
         engine, logs = build_engine(FakeMemory(queue=[]))
         engine._stack = [block]
 
-        run(lambda: engine.execute(None))
+        run(lambda: engine.execute())
 
         self.assertIn("FIND phase", " ".join(m for _, m, _ in logs))
 

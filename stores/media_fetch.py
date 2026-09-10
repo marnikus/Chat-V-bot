@@ -25,7 +25,7 @@ import os
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
-from backend import chat_agent_js
+from core import chat_agent_js
 from stores.media_layout import _extension, _now, infer_kind
 
 log = logging.getLogger("chatbot")

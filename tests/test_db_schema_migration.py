@@ -26,7 +26,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_db import (SCHEMA_VERSION, TABLE_COLUMNS,  # noqa: E402
+from stores.history_db import (SCHEMA_VERSION, TABLE_COLUMNS,  # noqa: E402
                                 HistoryDB)
 
 

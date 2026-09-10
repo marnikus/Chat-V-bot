@@ -249,12 +249,17 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # runtime in services/run/progress.py) and D's chat_sync extraction
         # (+3: SyncResult/MAX_LIVE_ITEMS/align_batch/MessageRecord) added
         # legitimate imports *before* B was merged; the B merge itself adds
-        # zero. The invariant this pins is "the stores refactor must not
-        # force another area to edit an import" — bump this number only when
-        # another area legitimately grows the surface.
-        self.assertEqual(count, 37,
-                         "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 37)")
+        # zero; the integrated baseline was therefore 37.
+        # INTEGRATION-01/I1 then deleted the 11 backend shims, 7 of which
+        # held 8 `from stores…` lines (history_db 1, history_models 2,
+        # history_repo 1, label_store 1, media_store 1, preset_store 1,
+        # user_memory 1 — recounted, not assumed): 37 − 8 = 29.
+        # The invariant this pins is "no area edits an import to grow the
+        # stores surface" — bump this number only when another area
+        # legitimately grows it.
+        self.assertEqual(count, 29,
+                         "no area may grow the stores import surface "
+                         "without updating this gate (baseline: 29)")
 
 
 if __name__ == "__main__":

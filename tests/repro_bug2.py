@@ -27,11 +27,11 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
-from backend.collector import Collector  # noqa: E402
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import fingerprint  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from services.collector_service import Collector  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_models import fingerprint  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
+from stores.media_store import MediaStore  # noqa: E402
 
 NOW = datetime(2026, 9, 7, 16, 30, 0)
 ME = "Хорошо Все"

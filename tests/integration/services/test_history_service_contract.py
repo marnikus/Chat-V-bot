@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryService  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))), "tests"))

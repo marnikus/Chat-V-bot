@@ -1,11 +1,14 @@
 """
-services/run_service — Key Path Tests (Normalize, Norm, Trace) +
+services/run — Key Path Tests (Normalize, Norm, Trace) +
 AREA A P0-1/P0-2 regression pins for RunCoordinator.load_stack and
 RunProgress.UserRecord.
 
 Real assertions on logic, not pass-through.  This module deliberately does
 NOT stub PySide6: the run engine is a real QObject subclass and importing it
 with real Qt headless is part of the harness contract.
+
+INTEGRATION-01/I2: the `services.run_service` alias package is retired;
+everything comes from `services.run` now.
 """
 import unittest
 import os
@@ -15,10 +18,9 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
-from services.run import RunProgress  # noqa: E402
-from services.run_service import (  # noqa: E402
+from services.run import (  # noqa: E402
     STANDALONE_NICK, USER_SCOPED_BLOCKS, RETIRED_BLOCK_KEYS,
-    RunCoordinator, RunTracer, norm_level, normalize_blocks,
+    RunCoordinator, RunProgress, RunTracer, norm_level, normalize_blocks,
 )
 
 

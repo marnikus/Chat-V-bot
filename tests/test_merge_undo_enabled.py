@@ -27,8 +27,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.scroll_parse import ScrollParse  # noqa: E402
-from backend.action_engine import ActionEngine  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
 
@@ -193,14 +193,19 @@ class TestBridgeSurface(unittest.TestCase):
 
     def test_engine_execute_is_called_without_a_parser(self):
         import inspect
-        from backend.action_engine import ActionEngine
+        from services.run import ActionEngine
         src = inspect.getsource(ActionEngine.execute)
         cycle = inspect.getsource(ActionEngine._execute_cycle)
+        collect = inspect.getsource(ActionEngine._collect_cycle_queue)
         self.assertIn("_execute_cycle", src,
                       "execute drives each run cycle itself")
-        self.assertIn("_run_collect_phase", cycle,
+        # INTEGRATION-01/I5 split the cycle into phases; the ownership
+        # contract is unchanged, only one delegation deeper.
+        self.assertIn("_collect_cycle_queue", cycle,
                       "the cycle owns the Scroll & Parse collect phase")
-        self.assertNotIn("_run_parse_phase", src + cycle)
+        self.assertIn("_run_collect_phase", collect,
+                      "the collect phase reaches the engine's own collector")
+        self.assertNotIn("_run_parse_phase", src + cycle + collect)
 
 
 if __name__ == "__main__":

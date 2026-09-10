@@ -10,6 +10,7 @@ Run with:  python3 tests/integration/services/test_services_history.py
 """
 
 import asyncio
+import inspect
 import json
 import os
 import sys
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_models import MessageRecord, fingerprint  # noqa: E402
 from services.history import (HistoryService,  # noqa: E402
                                       HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT,
                                       OLD_MAX_FILE_MB, _merge, _db_stem)
@@ -420,7 +421,11 @@ class TestLifecycle(ServiceCase):
         # bindings for other names go to the collector only via __cvbPush
         self.assertIsNone(self.service._on_binding({"name": "other"}))
         result = self.service._on_binding({"name": "__cvbPush", "payload": "[]"})
-        self.assertIsNotNone(result)
+        # the handler hands the coroutine back for the CDP layer to schedule
+        # (contract test: TestHistoryServiceContract::on_binding) — awaiting
+        # it here is what keeps the suite RuntimeWarning-free.
+        self.assertTrue(inspect.isawaitable(result))
+        self.assertEqual(await result, 0)
 
     async def test_reconnect_rebinds(self):
         self.assertEqual(self.service._binding, True)

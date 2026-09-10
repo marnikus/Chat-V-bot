@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
 

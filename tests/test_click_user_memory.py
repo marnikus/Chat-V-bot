@@ -39,8 +39,8 @@ _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
 from actions.click_user import ClickUser  # noqa: E402
 from actions.take_person import TakePerson  # noqa: E402
-from backend.action_engine import ActionEngine  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
 def run(coro):
@@ -270,7 +270,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 take = TakePerson(pick_mode="order_first")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [take, click]
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return click, rows
         click, rows = in_tmp_cwd(go)
@@ -295,7 +295,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 eng.log_msg.connect(lambda m: logs.append(m))
                 eng.debug_msg.connect(lambda m, lvl: details.append(m))
                 eng._stack = [click]
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return click.calls, rows, logs + details
         calls, rows, logs = in_tmp_cwd(go)
@@ -311,7 +311,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 click = StubClick(use_person_from_memory=False)
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [click]
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return click.calls, rows
         calls, rows = in_tmp_cwd(go)
@@ -327,7 +327,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 consumer = Consumer(match_text="hi {{nick}}")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [off, consumer]
-                await eng.execute(None)
+                await eng.execute()
                 return consumer.seen
         seen = in_tmp_cwd(go)
         self.assertEqual(len(seen), 2,
@@ -346,7 +346,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [take, click, consumer]
                 eng._repeat_cycles = lambda: 10   # pretend a Repeat Loop marker
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return click.calls, [s for _, s in consumer.seen], rows
         calls, texts, rows = in_tmp_cwd(go)

@@ -36,8 +36,8 @@ from actions.base_action import BaseAction, ActionResult  # noqa: E402
 from actions.click_user import ClickUser  # noqa: E402
 from actions.custom_find import CustomFind  # noqa: E402
 from actions.type_message import TypeMessage  # noqa: E402
-from backend.action_engine import ActionEngine  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
 def run(coro):
@@ -192,7 +192,7 @@ class TestEngineNickExpansion(unittest.TestCase):
     async def _engine(self, mem, *blocks):
         eng = ActionEngine(cdp=None, memory=mem, criteria=None)
         eng._stack = list(blocks)
-        await eng.execute(None)
+        await eng.execute()
         return eng
 
     def test_fields_see_the_selected_user_of_this_step(self):
@@ -253,11 +253,11 @@ class TestEngineNickExpansion(unittest.TestCase):
                 await seed_user(mem, "Anna")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [StubClick()]
-                await eng.execute(None)
+                await eng.execute()
                 self.assertEqual(eng.selected_nick, "Anna")
                 # Second press: everyone is messaged → empty run, but the
                 # remembered nick must NOT survive from the previous run.
-                await eng.execute(None)
+                await eng.execute()
                 return eng.selected_nick
 
         selected = in_tmp_cwd(go)
@@ -271,7 +271,7 @@ class TestEngineNickExpansion(unittest.TestCase):
                 consumer = Consumer(match_text="after {{nick}}")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [boom, consumer]
-                await eng.execute(None)      # must not raise
+                await eng.execute()      # must not raise
                 return boom, consumer
 
         boom, consumer = in_tmp_cwd(go)
@@ -301,7 +301,7 @@ class TestRealCustomFindWiring(unittest.TestCase):
                 eng._stack = [click, finder]
                 with mock.patch.object(custom_find_mod, "find_and_click",
                                        new=fake_find):
-                    await eng.execute(None)
+                    await eng.execute()
                 return finder, captured
 
         finder, captured = in_tmp_cwd(go)

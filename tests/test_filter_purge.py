@@ -25,10 +25,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.scroll_parse import ScrollParse  # noqa: E402
-from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import ActionEngine  # noqa: E402
 from backend.person_filter import PersonFilter  # noqa: E402
 from backend.scroll_parser import ScrollParser  # noqa: E402
-from backend.user_memory import UserMemory, UserRecord  # noqa: E402
+from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
 

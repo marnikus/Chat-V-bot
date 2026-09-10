@@ -27,6 +27,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Optional
 
+from core.action_result import ActionResult  # noqa: F401  (re-export)
+
 _SIGNATURES: dict = {}          # class -> its __init__ parameters, computed once
 
 
@@ -43,21 +45,17 @@ def ms_floor(value: Any) -> int:
 def _click_runner():
     """The shared visual-confirmation runner (RULE 1), reached lazily.
 
-    `backend.visual_click` imports this module for ActionResult, so importing it
-    back at module scope would be a cycle that exists only while Python is
-    reading the files — a function-level import is how the block family avoids
-    it, and tests can still patch either side.
+    `backend.visual_click` used to import ActionResult from this module, so
+    importing it back at module scope was a cycle that existed only while
+    Python was reading the files — a function-level import is how the block
+    family avoids it, and tests can still patch either side.
+    (INTEGRATION-01/I7 has since moved ActionResult itself to the leaf
+    `core/action_result.py`, which both sides import with no cycle at all.)
     """
     from actions.find_click_runner import find_and_click
     return find_and_click
 
 log = logging.getLogger("chatbot")
-
-
-class ActionResult:
-    OK = "ok"
-    FAIL = "fail"
-    SKIP = "skip"
 
 
 class BaseAction(ABC):

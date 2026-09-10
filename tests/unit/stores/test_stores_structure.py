@@ -6,9 +6,10 @@ These are the numbers the plan asked for, written as tests so they cannot rot:
 
   * no file in `stores/` over **400 SLOC** (plan §6.2 exit criterion 2);
   * `HistoryRepo` under **30 public methods** (it had 44 in total);
-  * a store never imports a service, a bridge or `app` — and the single
-    documented `stores → backend` edge (`media_store → backend.chat_agent_js`,
-    the layering inversion the plan defers in §9) stays the ONLY one;
+  * a store never imports a service, a bridge or `app` — and there are
+    ZERO `stores → backend` edges (INTEGRATION-01/I3 moved the last one,
+    `media_fetch → chat_agent_js`, to `core/`, closing the plan's §9
+    inversion for good);
   * every god class is composed of the collaborators B2 extracts, and each
     collaborator reads the aggregate's state (the split must move behaviour,
     not hide it behind a second copy of the data).
@@ -30,11 +31,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 STORES = os.path.join(ROOT, "stores")
 SLOC_CEILING = 400
-#: the one `stores → backend` import the plan knows about and defers (§3.5).
-#: B2 moved it with the downloader, so `media_fetch.py` owns the JS expression
-#: now and `stores/media_store.py` no longer imports `backend` at all — still
-#: exactly ONE inversion, just one file deeper (design §2.2, §3.5).
-ALLOWED_UPWARD_EDGES = {"media_fetch.py": "backend.chat_agent_js"}
+#: INTEGRATION-01/I3: the plan's one `stores → backend` import (§3.5) is gone
+#: — `chat_agent_js` moved to `core/`, which is downward for every package.
+#: This stays EMPTY: any new upward edge fails the suite.
+ALLOWED_UPWARD_EDGES = {}
 
 
 def py_files():

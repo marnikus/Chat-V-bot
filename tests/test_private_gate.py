@@ -24,16 +24,16 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.chat_agent_js import AGENT_VERSION  # noqa: E402
+from core.chat_agent_js import AGENT_VERSION  # noqa: E402
 from backend.chat_parser import (  # noqa: E402
     ChatParser,
     sync_conversation,
     verify_private,
 )
-from backend.collector import Collector, CollectorState  # noqa: E402
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.user_memory import UserMemory  # noqa: E402
+from services.collector_service import Collector, CollectorState  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
+from stores.user_memory import UserMemory  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402

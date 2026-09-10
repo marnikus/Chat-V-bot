@@ -27,9 +27,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.history_service import HistoryService  # noqa: E402
-from backend.label_store import LabelStore  # noqa: E402
-from backend.user_memory import UserMemory  # noqa: E402
+from services.history import HistoryService  # noqa: E402
+from stores.label_store import LabelStore  # noqa: E402
+from stores.user_memory import UserMemory  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage  # noqa: E402
@@ -66,7 +66,7 @@ class MigrationCase(unittest.IsolatedAsyncioTestCase):
     async def _make_legacy_queue(self, nicks):
         """The queue file exactly as the pre-redesign app left it."""
         import aiosqlite
-        from backend.user_memory import _SCHEMA
+        from stores.user_memory import _SCHEMA
         async with aiosqlite.connect(self.legacy_path) as conn:
             await conn.executescript(_SCHEMA)
             for i, nick in enumerate(nicks, start=1):

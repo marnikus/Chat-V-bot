@@ -255,7 +255,7 @@ class TestSingleTargetCyclePin(RegistryCase):
             take = TakePerson(pick_mode="order_first")
             consumer = _make_consumer()
             engine._stack = [take, click, consumer]
-            await engine.execute(None)
+            await engine.execute()
             return click, consumer, memory
 
         click, consumer, memory = asyncio.run(go())
@@ -278,7 +278,7 @@ class TestSingleTargetCyclePin(RegistryCase):
             engine.log_msg.connect(logs.append)
             engine.debug_msg.connect(lambda m, level=None: logs.append(m))
             engine._stack = [click]
-            await engine.execute(None)
+            await engine.execute()
             return click.calls, memory.marked, logs
 
         calls, marked, logs = asyncio.run(go())

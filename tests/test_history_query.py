@@ -23,10 +23,10 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_models import MessageRecord, fingerprint  # noqa: E402
 from backend.history_query import HistoryQuery  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 

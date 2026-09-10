@@ -231,8 +231,8 @@ class TestLiveRefresh(unittest.TestCase):
 
 class TestEngineLiveHook(unittest.TestCase):
     def test_engine_persists_and_emits_per_person(self):
-        from backend.action_engine import ActionEngine
-        from backend.user_memory import UserRecord
+        from services.run import ActionEngine
+        from stores.user_memory import UserRecord
 
         class Mem:
             def __init__(self): self.saved = []
@@ -252,8 +252,8 @@ class TestEngineLiveHook(unittest.TestCase):
         self.assertEqual(emitted[0]["collected"], 1)
 
     def test_hook_survives_a_storage_failure(self):
-        from backend.action_engine import ActionEngine
-        from backend.user_memory import UserRecord
+        from services.run import ActionEngine
+        from stores.user_memory import UserRecord
 
         class Broken:
             async def upsert_user(self, u): raise RuntimeError("db down")

@@ -21,8 +21,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.media_store import MediaStore  # noqa: E402
 
 GIF = b"GIF89a" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 500

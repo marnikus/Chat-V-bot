@@ -181,7 +181,7 @@ class RestoreCase(unittest.IsolatedAsyncioTestCase):
 
     async def seed_row(self):
         from datetime import datetime
-        from backend.history_models import MessageRecord, fingerprint
+        from stores.history_models import MessageRecord, fingerprint
         rec = MessageRecord(
             fp=fingerprint("in", "Nick", "10:00", "text", "hello", 0),
             direction="in", from_nick="Nick", kind="text", text="hello",

@@ -32,7 +32,7 @@ class _LeaseCtx:
         await self._lease.acquire(self._priority)
         return self._lease
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(self, _exc_type, _exc, _tb):
         self._lease.release()
         return False
 

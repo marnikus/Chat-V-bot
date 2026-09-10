@@ -65,13 +65,13 @@ class RunTracer:
 
 
 class RunHooks:
-    def pre_run(self, coordinator) -> None:
+    def pre_run(self, _coordinator) -> None:
         return None
 
-    def post_run(self, coordinator, outcome: str) -> None:
+    def post_run(self, _coordinator, outcome: str) -> None:
         return None
 
-    def on_action_complete(self, coordinator, block, nick: str, status: str) -> None:
+    def on_action_complete(self, _coordinator, block, nick: str, status: str) -> None:
         return None
 
 

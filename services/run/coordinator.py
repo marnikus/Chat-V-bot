@@ -16,7 +16,6 @@ except Exception:
 if TYPE_CHECKING:
     from backend.cdp_client import CDPClient
     from backend.criteria_engine import CriteriaEngine
-    from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
 from .error_recovery import RetryPolicy, RunExecutionMixin
 from .hooks import STANDALONE_NICK, USER_SCOPED_BLOCKS, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
@@ -51,7 +50,7 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
     def pause(self) -> None: self._paused = True; self._state.mark_paused()
     def resume(self) -> None: self._paused = False; self._state.mark_resumed()
 
-    async def execute(self, scroll_parser: 'ScrollParser' | None = None) -> None:
+    async def execute(self) -> None:
         if self._running: self.log_msg.emit("⚠ Already running"); return
         self._running, self._stop_requested, self._paused = True, False, False
         self._state.mark_running(); self.progress.reset(); self.progress.emit(); self._run_seq += 1
@@ -87,34 +86,52 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
             if self._tracer is not None: self._tracer.close(); self._tracer = None
             self._running = False; self._ctx = {}; self.stack_complete.emit(); self.log_msg.emit("✅ Stack execution complete")
 
-    async def _execute_cycle(self) -> str:
-        scroll = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
-        queue = await self._run_collect_phase(scroll) if scroll is not None else await self._memory.get_queue()
-        queue = self.filter_by_labels(queue, announce=True); queue = await self._order_queue_by_column(queue)
-        take_matched = await self._run_take_phase(); has_skip = any(b.block_id == "CONDITIONAL_SKIP" and getattr(b, "enabled", True) for b in self._stack)
-        mem_click = next((b for b in self._stack if b.block_id == "CLICK_USER" and getattr(b, "enabled", True) and getattr(b, "use_person_from_memory", False)), None)
+    def _find_enabled_block(self, block_id: str):
+        return next((b for b in self._stack if b.block_id == block_id and getattr(b, "enabled", True)), None)
+
+    def _has_enabled_block(self, block_id: str) -> bool:
+        return any(b.block_id == block_id and getattr(b, "enabled", True) for b in self._stack)
+
+    async def _collect_cycle_queue(self) -> list:
+        scroll = self._find_enabled_block("SCROLL_PARSE")
+        if scroll is None:
+            queue = await self._memory.get_queue()
+        else:
+            queue = await self._run_collect_phase(scroll)
+        queue = self.filter_by_labels(queue, announce=True)
+        return await self._order_queue_by_column(queue)
+
+    def _announce_cycle_mode(self, queue: list, take_matched: bool) -> tuple:
+        """Emit the mode cascade. Returns (queue, standalone, terminal).
+
+        `terminal` is None while the cycle should proceed to the per-user
+        loop, otherwise the outcome to return ("empty"/"empty_stack").
+        """
         needs_user = [b.block_id for b in self._stack if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
-        take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
-        if mem_click is not None: return await self._run_single_target_cycle(has_skip, take_matched)
+        take_present = self._has_enabled_block("TAKE_PERSON")
         if take_present and not take_matched and not needs_user and not queue:
             self.log_msg.emit("⚠ Pick Person found no one this cycle — nothing left to work (a Repeat Loop ends here, like an empty queue)")
             self.debug_msg.emit("ℹ Memory-driven cycle ended: no person matched Pick Person", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "no_take_match"}); return "empty"
-        standalone = False
+            self._tracer.note({"type": "run_skip", "reason": "no_take_match"})
+            return [], False, "empty"
         if queue:
             self.progress.extend_total(len(queue)); self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
-        elif not self._stack:
+            return queue, False, None
+        if not self._stack:
             self.log_msg.emit("⚠ The stack is empty — add at least one block"); self.debug_msg.emit("⚠ Nothing to run: the action stack is empty", "warn")
-            return "empty_stack"
-        elif needs_user:
+            return [], False, "empty_stack"
+        if needs_user:
             self.log_msg.emit("⚠ No users in queue — nothing to run")
             self.debug_msg.emit("⚠ The queue is empty and this stack contains user-dependent block(s): " + ", ".join(sorted(set(needs_user))) + ". Add a Scroll & Parse block (or reset the 'messaged' flags) so there are users to run on.", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))}); return "empty"
-        else:
-            standalone = True; self.progress.extend_total(1); queue = [UserRecord(nick=STANDALONE_NICK)]
-            self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
-            self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
-            self._tracer.note({"type": "run_mode", "mode": "standalone"})
+            self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))})
+            return [], False, "empty"
+        self.progress.extend_total(1)
+        self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
+        self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
+        self._tracer.note({"type": "run_mode", "mode": "standalone"})
+        return [UserRecord(nick=STANDALONE_NICK)], True, None
+
+    async def _drive_user_queue(self, queue: list, standalone: bool, has_skip: bool) -> str:
         for user in queue:
             if self._stop_requested:
                 self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
@@ -124,5 +141,16 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
             if not standalone: self.user_complete.emit(user.nick, status == "ok")
             if status == "stop": self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
         return "worked"
+
+    async def _execute_cycle(self) -> str:
+        queue = await self._collect_cycle_queue()
+        take_matched = await self._run_take_phase()
+        mem_click = next((b for b in self._stack if b.block_id == "CLICK_USER" and getattr(b, "enabled", True) and getattr(b, "use_person_from_memory", False)), None)
+        if mem_click is not None:
+            return await self._run_single_target_cycle(self._has_enabled_block("CONDITIONAL_SKIP"), take_matched)
+        queue, standalone, terminal = self._announce_cycle_mode(queue, take_matched)
+        if terminal is not None:
+            return terminal
+        return await self._drive_user_queue(queue, standalone, self._has_enabled_block("CONDITIONAL_SKIP"))
 
 ActionEngine = RunCoordinator

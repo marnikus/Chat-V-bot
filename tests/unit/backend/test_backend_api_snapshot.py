@@ -53,7 +53,11 @@ class TestPublicApiSnapshot(unittest.TestCase):
         self.assertIn("backend.chat_parser", modules)
         self.assertIn("backend.scroll_parser", modules)
         self.assertIn("actions.base", modules)
-        self.assertGreaterEqual(len(modules), 45,
+        # 50 at the AREA D snapshot; INTEGRATION-01/I1+I3 removed exactly 12
+        # (the 11 test-only shims + backend.chat_agent_js, re-homed to core/)
+        # — the removal set is pinned independently by
+        # tests/integration/test_post_merge_contract.py::TestShimsAreRetired.
+        self.assertGreaterEqual(len(modules), 38,
                                 "the snapshot must cover every module of "
                                 "backend/ and actions/")
 

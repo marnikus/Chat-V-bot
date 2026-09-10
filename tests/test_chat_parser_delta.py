@@ -36,15 +36,15 @@ from backend.chat_parser import (  # noqa: E402
     parse_records,
     sync_conversation,
 )
-from backend.chat_agent_js import (  # noqa: E402
+from core.chat_agent_js import (  # noqa: E402
     AGENT_VERSION,
     fetch_media_expression,
     restore_scroll_expression,
     slice_expression,
 )
-from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import fingerprint  # noqa: E402
-from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_db import HistoryDB  # noqa: E402
+from stores.history_models import fingerprint  # noqa: E402
+from stores.history_repo import HistoryRepo  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -115,7 +115,7 @@ class FakePage:
     @staticmethod
     def _any_fp(message):
         """The fingerprint of one record without its author (agent v10)."""
-        from backend.history_models import fingerprint
+        from stores.history_models import fingerprint
         media = message.get("media")
         payload = media["url"] if media else message.get("text") or ""
         return fingerprint(message.get("dir") or "in", "",
