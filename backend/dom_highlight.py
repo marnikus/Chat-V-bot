@@ -118,32 +118,90 @@ def _base_out_js() -> str:
 """
 
 
-def build_find_probe(
-    selector: str,
-    label_selector: Optional[str] = None,
-    match_text: Optional[str] = None,
-    match_mode: str = MATCH_CONTAINS,
-    highlight: bool = True,
-    highlight_ms: int = 1200,
-    color: str = COLOR_FIND,
-    caption: str = "FOUND",
-    max_candidates: int = 6,
-) -> str:
-    """Phase 1 probe: find the element, highlight it in RED, do NOT click.
-
-    The matched node is stashed on ``window.__cfStash`` so the click phase can
-    act on the exact same element instead of re-querying the DOM.
-    """
-    return """
+#: The wrapper every probe shares: the diagnostic object, the helper
+#: functions, one try/catch that turns a thrown JS error into ``out.error``
+#: (so a broken page can never raise across CDP), and the JSON reply.
+#:
+#: ``build_clear_probe()`` is the one probe that deliberately skips the
+#: chassis: it answers ``{cleared: n}`` and must do so even on a page with no
+#: overlay, no helper and no diagnostic object at all.
+_PROBE_JS = """
 (function(){
 %(out)s
 %(helpers)s
   try {
-    out.phase = 'find';
+%(body)s
+  } catch (err) {
+    out.error = String(err && err.message || err);
+  }
+  return JSON.stringify(out);
+})()
+"""
+
+
+def _probe(body: str, **fields) -> str:
+    """Fill in a probe body, then wrap it in the chassis.
+
+    Two passes, and the order is the point: the body's own ``%(name)s``
+    placeholders are resolved first, and the finished script then goes in as a
+    *value* of the chassis template. A label that happens to contain a ``%`` —
+    "100% done" in a nickname — therefore never has to survive a second
+    formatting pass, exactly as it didn't when every builder inlined the
+    wrapper and formatted the whole script in one go.
+    """
+    script = body % fields
+    return _PROBE_JS % {"out": _base_out_js(), "helpers": _HELPERS_JS,
+                        "body": script.strip("\n")}
+
+
+def _splice(body: str, **fragments) -> str:
+    """Put the shared JS fragments back into a body's ``__MARKER__`` lines.
+
+    A fragment loses its own blank margins on the way in, so a body made of
+    pieces reads exactly like one written out in full — which is what keeps
+    the script the page runs byte-identical to the hand-written one.
+    """
+    for name, fragment in fragments.items():
+        body = body.replace(f"__{name.upper()}__", fragment.strip("\n"))
+    return body
+
+
+# ── JS fragments more than one probe needs ──────────────────────────────
+#: How the FIND and HIGHLIGHT probes read their arguments. In one place on
+#: purpose: a new argument used to mean editing two bodies, and missing one
+#: left the two probes matching against different text.
+_QUERY_VARS = """
     var sel = %(selector)s;
     var childSel = %(label_selector)s;
     var matchText = %(match_text)s;
     var exact = %(exact)s;
+"""
+
+#: The label of one candidate node: the root's own text, or the inner element
+#: the caller named with ``label_selector``.
+_LABEL_JS = """
+      var node = nodes[i];
+      var el = node;
+      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
+      if (childSel) {
+        var c = node.querySelector(childSel);
+        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
+      }"""
+
+#: The exact/contains filter. "Anna must never match Annabelle" is one rule
+#: the two matching probes may not implement twice.
+_MATCH_JS = """
+      if (matchText !== null && matchText !== undefined && matchText !== '') {
+        if (exact) { if (label !== matchText) { continue; } }
+        else { if (label.indexOf(matchText) < 0) { continue; } }
+      }
+"""
+
+#: Phase 1: locate the node, report what was found, draw the RED outline,
+#: and stash the element for the click phase.
+_FIND_BODY = _splice("""
+    out.phase = 'find';
+__QUERY__
     var doHighlight = %(highlight)s;
     out.query = sel;
     clearHighlights();
@@ -152,18 +210,9 @@ def build_find_probe(
     out.total = nodes.length;
     var cands = [];
     for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var el = node;
-      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
-      if (childSel) {
-        var c = node.querySelector(childSel);
-        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
-      }
+__LABEL__
       if (label.length > 120) label = label.slice(0, 120) + '\\u2026';
-      if (matchText !== null && matchText !== undefined && matchText !== '') {
-        if (exact) { if (label !== matchText) { continue; } }
-        else { if (label.indexOf(matchText) < 0) { continue; } }
-      }
+__MATCH__
       /* Visibility/clickability must describe the node we will actually
          highlight and click (the root), not the inner label element: a label
          inside a display:none parent still reports its own style as visible. */
@@ -184,46 +233,37 @@ def build_find_probe(
                   clickable: vi.visible && !vi.disabled});
     }
     out.candidates = cands.slice(0, %(maxcand)s);
-  } catch (err) {
-    out.error = String(err && err.message || err);
-  }
-  return JSON.stringify(out);
-})()
-""" % {
-        "out": _base_out_js(),
-        "helpers": _HELPERS_JS,
-        "selector": _js_str(selector),
-        "label_selector": _js_str(label_selector) if label_selector else "null",
-        "match_text": _js_str(match_text) if match_text else "null",
-        "exact": "true" if match_mode == MATCH_EXACT else "false",
-        "highlight": "true" if highlight else "false",
-        "color": _js_str(color),
-        "caption": _js_str(caption),
-        "hms": int(highlight_ms),
-        "stash": STASH_KEY,
-        "maxcand": int(max_candidates),
+""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
+
+#: Visual confirmation only: highlight the first match. Never clicks, never
+#: scrolls, never touches the click stash — the scroll parser marks every
+#: person who matched the filter with this probe, one row at a time.
+_HIGHLIGHT_BODY = _splice("""
+    out.phase = 'highlight';
+__QUERY__
+    out.query = sel;
+    if (%(clear)s) clearHighlights();
+    var nodes = Array.prototype.slice.call(document.querySelectorAll(sel));
+    out.total = nodes.length;
+    for (var i = 0; i < nodes.length; i++) {
+__LABEL__
+__MATCH__
+      var vi = probeVisible(node);
+      out.found = true; out.index = i; out.text = label;
+      out.visible = vi.visible; out.disabled = vi.disabled;
+      out.clickable = vi.visible && !vi.disabled;
+      out.target_desc = describe(node);
+      var rect = highlight(node, %(color)s, %(hms)s, %(caption)s);
+      out.rect = rect;
+      out.highlighted = !!rect;
+      break;
     }
+""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
 
-
-def build_click_probe(
-    click_selector: Optional[str] = None,
-    highlight: bool = True,
-    highlight_ms: int = 1200,
-    color: str = COLOR_CLICK,
-    caption: str = "CLICK",
-    do_click: bool = True,
-) -> str:
-    """Phase 2 probe: highlight the click target in ORANGE, then click it.
-
-    Operates on the element stashed by :func:`build_find_probe`. When
-    ``click_selector`` is given, the click target is that element *inside* the
-    stashed node; otherwise the stashed node itself is clicked.
-    """
-    return """
-(function(){
-%(out)s
-%(helpers)s
-  try {
+#: Phase 2: re-check the stashed element, draw the ORANGE outline on the
+#: click target, then click it. It works from ``window.__cfStash`` rather
+#: than a query, so it shares none of the fragments above.
+_CLICK_BODY = """
     out.phase = 'click';
     var doHighlight = %(highlight)s;
     var doClick = %(do_click)s;
@@ -284,22 +324,62 @@ def build_click_probe(
       try { target.click(); out.clicked = true; }
       catch(err) { out.error = String(err && err.message || err); }
     }
-  } catch (err) {
-    out.error = String(err && err.message || err);
-  }
-  return JSON.stringify(out);
-})()
-""" % {
-        "out": _base_out_js(),
-        "helpers": _HELPERS_JS,
-        "click_selector": _js_str(click_selector) if click_selector else "null",
-        "highlight": "true" if highlight else "false",
-        "do_click": "true" if do_click else "false",
-        "color": _js_str(color),
-        "caption": _js_str(caption),
-        "hms": int(highlight_ms),
-        "stash": STASH_KEY,
-    }
+"""
+
+
+
+def build_find_probe(
+    selector: str,
+    label_selector: Optional[str] = None,
+    match_text: Optional[str] = None,
+    match_mode: str = MATCH_CONTAINS,
+    highlight: bool = True,
+    highlight_ms: int = 1200,
+    color: str = COLOR_FIND,
+    caption: str = "FOUND",
+    max_candidates: int = 6,
+) -> str:
+    """Phase 1 probe: find the element, highlight it in RED, do NOT click.
+
+    The matched node is stashed on ``window.__cfStash`` so the click phase can
+    act on the exact same element instead of re-querying the DOM.
+    """
+    return _probe(_FIND_BODY,
+                  selector=_js_str(selector),
+                  label_selector=(_js_str(label_selector) if label_selector
+                                  else "null"),
+                  match_text=(_js_str(match_text) if match_text else "null"),
+                  exact="true" if match_mode == MATCH_EXACT else "false",
+                  highlight="true" if highlight else "false",
+                  color=_js_str(color),
+                  caption=_js_str(caption),
+                  hms=int(highlight_ms),
+                  stash=STASH_KEY,
+                  maxcand=int(max_candidates))
+
+
+def build_click_probe(
+    click_selector: Optional[str] = None,
+    highlight: bool = True,
+    highlight_ms: int = 1200,
+    color: str = COLOR_CLICK,
+    caption: str = "CLICK",
+    do_click: bool = True,
+) -> str:
+    """Phase 2 probe: highlight the click target in ORANGE, then click it.
+
+    Operates on the element stashed by :func:`build_find_probe`. When
+    ``click_selector`` is given, the click target is that element *inside* the
+    stashed node; otherwise the stashed node itself is clicked.
+    """
+    return _probe(_CLICK_BODY,
+                  click_selector=_js_str(click_selector) if click_selector else "null",
+                  highlight="true" if highlight else "false",
+                  do_click="true" if do_click else "false",
+                  color=_js_str(color),
+                  caption=_js_str(caption),
+                  hms=int(highlight_ms),
+                  stash=STASH_KEY)
 
 
 def build_highlight_probe(
@@ -319,59 +399,16 @@ def build_highlight_probe(
     ``scrollIntoView``: moving the viewport mid-scroll would corrupt the
     parser's position tracking.
     """
-    return """
-(function(){
-%(out)s
-%(helpers)s
-  try {
-    out.phase = 'highlight';
-    var sel = %(selector)s;
-    var childSel = %(label_selector)s;
-    var matchText = %(match_text)s;
-    var exact = %(exact)s;
-    out.query = sel;
-    if (%(clear)s) clearHighlights();
-    var nodes = Array.prototype.slice.call(document.querySelectorAll(sel));
-    out.total = nodes.length;
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var el = node;
-      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
-      if (childSel) {
-        var c = node.querySelector(childSel);
-        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
-      }
-      if (matchText !== null && matchText !== undefined && matchText !== '') {
-        if (exact) { if (label !== matchText) { continue; } }
-        else { if (label.indexOf(matchText) < 0) { continue; } }
-      }
-      var vi = probeVisible(node);
-      out.found = true; out.index = i; out.text = label;
-      out.visible = vi.visible; out.disabled = vi.disabled;
-      out.clickable = vi.visible && !vi.disabled;
-      out.target_desc = describe(node);
-      var rect = highlight(node, %(color)s, %(hms)s, %(caption)s);
-      out.rect = rect;
-      out.highlighted = !!rect;
-      break;
-    }
-  } catch (err) {
-    out.error = String(err && err.message || err);
-  }
-  return JSON.stringify(out);
-})()
-""" % {
-        "out": _base_out_js(),
-        "helpers": _HELPERS_JS,
-        "selector": _js_str(selector),
-        "label_selector": _js_str(label_selector) if label_selector else "null",
-        "match_text": _js_str(match_text) if match_text else "null",
-        "exact": "true" if match_mode == MATCH_EXACT else "false",
-        "clear": "true" if clear_first else "false",
-        "color": _js_str(color),
-        "caption": _js_str(caption),
-        "hms": int(highlight_ms),
-    }
+    return _probe(_HIGHLIGHT_BODY,
+                  selector=_js_str(selector),
+                  label_selector=(_js_str(label_selector) if label_selector
+                                  else "null"),
+                  match_text=(_js_str(match_text) if match_text else "null"),
+                  exact="true" if match_mode == MATCH_EXACT else "false",
+                  clear="true" if clear_first else "false",
+                  color=_js_str(color),
+                  caption=_js_str(caption),
+                  hms=int(highlight_ms))
 
 
 def build_clear_probe() -> str:
@@ -390,6 +427,25 @@ def build_clear_probe() -> str:
 
 
 # ── interpretation of the two phases ─────────────────────────────────────
+def _candidate_lines(result: dict) -> str:
+    """What the probe DID see, as one readable line — or an empty string.
+
+    A miss is far more useful with the near-misses under it: that is how a user
+    tells "wrong selector" from "right node, wrong text" without opening the
+    debugger pane.
+    """
+    cands = result.get("candidates") or []
+    if not cands:
+        return ""
+    parts = [
+        f"[{c.get('index')}] “{str(c.get('text', ''))[:40]}” "
+        f"({'visible' if c.get('visible') else 'hidden'}, "
+        f"{'clickable' if c.get('clickable') else 'not clickable'})"
+        for c in cands[:4]
+    ]
+    return " Candidates: " + "; ".join(parts) + "."
+
+
 def interpret_find(result, label: str = "element") -> tuple[str, str]:
     """Turn a FIND-phase result into a (message, level) pair."""
     if not result:
@@ -399,18 +455,9 @@ def interpret_find(result, label: str = "element") -> tuple[str, str]:
         return f"❌ FIND error while searching {label}: {result['error']}", "error"
     total = int(result.get("total", 0) or 0)
     if not result.get("found"):
-        msg = (f"❌ FIND failed: {label} — selector matched {total} node(s), "
-               "none with the required text/properties.")
-        cands = result.get("candidates") or []
-        if cands:
-            parts = [
-                f"[{c.get('index')}] “{str(c.get('text', ''))[:40]}” "
-                f"({'visible' if c.get('visible') else 'hidden'}, "
-                f"{'clickable' if c.get('clickable') else 'not clickable'})"
-                for c in cands[:4]
-            ]
-            msg += " Candidates: " + "; ".join(parts) + "."
-        return msg, "error"
+        return (f"❌ FIND failed: {label} — selector matched {total} node(s), "
+                "none with the required text/properties."
+                + _candidate_lines(result)), "error"
     text = str(result.get("text", ""))[:60]
     idx = result.get("index", -1)
     state = "visible" if result.get("visible") else "⚠ NOT visible (hidden/zero-size)"
