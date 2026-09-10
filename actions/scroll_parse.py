@@ -27,7 +27,7 @@ from typing import Optional
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
 from backend.person_filter import ANY, NO, YES, PersonFilter, normalize
-from backend.scroll_parser import CollectResult, ScrollParser
+from backend.scroll_parser import CollectResult, ScrollOptions, ScrollParser
 
 log = logging.getLogger("chatbot")
 
@@ -104,12 +104,18 @@ class ScrollParse(BaseAction):
             panel_criteria=None,
         )
 
-    def build_parser(self, cdp: CDPClient, panel_criteria=None,
-                     log_cb=None, on_collect=None, on_reject=None,
-                     should_stop=None) -> ScrollParser:
-        return ScrollParser(
-            cdp=cdp,
-            criteria=None,          # panel criteria intentionally not applied
+    def to_scroll_options(self, panel_criteria=None, log_cb=None,
+                          on_collect=None, on_reject=None,
+                          should_stop=None) -> ScrollOptions:
+        """This block's settings, as the backend's own options value.
+
+        A SCROLL_PARSE block IS a scroll run's configuration, so the
+        translation is one expression — and anything the block does not mention
+        keeps `ScrollOptions`' default instead of a copy of the numbers made
+        here. `panel_criteria` is accepted and ignored, exactly as in
+        `build_filter`.
+        """
+        return ScrollOptions(
             viewport_sel=self.viewport_selector,
             scroll_dy=self.scroll_delta_y,
             pause_ms=self.scroll_pause_ms,
@@ -123,10 +129,21 @@ class ScrollParse(BaseAction):
             highlight_ms=self.highlight_ms,
             confirm_pause_ms=self.confirm_pause_ms,
             on_collect=on_collect,
+            # RULE 6: only a purge that is switched on may destroy records
             on_reject=on_reject if self.purge_rejected else None,
             should_stop=should_stop,
             log_cb=log_cb,
         )
+
+    def build_parser(self, cdp: CDPClient, panel_criteria=None,
+                     log_cb=None, on_collect=None, on_reject=None,
+                     should_stop=None) -> ScrollParser:
+        return ScrollParser.from_options(
+            cdp,
+            self.to_scroll_options(panel_criteria=panel_criteria,
+                                   log_cb=log_cb, on_collect=on_collect,
+                                   on_reject=on_reject,
+                                   should_stop=should_stop))
 
     @staticmethod
     async def _read_unmessaged(engine) -> set:
@@ -147,6 +164,34 @@ class ScrollParse(BaseAction):
             return set()
 
     # ── the pipeline ─────────────────────────────────────────────
+    @staticmethod
+    def _say(engine: Optional[object], message: str,
+             level: str = "info") -> None:
+        """`engine.report` when a run is listening, silence when not."""
+        if engine is not None:
+            engine.report(message, level)
+
+    @classmethod
+    def _binder(cls, engine):
+        """The `log_cb` shape the parser calls: (message, level)."""
+        return lambda message, level="info": cls._say(engine, message, level)
+
+    def _hooks(self, engine, on_collect, on_reject, should_stop) -> tuple:
+        """Fill the three callbacks from the engine when the caller left them out.
+
+        The engine's own hooks are what keep the user table in sync while the
+        scroll runs (RULE 5), so a pipeline started from the run console must
+        get them without the caller repeating the wiring.
+        """
+        if engine is not None:
+            if on_collect is None:
+                on_collect = getattr(engine, "person_collected", None)
+            if on_reject is None:
+                on_reject = getattr(engine, "person_rejected", None)
+            if should_stop is None:
+                should_stop = getattr(engine, "is_stopping", None)
+        return on_collect, on_reject, should_stop
+
     async def run_pipeline(self, cdp: CDPClient, engine: Optional[object] = None,
                            panel_criteria=None,
                            known_messaged: set | None = None,
@@ -155,70 +200,82 @@ class ScrollParse(BaseAction):
                            seek_nicks: set | None = None) -> CollectResult:
         """Run scroll → filter → collect and return the ordered people.
 
+        Three steps: decide the mode, let `ScrollParser` run the passes, report
+        the queue. Each one owns its own lines in the run console, which is why
+        `execute()` and a caller driving `run_pipeline()` directly always see
+        the same story.
+
         :param panel_criteria: accepted for call-compatibility and ignored.
         :param seek_nicks: scroll-only targets. When omitted they are read
             from the engine's People Memory.
         """
-        def say(message: str, level: str = "info") -> None:
-            if engine is not None:
-                engine.report(message, level)
+        seek = await self._decide_mode(engine, seek_nicks)
+        self._say(engine, f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
+                         f"(max {self.max_scrolls} scrolls, "
+                         f"{self.scroll_pause_ms} ms pause)", "info")
+        result = await self._collect(cdp, engine, panel_criteria,
+                                     known_messaged, seek, on_collect,
+                                     on_reject, should_stop)
+        self._report_result(engine, result, seek)
+        return result
 
-        # ── mode decision (STEP 0) ───────────────────────────────
-        # Scroll-only: hunt for someone already in the list rather than
-        # adding anybody. An empty target set falls through to normal
-        # collection — the mode is not a permanent off-switch.
-        if self.scroll_only:
-            if seek_nicks is None:
-                seek_nicks = await self._read_unmessaged(engine)
-            if seek_nicks:
-                say(f"🔎 Scroll-only mode: {len(seek_nicks)} un-messaged "
-                    "person(s) in the list — searching the page for one of "
-                    "them, no new people will be added", "warn")
-            else:
-                say("🔎 Scroll-only mode: no un-messaged people in the list "
-                    "— collecting new people as usual", "info")
-                seek_nicks = None
-        else:
-            seek_nicks = None
+    async def _decide_mode(self, engine, seek_nicks):
+        """Scroll-only means "hunt for somebody already in the list".
 
-        say(f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
-            f"(max {self.max_scrolls} scrolls, {self.scroll_pause_ms} ms pause)",
-            "info")
-        # Prefer the engine's own hooks so the user table stays in sync live.
-        if engine is not None:
-            if on_collect is None:
-                on_collect = getattr(engine, "person_collected", None)
-            if on_reject is None:
-                on_reject = getattr(engine, "person_rejected", None)
-            if should_stop is None:
-                should_stop = getattr(engine, "is_stopping", None)
-        parser = self.build_parser(cdp, panel_criteria, log_cb=say,
-                                   on_collect=on_collect, on_reject=on_reject,
+        Adding nobody is the point of the mode — but with no un-messaged
+        person to look for it falls through to normal collection, because the
+        mode must never be a permanent off-switch for a stack that has to keep
+        harvesting.
+        """
+        if not self.scroll_only:
+            return None
+        if seek_nicks is None:
+            seek_nicks = await self._read_unmessaged(engine)
+        if seek_nicks:
+            self._say(engine, f"🔎 Scroll-only mode: {len(seek_nicks)} "
+                              "un-messaged person(s) in the list — searching "
+                              "the page for one of them, no new people will be "
+                              "added", "warn")
+            return set(seek_nicks)
+        self._say(engine, "🔎 Scroll-only mode: no un-messaged people in the "
+                          "list — collecting new people as usual", "info")
+        return None
+
+    async def _collect(self, cdp, engine, panel_criteria, known_messaged,
+                       seek, on_collect, on_reject, should_stop) -> CollectResult:
+        on_collect, on_reject, should_stop = self._hooks(
+            engine, on_collect, on_reject, should_stop)
+        parser = self.build_parser(cdp, panel_criteria,
+                                   log_cb=self._binder(engine),
+                                   on_collect=on_collect,
+                                   on_reject=on_reject,
                                    should_stop=should_stop)
         result = await parser.collect(min_new_users=self.min_new_users,
                                       known_messaged=known_messaged or set(),
-                                      seek_nicks=seek_nicks)
+                                      seek_nicks=seek)
         self.last_result = result
+        return result
 
+    def _report_result(self, engine, result: CollectResult, seek) -> None:
+        """What the run console says about a finished pass."""
         if result.seeking:
             if result.found is not None:
-                say(f"⏹ Scroll-only: stopping the scroll at “{result.found.nick}”"
-                    " — no new people were added", "success")
+                self._say(engine, f"⏹ Scroll-only: stopping the scroll at "
+                                  f"“{result.found.nick}” — no new people were "
+                                  "added", "success")
             elif not result.stopped:
-                say(f"⚠ Scroll-only: reached the end of the list, none of the "
-                    f"{len(seek_nicks or ())} un-messaged people are on the "
-                    "page", "warn")
-            return result
-
+                self._say(engine, f"⚠ Scroll-only: reached the end of the list, "
+                                  f"none of the {len(seek or ())} un-messaged "
+                                  "people are on the page", "warn")
+            return
         if result.collected:
             preview = ", ".join(
                 f"{p.nick}{'' if not p.messaged else ' (messaged)'}"
                 for p in result.collected[:8])
             more = "" if len(result.collected) <= 8 \
                 else f" …+{len(result.collected) - 8} more"
-            say(f"📋 STEP 3 — queue ordered (un-messaged first, then A–Z): "
-                f"{preview}{more}", "success")
-        return result
+            self._say(engine, f"📋 STEP 3 — queue ordered (un-messaged first, "
+                              f"then A–Z): {preview}{more}", "success")
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
