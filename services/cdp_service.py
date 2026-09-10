@@ -13,9 +13,10 @@ import json
 import logging
 from typing import Optional
 
-from core.events import (EventBus, ConnectionChanged, LogMessage,
+from core.events import (EventBus, ConnectionChanged,
                          TabsReceived, TabMatchResult)
 from core.result import Err, Ok, Result
+from services.service_log import emit_log
 
 from backend.tab_matcher import best_matches
 
@@ -39,7 +40,7 @@ class CdpService:
             self._bus = bus
 
     def _log(self, message: str, level: str = "info") -> None:
-        self._bus.emit(LogMessage(message=message, level=level))
+        emit_log(self._bus, message, level)
 
     def install_status_forwarding(self) -> None:
         """Re-emit the client's Qt connection signals as bus events."""

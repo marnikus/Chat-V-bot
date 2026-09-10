@@ -15,8 +15,9 @@ import json
 import logging
 from typing import Any, Optional
 
-from core.events import EventBus, LogMessage, PeopleChanged, UsersDeleted
+from core.events import EventBus, PeopleChanged, UsersDeleted
 from core.result import Err, Ok, Result
+from services.service_log import emit_log
 
 log = logging.getLogger("chatbot")
 
@@ -59,7 +60,7 @@ class PeopleService:
 
     # ── helpers ──────────────────────────────────────────────────
     def _log(self, message: str, level: str = "info") -> None:
-        self._bus.emit(LogMessage(message=message, level=level))
+        emit_log(self._bus, message, level)
 
     def labels_for_nicks(self, nicks) -> dict:
         """nick → label ids, joined at read time (never stored per DB)."""

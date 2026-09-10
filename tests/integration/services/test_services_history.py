@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
-from services.history_service import (HistoryService,  # noqa: E402
+from services.history import (HistoryService,  # noqa: E402
                                       HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT,
                                       OLD_MAX_FILE_MB, _merge, _db_stem)
 

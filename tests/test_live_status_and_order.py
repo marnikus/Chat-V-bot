@@ -26,7 +26,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PySide6.QtCore import QObject, Signal  # noqa: E402
 
-from actions.base_action import BaseAction, ActionResult  # noqa: E402
+from actions.base_action import (ActionRegistry, ActionResult,  # noqa: E402
+                                 BaseAction)
+
+# Snapshot the global ActionRegistry BEFORE this module's fake blocks
+# shadow the shipped classes at import time; restored at module end so
+# later test modules see the real actions.
+_REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
+
 from backend.action_engine import ActionEngine  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.cdp_client import CDPClient  # noqa: E402
@@ -330,6 +337,9 @@ class TestOrderUiContract(unittest.TestCase):
         self.assertIn("th.col-order", css)
         self.assertIn("td.col-order", css)
 
+
+ActionRegistry._classes.clear()
+ActionRegistry._classes.update(_REGISTRY_SNAPSHOT)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
