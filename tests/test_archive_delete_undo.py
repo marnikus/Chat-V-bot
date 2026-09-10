@@ -33,6 +33,7 @@ from PySide6.QtCore import QObject  # noqa: E402
 
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
+from backend.history_query import PersonPageRequest  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -141,7 +142,7 @@ class TestSoftDeletes(ArchiveCase):
         await self.seed(count=5)
         token = self.repo.new_op_token()
         await self.repo.delete_person("Nick", hard=False, token=token)
-        listed = await self.query.list_persons(limit=50)
+        listed = await self.query.list_persons(PersonPageRequest(limit=50))
         self.assertNotIn("Nick", [p["nick"] for p in listed["items"]])
         self.assertEqual(await self.stored_rows(), 5, "nothing was erased")
 
@@ -150,7 +151,7 @@ class TestSoftDeletes(ArchiveCase):
         token = self.repo.new_op_token()
         await self.repo.delete_person("Nick", hard=False, token=token)
         await self.repo.restore_person("Nick", token=token)
-        listed = await self.query.list_persons(limit=50)
+        listed = await self.query.list_persons(PersonPageRequest(limit=50))
         self.assertIn("Nick", [p["nick"] for p in listed["items"]])
         self.assertEqual(len(await self.visible()), 5)
 
@@ -259,7 +260,7 @@ class TestDeleteSlots(ArchiveCase):
         await self.seed(count=5)
         self.assertTrue(self.bridge.history_delete_person("Nick", False))
         await wait_for(self.changed)
-        listed = await self.query.list_persons(limit=50)
+        listed = await self.query.list_persons(PersonPageRequest(limit=50))
         self.assertNotIn("Nick", [p["nick"] for p in listed["items"]])
 
     async def test_undoing_a_person_delete_restores_the_conversation(self):
@@ -269,7 +270,7 @@ class TestDeleteSlots(ArchiveCase):
         self.changed.clear()
         self.bridge.undo()
         await wait_for(self.changed)
-        listed = await self.query.list_persons(limit=50)
+        listed = await self.query.list_persons(PersonPageRequest(limit=50))
         self.assertIn("Nick", [p["nick"] for p in listed["items"]])
         self.assertEqual(len(await self.visible()), 5)
 

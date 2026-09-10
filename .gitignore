@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
+.coverage
+.coverage.*
+htmlcov/
 *.db
 logs/*.log
 .env
@@ -16,3 +19,7 @@ history.db*
 config/
 config.json
 config.json.migrated-*
+
+# Mutation-testing sandbox (mutmut rebuilds it on every run)
+mutants/
+.mutmut-cache

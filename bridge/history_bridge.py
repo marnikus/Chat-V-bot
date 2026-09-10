@@ -15,8 +15,29 @@ import os
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import LogMessage, UserDbChanged
+from backend.history_query import (
+    DEFAULT_LIMIT, DEFAULT_SORT, PersonPageRequest,
+)
 
 log = logging.getLogger("chatbot")
+
+
+def _person_request(opts: dict) -> PersonPageRequest:
+    """The UI's JSON blob as a `PersonPageRequest`.
+
+    Kept out of the `work()` closure so that closure stays a short, readable
+    "fetch, decorate, emit" sequence.
+
+    `dir` defaults to `""` — the sort key's *natural* direction — so a payload
+    written before the sortable headers existed means exactly what it meant.
+    """
+    return PersonPageRequest(
+        q=str(opts.get("q") or ""),
+        limit=int(opts.get("limit") or DEFAULT_LIMIT),
+        offset=int(opts.get("offset") or 0),
+        sort=str(opts.get("sort") or DEFAULT_SORT),
+        dir=str(opts.get("dir") or ""),
+        include_deleted=bool(opts.get("include_deleted")))
 
 
 class HistoryBridge(QObject):
@@ -152,14 +173,10 @@ class HistoryBridge(QObject):
         if not self._need_archive("userdb_page", req_id):
             return
         opts = self._json_arg(query_json)
+        req = _person_request(opts)
 
         async def work():
-            payload = await self.ctx.archive.query.list_persons(
-                q=str(opts.get("q") or ""),
-                limit=int(opts.get("limit") or 50),
-                offset=int(opts.get("offset") or 0),
-                sort=str(opts.get("sort") or "recent"),
-                include_deleted=bool(opts.get("include_deleted")))
+            payload = await self.ctx.archive.query.list_persons(req)
             payload["req_id"] = req_id
             payload["my_nick"] = self.ctx.archive.my_nick
             labels = self.ctx.people.labels_for_nicks(

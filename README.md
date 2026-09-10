@@ -313,7 +313,7 @@ ordinary windows manage the archive itself: **Label Manager** and
 | Window | What it does |
 |---|---|
 | **Person History** | The whole conversation with one person, oldest first, with inline images/GIFs, day separators and gap markers. Click a nick in **User Memory** to open it. Text is selectable; a left click on an image copies it. Search this conversation, or switch to **All people** for a global search grouped per nick. |
-| **Full User Database** | Everyone ever archived, merged by nick (never a duplicate), lazily loaded as you scroll, searchable by nick. Clicking a row opens that person. `Preload` sets how many rows are fetched ahead of the scroll. |
+| **Full User Database** | Everyone ever archived, merged by nick (never a duplicate), lazily loaded as you scroll, searchable by nick. Clicking a row opens that person. `Preload` sets how many rows are fetched ahead of the scroll. Every column header (**Nick · Msgs · Media · First · Last · My nick**) is a button: click it to sort ▲, click again to reverse ▼. The order is computed by the database over *all* people, not just the loaded page, and it stays for as long as the app runs. |
 | **Chat Message Collector** | What the background collector is doing right now: *Collecting*, *Collected*, *No new messages* or *Not in private tab now*, plus the partner, my nick, the archive total and the heartbeat. Pause/resume it, force one pass, or turn media downloads off. |
 
 ### Only real private chats are archived (two-step gate)
