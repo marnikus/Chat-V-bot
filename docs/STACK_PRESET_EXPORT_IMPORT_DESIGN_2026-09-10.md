@@ -338,3 +338,36 @@ of `tests/test_stack_dnd_migration.js`):
 Signals: `export_done(str)`, `import_preview(str)`. Custom-block library
 refreshes still flow through the existing `custom_blocks_updated` signal
 (FileBridge emits `PresetsChanged` on the bus; `StackBridge` re-emits).
+
+## 10. Revision 2026-09-11 — BUG fix: "preset panel incomplete"
+
+Bug report: only one (icon-only) button was visible in the preset panel.
+Root cause: the four preset controls were **icon-only**
+(`.btn-icon-sm` + Material Icons), and the icon font loads from the
+Google Fonts CDN (`ui/index.html` line 7) — on a machine without access
+to that CDN the glyphs are blank, so the controls were invisible
+(unreachable), not missing from the DOM.
+
+Fix (this revision):
+
+* The four controls moved from the window-title row to a dedicated
+  `.preset-toolbar` row with **plain-text labels**
+  (`Select Preset ▾` / `Save` / `Export` / `Import ⬇`) — visible with or
+  without the icon font. Same button ids → the existing JS wiring is
+  unchanged; `Import ⬇` is the "Download" control from the report.
+* New behaviour required by the report: an applied import (Replace or
+  Merge) also registers the imported file as a **named preset**
+  (`save_imported_preset` in `bridge/file_bridge.py`:
+  `PresetStore.save_stack(name, file_stack)` + `PresetsChanged(kind="stacks")`),
+  so it appears in the Select Preset list immediately. The stored preset
+  is the FILE's stack (not the merged working stack); same name =
+  refresh (overwrite). Result JSON gains `preset_saved`.
+* Tests: 4 new FileBridge tests (preset registration, merge keeps the
+  file stack, re-import overwrite, no-preset-store degradation) and 2
+  new node tests asserting the shipped HTML carries all four labeled
+  controls exactly once (regression guard for "buttons visible").
+
+Remaining known limitation (out of scope): the rest of the app still
+uses Material Icons glyphs for run/pause/stop etc.; those remain blank
+offline. Fixing that properly means bundling the font locally, which
+needs a one-time download with network access.

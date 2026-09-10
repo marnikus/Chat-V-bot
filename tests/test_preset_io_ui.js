@@ -349,6 +349,39 @@ t('chip without onExport keeps the historical shape', () => {
   ok(!chip.querySelector('.chip-export'), 'no export affordance');
 });
 
+// ── the shipped HTML keeps every preset control VISIBLE (BUG) ───
+// Icon-only buttons render blank when the Material Icons web font
+// (CDN) cannot load offline — the preset row must be text-labeled.
+const html = fs.readFileSync(
+  path.join(__dirname, '..', 'ui', 'index.html'), 'utf8');
+function btnLabel(id) {
+  const m = html.match(new RegExp(`<button id="${id}"[^>]*>([\\s\\S]*?)</button>`));
+  return m ? m[1].replace(/<[^>]+>/g, '').trim() : null;
+}
+
+t('the preset row shows all five labeled controls', () => {
+  const select = btnLabel('loadStackBtn');
+  ok(select && select.startsWith('Select Preset'),
+     'Select Preset must be labeled, got: ' + select);
+  eq(btnLabel('saveStackBtn'), 'Save', 'Save must be labeled');
+  eq(btnLabel('exportStackBtn'), 'Export', 'Export must be labeled');
+  const imp = btnLabel('importStackBtn');
+  ok(imp && imp.includes('Import'),
+     'Import (the Download control) must be labeled, got: ' + imp);
+  // every one of them carries a real text label — none icon-only
+  ['loadStackBtn', 'saveStackBtn', 'exportStackBtn', 'importStackBtn']
+    .forEach((id) => ok((btnLabel(id) || '').length >= 4,
+                        id + ' must not be icon-only'));
+});
+
+t('each preset control exists exactly once in the page', () => {
+  ['loadStackBtn', 'saveStackBtn', 'exportStackBtn', 'importStackBtn']
+    .forEach((id) => {
+      eq((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1,
+         id + ' duplicated or missing');
+    });
+});
+
 // ── summary ──────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

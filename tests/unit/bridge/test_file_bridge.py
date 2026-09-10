@@ -458,6 +458,58 @@ class FileBridgeCase(unittest.TestCase):
             json.dumps(preview), "merge", "[]"))
         self.assertFalse(out["ok"])
 
+    # ── import also registers the file as a saved preset (BUG) ───
+    def test_apply_replace_registers_the_preset_in_the_select_list(self):
+        from core.events import PresetsChanged
+        events = []
+        self.ctx.bus.subscribe(PresetsChanged, lambda e: events.append(e))
+        self.open_target = self.stack_file()
+        preview = json.loads(self.bridge.import_file("stack"))
+        out = self.result(self.bridge.apply_imported(
+            json.dumps(preview), "replace", "[]"))
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["preset_saved"], "Imported")
+        # the Select Preset list now offers it, with the file's stack
+        self.assertEqual(self.presets.load_stack("Imported"),
+                         [dict(self.block_a), dict(self.block_b)])
+        self.assertIn("stacks", [e.kind for e in events])
+        names = [p["name"] for p in self.presets.list_stacks()]
+        self.assertIn("Imported", names)
+
+    def test_apply_merge_saves_the_file_stack_not_the_merged_stack(self):
+        self.open_target = self.stack_file()
+        preview = json.loads(self.bridge.import_file("stack"))
+        current = [dict(self.block_a)]
+        out = self.result(self.bridge.apply_imported(
+            json.dumps(preview), "merge", json.dumps(current)))
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["preset_saved"], "Imported")
+        # list entry = the file's content; working stack = the merge
+        self.assertEqual(self.presets.load_stack("Imported"),
+                         [dict(self.block_a), dict(self.block_b)])
+        self.assertEqual([b["block_id"] for b in out["stack"]],
+                         ["PAUSE", "PAUSE", "CUSTOM_FIND"])
+
+    def test_reimport_overwrites_the_older_copy_of_the_same_preset(self):
+        self.open_target = self.stack_file()
+        preview = json.loads(self.bridge.import_file("stack"))
+        self.bridge.apply_imported(json.dumps(preview), "replace", "[]")
+        # second import of the same-named file: still one preset
+        self.open_target = self.stack_file()
+        preview = json.loads(self.bridge.import_file("stack"))
+        self.bridge.apply_imported(json.dumps(preview), "replace", "[]")
+        self.assertEqual(
+            [p["name"] for p in self.presets.list_stacks()], ["Imported"])
+
+    def test_apply_without_a_preset_store_still_applies(self):
+        self.open_target = self.stack_file()
+        preview = json.loads(self.bridge.import_file("stack"))
+        self.ctx.presets = None
+        out = self.result(self.bridge.apply_imported(
+            json.dumps(preview), "replace", "[]"))
+        self.assertTrue(out["ok"])
+        self.assertFalse(out["preset_saved"])
+
 
 class TestRouterWiring(unittest.TestCase):
     """FileBridge is one of the domain bridges the Router publishes."""

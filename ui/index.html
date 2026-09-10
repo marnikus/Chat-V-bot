@@ -92,11 +92,17 @@
         <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
         <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
         <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
-        <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
-        <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
-        <button id="exportStackBtn" class="btn-icon-sm" title="Export the current stack + all custom blocks to a .json file"><span class="material-icons">upload_file</span></button>
-        <button id="importStackBtn" class="btn-icon-sm" title="Import a stack preset from a .json file (preview before applying)"><span class="material-icons">download</span></button>
       </h3>
+      <!-- Preset management row. TEXT-labeled on purpose: icon-only
+           buttons render invisible when the Material Icons web font
+           (CDN) cannot load — offline machines must still see all
+           five preset controls. (BUG: preset panel incomplete) -->
+      <div class="preset-toolbar" role="toolbar" aria-label="Preset management">
+        <button id="loadStackBtn" class="btn-small" title="Pick a saved preset — list shows name, date and block count; click Load to restore">Select Preset ▾</button>
+        <button id="saveStackBtn" class="btn-small" title="Save the current stack as a named preset (full parameters + order)">Save</button>
+        <button id="exportStackBtn" class="btn-small" title="Export the current stack + all custom blocks to a portable .json file">Export</button>
+        <button id="importStackBtn" class="btn-small" title="Import / download a .json preset file — the app validates it, shows a preview, then you choose Merge or Replace">Import ⬇</button>
+      </div>
       <!-- Saved preset chips: click to load (BUG #1) -->
       <div class="preset-row">
         <span class="preset-row-label">Saved presets</span>

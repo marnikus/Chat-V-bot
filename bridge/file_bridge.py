@@ -142,6 +142,28 @@ def apply_block(bridge: "FileBridge", preview: PresetPreview,
     return _json({"ok": True, "name": preview.name})
 
 
+def save_imported_preset(bridge: "FileBridge", preview: PresetPreview):
+    """The imported file is also a named preset: register it in the
+    saved-preset list so it shows up in Select Preset right away
+    (same name = same preset: a re-import refreshes it)."""
+    presets = bridge.ctx.presets
+    if presets is None or not preview.stack:
+        return False
+    try:
+        presets.save_stack(preview.name, list(preview.stack))
+        saved = presets.save(force=True)
+    except (ValueError, OSError) as exc:
+        bridge._log(f"⚠ Imported preset not saved: {exc}", "warn")
+        return False
+    if not saved:
+        bridge._log("⚠ Imported preset could not be persisted to disk",
+                    "warn")
+        return False
+    payload = _json(presets.list_stacks())
+    bridge.ctx.bus.emit(PresetsChanged(kind="stacks", payload=payload))
+    return preview.name
+
+
 def export_file(bridge: "FileBridge", payload: dict, default_name: str,
                 done: str) -> str:
     """Save dialog → atomic write → honest result JSON + log line."""
@@ -295,12 +317,16 @@ class FileBridge(QObject):
             else list(preview.stack)
         added, replaced = merge_library(self, preview.custom_blocks)
         apply_stack(self, stack, current)
+        saved_name = save_imported_preset(self, preview)
         payload = _json(_library_of(self.ctx.config))
         self.ctx.bus.emit(PresetsChanged(kind="custom_blocks",
                                          payload=payload))
+        saved_note = f"; saved as preset “{saved_name}”" \
+            if saved_name else ""
         self._log(f"📥 Imported “{preview.name}” ({mode}) — "
                   f"{len(stack)} block(s) in the stack, {added} added / "
-                  f"{replaced} replaced (↩ Undo)", "success")
+                  f"{replaced} replaced{saved_note} (↩ Undo)", "success")
         return _json({"ok": True, "stack": stack,
                       "blocks_added": added,
-                      "blocks_replaced": replaced})
+                      "blocks_replaced": replaced,
+                      "preset_saved": saved_name or False})

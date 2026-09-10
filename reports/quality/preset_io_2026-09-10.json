@@ -35,12 +35,26 @@
     "vulture_min_confidence_90_findings": 0,
     "overrides_used": 0
   },
+  "revision_2026_09_11_bugfix": {
+    "bug": "preset panel showed only one button (icon-only controls + CDN icon font invisible offline)",
+    "fix": "labeled .preset-toolbar row (Select Preset / Save / Export / Import) + import registers the file as a named preset",
+    "new_python_tests": 4,
+    "new_js_tests": 2,
+    "gates_after_fix": {
+      "save_imported_preset": "loc=20 cog=7 nest=1",
+      "apply_imported": "loc=27 cog=12 nest=1",
+      "FileBridge": "loc=109 methods=9",
+      "radon_cc_max_grade": "B (<=10)",
+      "vulture_findings": 0
+    }
+  },
   "tests": {
     "baseline_passed": 2467,
     "after_passed": 2538,
+    "after_bugfix_passed": 2542,
     "failed": 0,
-    "new_python_tests": 71,
-    "new_js_tests": 15,
+    "new_python_tests": 75,
+    "new_js_tests": 17,
     "js_suites_green": "19/19"
   },
   "coverage": {

@@ -204,6 +204,11 @@ button:disabled { opacity: .35; cursor: default; }
 .btn-compact { padding: 5px 12px; font-size: var(--font-size-sm); }
 
 /* chip rows */
+.preset-toolbar {
+  display: flex; align-items: center; gap: var(--gap-xs);
+  padding: 4px var(--gap-lg) 0; flex-wrap: wrap;
+}
+.preset-toolbar .btn-small { cursor: pointer; }
 .preset-row {
   display: flex; align-items: flex-start; gap: var(--gap-sm);
   margin: 0 0 var(--gap-sm);

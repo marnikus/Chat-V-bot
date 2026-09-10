@@ -428,10 +428,13 @@ const PresetsUI = {
           StackDnD.setStack(r.stack);
         }
         if (preview.kind === 'stack') {
+          const savedNote = r.preset_saved
+            ? `; saved as preset “${r.preset_saved}”` : '';
           LogConsole.log(
             `✅ Imported “${preview.name}” (${mode}) — ${r.stack.length} ` +
             `block(s) in the stack, ${r.blocks_added || 0} custom block(s) ` +
-            `added, ${r.blocks_replaced || 0} replaced (↩ Undo to return)`,
+            `added, ${r.blocks_replaced || 0} replaced${savedNote} ` +
+            '(↩ Undo to return)',
             'success');
         } else {
           LogConsole.log(`✅ Block “${r.name}” imported into the ` +
