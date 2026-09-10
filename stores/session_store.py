@@ -35,8 +35,25 @@ SESSION_DEFAULTS: dict[str, Any] = {
 class SessionStore:
     """Flat key/value session state. One file, atomic saves."""
 
-    def __init__(self, path: str, data: dict | None = None):
-        self._path = path
+    def __init__(self, path: Any | None = None,
+                 data: dict | None = None):
+        # Accept AtomicJsonStore or plain path for test compat:
+        #   SessionStore(AtomicJsonStore(path))   → use store's _path
+        #   SessionStore("/tmp/session.json")     → use string directly
+        #   SessionStore(path="/tmp/session.json") → keyword path
+        from stores.atomic import AtomicJsonStore as _AJS  # local to avoid cycle
+        if isinstance(path, _AJS):
+            self._path = path._path
+        elif isinstance(path, str) and path:
+            self._path = path
+        else:
+            self._path = "config.json" if not isinstance(path, str) else path
+            if not self._path:
+                self._path = "config.json"
+        # handle legacy positional data when path is actually data dict
+        if isinstance(path, dict) and data is None:
+            data = path  # type: ignore
+            self._path = "config.json"
         self._data: dict[str, Any] = {}
         self._dirty = False
         if data is not None:
@@ -68,7 +85,17 @@ class SessionStore:
             return copy.deepcopy(SESSION_DEFAULTS[key])
         return default
 
-    def set(self, save_now: bool = True, **updates: Any) -> None:
+    def set(self, save_now: bool = True, save: bool | None = None, **updates: Any) -> None:
+        # alias: tests call set(save=False, ...) while signature is save_now
+        if save is not None:
+            save_now = save
+        # also handle save_now passed as part of updates when called as set(save=False, ...)
+        # (Python would have put it in updates if caller used keyword `save`)
+        # but we already handled `save` alias above; for `save_now` alias both names work
+        if "save_now" in updates:
+            save_now = updates.pop("save_now")  # type: ignore
+        if "save" in updates:
+            save_now = updates.pop("save")  # type: ignore
         for key, value in updates.items():
             self._data[key] = copy.deepcopy(value)
         self._dirty = True

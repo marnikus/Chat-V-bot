@@ -36,8 +36,28 @@ class PresetStore:
     _by_path: dict[str, "PresetStore"] = {}
 
     def __new__(cls, config=None, path: Optional[str] = None):
-        key = os.path.abspath(path) if path else os.path.abspath(
-            os.path.join(_config_dir_of(config), "presets.json"))
+        # B1 unification: config may be AtomicJsonStore, a path string, or a
+        # ConfigManager-like object; path may be AtomicJsonStore or str.
+        from stores.atomic import AtomicJsonStore as _AJS
+        effective_path: Optional[str] = None
+        effective_config = config
+        if isinstance(config, _AJS):
+            effective_path = config._path
+            effective_config = None
+        elif isinstance(config, str) and config:
+            effective_path = config
+            effective_config = None
+        elif isinstance(path, _AJS):
+            effective_path = path._path
+        elif isinstance(path, str) and path:
+            effective_path = path
+        else:
+            effective_path = path
+        if effective_path:
+            key = os.path.abspath(effective_path)
+        else:
+            key = os.path.abspath(
+                os.path.join(_config_dir_of(effective_config), "presets.json"))
         cached = cls._by_path.get(key)
         if cached is not None:
             return cached
@@ -204,41 +224,5 @@ class PresetStore:
     # ── one-time legacy imports ──────────────────────────────────
     def import_legacy(self, db_path: str = "chatbot.db") -> bool:
         """Presets from the old SQLite tables (runs at most once)."""
-        if self._data["stack_presets"] or self._data["template_presets"]:
-            return False
-        if not os.path.exists(db_path):
-            return False
-        imported = False
-        try:
-            conn = sqlite3.connect(db_path, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            try:
-                cur = conn.execute(
-                    "SELECT name, blocks FROM stacks")  # may not exist
-                for row in cur.fetchall():
-                    try:
-                        blocks = json.loads(row["blocks"])
-                        if isinstance(blocks, list):
-                            self._data["stack_presets"][row["name"]] = {
-                                "blocks": blocks,
-                                "updated_at": self._now()}
-                            imported = True
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                cur = conn.execute("SELECT name, body FROM templates")
-                for row in cur.fetchall():
-                    self._data["template_presets"][row["name"]] = {
-                        "body": row["body"], "updated_at": self._now()}
-                    imported = True
-            except sqlite3.OperationalError:
-                pass  # tables absent in this build
-            finally:
-                conn.close()
-        except sqlite3.Error as exc:
-            log.warning("Legacy preset import failed: %s", exc)
-            return False
-        if imported:
-            self._dirty = True
-            self.save()
-            log.info("Legacy presets imported into %s", self._path)
-        return imported
+        from stores._preset_migrate import import_legacy as _import
+        return _import(self, db_path)

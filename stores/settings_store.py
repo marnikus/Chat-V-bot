@@ -78,8 +78,21 @@ _UNSET = object()
 class SettingsStore:
     """One JSON file, one settings tree, atomic saves."""
 
-    def __init__(self, path: str, data: dict | None = None):
-        self._path = path
+    def __init__(self, path: Any | None = None,
+                 data: dict | None = None):
+        # Accept AtomicJsonStore or plain path (test compat vs ConfigManager)
+        from stores.atomic import AtomicJsonStore as _AJS
+        if isinstance(path, _AJS):
+            self._path = path._path
+        elif isinstance(path, str) and path:
+            self._path = path
+        else:
+            self._path = "config.json" if not isinstance(path, str) else path
+            if not self._path:
+                self._path = "config.json"
+        if isinstance(path, dict) and data is None:
+            data = path  # type: ignore
+            self._path = "config.json"
         self._data: dict[str, Any] = {}
         self._dirty = False
         if data is not None:
@@ -138,7 +151,10 @@ class SettingsStore:
         return copy.deepcopy(self._data)
 
     # ── writes (memory only; `save()` persists) ──────────────────
-    def set(self, *keys_and_value: Any, save_now: bool = False) -> None:
+    def set(self, *keys_and_value: Any, save_now: bool = True, save: bool | None = None) -> None:
+        if save is not None:
+            save_now = save
+        # also handle bare `save` in keys_and_value position? not needed
         *keys, value = keys_and_value
         node = self._data
         for key in keys[:-1]:

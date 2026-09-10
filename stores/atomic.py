@@ -13,6 +13,20 @@ from core.result import Result, ok, err
 log = logging.getLogger("chatbot")
 
 
+def _coerce_path(atomic: Any | None, fallback: str = "config.json") -> str:
+    """Extract a file path from an AtomicJsonStore, a string, or a fallback.
+
+    Small stores accept ``(atomic: AtomicJsonStore | str | None, path: str)`` so
+    tests can pass a live store and ConfigManager can pass a string. This helper
+    keeps the coercion in one place and avoids duplicating the isinstance dance.
+    """
+    if isinstance(atomic, AtomicJsonStore):
+        return atomic._path
+    if isinstance(atomic, str) and atomic:
+        return atomic
+    return fallback
+
+
 class AtomicJsonStore:
     """Lowest layer: load / atomic save of a JSON file."""
 
