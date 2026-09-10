@@ -83,11 +83,16 @@ class StackBridge(QObject):
         except json.JSONDecodeError:
             self._log("❌ Bad JSON", "error")
             return
+        if not isinstance(blocks, list):
+            # Wrong-shaped JSON must not execute anything or touch config
+            # (a dict/string/number used to reach normalize_blocks, which
+            # silently ran an empty stack or raised TypeError on numbers).
+            self._log("❌ Stack is not a list of blocks", "error")
+            return
         blocks = self._clean_blocks(blocks)
         engine.load_stack(blocks)
-        if isinstance(blocks, list):
-            self.ctx.config.set_state(last_stack=blocks,
-                                      last_stack_preset="")
+        self.ctx.config.set_state(last_stack=blocks,
+                                  last_stack_preset="")
         self._schedule(engine.execute())
 
     @Slot()
@@ -282,7 +287,12 @@ class StackBridge(QObject):
             self._log("❌ Block preset needs a name and block config",
                       "error")
             return
-        self.ctx.config.blocks.save_block(name, block)
+        result = self.ctx.config.blocks.save_custom_block(name, block)
+        if result.is_err:
+            err_ = result.err()
+            self._log(f"❌ Block preset save failed: "
+                      f"{err_.detail or err_.code}", "error")
+            return
         self.ctx.config.save()
         self._emit_blocks()
         self._log(f"💾 Block preset “{name}” saved — reusable from "
@@ -291,7 +301,7 @@ class StackBridge(QObject):
     @Slot(str)
     def delete_custom_block(self, name):
         before = len(self.ctx.config.blocks.all())
-        self.ctx.config.blocks.delete(name)
+        self.ctx.config.blocks.delete_custom_block(name)
         if len(self.ctx.config.blocks.all()) != before:
             self.ctx.config.save()
             self._emit_blocks()
