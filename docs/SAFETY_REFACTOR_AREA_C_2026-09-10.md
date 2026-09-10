@@ -127,3 +127,99 @@ Existing regression gates: `tests/integration/services/test_run_engine_p0_pins.p
 - Explicitly list cancellation boundaries that cannot interrupt remote side effects and what cleanup guarantees apply under ordinary cancellation versus process kill.
 
 Implementation journal (owner fills): branch/head; C1 reproduction/fix results; C2 before/after metrics and behavioral parity; coverage; signals/progress compatibility; unresolved issues.
+
+### Journal — 2026-09-10 (Arena agent, branch `arena/01a08b7b-chat-v-bot`)
+
+- C1 commit `323a4b8` ("area-c C1: cooperative stop/cancellation correctness");
+  C2 is the commit carrying this journal entry. Two commits by design: C1 is
+  behavior-only (inline in the existing structure), C2 is structure-only
+  (extraction + pure planner) on top of the green C1 tree.
+- Design: `docs/SAFETY_REFACTOR_AREA_C_IMPL_DESIGN_2026-09-10.md` (written
+  before tests and implementation, committed with C1).
+
+C1 reproduction/fix results. New safety suites run against the base commit
+fail as required: 60 failed / 27 passed across `run_safety` (stop contract
+11, cleanup contract 6, cycle-plan unit 18 incl. ImportError guards) and
+`test_wait_page_cancellation.py` (25); `test_coverage_gaps.py` additionally
+fails to import (no `actions/cancellation.py`). The 27 baseline-passing cases
+are characterization tests (preserved success/timeout/diagnostic behavior).
+Fixed per the C1a table: pre-stopped wait does no delay/probe; stop during
+pre-delay/polling/hanging-probe exits promptly with no orphaned task
+(`await_or_stop` cancels + reaps the probe); pause barriers re-check stop
+before starting a cycle/block; collect/take RunStopped maps to `stopped`,
+never empty-success or fatal error; retry delays are stop-aware and stop is
+never retried (pinned with a permissive-retry subclass); the automatic mark
+boundary loses to a stop landing after the final OK (explicit earlier marks
+kept); external `task.cancel()` propagates after exactly-once cleanup;
+`post_run` failure/cancel is reported without masking the run's own
+cancellation/error; stopped runs reach DONE and restart cleanly (including
+`STOPPING → reset → RUNNING`, the one-line `state_machine.py` fix).
+Full gate on the C1 commit: 2185 passed, 3 skipped, 1 deselected
+(real-WebEngine env crash, pre-existing), 1 xfailed, 771 subtests.
+
+C2 before/after metrics (Radon CC / cognitive / audit nesting; all C2
+helpers ≤10/≤15/≤4): `_execute_cycle` 31/25 → 9/9/2 with pure planner
+`cycle_plan.inspect_stack` 6/7 and `choose_cycle_mode` 9/6 plus small
+`_prepare_cycle_queue` (5), `_execute_cycle_guarded` (3), `_pre_cycle_gate`
+(4), `_note_cycle_outcome` (5), `_run_user_list` (6), `_finish_single_user`
+(10/11); `execute` 14 → 8/9 with `_run_all_cycles` (5) and `_finalize_run`
+(10/12). C1 helpers also within aim: `await_or_stop` 10/13 after extracting
+the duplicated cancel+reap block. Behavioral parity: full scenario matrix in
+`test_cycle_modes.py` / `test_cycle_event_order.py` (queued/empty/
+empty-stack/standalone/single-target TAKE-miss/no-nick/repeat/stop/cancel/
+skip/failure paths) with effect-trace assertions; pre-existing regression
+pins (`test_run_engine_p0_pins`, `test_run_service_paths`,
+`test_run_state_machine_contract`, `test_services_run`,
+`test_action_engine_sequence`, `test_engine_standalone_run`,
+`test_repeat_loop`, `test_click_user_memory`, `test_click_user_order`,
+`test_take_person`, `test_scroll_only_seek`, `test_scroll_parse_pipeline`,
+`test_nick_placeholder`) all green. `test_merge_undo_enabled.py` (outside
+Area C, asserts direct-call structure via source inspection) kept passing
+via truthful delegation docstrings — no test edits, no inlining.
+
+Coverage (plan gate command, `--source=core,actions,backend,bridge,services,
+stores,app,main`). Area C files, line/branch: `actions/cancellation.py`
+100/100 (new), `services/run/cycle_plan.py` 100/100 (new),
+`services/run/coordinator.py` 100/100 (was 92.1/100),
+`services/run/error_recovery.py` 100/100 (was 100/100),
+`services/run/progress.py` 100/100 (was 91.7/88.6), `actions/wait_page.py`
+100/100 (was 100/75.0), `services/run/state_machine.py` 100/100 (was
+97.8/91.7) — all above the ≥90/≥85 target. Global: 87.66% line / 82.31%
+branch vs reproduced base-gate 87.03%/81.32% (2129 passed) — both improved;
+above the 80/75 floor. (The plan text quotes an 88.44% line baseline that
+does not reproduce with the gate command in this environment; the apples-to-
+apples base re-run is the comparison used here.) Final gate: 2258 passed
+(+129 Area C tests), 3 skipped, 1 deselected, 1 xfailed, 771 subtests.
+JS gate: 19/20 entrypoints, the single failure being the known baseline
+stale-registration failure in `test_bridge_router.js` (Area B owns the fix);
+no new JS failures. `tools/metrics/current_audit.py` artifact refreshed.
+
+Signals/progress compatibility: all `RunCoordinator` signals, `execute` /
+`load_stack` / `stop` / `pause` / `resume` / `is_running` contracts, tracer
+record vocabulary, `ActionResult` constants and preset serialization
+unchanged; `RunProgress.note_status` keeps the legacy stop→fail counter
+mapping (stop identity lives in outcome/trace); no runtime state leaks into
+`to_dict()` (pinned by test).
+
+Cancellation boundaries that cannot interrupt remote side effects: only
+local awaits are ever cancelled — WaitPageLoad's read-only CDP probe (via
+`await_or_stop`) and retry backoff sleeps. Cancelling a local await never
+undoes a browser-side effect: an already-started write (sent message, DB
+upsert, explicit mark) is treated as potentially completed and is never
+rolled back; the automatic mark is only *withheld* when stop lands before
+the boundary. Guarantees under ordinary cooperative stop/cancellation:
+exactly-once `post_run`, tracer close, running-flag reset, single
+`stack_complete` emission, nickname-expansion restoration in `finally`, and
+no orphaned probe tasks (reaped with `await`). Under process kill none of
+this runs: in-flight browser actions may or may not have completed, the
+trace file may end mid-cycle, and `messaged` flags reflect only marks that
+reached the DB — restart re-runs unmarked users.
+
+Unresolved / out of scope: C1 necessarily added stop branches to large
+pre-existing executors (`wait_page.execute` CC 18→22,
+`_execute_for_user` 15→20, `retry_with_backoff` 5→11, `_run_collect_phase`
+15→17, `_run_single_target_cycle` 7→12) — coverage-gated (all 100%) but not
+complexity-gated by the plan, and left structurally alone per "safety fixes
+before cosmetic complexity reductions". Untouched pre-existing overs
+(`filter_by_labels` CC 14, `_order_queue_by_column` CC 12) likewise
+documented, not refactored.

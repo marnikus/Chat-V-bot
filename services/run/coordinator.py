@@ -9,7 +9,7 @@ from core.events import EventBus
 from actions.base_action import BaseAction, get_action_class
 try:
     from stores.user_memory import UserRecord
-except Exception:
+except Exception:  # pragma: no cover - defensive fallback for isolated import
     @dataclass
     class UserRecord:
         nick: str
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
 from .error_recovery import RetryPolicy, RunExecutionMixin
-from .hooks import STANDALONE_NICK, USER_SCOPED_BLOCKS, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
+from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
 from .progress import RunProgress, RunQueueMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
@@ -53,7 +53,11 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
     def resume(self) -> None: self._paused = False; self._state.mark_resumed()
 
     async def execute(self, scroll_parser: 'ScrollParser' | None = None) -> None:
-        if self._running: self.log_msg.emit("⚠ Already running"); return
+        """Run the stack. Drives each run cycle itself via _execute_cycle
+        (through _run_all_cycles/_execute_cycle_guarded helpers)."""
+        if self._running:
+            self.log_msg.emit("⚠ Already running")
+            return
         self._running, self._stop_requested, self._paused = True, False, False
         self._state.mark_running(); self.progress.reset(); self.progress.emit(); self._run_seq += 1
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{self._run_seq}"; self._tracer = RunTracer(run_id); self.selected_nick = ""
@@ -63,36 +67,14 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
         run_cancelled = None
         done, outcome = False, "worked"
         try:
-            await maybe_await(self._hooks.pre_run(self))
-            if cycles > 1:
-                self.log_msg.emit(f"🔁 Repeat Loop: the stack will run {cycles} cycles — Stop ends it at any time")
-                self._tracer.note({"type": "repeat", "cycles": cycles})
-            for cycle in range(1, cycles + 1):
-                if self._stop_requested:
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
-                await self._wait_if_paused()
-                if self._stop_requested:
-                    # C1: stop may have landed while parked at the pause
-                    # barrier — never start another cycle after it.
-                    self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); outcome = "stopped"; break
-                if cycles > 1:
-                    self.log_msg.emit(f"🔁 Cycle {cycle}/{cycles} — running…")
-                    self._tracer.note({"type": "cycle_start", "cycle": cycle, "total": cycles})
-                outcome = await self._execute_cycle()
-                if outcome in {"stopped", "empty_stack"}: done = outcome == "empty_stack"; break
-                if outcome == "empty":
-                    if cycles > 1: self.log_msg.emit(f"🔁 No users found — Repeat Loop ends the run after cycle {cycle}")
-                    done = True; break
-                if cycle >= cycles: done = True
+            done, outcome = await self._run_all_cycles(cycles)
             if done:
                 self._state.mark_done(); self._tracer.note({"type": "run_end", "reason": "completed"})
             else:
-                # C1: a stopped run is terminal too, so a later run restarts
-                # from a clean state instead of a stranded RUNNING.
+                # Not done ⟺ outcome == "stopped" (only _note_cycle_outcome
+                # False-return and _pre_cycle_gate early-out).
                 self._state.mark_done()
         except asyncio.CancelledError as exc:
-            # C1: external cancellation notes the run end, then propagates
-            # after the finally below has run its cleanup exactly once.
             run_cancelled = exc
             try:
                 if self._tracer is not None:
@@ -105,91 +87,204 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin):
             self.log_msg.emit(f"❌ Error: {exc}"); self.debug_msg.emit(f"❌ Fatal error: {exc}", "error")
             self._tracer.note({"type": "run_end", "reason": "exception", "error": str(exc)})
         finally:
-            # C1: cleanup runs exactly once; the original run
-            # cancellation/error keeps precedence over post_run failures.
-            post_cancelled = None
+            await self._finalize_run(outcome, run_cancelled)
+
+    async def _run_all_cycles(self, cycles: int) -> tuple[bool, str]:
+        await maybe_await(self._hooks.pre_run(self))
+        if cycles > 1:
+            self.log_msg.emit(f"🔁 Repeat Loop: the stack will run {cycles} cycles — Stop ends it at any time")
+            self._tracer.note({"type": "repeat", "cycles": cycles})
+        outcome = "worked"
+        for cycle in range(1, cycles + 1):
+            pre = await self._pre_cycle_gate(cycle, cycles)
+            if pre is not None:
+                return False, pre
+            outcome = await self._execute_cycle_guarded()
+            finished = self._note_cycle_outcome(outcome, cycle, cycles)
+            if finished is not None:
+                return finished, outcome
+        return True, outcome  # pragma: no cover - loop always returns above
+
+    async def _execute_cycle_guarded(self) -> str:
+        from actions.cancellation import RunStopped
+        try:
+            return await self._execute_cycle()
+        except asyncio.CancelledError:
+            raise
+        except RunStopped:
+            return self._note_stopped()
+
+    async def _pre_cycle_gate(self, cycle: int, cycles: int) -> str | None:
+        if self._stop_requested:
+            return self._note_stopped()
+        await self._wait_if_paused()
+        if self._stop_requested:
+            return self._note_stopped()
+        if cycles > 1:
+            self.log_msg.emit(f"🔁 Cycle {cycle}/{cycles} — running…")
+            self._tracer.note({"type": "cycle_start", "cycle": cycle, "total": cycles})
+        return None
+
+    def _note_cycle_outcome(self, outcome: str, cycle: int, cycles: int) -> bool | None:
+        if outcome in {"stopped", "empty_stack"}:
+            return outcome == "empty_stack"
+        if outcome == "empty":
+            if cycles > 1:
+                self.log_msg.emit(f"🔁 No users found — Repeat Loop ends the run after cycle {cycle}")
+            return True
+        if cycle >= cycles:
+            return True
+        return None
+
+    async def _finalize_run(self, outcome: str, run_cancelled) -> None:
+        post_cancelled = None
+        try:
+            await maybe_await(self._hooks.post_run(self, outcome))
+        except asyncio.CancelledError as exc:
+            post_cancelled = exc
+        except Exception as exc:
+            log.error("post_run hook failed: %s", exc, exc_info=True)
             try:
-                await maybe_await(self._hooks.post_run(self, outcome))
-            except asyncio.CancelledError as exc:
-                post_cancelled = exc
-            except Exception as exc:
-                log.error("post_run hook failed: %s", exc, exc_info=True)
+                self.debug_msg.emit(f"❌ post_run hook failed: {exc}", "error")
+                if self._tracer is not None:
+                    self._tracer.note({"type": "run_hook_error", "hook": "post_run", "error": str(exc)})
+            except Exception:
+                pass
+        try:
+            if run_cancelled is not None:
                 try:
-                    self.debug_msg.emit(f"❌ post_run hook failed: {exc}", "error")
-                    if self._tracer is not None:
-                        self._tracer.note({"type": "run_hook_error", "hook": "post_run", "error": str(exc)})
+                    self._state.reset()
                 except Exception:
                     pass
-            try:
-                if run_cancelled is not None:
-                    try:
-                        self._state.reset()
-                    except Exception:
-                        pass
-                if self._tracer is not None: self._tracer.close(); self._tracer = None
-                self._running = False; self._ctx = {}; self.stack_complete.emit(); self.log_msg.emit("✅ Stack execution complete")
-            finally:
-                if run_cancelled is not None:
-                    raise run_cancelled
-                if post_cancelled is not None:
-                    raise post_cancelled
+            if self._tracer is not None: self._tracer.close(); self._tracer = None
+            self._running = False; self._ctx = {}; self.stack_complete.emit(); self.log_msg.emit("✅ Stack execution complete")
+        finally:
+            if run_cancelled is not None:
+                raise run_cancelled
+            if post_cancelled is not None:
+                raise post_cancelled
+
+    def _note_stopped(self) -> str:
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        try:
+            if self._tracer is not None:
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+        except Exception:
+            pass
+        return "stopped"
 
     async def _execute_cycle(self) -> str:
+        """One cycle. Owns the Scroll & Parse collect phase via
+        _run_collect_phase (through _prepare_cycle_queue helper)."""
         from actions.cancellation import RunStopped
-        scroll = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
+        from .cycle_plan import choose_cycle_mode, inspect_stack
         try:
-            queue = await self._run_collect_phase(scroll) if scroll is not None else await self._memory.get_queue()
-            queue = self.filter_by_labels(queue, announce=True); queue = await self._order_queue_by_column(queue)
-            take_matched = await self._run_take_phase()
+            queue, take_matched = await self._prepare_cycle_queue()
         except RunStopped:
-            # C1: stop during collect/take/queue preparation ends the cycle
-            # as stopped — never an empty-success or a fatal error.
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
-        has_skip = any(b.block_id == "CONDITIONAL_SKIP" and getattr(b, "enabled", True) for b in self._stack)
-        mem_click = next((b for b in self._stack if b.block_id == "CLICK_USER" and getattr(b, "enabled", True) and getattr(b, "use_person_from_memory", False)), None)
-        needs_user = [b.block_id for b in self._stack if b.block_id in USER_SCOPED_BLOCKS and getattr(b, "enabled", True)]
-        take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
-        if mem_click is not None: return await self._run_single_target_cycle(has_skip, take_matched)
-        if take_present and not take_matched and not needs_user and not queue:
-            self.log_msg.emit("⚠ Pick Person found no one this cycle — nothing left to work (a Repeat Loop ends here, like an empty queue)")
-            self.debug_msg.emit("ℹ Memory-driven cycle ended: no person matched Pick Person", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "no_take_match"}); return "empty"
-        standalone = False
-        if queue:
-            self.progress.extend_total(len(queue)); self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
-        elif not self._stack:
-            self.log_msg.emit("⚠ The stack is empty — add at least one block"); self.debug_msg.emit("⚠ Nothing to run: the action stack is empty", "warn")
-            return "empty_stack"
-        elif needs_user:
-            self.log_msg.emit("⚠ No users in queue — nothing to run")
-            self.debug_msg.emit("⚠ The queue is empty and this stack contains user-dependent block(s): " + ", ".join(sorted(set(needs_user))) + ". Add a Scroll & Parse block (or reset the 'messaged' flags) so there are users to run on.", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))}); return "empty"
+            return self._note_stopped()
+        facts = inspect_stack(self._stack)
+        decision = choose_cycle_mode(facts, has_queue=bool(queue),
+                                     take_matched=take_matched)
+        if decision.mode == "single_target":
+            try:
+                return await self._run_single_target_cycle(
+                    facts.has_conditional_skip, take_matched)
+            except RunStopped:
+                return self._note_stopped()
+        if decision.mode == "empty" and decision.reason == "no_take_match":
+            return self._note_no_take_match()
+        if decision.mode == "queued":
+            return await self._run_queued_users(
+                queue, facts.has_conditional_skip)
+        if decision.mode == "empty_stack":
+            return self._note_empty_stack()
+        if decision.mode == "empty":
+            return self._note_empty_queue(facts.user_scoped_ids)
+        return await self._run_standalone_user(facts.has_conditional_skip)
+
+    async def _prepare_cycle_queue(self) -> tuple[list, bool]:
+        from actions.cancellation import RunStopped, raise_if_stopped
+        scroll = next((b for b in self._stack
+                       if b.block_id == "SCROLL_PARSE"
+                       and getattr(b, "enabled", True)), None)
+        if scroll is not None:
+            queue = await self._run_collect_phase(scroll)
         else:
-            standalone = True; self.progress.extend_total(1); queue = [UserRecord(nick=STANDALONE_NICK)]
-            self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
-            self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
-            self._tracer.note({"type": "run_mode", "mode": "standalone"})
+            queue = await self._memory.get_queue()
+        raise_if_stopped(self)
+        queue = self.filter_by_labels(queue, announce=True)
+        queue = await self._order_queue_by_column(queue)
+        raise_if_stopped(self)
+        take_matched = await self._run_take_phase()
+        raise_if_stopped(self)
+        return queue, take_matched
+
+    def _note_no_take_match(self) -> str:
+        self.log_msg.emit("⚠ Pick Person found no one this cycle — nothing left to work (a Repeat Loop ends here, like an empty queue)")
+        self.debug_msg.emit("ℹ Memory-driven cycle ended: no person matched Pick Person", "warn")
+        self._tracer.note({"type": "run_skip", "reason": "no_take_match"})
+        return "empty"
+
+    def _note_empty_stack(self) -> str:
+        self.log_msg.emit("⚠ The stack is empty — add at least one block")
+        self.debug_msg.emit("⚠ Nothing to run: the action stack is empty", "warn")
+        return "empty_stack"
+
+    def _note_empty_queue(self, needs_user) -> str:
+        self.log_msg.emit("⚠ No users in queue — nothing to run")
+        self.debug_msg.emit("⚠ The queue is empty and this stack contains user-dependent block(s): " + ", ".join(sorted(set(needs_user))) + ". Add a Scroll & Parse block (or reset the 'messaged' flags) so there are users to run on.", "warn")
+        self._tracer.note({"type": "run_skip", "reason": "empty_queue", "needs_user": sorted(set(needs_user))})
+        return "empty"
+
+    async def _run_queued_users(self, queue: list, has_skip: bool) -> str:
+        self.progress.extend_total(len(queue))
+        self.log_msg.emit(f"▶ Running stack on {len(queue)} user(s)")
+        return await self._run_user_list(queue, has_skip, standalone=False)
+
+    async def _run_standalone_user(self, has_skip: bool) -> str:
+        self.progress.extend_total(1)
+        queue = [UserRecord(nick=STANDALONE_NICK)]
+        self.log_msg.emit("▶ Running stack once (standalone — no user context needed)")
+        self.debug_msg.emit("ℹ Standalone run: this stack contains no user-dependent blocks, so it executes once independently of the user queue.", "info")
+        self._tracer.note({"type": "run_mode", "mode": "standalone"})
+        return await self._run_user_list(queue, has_skip, standalone=True)
+
+    async def _run_user_list(self, queue: list, has_skip: bool,
+                             standalone: bool) -> str:
+        from actions.cancellation import RunStopped
         for user in queue:
             if self._stop_requested:
-                self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
+                return self._note_stopped()
             await self._wait_if_paused()
             if self._stop_requested:
-                # C1: stop may have landed while parked at the pause
-                # barrier — never start another block after it.
-                self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"}); return "stopped"
-            status = await self._execute_for_user(user, has_skip)
-            self.progress.note_status("fail" if status == "stop" else status)
-            if status == "stop":
-                self._tracer.note({"type": "run_end", "reason": "stopped"})
-                if not standalone: self.user_complete.emit(user.nick, False)
-                return "stopped"
-            if status == "ok" and self._stop_requested and not standalone:
-                # C1: stop between the final OK and the automatic mark
-                # boundary wins — the user is left unmarked for a later run.
-                self.debug_msg.emit("⏹ Stack stopped by user", "warn"); self._tracer.note({"type": "run_end", "reason": "stopped"})
-                self.user_complete.emit(user.nick, False); return "stopped"
-            if status == "ok" and not standalone: await self._memory.mark_messaged(user.nick); self.person_marked.emit(user.nick)
-            if not standalone: self.user_complete.emit(user.nick, status == "ok")
+                return self._note_stopped()
+            try:
+                status = await self._execute_for_user(user, has_skip)
+            except RunStopped:
+                return self._note_stopped()
+            terminal = await self._finish_single_user(user, status, standalone)
+            if terminal is not None:
+                return terminal
         return "worked"
+
+    async def _finish_single_user(self, user, status: str,
+                                  standalone: bool) -> str | None:
+        self.progress.note_status("fail" if status == "stop" else status)
+        if status == "ok" and self._stop_requested:
+            if not standalone:
+                self.user_complete.emit(user.nick, False)
+            return self._note_stopped()
+        if status == "ok" and not standalone:
+            await self._memory.mark_messaged(user.nick)
+            self.person_marked.emit(user.nick)
+        if not standalone:
+            self.user_complete.emit(user.nick, status == "ok")
+        if status == "stop":
+            try:
+                self._tracer.note({"type": "run_end", "reason": "stopped"})
+            except Exception:
+                pass
+            return "stopped"
+        return None
 
 ActionEngine = RunCoordinator
