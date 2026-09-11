@@ -7,5 +7,6 @@ or actions/: the dependency arrows flow DOWN only (core is the bottom).
 from core.result import Result, Ok, Err
 from core.events import EventBus
 from core.di import Container
+from core.version import APP_VERSION
 
-__all__ = ["Result", "Ok", "Err", "EventBus", "Container"]
+__all__ = ["Result", "Ok", "Err", "EventBus", "Container", "APP_VERSION"]

@@ -95,9 +95,17 @@
         <button id="runBtn" class="btn-success" title="Run"><span class="material-icons">play_arrow</span></button>
         <button id="pauseBtn" class="btn-warning" title="Pause" disabled><span class="material-icons">pause</span></button>
         <button id="stopBtn" class="btn-danger" title="Stop" disabled><span class="material-icons">stop</span></button>
-        <button id="saveStackBtn" class="btn-icon-sm" title="Save stack as preset"><span class="material-icons">save</span></button>
-        <button id="loadStackBtn" class="btn-icon-sm" title="Load preset list"><span class="material-icons">folder_open</span></button>
       </h3>
+      <!-- Preset management row. TEXT-labeled on purpose: icon-only
+           buttons render invisible when the Material Icons web font
+           (CDN) cannot load — offline machines must still see all
+           five preset controls. (BUG: preset panel incomplete) -->
+      <div class="preset-toolbar" role="toolbar" aria-label="Preset management">
+        <button id="loadStackBtn" class="btn-small" title="Pick a saved preset — list shows name, date and block count; click Load to restore">Select Preset ▾</button>
+        <button id="saveStackBtn" class="btn-small" title="Save the current stack as a named preset (full parameters + order)">Save</button>
+        <button id="exportStackBtn" class="btn-small" title="Export the current stack + all custom blocks to a portable .json file">Export</button>
+        <button id="importStackBtn" class="btn-small" title="Read a .json preset file into the app — the app validates it, shows a preview, then you choose Merge or Replace">Import</button>
+      </div>
       <!-- Saved preset chips: click to load (BUG #1) -->
       <div class="preset-row">
         <span class="preset-row-label">Saved presets</span>
@@ -105,12 +113,16 @@
           <span class="preset-row-empty">none yet — click 💾 Save and give the preset a name</span>
         </div>
       </div>
-      <!-- Custom Find & Click block presets: click to add to the stack -->
+      <!-- Custom Find & Click block presets: click to add to the stack.
+           ⬇ on a chip exports that one block; "Import Block" imports a
+           block from a .json file (portable presets, FEATURE). Text-labeled
+           like the preset row: icon-only buttons go invisible offline. -->
       <div class="preset-row">
         <span class="preset-row-label">Custom blocks</span>
         <div id="customBlockChips" class="chip-wrap">
           <span class="preset-row-empty">no saved blocks — add a “Find &amp; Click” block, configure it, and press “Save Block as Preset”</span>
         </div>
+        <button id="importBlockBtn" class="btn-small" title="Import a single custom block from a .json file">Import Block</button>
       </div>
       <div class="stack-hint">Drag the <b>⠿</b> handle to reorder blocks — the glowing bar shows where the block will land. Toggle <b>On/Off</b> to skip a block. Keyboard: select a block, then <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>; <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> Redo (up to 100 steps). Drag the window by its <b>title bar</b> to rearrange the grid.</div>
       <div id="stackList" class="stack-list">
@@ -468,6 +480,25 @@
     <div class="modal-actions">
       <button id="confirmModalYes" class="btn-danger btn-danger-solid">Delete</button>
       <button id="confirmModalNo" class="btn-small">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import preview: the parsed file (block list + compatibility
+     warnings) is shown BEFORE anything is applied. Stack files offer
+     Merge (append + merge library) / Replace (overwrite, undoable);
+     block files offer one Import action. (FEATURE: portable presets) -->
+<div id="importPreviewModal" class="modal hidden">
+  <div class="modal-content import-modal">
+    <h3 id="importPreviewTitle">Import preview</h3>
+    <div id="importPreviewMeta" class="confirm-text"></div>
+    <div id="importPreviewWarnings" class="import-warnings hidden"></div>
+    <div id="importPreviewBlocks" class="import-block-list"></div>
+    <div class="modal-actions">
+      <button id="importPreviewCancel" class="btn-small">Cancel</button>
+      <button id="importPreviewMerge" class="btn-small" title="Keep the current stack — append the imported blocks to it and merge the imported custom blocks into the library">Merge</button>
+      <button id="importPreviewReplace" class="btn-success" title="Overwrite the current stack entirely (↩ Undo restores it). Imported custom blocks are merged into the library">Replace</button>
+      <button id="importPreviewAdd" class="btn-success hidden" title="Add this block to the Custom Blocks library">Import Block</button>
     </div>
   </div>
 </div>

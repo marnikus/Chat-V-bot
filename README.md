@@ -219,6 +219,34 @@ design in `docs/archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-0
 - **Save Template / Load Template ▾** work the same way for message templates.
 - Deletion is confirmed through an in-app dialog (no browser dialogs needed).
 
+### Export / Import Presets (portable `.json` files)
+The Action Stack panel has a dedicated, **text-labeled** preset row:
+**[ Select Preset ▾ ]  [ Save ]  [ Export ]  [ Import ]** — four
+distinct controls (labels are plain text on purpose, so the row stays
+visible even when the icon web font cannot load, e.g. offline).
+- **Select Preset ▾** — list of every saved preset (name, save date,
+  block count); click **Load** to restore its full stack.
+- **Save** — name the current stack and it is stored with **every** block
+  parameter and order.
+- **Export** — writes the **current stack + every custom block** as one
+  standalone `.json` file (native save dialog). The Select Preset list has
+  an **Export** button per saved preset, and the **⬇ on a Custom Block
+  chip** exports that one block.
+- **Import** — pick a `.json` preset file: the app first shows a
+  **preview** (block list + compatibility warnings: newer app version,
+  unknown block type, a Find & Click block without its selector) and only
+  then applies. Choose **Replace** (overwrites the current stack; ↩ Undo
+  returns to it) or **Merge** (appends the imported blocks and merges the
+  imported custom blocks into your library, same name = same block). The
+  imported file is also **saved as a named preset**, so it appears in
+  Select Preset immediately. The download button on the Custom Blocks row
+  imports a single block.
+- The file carries `format` / `format_version` / `app_version`, so a file
+  made by a newer app is refused with a clear message instead of silently
+  losing steps, and invalid files are rejected before anything is applied.
+  The file has no absolute paths or local state — copy it to another
+  machine or install and import it there.
+
 ### Session restore on startup
 On every start the app restores the previous session from the same single
 `config.json` store:
