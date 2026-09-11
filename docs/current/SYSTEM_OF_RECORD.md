@@ -266,6 +266,7 @@ dict, and the collector status strings.
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 31 (legacy), mean 3.25 |
 | Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **90.44% / 84.38%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
+| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 6 lines (57.7% in band) · median file 130 lines — RULE 18 |
 
 ---
 
