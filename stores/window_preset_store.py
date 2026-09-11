@@ -7,7 +7,7 @@ import os
 from typing import Any, Optional
 
 from stores.atomic import AtomicJsonStore
-from stores.json_store import JsonFileStore
+from stores.json_store import JsonFileStore, per_path_instance
 
 
 class WindowPresetStore(JsonFileStore):
@@ -18,25 +18,21 @@ class WindowPresetStore(JsonFileStore):
     _by_path: dict[str, "WindowPresetStore"] = {}
 
     def __new__(cls, config: Any = None, path: Optional[str] = None):
+        return per_path_instance(cls, cls._raw_path_for(config, path), super().__new__)
+
+    @classmethod
+    def _raw_path_for(cls, config: Any, path: Optional[str]) -> str:
+        """Resolve the file this instance owns from the accepted spellings."""
         if path:
-            raw_path = path
-        elif isinstance(config, (str, os.PathLike)):
-            raw_path = os.fspath(config)
-        elif getattr(config, "path", None):
-            raw_path = config.path
-        elif getattr(config, "_path", None):
-            raw_path = os.path.join(os.path.dirname(os.path.abspath(config._path)),
-                                    "config", "window_presets.json")
-        else:
-            raw_path = cls.DEFAULT_FILE
-        key = os.path.abspath(raw_path)
-        cached = cls._by_path.get(key)
-        if cached is not None:
-            return cached
-        instance = super().__new__(cls)
-        instance._cache_key = key
-        cls._by_path[key] = instance
-        return instance
+            return path
+        if isinstance(config, (str, os.PathLike)):
+            return os.fspath(config)
+        if getattr(config, "path", None):
+            return config.path
+        if getattr(config, "_path", None):
+            return os.path.join(os.path.dirname(os.path.abspath(config._path)),
+                                "config", "window_presets.json")
+        return cls.DEFAULT_FILE
 
     def __init__(self, config: Any = None, path: Optional[str] = None):
         if getattr(self, "_initialized", False):

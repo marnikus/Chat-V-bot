@@ -184,11 +184,17 @@ def _validate(lifecycle, st) -> None:
             st, "validate",
             "cannot delete the last database — create a new one first",
             _Fail(extra={"last_database": True}))
+    # An unknown active state is not a licence to delete: the caller that
+    # cannot say whether the app is using this database gets a refusal, the
+    # same answer every other unreadable precondition in this file gives.
     try:
         st.was_active = (
             st.target_abs == os.path.abspath(registry.active_path()))
-    except Exception:  # noqa: BLE001
-        st.was_active = False
+    except Exception as exc:  # noqa: BLE001 -- unprovable: refuse, touch nothing
+        raise_refusal(
+            st, "validate",
+            f"cannot tell whether that database is the active one: {exc}",
+            _Fail(was_active=True))
 
 
 def _existing_abspaths(registry) -> list:

@@ -129,6 +129,28 @@ class RunHooksMixin:
             self._tracer.note({"type": "person_purged", **payload})
         return True
 
+    async def mark_person_messaged(self, nick: str) -> str:
+        """Mark one person as messaged; the answer tells the caller why not.
+
+        Lives with the other per-person memory writes: a block only asks the
+        engine, and the engine keeps the store, the trace and the UI in step.
+        """
+        if not nick:
+            return "missing"
+        try:
+            rows = await self._memory.get_all()
+            record = next((r for r in rows if getattr(r, "nick", "") == nick), None)
+            if record is None:
+                return "missing"
+            if getattr(record, "messaged", False):
+                return "already"
+            await self._memory.mark_messaged(nick)
+            self.person_marked.emit(nick)
+            return "ok"
+        except Exception as exc:
+            log.warning("mark_person_messaged(%s) failed: %s", nick, exc)
+            return "error"
+
     def note_selected(self, nick: str) -> None:
         if not nick:
             return

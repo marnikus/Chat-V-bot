@@ -16,6 +16,49 @@ import logging
 
 log = logging.getLogger("chatbot")
 
+#: a split is only meaningful when it divides the space at least twice
+_MIN_CHILDREN = 2
+
+
+def _clean_leaf(node: dict):
+    """Canonical form of a leaf, or the `leaf without id` error."""
+    node_id = node.get("id")
+    if not isinstance(node_id, str) or not node_id:
+        return None, "leaf without id"
+    return {"t": "leaf", "id": node_id}, None
+
+
+def _split_shape_error(kids, sizes) -> str | None:
+    """Why this split is not a split, or None when its shape is sound."""
+    if not isinstance(kids, list) or len(kids) < _MIN_CHILDREN:
+        return "split needs >=2 children"
+    if not isinstance(sizes, list) or len(sizes) != len(kids):
+        return "sizes must match children"
+    return None
+
+
+def _clean_sizes(sizes, min_size):
+    """Validate the size list (type, floor, sum to 100) and copy it."""
+    for size in sizes:
+        if (isinstance(size, bool) or not isinstance(size, (int, float))
+                or size < min_size):
+            return None, "bad size value (panel below minimum size)"
+    if not 99.5 <= sum(sizes) <= 100.5:
+        return None, "sizes must sum to 100"
+    return list(sizes), None
+
+
+def _clean_children(kids, depth, normalize):
+    """Normalise every child with `normalize` (the classmethod, so a subclass
+    override still reaches the leaves)."""
+    out = []
+    for kid in kids:
+        clean, err = normalize(kid, depth + 1)
+        if err:
+            return None, err
+        out.append(clean)
+    return out, None
+
 
 class LayoutService:
     """Grid tree spec: window sets, versions, validation, migration."""
@@ -40,39 +83,32 @@ class LayoutService:
 
     @classmethod
     def normalize_grid_tree(cls, node, depth: int = 0):
-        """Return a canonical `t` tree or an explanatory validation error."""
+        """Return a canonical `t` tree or an explanatory validation error.
+
+        The four decisions are the module-level validators above; this method
+        is only their order: depth, object, leaf, split shape, sizes, children.
+        """
         if depth > 12:
             return None, "tree too deep"
         if not isinstance(node, dict):
             return None, "node must be an object"
-        node_type = cls.node_type(node)
-        if node_type == "leaf":
-            if not isinstance(node.get("id"), str) or not node.get("id"):
-                return None, "leaf without id"
-            return {"t": "leaf", "id": node["id"]}, None
-        if node_type != "split":
+        kind = cls.node_type(node)
+        if kind == "leaf":
+            return _clean_leaf(node)
+        if kind != "split":
             return None, "unknown node type"
         if node.get("dir") not in ("row", "col"):
             return None, "bad dir"
         kids, sizes = node.get("children"), node.get("sizes")
-        if not isinstance(kids, list) or len(kids) < 2:
-            return None, "split needs >=2 children"
-        if not isinstance(sizes, list) or len(sizes) != len(kids):
-            return None, "sizes must match children"
-        clean_sizes = []
-        for size in sizes:
-            if (isinstance(size, bool) or not isinstance(size, (int, float))
-                    or size < cls.MIN_GRID_SIZE):
-                return None, "bad size value (panel below minimum size)"
-            clean_sizes.append(size)
-        if not 99.5 <= sum(clean_sizes) <= 100.5:
-            return None, "sizes must sum to 100"
-        clean_kids = []
-        for kid in kids:
-            clean, err = cls.normalize_grid_tree(kid, depth + 1)
-            if err:
-                return None, err
-            clean_kids.append(clean)
+        shape = _split_shape_error(kids, sizes)
+        if shape:
+            return None, shape
+        clean_sizes, err = _clean_sizes(sizes, cls.MIN_GRID_SIZE)
+        if err:
+            return None, err
+        clean_kids, err = _clean_children(kids, depth, cls.normalize_grid_tree)
+        if err:
+            return None, err
         return {"t": "split", "dir": node["dir"],
                 "children": clean_kids, "sizes": clean_sizes}, None
 
@@ -105,21 +141,27 @@ class LayoutService:
         if not isinstance(data, dict):
             return None, "payload must be an object"
         version = data.get("v")
-        if not isinstance(version, int) or \
-                not 1 <= version <= cls.GRID_VERSION:
+        if not isinstance(version, int) or not 1 <= version <= cls.GRID_VERSION:
             return None, f"unsupported version {version!r}"
         tree, err = cls.normalize_grid_tree(data.get("tree"))
         if err:
             return None, err
-        got = sorted(i for i in cls.leaf_ids(tree) if i)
-        known = {1: sorted(cls.V1_WINDOW_IDS), 2: sorted(cls.V2_WINDOW_IDS)}
-        if version < cls.GRID_VERSION and got == known.get(version):
-            # A layout saved before newer windows existed. Rejecting it
-            # would throw away the user's arrangement on first start
-            # after the update, so it is upgraded instead.
-            tree = cls.migrate_grid_tree(tree)
-            got = sorted(i for i in cls.leaf_ids(tree) if i)
-        if got != sorted(cls.WINDOW_IDS):
+        return cls._match_window_set(tree, version)
+
+    @classmethod
+    def _match_window_set(cls, tree, version: int):
+        """The tree, checked to cover every window — an older set upgraded first.
+
+        A layout saved before newer windows existed is migrated rather than
+        rejected: rejecting it would throw the user's own arrangement away on
+        the first start after an update, which is the worse bug.
+        """
+        if version < cls.GRID_VERSION:
+            previous = {1: sorted(cls.V1_WINDOW_IDS),
+                        2: sorted(cls.V2_WINDOW_IDS)}.get(version)
+            if sorted(i for i in cls.leaf_ids(tree) if i) == previous:
+                tree = cls.migrate_grid_tree(tree)
+        if sorted(i for i in cls.leaf_ids(tree) if i) != sorted(cls.WINDOW_IDS):
             return None, ("window set mismatch "
                           "(every window must appear once)")
         return tree, None

@@ -34,6 +34,28 @@ from typing import Any
 from stores.atomic import AtomicJsonStore, _coerce_path
 from stores.jsonio import load_json
 
+
+def per_path_instance(cls: type, raw_path: Any, create) -> Any:
+    """One store instance per resolved config path.
+
+    The stores that are keyed this way hand back the SAME object to every
+    caller naming the same file, so two façades can never clobber each other:
+    there is exactly one cache and one write lock per path.
+
+    ``create`` is called with ``cls`` only on a cache miss and must return the
+    new object. Callers pass their own ``super().__new__``, so the MRO that
+    builds the instance stays the owning store's rather than this helper's.
+    """
+    key = os.path.abspath(raw_path)
+    cached = cls._by_path.get(key)
+    if cached is not None:
+        return cached
+    instance = create(cls)
+    instance._cache_key = key
+    cls._by_path[key] = instance
+    return instance
+
+
 class JsonFileStore:
     """Load / mutate / atomic-save one JSON file."""
 

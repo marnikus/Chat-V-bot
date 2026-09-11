@@ -40,7 +40,7 @@ def _person_request(opts: dict) -> PersonPageRequest:
         include_deleted=bool(opts.get("include_deleted")))
 
 
-class HistoryBridge(QObject):
+class HistoryBridge(QObject):  # quality-override: class-loc=486 methods=45 reason=each method is a JS-callable bridge RPC, the surface ui/js names
     history_page_ready = Signal(str, str)    # req_id, JSON page
     history_search_ready = Signal(str, str)  # req_id, JSON results
     history_stats_ready = Signal(str, str)   # req_id, JSON stats

@@ -36,7 +36,7 @@ def _js_str(value: str) -> str:
     return json.dumps(str(value), ensure_ascii=False)
 
 
-def build_probe(
+def build_probe(  # quality-override: loc=122 params=8 reason=the body is one generated JS template, kept whole for CDP
     selector: str,
     label_selector: Optional[str] = None,
     match_text: Optional[str] = None,

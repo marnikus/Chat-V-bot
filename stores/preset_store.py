@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from stores.atomic import AtomicJsonStore
-from stores.json_store import JsonFileStore
+from stores.json_store import JsonFileStore, per_path_instance
 
 log = logging.getLogger("chatbot")
 
@@ -66,14 +66,7 @@ class PresetStore(JsonFileStore):
     _by_path: dict[str, "PresetStore"] = {}
 
     def __new__(cls, config: Any = None, path: Optional[str] = None):
-        key = os.path.abspath(_file_for(config, path))
-        cached = cls._by_path.get(key)
-        if cached is not None:
-            return cached
-        instance = super().__new__(cls)
-        instance._cache_key = key
-        cls._by_path[key] = instance
-        return instance
+        return per_path_instance(cls, _file_for(config, path), super().__new__)
 
     def __init__(self, config: Any = None, path: Optional[str] = None):
         if getattr(self, "_initialized", False):
