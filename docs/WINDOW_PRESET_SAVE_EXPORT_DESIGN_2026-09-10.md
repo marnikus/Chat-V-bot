@@ -144,6 +144,14 @@ ui/index.html + ui/css/*
   separate language-bookmark toolbar, Grid view menu, and preview surface
 ```
 
+The validator is staged by domain so each reader-facing responsibility stays
+small: decoding/header names, grid metadata, window-state lists, normalized
+bounds, individual window entries, and screen metadata are separate checks;
+`validate_document` only coordinates them. This keeps validation errors
+specific without placing the whole document contract in one dense branch. The
+store and bridge retain the same narrow boundaries: CRUD owns persistence,
+while the bridge validates, flushes, and emits the refreshed list.
+
 `ConfigManager` wires the new store into its existing load/save lifecycle, but
 stack/template presets remain untouched. The bridge never accepts an invalid
 snapshot into the store: it canonicalises and validates first, then atomically

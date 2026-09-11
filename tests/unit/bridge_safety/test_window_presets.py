@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from bridge.context import BridgeContext
 from bridge.window_preset_bridge import WindowPresetBridge
@@ -67,3 +68,78 @@ def test_missing_config_degrades_to_empty_without_false_success():
     assert bridge.list_window_presets() == "[]"
     assert bridge.load_window_preset("ghost") == "null"
     assert not bridge.save_window_preset("Desk", json.dumps(document()))
+    assert not bridge.delete_window_preset("ghost")
+
+
+class _FakeStore:
+    def __init__(self, value=None, *, save_result=True):
+        self.value = value
+        self.save_result = save_result
+        self.loaded = False
+        self.raise_on = set()
+
+    def list_presets(self):
+        if "list" in self.raise_on:
+            raise RuntimeError("list failed")
+        return []
+
+    def save_preset(self, _name, value):
+        if "save_preset" in self.raise_on:
+            raise RuntimeError("save failed")
+        self.value = value
+
+    def load_preset(self, _name):
+        if "load" in self.raise_on:
+            raise RuntimeError("load failed")
+        return self.value
+
+    def delete_preset(self, _name):
+        if "delete" in self.raise_on:
+            raise RuntimeError("delete failed")
+        if self.value is None:
+            return False
+        self.value = None
+        return True
+
+    def save(self, force=False):
+        return self.save_result
+
+    def load(self):
+        self.loaded = True
+
+
+def _bridge_for_store(store):
+    config = SimpleNamespace(window_presets=store)
+    return WindowPresetBridge(BridgeContext(config=config))
+
+
+def test_bridge_handles_store_exceptions_and_failed_flushes():
+    store = _FakeStore()
+    store.raise_on.add("list")
+    assert _bridge_for_store(store).list_window_presets() == "[]"
+
+    store = _FakeStore(save_result=False)
+    bridge = _bridge_for_store(store)
+    assert not bridge.save_window_preset("Desk", json.dumps(document()))
+    assert store.loaded
+
+    store = _FakeStore()
+    store.raise_on.add("save_preset")
+    assert not _bridge_for_store(store).save_window_preset(
+        "Desk", json.dumps(document()))
+
+    store = _FakeStore()
+    store.raise_on.add("load")
+    assert _bridge_for_store(store).load_window_preset("Desk") == "null"
+
+    store = _FakeStore({"name": "not a valid preset"})
+    assert _bridge_for_store(store).load_window_preset("Desk") == "null"
+
+    store = _FakeStore(document(), save_result=False)
+    bridge = _bridge_for_store(store)
+    assert not bridge.delete_window_preset("Desk")
+    assert store.loaded
+
+    store = _FakeStore(document())
+    store.raise_on.add("delete")
+    assert not _bridge_for_store(store).delete_window_preset("Desk")

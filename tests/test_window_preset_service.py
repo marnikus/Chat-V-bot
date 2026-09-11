@@ -101,6 +101,102 @@ class TestWindowPresetService(unittest.TestCase):
         self.assertIn("different", WindowPresetService.resolution_note(
             parsed, 1920, 1080))
 
+    def test_required_metadata_errors_are_specific(self):
+        cases = (
+            (lambda doc: doc.pop("format"), "missing format"),
+            (lambda doc: doc.update(format="other"), "unsupported format"),
+            (lambda doc: doc.pop("schema_version"), "missing schema_version"),
+            (lambda doc: doc.update(schema_version=0), "unsupported schema"),
+            (lambda doc: doc.update(app_version=""), "missing app_version"),
+            (lambda doc: doc.pop("name"), "missing name"),
+            (lambda doc: doc.update(name="x" * 81), "longer than 80"),
+            (lambda doc: doc.pop("grid"), "grid.type"),
+            (lambda doc: doc["grid"].update(version=True), "grid.version"),
+            (lambda doc: doc["grid"].update(tree=object()), "JSON data"),
+            (lambda doc: doc["grid"].update(window_count=1), "window_count"),
+            (lambda doc: doc["grid"].update(sizes_unit="pixels"), "sizes_unit"),
+        )
+        for mutate, fragment in cases:
+            doc = _document()
+            mutate(doc)
+            parsed, error = WindowPresetService.validate(doc)
+            self.assertIsNone(parsed, fragment)
+            self.assertIn(fragment, error, fragment)
+
+    def test_window_state_and_screen_errors_are_refused(self):
+        cases = (
+            (lambda doc: doc.update(window_states=[]), "window_states must"),
+            (lambda doc: doc["window_states"].update(closed="bad"),
+             "closed must"),
+            (lambda doc: doc["window_states"].update(closed=["ghost"]),
+             "closed contains"),
+            (lambda doc: doc["window_states"].update(closed=["stats", "stats"]),
+             "closed contains a duplicate"),
+            (lambda doc: doc["window_states"].update(minimized="bad"),
+             "minimized must"),
+            (lambda doc: doc["window_states"].update(minimized=["ghost"]),
+             "minimized contains"),
+            (lambda doc: doc.update(windows={}), "windows must be a list"),
+            (lambda doc: doc["windows"].__setitem__(0, None),
+             "each window entry"),
+            (lambda doc: doc["windows"].__setitem__(0, {"id": "ghost"}),
+             "unknown or duplicate id"),
+            (lambda doc: doc["windows"][0].update(state="closed"),
+             "inconsistent state"),
+            (lambda doc: doc["windows"][0].update(bounds=None),
+             "bounds must be an object"),
+            (lambda doc: doc["windows"][0]["bounds"].update(width="wide"),
+             "finite numbers"),
+            (lambda doc: doc["windows"][0]["bounds"].update(width=-1),
+             "between 0 and 1"),
+            (lambda doc: doc["windows"][0]["bounds"].update(
+                x=0.8, width=0.5), "outside the screen"),
+            (lambda doc: doc["windows"].pop(), "current window set"),
+            (lambda doc: doc.update(screen=[]), "screen must"),
+            (lambda doc: doc["screen"].update(width=0), "positive numbers"),
+            (lambda doc: doc["screen"].update(device_pixel_ratio=0),
+             "device_pixel_ratio"),
+        )
+        for mutate, fragment in cases:
+            doc = _document()
+            mutate(doc)
+            parsed, error = WindowPresetService.validate(doc)
+            self.assertIsNone(parsed, fragment)
+            self.assertIn(fragment, error, fragment)
+
+    def test_closed_minimized_windows_and_optional_values_are_canonical(self):
+        doc = _document()
+        doc.pop("created_at")
+        doc.pop("updated_at")
+        doc["window_states"] = {"closed": ["stats"],
+                                 "minimized": ["composer"]}
+        source = {item["id"]: item for item in doc["windows"]}
+        source["stats"]["state"] = "closed"
+        source["composer"]["state"] = "minimized"
+        source["composer"]["title"] = 42
+        parsed, error = WindowPresetService.validate(doc)
+        self.assertIsNone(error)
+        result = {item["id"]: item for item in parsed["windows"]}
+        self.assertEqual(result["stats"]["state"], "closed")
+        self.assertEqual(result["composer"]["state"], "minimized")
+        self.assertEqual(result["composer"]["title"], "composer")
+        self.assertTrue(parsed["created_at"])
+        self.assertTrue(parsed["updated_at"])
+        self.assertEqual(WindowPresetService.compatibility_note(parsed), "")
+        self.assertEqual(WindowPresetService.resolution_note(
+            parsed, parsed["screen"]["width"], parsed["screen"]["height"]), "")
+
+    def test_non_object_input_and_invalid_grid_tree_are_refused(self):
+        parsed, error = WindowPresetService.validate([])
+        self.assertIsNone(parsed)
+        self.assertIn("JSON object", error)
+
+        doc = _document()
+        doc["grid"]["tree"] = {"t": "not-a-real-node"}
+        parsed, error = WindowPresetService.validate(doc)
+        self.assertIsNone(parsed)
+        self.assertIn("invalid grid tree", error)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

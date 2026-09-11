@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,6 +57,27 @@ class TestWindowPresetStore(unittest.TestCase):
         store.save_preset("Desk", {"name": "Desk"})
         self.assertTrue(store.save(force=True))
         self.assertEqual(atomic.load()["window_presets"]["Desk"]["name"], "Desk")
+
+    def test_config_path_forms_and_cached_instances_are_supported(self):
+        config_path = os.path.join(self.directory.name, "legacy.json")
+        config = SimpleNamespace(_path=config_path)
+        derived = os.path.join(self.directory.name, "config",
+                               "window_presets.json")
+        WindowPresetStore._by_path.pop(os.path.abspath(derived), None)
+        from_config = WindowPresetStore(config=config)
+        self.assertEqual(from_config.path, os.path.abspath(derived))
+        self.assertIs(from_config, WindowPresetStore(config=config))
+
+        path_config = SimpleNamespace(path=self.path)
+        WindowPresetStore._by_path.pop(os.path.abspath(self.path), None)
+        from_path = WindowPresetStore(config=path_config)
+        self.assertEqual(from_path.path, os.path.abspath(self.path))
+        self.assertEqual(from_path._coerce("bad"), {"window_presets": {}})
+
+        string_path = os.path.join(self.directory.name, "string.json")
+        WindowPresetStore._by_path.pop(os.path.abspath(string_path), None)
+        from_string = WindowPresetStore(config=string_path)
+        self.assertEqual(from_string.path, os.path.abspath(string_path))
 
 
 if __name__ == "__main__":

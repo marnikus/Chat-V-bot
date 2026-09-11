@@ -15,7 +15,6 @@ SCHEMA_VERSION = 1
 APP_VERSION = "0.1.0"
 GRID_TYPE = "sash-tree"
 _BOUNDS_KEYS = ("x", "y", "width", "height")
-_STATES = ("open", "closed", "minimized")
 
 
 def _decode(raw: Any) -> tuple[dict | None, str | None]:
@@ -29,41 +28,56 @@ def _decode(raw: Any) -> tuple[dict | None, str | None]:
     return copy.deepcopy(raw), None
 
 
-def _text(doc: dict, key: str, required: bool = True) -> tuple[str | None, str | None]:
+def _text(doc: dict, key: str) -> tuple[str | None, str | None]:
     value = doc.get(key)
     if isinstance(value, str) and value.strip():
         return value.strip(), None
-    if required:
-        return None, f"missing {key}"
-    return "", None
+    return None, f"missing {key}"
 
 
-def _header(doc: dict, name: str | None) -> tuple[dict | None, str | None]:
+def _header_error(doc: dict) -> str | None:
     if "format" not in doc:
-        return None, "missing format"
+        return "missing format"
     if doc.get("format") != FORMAT:
-        return None, f"unsupported format {doc.get('format')!r}"
+        return f"unsupported format {doc.get('format')!r}"
     if "schema_version" not in doc:
-        return None, "missing schema_version"
+        return "missing schema_version"
     if doc.get("schema_version") != SCHEMA_VERSION:
-        return None, f"unsupported schema version {doc.get('schema_version')!r}"
-    app, error = _text(doc, "app_version")
-    if error:
-        return None, error
-    preset_name, error = _text(doc, "name")
+        return f"unsupported schema version {doc.get('schema_version')!r}"
+    return None
+
+
+def _preset_name(doc: dict, name: str | None) -> tuple[str | None, str | None]:
+    source = doc
     if name is not None:
-        preset_name, error = _text({"name": name}, "name")
+        source = {"name": name}
+    preset_name, error = _text(source, "name")
     if error:
         return None, error
     if len(preset_name) > 80:
         return None, "name is longer than 80 characters"
+    return preset_name, None
+
+
+def _timestamp(value: Any, fallback: str) -> str:
+    return value if isinstance(value, str) and value else fallback
+
+
+def _header(doc: dict, name: str | None) -> tuple[dict | None, str | None]:
+    error = _header_error(doc)
+    if error:
+        return None, error
+    app, error = _text(doc, "app_version")
+    if error:
+        return None, error
+    preset_name, error = _preset_name(doc, name)
+    if error:
+        return None, error
     now = datetime.now().isoformat(timespec="seconds")
-    created = doc.get("created_at")
-    updated = doc.get("updated_at")
     return {"format": FORMAT, "schema_version": SCHEMA_VERSION,
             "app_version": app, "name": preset_name,
-            "created_at": created if isinstance(created, str) and created else now,
-            "updated_at": updated if isinstance(updated, str) and updated else now}, None
+            "created_at": _timestamp(doc.get("created_at"), now),
+            "updated_at": _timestamp(doc.get("updated_at"), now)}, None
 
 
 def _grid(doc: dict) -> tuple[dict | None, str | None]:
@@ -127,7 +141,7 @@ def _number(value: Any) -> bool:
         and math.isfinite(value)
 
 
-def _bounds(entry: dict) -> tuple[dict | None, str | None]:
+def _bound_values(entry: dict) -> tuple[dict | None, str | None]:
     bounds = entry.get("bounds")
     if not isinstance(bounds, dict):
         return None, "window bounds must be an object"
@@ -136,10 +150,56 @@ def _bounds(entry: dict) -> tuple[dict | None, str | None]:
         return None, "window bounds must contain finite numbers"
     if any(value < 0 or value > 1 for value in values.values()):
         return None, "window bounds must be normalized between 0 and 1"
-    if values["x"] + values["width"] > 1.001 or \
-            values["y"] + values["height"] > 1.001:
+    return values, None
+
+
+def _bounds_extend_screen(values: dict) -> bool:
+    return values["x"] + values["width"] > 1.001 or \
+        values["y"] + values["height"] > 1.001
+
+
+def _bounds(entry: dict) -> tuple[dict | None, str | None]:
+    values, error = _bound_values(entry)
+    if error:
+        return None, error
+    if _bounds_extend_screen(values):
         return None, "window bounds extend outside the screen"
     return {key: round(value, 6) for key, value in values.items()}, None
+
+
+def _window_id(entry: dict, expected: set[str], seen: set[str]) -> tuple[str | None, str | None]:
+    wid = entry.get("id")
+    if isinstance(wid, str) and wid in expected and wid not in seen:
+        return wid, None
+    return None, "windows contain an unknown or duplicate id"
+
+
+def _window_state(entry: dict, wid: str, states: dict) -> tuple[str | None, str | None]:
+    wanted = "closed" if wid in states["closed"] else "open"
+    if wid in states["minimized"]:
+        wanted = "minimized"
+    if entry.get("state") != wanted:
+        return None, f"window {wid!r} has an inconsistent state"
+    return wanted, None
+
+
+def _window_entry(
+    entry: Any, expected: set[str], seen: set[str], states: dict
+) -> tuple[dict | None, str | None]:
+    if not isinstance(entry, dict):
+        return None, "each window entry must be an object"
+    wid, error = _window_id(entry, expected, seen)
+    if error:
+        return None, error
+    state, error = _window_state(entry, wid, states)
+    if error:
+        return None, error
+    bounds, error = _bounds(entry)
+    if error:
+        return None, f"window {wid!r}: {error}"
+    title = entry.get("title")
+    return {"id": wid, "title": title if isinstance(title, str) else wid,
+            "state": state, "bounds": bounds}, None
 
 
 def _windows(doc: dict, states: dict) -> tuple[list[dict] | None, str | None]:
@@ -150,24 +210,11 @@ def _windows(doc: dict, states: dict) -> tuple[list[dict] | None, str | None]:
     seen = set()
     clean = []
     for entry in entries:
-        if not isinstance(entry, dict):
-            return None, "each window entry must be an object"
-        wid = entry.get("id")
-        if not isinstance(wid, str) or wid not in expected or wid in seen:
-            return None, "windows contain an unknown or duplicate id"
-        state = entry.get("state")
-        wanted = "closed" if wid in states["closed"] else "open"
-        if wid in states["minimized"]:
-            wanted = "minimized"
-        if state != wanted or state not in _STATES:
-            return None, f"window {wid!r} has an inconsistent state"
-        bounds, error = _bounds(entry)
+        window, error = _window_entry(entry, expected, seen, states)
         if error:
-            return None, f"window {wid!r}: {error}"
-        title = entry.get("title")
-        clean.append({"id": wid, "title": title if isinstance(title, str) else wid,
-                      "state": state, "bounds": bounds})
-        seen.add(wid)
+            return None, error
+        clean.append(window)
+        seen.add(window["id"])
     if seen != expected:
         return None, "windows do not contain the current window set"
     return clean, None
