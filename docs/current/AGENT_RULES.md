@@ -628,7 +628,7 @@ reference implementation of that count is the AST walker in
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
 * *Measured today:* `core/` 5, `app/` 4, `services/history/` 7,
-  `services/run/` 9, `bridge/` 12, `services/` 17 — inside the ideal. Over it:
+  `services/run/` 9, `bridge/` 12, `services/` 18 — inside the ideal. Over it:
   `stores/` 35, `backend/` 30, `actions/` 23, each held together by prefix
   families. When a family grows again, promote it to a sub-package rather than
   adding file 36.

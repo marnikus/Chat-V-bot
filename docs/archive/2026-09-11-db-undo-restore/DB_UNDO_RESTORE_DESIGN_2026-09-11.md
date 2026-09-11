@@ -210,6 +210,55 @@ long as the undo step that can restore it.**
 The People-list half needs none of this: a queue row carries no history, so
 restoring it from a surviving `people` entry is always honest.
 
+### 2.5 A restart fills the windows by itself
+
+*“ass BD connection after restart it should automatically upload all users in
+no need to wait a refresh button.”*
+
+The page is loaded by `create_window` **before** `ApplicationLifecycle.startup`
+opens anything: `memory.init()` and `history.init()` (schema migration, media
+layout, FTS check) run while the page is already booting, and the JS boot
+block asks for its lists the moment the QWebChannel handshake succeeds. Those
+first requests therefore hit a world that is not open yet — an empty page or a
+`userdb_page` the backend never answered — and **nothing asked again**: the
+world only re-announced itself on a *switch* (`restart_world`), and that never
+happens at boot. Result: an empty People list and an empty Full User Database
+until the user pressed ↻.
+
+The fix is one announcement, at the only moment it can be trusted — the end of
+`startup`:
+
+```
+app/lifecycle.py::startup            (after memory.init + history.init + sync)
+        └── Router.announce_world_ready()
+                └── services/world_events.py::announce_world_live(bus, labels, "startup")
+                        ├── PeopleChanged          → users_updated + stats_updated → User Memory
+                        ├── UserDbChanged          → userdb_changed → Full User Database + DB Connection
+                        └── LabelsChanged          → label pills
+```
+
+* `services/world_events.py` is the ONE emitter: `restart_world` (the switch
+  path) now calls it too, so a boot and a switch can never drift into two
+  payload shapes — the file also gives that broadcast a home that is not the
+  561-line `undo_service.py` (a §16.5 landmine that may only shrink).
+* The announcement is **last** in `startup` (before the tab fetch), and it
+  fires even when the archive is unavailable — the queue is readable on its
+  own, so the People list still fills.
+* Ordering is race-free without polling: the JS registers its signal handlers
+  (`setupBridgeListeners`) before it asks for anything, so an announcement can
+  never fall between "listeners" and "requests". Either the backend was ready
+  first (the boot requests return data) or it announces later (the windows
+  reload).
+* `HistoryDb.reload()` keeps clearing its `loading` flag, so a request the
+  backend never answered cannot block the reload the announcement brings —
+  pinned by `tests/test_userdb_refresh.js`.
+
+Evidence: `tests/unit/app/test_app_lifecycle.py` (the boot order ends with the
+announcement; an unavailable archive still announces), and
+`tests/unit/bridge_safety/test_world_ready.py`, which runs the REAL router,
+`UserMemory` and `PeopleService` and reads the JS signals — deleting the
+announcement fails 5 of those 6 tests.
+
 ## 3. Measurements (RULE 16 / RULE 18)
 
 Measured with `tools/metrics/rule16_gate.py` (`measure_function` / `classes` —
@@ -247,6 +296,19 @@ because `undo_service.py` no longer imports `asyncio`). `CLONE_BASELINE` in
 comment — the same treatment the pre-existing `db_bridge` ↔ `history_bridge`
 header already had; the scan reports 11 groups / 83 lines. No *logic* is
 cloned anywhere.
+
+### 3.1b The boot broadcast (2026-09-11, second slice)
+
+| Where | Before | After |
+|---|---|---|
+| `services/world_events.py` (new) | — | 55 lines, no class: `announce_world_live` 10 LOC / 3 params, `_announce_labels` 8 LOC — the ONE emitter the boot and a world switch share |
+| `services/undo_service.py` | 561 lines (baseline 563, a §16.5 landmine) | **554 lines** — `restart_world`'s three hand-rolled emissions became one `announce_world_live(...)` call, so the landmine shrank instead of growing |
+| `bridge/router.py` | 455 lines | 470 lines — `announce_world_ready()` (12 LOC) joins its sibling `sync_world_state()`; the router is the bridge layer's one QObject and already owns “re-emit the domain events under the historical names” |
+| `app/lifecycle.py` | 62 lines | 75 lines — `startup` now ends in `_announce_world_ready` (8 LOC, failure-tolerant) |
+
+All new functions are inside RULE 16 (≤ 30 LOC, ≤ 4 params, CC ≤ 3, cognitive
+≤ 2) and inside the RULE 18 4–20 line band. The clone scan is unchanged (0 new
+groups, 0 stale baseline entries).
 
 ### 3.2 The hot spots, before and after
 

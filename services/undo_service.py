@@ -32,6 +32,7 @@ from services.service_log import emit_log
 from services.undo_archive import ArchiveCommands
 from services.undo_support import UndoProjection, UndoWorldStore
 from services.undo_timeline import TimelineCommit
+from services.world_events import announce_world_live
 
 log = logging.getLogger("chatbot")
 
@@ -109,15 +110,7 @@ async def restart_world(memory, archive, labels, undo, bus: EventBus,
             await undo.sync_world_state()
         except Exception as exc:                        # noqa: BLE001
             log.warning("world undo sync failed: %s", exc)
-    bus.emit(PeopleChanged(reason="db_switch"))
-    bus.emit(UserDbChanged(payload=json.dumps(
-        {"action": "db_switch", "ok": True}, ensure_ascii=False)))
-    if labels is not None:
-        try:
-            bus.emit(LabelsChanged(
-                payload=json.dumps(labels.state(), ensure_ascii=False)))
-        except Exception:                               # noqa: BLE001
-            pass
+    announce_world_live(bus, labels, reason="db_switch")
     try:
         bus.emit(LogMessage(message="👤 my nick follows the world", level="debug"))
         from core.events import MyNickChanged

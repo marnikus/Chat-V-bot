@@ -202,5 +202,29 @@ t('the window never purges by itself — no button, no method', () => {
   eq(calls.filter((c) => c[0] === 'purge'), [], 'nothing purged on its own');
 });
 
+// 7 — a restart fills the window without the refresh button (bug 2026-09-11)
+// The page boots while the backend is still opening the world, so the first
+// page request comes back empty (or never answers). The backend announces the
+// live world once it is ready and JS runs `onChanged()`; that reload must not
+// be swallowed by the request still marked as loading.
+t('the world-ready broadcast reloads even after an unanswered boot request',
+  () => {
+    reset();
+    HistoryDb.loading = false;
+    HistoryDb.init();                    // boot: asks while the world is closed
+    eq(pages(), 1, 'the boot request went out');
+    HistoryDb.loading = true;            // the backend never answered it
+    HistoryDb.onChanged();               // … then the world became ready
+    eq(pages(), 2, 'the ready broadcast asks again, by itself');
+  });
+
+// 8 — the same broadcast is what the People table reacts to: the module must
+// stay callable without a refresh button, i.e. reload() is the only entry
+t('reload() is enough — no button press is ever required', () => {
+  reset();
+  HistoryDb.reload();
+  eq(calls.map((c) => c[0]), ['page', 'stats'], 'one reload, one load');
+});
+
 console.log(failures ? 'FAILED ' + failures : 'all good');
 process.exit(failures ? 1 : 0);
