@@ -2,8 +2,11 @@
 
    The ticket's promise: adding a person, removing one, changing labels or
    pressing Ctrl+Z must show up in the database view at once — no manual
-   reload, ever. And the one irreversible action in the window (“Empty
-   trash”) must ask before it erases anything.
+   reload, ever.
+
+   And the user's rule the day after: removing a person asks NOTHING — the
+   delete is one undoable step, the rows stay hidden for the rest of the
+   session, and the world's own lifecycle erases them (no trash button).
 
    Per AGENT_RULES RULE 8 this runs the REAL shipped module
    (ui/js/history-db.js) against the REAL ids from ui/index.html, with a
@@ -120,10 +123,11 @@ function ok(value, what) { if (!value) throw new Error(what || 'expected truthy'
 
 console.log('Full User Database — live refresh + delete safety');
 
-// 0 — the markup the module needs really exists
-t('index.html ships the Empty trash button inside the footer', () => {
-  ok(/id="userdbEmptyTrash"/.test(html), 'button missing from ui/index.html');
-  ok(/id="userdbFoot"/.test(html), 'stats span missing');
+// 0 — the markup the module needs really exists, and nothing more
+t('the footer is a stats line — no trash button to press', () => {
+  ok(/id="userdbFoot"/.test(html), 'stats line missing');
+  ok(!/userdbEmptyTrash/.test(html),
+     'the DB window must not ship a trash button: the trash empties itself');
 });
 
 // 1 — boot asks for a page and for stats
@@ -166,45 +170,36 @@ t('a named change reloads at once and cancels the pending batch', () => {
   eq(byId.userdbList.scrollTop, 0, 'a named change starts from the top');
 });
 
-// 5 — removing a person asks first
-t('removing a person asks before anything is deleted', () => {
+// 5 — removing a person happens at once, without a dialog
+t('removing a person deletes straight away — one undoable step', () => {
   reset();
   asked = null;
-  answer = false;                              // the user said “no”
   byId.userdbBody.fire('click', {
     target: { dataset: { action: 'delete' }, closest: () => ({ dataset: { nick: 'Mloni' } }) },
     stopPropagation() {},
   });
-  ok(asked, 'no question was asked');
-  eq(asked.title, 'Remove this person?', 'dialog title');
-  eq(calls, [], 'nothing may happen before the answer');
-  answer = true;
-  HistoryDb.deletePerson('Mloni');
-  eq(calls, [['delete', 'Mloni', false]], 'the undoable, soft delete is the one');
+  eq(asked, null, 'no dialog may stand in the way');
+  eq(calls, [['delete', 'Mloni', false]],
+     'the soft, undoable delete is the one that runs');
 });
 
-// 6 — Empty trash asks, then empties the whole trash
-t('Empty trash asks, then purges every hidden row and person', () => {
+// 5b — and the trash is not the user's job
+t('the delete asks no question even when a dialog is available', () => {
   reset();
   asked = null;
-  answer = false;
-  HistoryDb.emptyTrash();
-  ok(asked, 'no question was asked');
-  eq(calls, [], 'a refused question must not purge');
   answer = true;
-  HistoryDb.emptyTrash();
-  eq(calls, [['purge', '']], 'an empty nick sweeps the whole trash');
+  HistoryDb.deletePerson('Bea');
+  eq(asked, null, 'no confirmation for a person delete');
+  eq(calls, [['delete', 'Bea', false]], 'the delete still reached the backend');
 });
 
-// 7 — without a dialog (headless) the actions still reach the backend
-t('without a dialog the actions still run', () => {
+// 6 — the module owns no purge path any more
+t('the window never purges by itself — no button, no method', () => {
+  eq(typeof HistoryDb.emptyTrash, 'undefined',
+     'the trash is emptied by the world lifecycle, not by this window');
   reset();
-  const saved = window.Dialog;
-  window.Dialog = undefined;
-  HistoryDb.deletePerson('Bea');
-  HistoryDb.emptyTrash();
-  window.Dialog = saved;
-  eq(calls.map((c) => c[0]), ['delete', 'purge'], 'fallback calls');
+  byId.userdbList.fire('scroll');
+  eq(calls.filter((c) => c[0] === 'purge'), [], 'nothing purged on its own');
 });
 
 console.log(failures ? 'FAILED ' + failures : 'all good');

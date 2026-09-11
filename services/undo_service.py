@@ -67,6 +67,16 @@ def _position_of(history: list, entry: dict) -> int:
     return -1
 
 
+def _archive_token(entry) -> str:
+    """The token of an archive entry — the rows a delete is keeping hidden."""
+    if not isinstance(entry, dict) or entry.get("kind") != "archive":
+        return ""
+    value = entry.get("value")
+    if not isinstance(value, dict):
+        return ""
+    return str(value.get("token") or "")
+
+
 def emit_db_change(bus: EventBus, action: str, result) -> None:
     """Format a DbManager result as the db_changed wire payload."""
     payload = dict(result or {})
@@ -249,19 +259,37 @@ class UndoService:
     def set_history(self, history: list, index: int) -> None:
         self._commit_timeline(list(history), index)
 
-    def _commit_timeline(self, history: list, index: int) -> None:
-        """Persist the ONE timeline split by ownership (app vs world)."""
-        for entry in history:
-            if isinstance(entry, dict) and \
-                    (not isinstance(entry.get("seq"), int)
-                     or entry["seq"] <= 0):
-                entry["seq"] = self._next_seq()
+    def _commit_timeline(self, history: list, index: int,
+                         purge_dropped: bool = True) -> None:
+        """Persist the ONE timeline split by ownership (app vs world).
+
+        `purge_dropped` erases the rows kept alive by archive entries that
+        just left the timeline (the cap, or a new edit truncating the redo
+        branch): once nothing can reach them, they are erased for good.
+        A world CHANGE passes False — the old world's rows are not this
+        world's to erase, and the old world sweeps them when it reopens.
+        """
+        dropped = self._dropped_tokens(history) if purge_dropped else []
+        self._stamp_seq(history)
         self._timeline = history
         self._h_index = index
         self._seq_next = max([e["seq"] for e in history
                               if isinstance(e, dict)
                               and isinstance(e.get("seq"), int)],
                              default=0) + 1
+        self._store_timeline(history, index)
+        self._purge_tokens(dropped)
+
+    def _stamp_seq(self, history: list) -> None:
+        """Give every entry the identity the merge keys off (seq)."""
+        for entry in history:
+            if isinstance(entry, dict) and (
+                    not isinstance(entry.get("seq"), int)
+                    or entry["seq"] <= 0):
+                entry["seq"] = self._next_seq()
+
+    def _store_timeline(self, history: list, index: int) -> None:
+        """Write the app half to config.json and the world half to the world."""
         service = self._archive
         if service is None or not getattr(service.db, "is_open", False):
             self._config.set_state(
@@ -272,6 +300,33 @@ class UndoService:
         self._config.set_state(undo_history=copy.deepcopy(app_entries),
                                undo_history_index=index)
         self._world_store.schedule_save(world_entries)
+
+    def _dropped_tokens(self, history: list) -> list:
+        """The archive tokens whose undo entry just left the timeline."""
+        keep = {_archive_token(entry) for entry in history}
+        seen = {_archive_token(entry) for entry in (self._timeline or [])}
+        return sorted(token for token in seen - keep if token)
+
+    def _purge_tokens(self, tokens: list) -> None:
+        """Erase what the dropped steps were hiding (best effort, async).
+
+        A step that leaves the timeline takes its data with it: past the undo
+        memory there is no restore, so the rows are erased for good and the
+        log says how many.
+        """
+        service = self._archive
+        if service is None or not tokens:
+            return
+
+        async def work():
+            erased = await service.purge_tokens(list(tokens))
+            if erased.get("persons") or erased.get("messages"):
+                self._log(
+                    f"🔥 {erased['messages']} hidden message(s) and "
+                    f"{erased['persons']} removed person(s) erased — their "
+                    "undo step left the history", "warn")
+
+        self._spawn("trash purge", work())
 
     def _schedule_world_undo_save(self, entries: list) -> None:
         """Persist the world half, tracking the task for a later
@@ -301,7 +356,7 @@ class UndoService:
                                    and e["seq"] > 0,
                                    e.get("seq") if isinstance(e.get("seq"),
                                                               int) else 0))
-        self._commit_timeline(merged, len(merged) - 1)
+        self._commit_timeline(merged, len(merged) - 1, purge_dropped=False)
         self._bus.emit(UndoHistoryChanged())
         return Ok(None)
 

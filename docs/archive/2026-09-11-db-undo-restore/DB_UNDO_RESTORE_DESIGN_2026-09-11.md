@@ -166,16 +166,44 @@ emitters were missing:
 * delete / clear / undo / redo / world switch already emitted the event — the
   undo one now fires after the verified change instead of before it.
 
-### 2.4 Deletion safety
+### 2.4 Delete safety — no dialogs, a session-sized trash
 
-* The DB window’s 🗑 asks first (`window.Dialog.confirm`, the same modal the
-  Person History window uses) and states that Ctrl+Z restores both halves.
-* The soft delete stays the only thing a click can do; the permanent path is
-  the explicit **Empty trash** button in the DB window’s footer, confirmed in
-  the same modal, which calls the existing `history_purge_deleted` slot
-  (now also erasing tombstoned *persons*, not only hidden messages) —
-  `HistoryMutateService.purge_trash()`. Ctrl+Z cannot bring those back, and the
-  log line says so.
+The first cut of this design asked before every delete (a confirm dialog) and
+offered an **Empty trash** button for the irreversible step. The user rejected
+both the same day: *“i dont need any cofirmations to delete perrson or chat in
+DB … asking to support the delete person with function undo (so it keeps track
+data deleted and able to add back to DB but as soon it closed or it above undo
+memory steps it losed completely then).”* The dialog and the button are gone.
+
+What replaces them is a rule with one sentence: **the trash lives exactly as
+long as the undo step that can restore it.**
+
+* 🗑 in the DB window (and Delete in the People list) deletes **immediately** —
+  no confirm, no extra click. The row leaves the list the same moment.
+* The delete is still a *soft* one: the person is tombstoned and their
+  messages are hidden under one token, invisible everywhere and restorable by
+  Ctrl+Z — the safety net is the undo timeline, not a dialog.
+* **The step falls off the timeline ⇒ the data is destroyed.**
+  `UndoService._commit_timeline` compares the archive tokens it carries before
+  and after each commit; every token that just left (the `MAX_STACK_HISTORY`
+  cap, or a new edit truncating the redo branch) is handed to
+  `HistoryMutateService.purge_tokens()`, which erases the hidden messages and
+  the tombstoned person for good and says so in the log.
+* **The app closes ⇒ the trash is destroyed.** `HistoryMutateService
+  .begin_session()` runs on every world open: it compares the world’s stored
+  `session` meta against this run’s `SESSION_TOKEN` (a fresh uuid4 per
+  process). A different token means “a previous run left this trash behind”,
+  so `forget_old_trash()` erases the hidden rows, the tombstones **and** the
+  now-unreachable `kind='archive'` rows in the world’s `undo_history` table,
+  then stamps this run. A mid-session re-init, a restart or a switch back to a
+  world this run already opened sees its own token and does nothing.
+* Switching *away* from a world is not a close: that world keeps its trash
+  until it is opened again — by which time another run's token makes it
+  garbage. `sync_world_state` merges timelines with `purge_dropped=False`, so
+  the world being left is never the one whose rows get erased.
+
+The People-list half needs none of this: a queue row carries no history, so
+restoring it from a surviving `people` entry is always honest.
 
 ## 3. Measurements (RULE 16 / RULE 18)
 
@@ -191,8 +219,11 @@ against the finished tree:
 | new helpers (`_position_of`, `_spawn`, `_crash_log`, `_disagrees`, `_row_verdict`, …) | — | 4–19 LOC, CC ≤ 6, cog ≤ 9 | 30 / 10 / 15 |
 | `WorldGate` / `WriteTurn` (new) | — | 5 + 4 methods, 48 + 23 LOC, longest method 17 LOC | 15 / 150 |
 | `HistoryBridge` class (ratchet) | 486 LOC / 45 methods | **488 / 45** | 493 / 45 frozen — LOC only |
-| `PersonLifecycle.purge_deleted` | 17 LOC | **29 LOC**, same method count (18) | 30 LOC; no method added to an over-15 class |
+| `PersonLifecycle.purge_deleted` | 17 LOC | **19 LOC** (the row work extracted to `_delete_hidden` / `_sweep_tombstones` / `_drop_person`) | 30 LOC; only private helpers added to the class |
 | `HistoryMutateService.save_world_undo` | 12 LOC, 1 statement per entry, no retry | **19 LOC** in one transaction + `_write_world_undo` (9 LOC) | 30 |
+| `HistoryMutateService.begin_session` / `forget_old_trash` / `purge_tokens` (new) | — | 14 / 16 / 26 LOC, CC ≤ 6 | 30 / CC 10 |
+| `UndoService._commit_timeline` | 24 LOC | **20 LOC** (identity stamping and the store split extracted to `_stamp_seq` / `_store_timeline`) | 30 |
+| `UndoService._purge_tokens` / `_dropped_tokens` (new) | — | 20 / 5 LOC | 30 |
 | `HistoryDB.close()` | released the turn before committing | commits first, drops the turn last | — |
 
 `stores/world_lock.py` is a leaf (no Qt, no `backend/`/`services/` imports) and
@@ -202,36 +233,39 @@ verifiable than before, not less.
 
 ## 4. Tests
 
-* `tests/test_world_write_gate.py` (new, 17 tests) — the gate itself
+* `tests/test_world_write_gate.py` (new, 30 tests) — the gate itself
   (classification, one gate per file, same-token re-entrance, cross-token
-  waiting, fail-open after `WAIT_S`, locked-error retry) plus the end-to-end
-  reproduction on the real stack: a slow `UserMemory.replace_all` running
-  beside `repo.restore_person` (README: the archive write must wait for the
-  open transaction — verified by a timeline of the two commits), the queue
-  write waiting for a held `HistoryDB` turn, a failed statement giving the turn
-  back, delete → undo restoring person **and** history with the verified log
-  line, redo hiding them again, a refused undo (LOCKED `restore_person`)
-  reporting `❌ Undo failed` and staying retryable, the DB window’s
-  `userdb_changed` event following the verified state, and “Empty trash”
-  (soft delete remains reversible until the purge erases the tombstone; a
-  later Ctrl+Z reports the failure instead of pretending).
+  waiting, fail-open after `WAIT_S`, locked-error retry), the pure facts the
+  log is built from, and the end-to-end reproduction on the real stack:
+  a slow `UserMemory.replace_all` beside `repo.restore_person` (the archive
+  write must wait for the open transaction — verified by a timeline of the two
+  commits), the queue write waiting for a held `HistoryDB` turn, a failed
+  statement giving the turn back, delete → undo restoring person **and**
+  history with the verified log line, redo hiding them again, a refused undo
+  reporting `❌ Undo failed` and staying retryable, a refused *people* half
+  stopping the whole command, a People-only entry saying so, the DB window’s
+  `userdb_changed` event following the verified state, and the session-sized
+  trash (`TestTrashLifecycle`): reversible while the session runs, erased on
+  the next app run (with the stored session stamp re-written and no archive
+  entry left behind), erased when the step falls off the cap, and never
+  claimed as a restore afterwards.
 * `tests/test_history_repo_lifecycle.py` (extended) — `purge_deleted()`
   erases tombstoned persons while a living person survives, and a
   single-nick purge leaves the other tombstone alone.
 * `tests/test_userdb_refresh.js` (new, Node) — the real `history-db.js`
   against the real ids from `ui/index.html`: one reload per burst of live
   changes (and the scroll position kept), named changes reloading at once, the
-  remove-confirm asking first and doing nothing when refused, Empty trash
-  purging the whole trash only after confirmation, and the headless fallback.
+  footer carrying no trash button, **no confirmation dialog on a person
+  delete** (the call reaches the backend on the first click), and no purge
+  path inside the window at all.
 * `tests/test_archive_delete_undo.py`, `tests/test_people_undo.py`,
   `tests/integration/services/test_services_undo.py` — unchanged contracts
   (kind/value payloads, one global timeline, `wait_for(self.changed)`); all
   still green after the verified-command rewrite.
 
 **Mutation check (RULE 8).** Reverting the fix in-process (gate inert + no
-`busy_timeout`) makes 7 of the 17 Python tests fail, including all three
+`busy_timeout`) makes 7 of the 30 Python tests fail, including all three
 cross-connection ones; with the connections’ own `busy_timeout` left in place
 (the pre-fix world had 5 s of `sqlite3` default waiting) the tests still pass,
 which is why the collision tests set `PRAGMA busy_timeout=0` — they must pin
 the gate, not SQLite’s default patience.
-

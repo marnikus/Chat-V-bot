@@ -36,7 +36,9 @@ from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_query import PersonPageRequest  # noqa: E402
 from core.events import LogMessage  # noqa: E402
 from core.result import Err  # noqa: E402
+from services import undo_service  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import mutate  # noqa: E402
 from services.undo_archive import (ArchiveCommands, _disagrees,  # noqa: E402
                                    _outcome, _person_verdict, _reason,
                                    _rows, _row_verdict, _state)
@@ -555,50 +557,151 @@ class TestUndoProvesItself(WorldCase):
                         f"the report must match the wiring: {self.logs}")
 
 
-class TestEmptyTrash(WorldCase):
-    """The only irreversible action asks for a click, and it is honest."""
+class TestTrashLifecycle(WorldCase):
+    """Ctrl+Z is session-sized: the rows live while the entry does.
 
-    async def test_a_soft_delete_stays_reversible_until_the_trash_is_emptied(self):
+    The user's rule (2026-09-11): a delete keeps the person and their history
+    so it can be restored — but the moment the app is closed (the world is
+    opened again) or the step falls off the timeline, the data is gone for
+    good. No dialog, no “Empty trash” button.
+    """
+
+    async def test_while_the_session_runs_a_delete_is_fully_reversible(self):
         await self.seed(count=3)
         self.bridge.history_delete_person("Mloni", False)
         await settle()
         self.assertIsNotNone(await self.service.repo.get_person("Mloni"),
                              "a soft delete keeps the tombstone")
 
-        self.bridge.undo()                       # still fully reversible …
+        self.bridge.undo()                       # … and Ctrl+Z brings it back
         await settle()
         self.assertIn("Mloni", await self.db_nicks())
         self.assertEqual(len(await self.visible()), 3)
 
-        self.bridge.history_delete_person("Mloni", False)
-        await settle()
-        self.assertTrue(self.bridge.history_purge_deleted(""))   # … until now
-        await settle()
-        self.assertIsNone(await self.service.repo.get_person("Mloni"),
-                          "the emptied trash leaves no row behind")
-        self.assertNotIn("Mloni", await self.db_nicks())
-
-    async def test_undo_after_a_purge_reports_the_failure(self):
-        """Ctrl+Z on an erased person must never claim a restore."""
+    async def test_opening_the_world_again_erases_the_trash(self):
+        """The sweep that `init()` runs for a world this run has not opened."""
         await self.seed(count=3)
         self.bridge.history_delete_person("Mloni", False)
         await settle()
-        self.bridge.history_purge_deleted("")
+        await self.service.begin_session()       # a world opened by this run
+        self.assertIsNotNone(await self.service.repo.get_person("Mloni"),
+                             "a mid-session re-open must NOT throw the trash")
+        await self.service.forget_old_trash()    # a world opened by a new run
         await settle()
-        before = len(self.logs)
-
-        self.bridge.undo()
-        await wait_until(lambda: any("Undo failed" in e.message
-                                     for e in self.logs[before:]))
-        self.assertTrue(any(e.level == "error" and "Undo failed" in e.message
-                            for e in self.logs[before:]),
-                        "an undo that cannot restore must say so")
-        self.assertFalse(any("is back in the database" in e.message
-                             for e in self.logs[before:]))
+        self.assertIsNone(await self.service.repo.get_person("Mloni"),
+                          "a closed session leaves no tombstone")
+        self.assertEqual(await self.service.repo.deleted_count(), 0,
+                         "a closed session leaves no hidden rows")
         self.assertNotIn("Mloni", await self.db_nicks())
-        self.assertNotIn("Mloni", [u.nick for u in await self.memory.get_all()],
-                         "the people list must not hold someone the "
-                         "database does not have (RULE 14)")
+
+    async def test_a_restart_really_erases_the_deleted_person(self):
+        """The end-to-end version: a fresh app run on the same file."""
+        await self.seed(count=3)
+        self.bridge.history_delete_person("Mloni", False)
+        await settle()
+        await self.service.close()            # the app exits …
+        await self.service.db.init()          # … and its stamp is left behind
+        await self.service.db.set_meta("session", "a previous app run")
+        await self.service.db.close()
+        fresh = HistoryService(cdp=ConnectedPage([]), config=self.cfg,
+                               db_path=self.world, memory=self.memory)
+        await fresh.init()                    # … and the world is opened
+        try:
+            self.assertIsNone(await fresh.repo.get_person("Mloni"),
+                              "reopening the world erases the trash")
+            self.assertEqual(await fresh.repo.deleted_count(), 0)
+            self.assertEqual([e for e in await fresh.load_world_undo()
+                              if e.get("kind") == "archive"], [],
+                             "no timeline entry may promise a restore")
+            self.assertEqual(await fresh.db.get_meta("session"),
+                             mutate.SESSION_TOKEN,
+                             "the world now belongs to this run")
+        finally:
+            await fresh.close()
+
+    async def test_purge_tokens_erases_exactly_what_it_owns(self):
+        """The sweep behind a dropped step touches only its own rows."""
+        await self.seed(count=2)
+        await self.seed(nick="Other", count=2)
+        repo = self.service.repo
+        token_a = repo.new_op_token()
+        token_b = repo.new_op_token()
+        await repo.delete_person("Mloni", hard=False, token=token_a)
+        await repo.delete_person("Other", hard=False, token=token_b)
+
+        self.assertEqual(await self.service.purge_tokens([]),
+                         {"persons": 0, "messages": 0},
+                         "nothing to erase is not an error")
+        self.assertEqual(await self.service.purge_tokens(["no-such-token"]),
+                         {"persons": 0, "messages": 0})
+        erased = await self.service.purge_tokens([token_a])
+        self.assertEqual(erased, {"persons": 1, "messages": 2})
+        self.assertIsNone(await repo.get_person("Mloni"),
+                          "the person row is gone, cursor and gaps with it")
+        self.assertIsNotNone(await repo.get_person("Other"),
+                             "the other step still owns its data")
+        self.assertTrue(await repo.restore_person("Other", token=token_b))
+        self.assertEqual(len(await self.visible("Other")), 2)
+
+    async def test_purging_one_person_leaves_the_other_tombstone(self):
+        await self.seed(count=2)
+        await self.seed(nick="Other", count=1)
+        repo = self.service.repo
+        await repo.delete_person("Mloni", hard=False,
+                                 token=repo.new_op_token())
+        await repo.delete_person("Other", hard=False,
+                                 token=repo.new_op_token())
+        self.assertEqual(await self.service.purge_trash("Mloni"),
+                         {"persons": 1, "messages": 2})
+        self.assertIsNone(await repo.get_person("Mloni"))
+        self.assertIsNotNone(await repo.get_person("Other"),
+                             "a single-nick sweep is not the whole trash")
+
+    async def test_a_step_that_falls_off_the_timeline_gives_up_its_data(self):
+        await self.seed(count=2)
+        self.bridge.history_delete_person("Mloni", False)
+        await settle()
+        undo = self.ctx.undo
+        original = undo_service.MAX_STACK_HISTORY
+        undo_service.MAX_STACK_HISTORY = 2
+        try:
+            undo.push("people", {"before": [{"nick": "a"}],
+                                 "after": [{"nick": "a"}, {"nick": "b"}]})
+            undo.push("people", {"before": [{"nick": "b"}],
+                                 "after": [{"nick": "c"}]})
+            await settle()
+        finally:
+            undo_service.MAX_STACK_HISTORY = original
+        self.assertIsNone(await self.service.repo.get_person("Mloni"),
+                          "the dropped step's tombstone is erased")
+        self.assertEqual(await self.service.repo.deleted_count(), 0,
+                         "and so are the messages it was hiding")
+
+    async def test_a_dropped_step_cannot_be_undone_into_a_success(self):
+        await self.seed(count=2)
+        self.bridge.history_delete_person("Mloni", False)
+        await settle()
+        undo = self.ctx.undo
+        original = undo_service.MAX_STACK_HISTORY
+        undo_service.MAX_STACK_HISTORY = 2
+        try:
+            undo.push("people", {"before": [{"nick": "a"}],
+                                 "after": [{"nick": "a"}, {"nick": "b"}]})
+            undo.push("people", {"before": [{"nick": "b"}],
+                                 "after": [{"nick": "c"}]})
+            await settle()
+        finally:
+            undo_service.MAX_STACK_HISTORY = original
+        # unwind the two people steps, then look for the archive step
+        for _ in range(4):
+            if json.loads(self.bridge.undo()) == {"kind": "archive"}:
+                break
+            await settle()
+        await settle()
+        self.assertFalse(any("is back in the database" in m
+                             for m in self.messages()),
+                         "a dropped step must never report a restore")
+        self.assertNotIn("Mloni", await self.db_nicks())
 
 
 if __name__ == "__main__":

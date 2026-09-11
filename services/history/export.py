@@ -56,6 +56,13 @@ class HistoryExportService:
     # ── lifecycle ────────────────────────────────────────────────
     async def init(self):
         await self.db.init()
+        # Ctrl+Z reaches back only as far as this session: whatever a closed
+        # world left hidden (and the entries that could restore it) is gone
+        # the moment the world is opened again.
+        try:
+            await self.begin_session()
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("old trash sweep on %s failed: %s", self.db.path, exc)
         await self.migrate_install()
         await self.load_app_settings()
         self._apply_world_media_dir()

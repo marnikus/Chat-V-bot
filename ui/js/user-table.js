@@ -321,28 +321,14 @@ const UserTable = {
   },
 
   // ── actions ─────────────────────────────────────────────────
-  // Every remove / reset action is recorded in the global undo history, so
-  // Ctrl+Z is the safety net. Removing a person asks first anyway: the list
-  // and the database must behave the same (bug report 2026-09-11), and one
-  // mis-click must not hide a conversation.
-
-  /** Ask before hiding data; without a dialog, run at once (headless runs). */
-  _confirm(title, text, okLabel, run) {
-    const dialog = (typeof window !== 'undefined' && window.Dialog) || null;
-    if (dialog && dialog.confirm) dialog.confirm(title, text, okLabel, run);
-    else run();
-  },
+  // No confirmation dialogs: every remove / reset action is recorded in the
+  // global undo history, so Ctrl+Z is the safety net (the list and the
+  // database behave the same — bug report 2026-09-11).
 
   deleteNick(nick) {
     if (!this._bridge()) return;
-    this._confirm(
-      'Remove “' + nick + '”?',
-      'The person leaves the people list. Ctrl+Z restores the list — and ' +
-      'the Full User Database keeps the archived history either way.',
-      'Remove', () => {
-        this.selected.delete(nick);
-        App.bridge.delete_user(nick);
-      });
+    this.selected.delete(nick);
+    App.bridge.delete_user(nick);
   },
 
   deleteSelected() {
@@ -352,15 +338,9 @@ const UserTable = {
       LogConsole.log('⚠ Nothing selected — tick the rows you want to delete', 'warn');
       return;
     }
-    this._confirm(
-      'Remove ' + nicks.length + ' people?',
-      'They leave the people list. Ctrl+Z restores the list — and the Full ' +
-      'User Database keeps the archived history either way.',
-      'Remove', () => {
-        App.bridge.delete_users(JSON.stringify(nicks));
-        this.selected.clear();
-        this._syncSelectionUI();
-      });
+    App.bridge.delete_users(JSON.stringify(nicks));
+    this.selected.clear();
+    this._syncSelectionUI();
   },
 
   clearAll() {

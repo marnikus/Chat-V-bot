@@ -24,7 +24,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-10-quality-gates/`](#2026-09-10-quality-gates) | 2 | Where the RULE 16 thresholds came from, and how one feature was measured against them. |
 | [`2026-09-10-history-push-and-sort/`](#2026-09-10-history-push-and-sort) | 3 | The `__cvbPush` lifecycle hardening and sortable columns in the Full User Database. |
 | [`2026-09-10-agent-rules-v1/`](#2026-09-10-agent-rules-v1) | 2 | The two rules files that [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) replaced. Kept for history — **do not follow these; follow the current file.** |
-| [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the delete/trash safety ladder. |
+| [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 
 ---
 
@@ -213,4 +213,4 @@ This folder holds the design for both fixes.
 
 *1 doc.*
 
-- [`DB_UNDO_RESTORE_DESIGN_2026-09-11.md`](2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) — One write gate per world file, an archive command that proves itself, DB-window auto-refresh, and the delete / Empty-trash safety ladder
+- [`DB_UNDO_RESTORE_DESIGN_2026-09-11.md`](2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) — One write gate per world file, an archive command that proves itself, DB-window auto-refresh, instant deletes and the session-sized trash

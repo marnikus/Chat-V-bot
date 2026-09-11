@@ -7,8 +7,8 @@ and are linked from here.
 | | |
 |---|---|
 | Last verified against code | 2026-09-11 (this checkout) |
-| Test suite | `2588 passed, 3 skipped, 1 deselected, 1 xfailed, 775 subtests passed` + 23 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **89.53%** · branch **84.75%** (floors: 80% / 75%) |
+| Test suite | `2593 passed, 3 skipped, 1 deselected, 1 xfailed, 775 subtests passed` + 23 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **89.50%** · branch **84.78%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -55,7 +55,7 @@ collector** archives whatever private conversation is on screen.
 | **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
 | **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/test_person_labels.py`, `tests/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
 | **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z`; an archive command is a task that reads the world back before it reports, and a refusal is an error, never a success | `services/undo_service.py`, `services/undo_archive.py`, `services/undo_support.py`, `stores/undo_store.py` | `tests/test_people_undo.py`, `tests/test_archive_delete_undo.py`, `tests/test_world_write_gate.py`, `tests/integration/services/test_undo_support_contract.py` |
-| **Delete safety (DB window)** | Removing a person asks first and only hides (tombstone); the explicit **Empty trash** button is the one irreversible action | `ui/js/history-db.js`, `bridge/history_bridge.py`, `services/history/mutate.py` | `tests/test_userdb_refresh.js`, `tests/test_world_write_gate.py`, `tests/test_history_repo_lifecycle.py` |
+| **Delete safety (DB window)** | Removing a person or a chat happens **at once — no dialog**; the delete is soft and Ctrl+Z restores both halves. The trash is **session-sized**: it is erased when the step leaves the undo history (cap / redo-branch truncation) or when a new app run opens the world | `ui/js/history-db.js`, `services/history/mutate.py` (`begin_session`, `purge_tokens`), `services/undo_service.py` | `tests/test_userdb_refresh.js`, `tests/test_world_write_gate.py`, `tests/test_history_repo_lifecycle.py` |
 | **Grid layout** | Any window in any cell; sashes draggable; layout validated before it is stored | `services/layout_service.py`, `bridge/layout_bridge.py`, `ui/js/sash-*.js` | `tests/test_grid_persistence.py`, `tests/integration/services/test_services_layout.py`, `tests/test_sash_webengine.py` |
 | **Database worlds** | One `.db` file = one complete world; create / load / switch / clean / **permanent delete** | `services/db_service.py`, `services/db_lifecycle.py`, `services/db_deletion*.py` | `tests/test_db_manager*.py`, `tests/test_db_unified_world.py`, `tests/integration/safety_deletion/` |
 | **Logging** | UI log console + file log + JSONL run trace | `backend/logger.py`, `ui/js/log-console.js`, `services/service_log.py` | `tests/unit/backend/test_logger_setup.py` |
@@ -168,7 +168,8 @@ Each one is enforced in code and pinned by a test. Rule numbers refer to
 | **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion_flow.py`, `services/db_lifecycle.py` |
 | **I-16** | No `os.unlink` happens before scan + plan + switch + detach + revalidate | `services/db_deletion_flow.py` |
 | **I-17** | One writer per world file: the People queue (`UserMemory`) and the archive (`HistoryDB`) take the SAME gate from their first write until the transaction ends, so no interleaving can fail with `database is locked`; reads never wait, and the wait is fail-open after 15 s rather than unbounded | `stores/world_lock.py` (`WorldGate` / `WriteTurn` / `world_write`), `stores/history_db.py`, `stores/user_memory.py` |
-| **I-18** | An archive undo/redo reports only what the database now shows: both halves (people list + rows) are applied, the result is read back, and a refusal logs an ERROR, restores the list half, keeps the timeline entry retryable and emits `userdb_changed(failed)` — “archive restored” can no longer appear over a still-deleted person; irreversible erasure requires the explicit **Empty trash** | `services/undo_archive.py`, `services/undo_service.py`, `bridge/history_bridge.py` |
+| **I-18** | An archive undo/redo reports only what the database now shows: both halves (people list + rows) are applied, the result is read back, and a refusal logs an ERROR, restores the list half, keeps the timeline entry retryable and emits `userdb_changed(failed)` — “archive restored” can no longer appear over a still-deleted person | `services/undo_archive.py`, `services/undo_service.py`, `bridge/history_bridge.py` |
+| **I-19** | Deleted data lives exactly as long as the undo step that can restore it: a delete is soft and instant (no confirmation dialog anywhere), and the hidden rows are destroyed the moment the step leaves the timeline (cap / new edit after an undo) or the next app run opens the world (`begin_session` stamps the world with a per-run token; a different token means the trash belongs to a closed session) | `services/history/mutate.py`, `services/undo_service.py` (`_commit_timeline` → `purge_tokens`) |
 
 ---
 
@@ -226,7 +227,7 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2588 tests + 775 subtests)
+# Python (2593 tests + 775 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
@@ -268,7 +269,7 @@ dict, and the collector status strings.
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 31 (legacy), mean 3.25 |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **89.53% / 84.75%** |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **89.50% / 84.78%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 6 lines (57.7% in band) · median file 130 lines — RULE 18 |
 

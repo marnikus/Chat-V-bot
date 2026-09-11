@@ -170,6 +170,8 @@ class TestPurgeAndPersonDelete(RepoCase):
         self.assertEqual(await self.repo.purge_deleted("Nick"), 0)
         self.assertIsNotNone(await self.repo.get_person("Bea"),
                              "purging one nick must not empty the whole trash")
+        self.assertEqual(await self.repo.purge_deleted("ghost"), 0,
+                         "a nick nobody has purges nothing")
 
     async def test_soft_person_delete_restores_person_and_rows(self):
         await self.seed("Nick", n=3)

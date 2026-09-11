@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    history-db.js — the Full User Database window
 
-   ideal-size: 431 lines reason=this is the ONE module behind the window's
+   ideal-size: 414 lines reason=this is the ONE module behind the window's
    DOM (list, sort headers, paging, live refresh, per-row actions and the
    trash button); splitting it would put one window's behaviour in two files
    and break the `HistoryDb.<method>` surface the Node harness loads.
@@ -45,7 +45,6 @@ const HistoryDb = {
       foot: $('userdbFoot'),
       preload: $('userdbPreload'),
       refresh: $('userdbRefreshBtn'),
-      emptyTrash: $('userdbEmptyTrash'),
     };
     this._flashNick = '';
     if (!this._els.body) return;
@@ -94,8 +93,6 @@ const HistoryDb = {
     }
     if (this._els.refresh)
       this._els.refresh.addEventListener('click', () => this.reload());
-    if (this._els.emptyTrash)
-      this._els.emptyTrash.addEventListener('click', () => this.emptyTrash());
     this.reload();
   },
 
@@ -233,25 +230,6 @@ const HistoryDb = {
     }, 400);
   },
 
-  /** The only irreversible action in this window — always asks first. */
-  emptyTrash() {
-    const bridge = (typeof App !== 'undefined' && App.bridge) || null;
-    if (!bridge || !bridge.history_purge_deleted) return;
-    this._confirm(
-      'Empty the trash?',
-      'Every hidden message and every removed person is erased for good. ' +
-      'Ctrl+Z cannot bring them back.',
-      'Empty trash', () => bridge.history_purge_deleted(''));
-  },
-
-  /** Ask before an action that hides data; without a dialog, do it at once
-   *  (the tests run headless — the backend stays the authority either way). */
-  _confirm(title, text, okLabel, run) {
-    const dialog = (typeof window !== 'undefined' && window.Dialog) || null;
-    if (dialog && dialog.confirm) dialog.confirm(title, text, okLabel, run);
-    else run();
-  },
-
   _onScroll() {
     const list = this._els.list;
     if (!list || this.loading || !this.hasMore) return;
@@ -259,14 +237,14 @@ const HistoryDb = {
     if (remaining < 120) this._request(this.rows.length);
   },
 
-  /** Remove the person AND their whole history (one undoable step). */
+  /** Remove the person AND their whole history — one undoable step.
+   *
+   *  No confirmation (BUG fix 2026-09-11): Ctrl+Z restores both halves, and
+   *  the hidden rows are kept until this session ends, so the click can be
+   *  taken back without a dialog in the way. */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
-    this._confirm(
-      'Remove this person?',
-      '“' + nick + '” and their entire history are hidden in this database. ' +
-      'Ctrl+Z restores both; “Empty trash” is what erases them for good.',
-      'Remove', () => App.bridge.history_delete_person(nick, false));
+    App.bridge.history_delete_person(nick, false);
   },
 
   /** Wipe the conversation but keep the person in the database. */
