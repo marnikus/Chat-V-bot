@@ -15,7 +15,6 @@ GridLayoutChanged / LogMessage events on the EventBus.
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import json
 import logging
@@ -32,6 +31,7 @@ from services.run import normalize_blocks
 from services.service_log import emit_log
 from services.undo_archive import ArchiveCommands
 from services.undo_support import UndoProjection, UndoWorldStore
+from services.undo_timeline import TimelineCommit
 
 log = logging.getLogger("chatbot")
 
@@ -65,16 +65,6 @@ def _position_of(history: list, entry: dict) -> int:
         if _same_entry(item, entry):
             return pos
     return -1
-
-
-def _archive_token(entry) -> str:
-    """The token of an archive entry — the rows a delete is keeping hidden."""
-    if not isinstance(entry, dict) or entry.get("kind") != "archive":
-        return ""
-    value = entry.get("value")
-    if not isinstance(value, dict):
-        return ""
-    return str(value.get("token") or "")
 
 
 def emit_db_change(bus: EventBus, action: str, result) -> None:
@@ -138,6 +128,38 @@ async def restart_world(memory, archive, labels, undo, bus: EventBus,
              os.path.basename(archive.db.path), op)
 
 
+def _apply_people_command(host, value: dict, forward: bool) -> bool:
+    """Restore / re-apply the people-list snapshot the entry carries."""
+    rows = value.get("after" if forward else "before")
+    if rows is None or host._people is None:
+        return False
+    host._timeline_commit.spawn("people restore", host._people.apply(rows))
+    return True
+
+
+def _apply_labels_command(host, value: dict, forward: bool) -> bool:
+    """Restore / re-apply the label snapshot the entry carries."""
+    snapshot = value.get("after" if forward else "before")
+    if not isinstance(snapshot, dict) or host._labels is None:
+        return False
+    host._labels.restore(snapshot)
+    host._bus.emit(LabelsChanged(
+        payload=json.dumps(host._labels.state(), ensure_ascii=False)))
+    # labels can hide people from the queue: the # column changes
+    host._bus.emit(PeopleChanged(reason="labels"))
+    return True
+
+
+def _log_command(host, entry: dict, forward: bool) -> None:
+    """Announce a command entry; archive ones report themselves later,
+    with the database state they actually produced."""
+    kind = entry.get("kind")
+    if kind == "archive":
+        return
+    host._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
+              + host.UNDO_LABELS.get(kind, kind + " restored"), "info")
+
+
 class UndoService:
     """The global timeline: push / undo / redo / persist / world sync."""
 
@@ -171,6 +193,7 @@ class UndoService:
         self._projection = UndoProjection(self._history_entry)
         self._world_store = UndoWorldStore(self)
         self._archive_commands = ArchiveCommands(self)
+        self._timeline_commit = TimelineCommit(self)
 
     # ── wiring (main.py / attach_history) ────────────────────────
     def attach(self, archive=None, people=None, labels=None, dbs=None,
@@ -257,76 +280,7 @@ class UndoService:
         return self._projection.clean(history), index
 
     def set_history(self, history: list, index: int) -> None:
-        self._commit_timeline(list(history), index)
-
-    def _commit_timeline(self, history: list, index: int,
-                         purge_dropped: bool = True) -> None:
-        """Persist the ONE timeline split by ownership (app vs world).
-
-        `purge_dropped` erases the rows kept alive by archive entries that
-        just left the timeline (the cap, or a new edit truncating the redo
-        branch): once nothing can reach them, they are erased for good.
-        A world CHANGE passes False — the old world's rows are not this
-        world's to erase, and the old world sweeps them when it reopens.
-        """
-        dropped = self._dropped_tokens(history) if purge_dropped else []
-        self._stamp_seq(history)
-        self._timeline = history
-        self._h_index = index
-        self._seq_next = max([e["seq"] for e in history
-                              if isinstance(e, dict)
-                              and isinstance(e.get("seq"), int)],
-                             default=0) + 1
-        self._store_timeline(history, index)
-        self._purge_tokens(dropped)
-
-    def _stamp_seq(self, history: list) -> None:
-        """Give every entry the identity the merge keys off (seq)."""
-        for entry in history:
-            if isinstance(entry, dict) and (
-                    not isinstance(entry.get("seq"), int)
-                    or entry["seq"] <= 0):
-                entry["seq"] = self._next_seq()
-
-    def _store_timeline(self, history: list, index: int) -> None:
-        """Write the app half to config.json and the world half to the world."""
-        service = self._archive
-        if service is None or not getattr(service.db, "is_open", False):
-            self._config.set_state(
-                undo_history=copy.deepcopy(history),
-                undo_history_index=index)
-            return
-        app_entries, world_entries = self._world_store.split(history)
-        self._config.set_state(undo_history=copy.deepcopy(app_entries),
-                               undo_history_index=index)
-        self._world_store.schedule_save(world_entries)
-
-    def _dropped_tokens(self, history: list) -> list:
-        """The archive tokens whose undo entry just left the timeline."""
-        keep = {_archive_token(entry) for entry in history}
-        seen = {_archive_token(entry) for entry in (self._timeline or [])}
-        return sorted(token for token in seen - keep if token)
-
-    def _purge_tokens(self, tokens: list) -> None:
-        """Erase what the dropped steps were hiding (best effort, async).
-
-        A step that leaves the timeline takes its data with it: past the undo
-        memory there is no restore, so the rows are erased for good and the
-        log says how many.
-        """
-        service = self._archive
-        if service is None or not tokens:
-            return
-
-        async def work():
-            erased = await service.purge_tokens(list(tokens))
-            if erased.get("persons") or erased.get("messages"):
-                self._log(
-                    f"🔥 {erased['messages']} hidden message(s) and "
-                    f"{erased['persons']} removed person(s) erased — their "
-                    "undo step left the history", "warn")
-
-        self._spawn("trash purge", work())
+        self._timeline_commit.commit(list(history), index)
 
     def _schedule_world_undo_save(self, entries: list) -> None:
         """Persist the world half, tracking the task for a later
@@ -356,7 +310,8 @@ class UndoService:
                                    and e["seq"] > 0,
                                    e.get("seq") if isinstance(e.get("seq"),
                                                               int) else 0))
-        self._commit_timeline(merged, len(merged) - 1, purge_dropped=False)
+        self._timeline_commit.commit(merged, len(merged) - 1,
+                                      purge_dropped=False)
         self._bus.emit(UndoHistoryChanged())
         return Ok(None)
 
@@ -423,63 +378,14 @@ class UndoService:
         if not isinstance(value, dict):
             return False
         if kind == "people":
-            return self._apply_people_command(value, forward)
+            return _apply_people_command(self, value, forward)
         if kind == "labels":
-            return self._apply_labels_command(value, forward)
+            return _apply_labels_command(self, value, forward)
         if kind == "archive":
             return self._apply_archive_command(value, forward, entry)
         if kind == "dbconn":
             return self._apply_db_command(value, forward)
         return False
-
-    def _apply_people_command(self, value: dict, forward: bool) -> bool:
-        """Restore / re-apply the people-list snapshot the entry carries."""
-        rows = value.get("after" if forward else "before")
-        if rows is None or self._people is None:
-            return False
-        self._schedule(self._people.apply(rows))
-        return True
-
-    def _apply_labels_command(self, value: dict, forward: bool) -> bool:
-        """Restore / re-apply the label snapshot the entry carries."""
-        snapshot = value.get("after" if forward else "before")
-        if not isinstance(snapshot, dict) or self._labels is None:
-            return False
-        self._labels.restore(snapshot)
-        self._bus.emit(LabelsChanged(
-            payload=json.dumps(self._labels.state(), ensure_ascii=False)))
-        # labels can hide people from the queue: the # column changes
-        self._bus.emit(PeopleChanged(reason="labels"))
-        return True
-
-    @staticmethod
-    def _schedule_task(coro) -> Optional[asyncio.Task]:
-        """Run `coro` now; None when there is no loop to run it on."""
-        try:
-            return asyncio.ensure_future(coro)
-        except RuntimeError:
-            coro.close()
-            return None
-
-    @staticmethod
-    def _schedule(coro) -> bool:
-        return UndoService._schedule_task(coro) is not None
-
-    @staticmethod
-    def _crash_log(scope: str, task) -> None:
-        """A background step that dies must never do so silently."""
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc is not None:
-            log.warning("%s failed: %s", scope, exc)
-
-    def _spawn(self, scope: str, coro) -> bool:
-        task = self._schedule_task(coro)
-        if task is None:
-            return False
-        task.add_done_callback(lambda done: self._crash_log(scope, done))
-        return True
 
     def _apply_archive_command(self, value: dict, forward: bool,
                                entry: Optional[dict] = None) -> bool:
@@ -496,7 +402,7 @@ class UndoService:
             return False
         if self._archive is None and self._people is None:
             return False
-        return self._spawn("archive undo",
+        return self._timeline_commit.spawn("archive undo",
                            self._archive_commands.run(entry, value, forward))
 
     def rewind_after_failure(self, entry: Optional[dict],
@@ -505,8 +411,7 @@ class UndoService:
 
         A failed undo puts the pointer back ON the entry and a failed redo
         puts it back IN FRONT of it, so the next key press tries the same
-        command again instead of skipping a state the database never
-        reached.
+        command again instead of skipping a state the database never reached.
         """
         if not isinstance(entry, dict):
             return
@@ -568,17 +473,8 @@ class UndoService:
                 await restart_world(self._memory, self._archive,
                                     self._labels, self, self._bus, op)
             emit_db_change(self._bus, op, result)
-        self._schedule(work())
+        self._timeline_commit.spawn("db command", work())
         return True
-
-    def _log_command(self, entry: dict, forward: bool) -> None:
-        """Announce a command entry; archive ones report themselves later,
-        with the database state they actually produced."""
-        kind = entry.get("kind")
-        if kind == "archive":
-            return
-        self._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
-                  + self.UNDO_LABELS.get(kind, kind + " restored"), "info")
 
     # ── apply one entry's state (walk onto a snapshot entry) ──────
     def _apply_entry(self, entry) -> None:
@@ -594,7 +490,8 @@ class UndoService:
             value = entry.get("value")
             rows = value.get("after") if isinstance(value, dict) else None
             if rows is not None and self._people is not None:
-                self._schedule(self._people.apply(rows))
+                self._timeline_commit.spawn(
+                    "people restore", self._people.apply(rows))
         else:
             blocks = self._clean_blocks(entry["value"])
             self._config.set_state(last_stack=blocks, last_stack_preset="")
@@ -622,7 +519,7 @@ class UndoService:
             self.set_history(history, index)
             self._bus.emit(UndoHistoryChanged())
             kind = entry["kind"]
-            self._log_command(entry, forward=False)
+            _log_command(self, entry, forward=False)
             value = entry.get("value") or {}
             payload = (value.get("before")
                        if kind in ("people", "labels") else value)
@@ -651,7 +548,7 @@ class UndoService:
             self.set_history(history, index)
             self._bus.emit(UndoHistoryChanged())
             kind = entry["kind"]
-            self._log_command(entry, forward=True)
+            _log_command(self, entry, forward=True)
             value = entry.get("value") or {}
             payload = (value.get("after")
                        if kind in ("people", "labels") else value)

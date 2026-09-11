@@ -140,17 +140,18 @@ Text of the successful undo (replaces the unconditional “archive restored”):
 ```
 
 **Where the code lives:** the orchestration in `services/undo_archive.py`
-(`ArchiveCommands`, 7 methods / 82 LOC) around module-level helpers that name
+(`ArchiveCommands`, 7 methods / 84 LOC) around module-level helpers that name
 one fact each — `_rows`, `_apply`, `_state`, `_disagrees` (+
 `_person_verdict` / `_row_verdict`), `_reason`, `_outcome`. `UndoService` keeps
-only the scheduling (`_apply_archive_command`, `_spawn`, `_crash_log`) and the
-timeline rewind (`rewind_after_failure`, `_position_of`). Extracting the two
-snapshot branches out of `apply_command` also took that legacy function from
-27 LOC / CC 12 to 15 LOC / CC 6.
+only the archive entry point (`_apply_archive_command`) and the timeline rewind
+(`rewind_after_failure`, `_position_of`). Extracting the two snapshot branches
+out of `apply_command` also took that legacy function from 28 LOC / CC 12 to
+15 LOC / CC 6.
 
-Tick after it ran, and the silent-crash hole is closed: `_spawn` attaches a
-done-callback (`_crash_log`) to every background step the undo service starts,
-so a task that dies can no longer disappear without a trace.
+The silent-crash hole is closed one tick after the task runs: `spawn` (on
+`services/undo_timeline.py::TimelineCommit`) attaches a done-callback
+(`_crash_log`) to every background step the undo timeline starts, so a task
+that dies can no longer disappear without a trace.
 
 ### 2.3 The DB window refreshes itself
 
@@ -184,19 +185,23 @@ long as the undo step that can restore it.**
   messages are hidden under one token, invisible everywhere and restorable by
   Ctrl+Z — the safety net is the undo timeline, not a dialog.
 * **The step falls off the timeline ⇒ the data is destroyed.**
-  `UndoService._commit_timeline` compares the archive tokens it carries before
-  and after each commit; every token that just left (the `MAX_STACK_HISTORY`
-  cap, or a new edit truncating the redo branch) is handed to
-  `HistoryMutateService.purge_tokens()`, which erases the hidden messages and
-  the tombstoned person for good and says so in the log.
-* **The app closes ⇒ the trash is destroyed.** `HistoryMutateService
-  .begin_session()` runs on every world open: it compares the world’s stored
-  `session` meta against this run’s `SESSION_TOKEN` (a fresh uuid4 per
-  process). A different token means “a previous run left this trash behind”,
-  so `forget_old_trash()` erases the hidden rows, the tombstones **and** the
-  now-unreachable `kind='archive'` rows in the world’s `undo_history` table,
-  then stamps this run. A mid-session re-init, a restart or a switch back to a
-  world this run already opened sees its own token and does nothing.
+  `services/undo_timeline.py::TimelineCommit.commit` compares the archive
+  tokens the timeline carries before and after each commit; every token that
+  just left (the `MAX_STACK_HISTORY` cap, or a new edit truncating the redo
+  branch) is handed to `services/history/trash.py::purge_tokens()`, which
+  erases the hidden messages and the tombstoned person for good and says so in
+  the log.
+* **The app closes ⇒ the trash is destroyed.** `trash.begin_session()` runs on
+  every world open: it compares the world’s stored `session` meta against this
+  run’s `SESSION_TOKEN` (a fresh uuid4 per process). A different token means
+  “a previous run left this trash behind”, so `forget_old_trash()` erases the
+  hidden rows, the tombstones **and** the now-unreachable `kind='archive'`
+  rows in the world’s `undo_history` table, then stamps this run. A mid-session
+  re-init, a restart or a switch back to a world this run already opened sees
+  its own token and does nothing. The open / switch paths call it through
+  `trash.open_world()`, which turns a failed sweep into a warning instead of a
+  world that will not open; `WorldSwitcher._load_world_state()` calls it too,
+  so a world switched into mid-session is swept before anything reads it.
 * Switching *away* from a world is not a close: that world keeps its trash
   until it is opened again — by which time another run's token makes it
   garbage. `sync_world_state` merges timelines with `purge_dropped=False`, so
@@ -207,29 +212,67 @@ restoring it from a surviving `people` entry is always honest.
 
 ## 3. Measurements (RULE 16 / RULE 18)
 
-Measured with `tools/metrics/rule16_gate.py` / the same `measure_function`
-against the finished tree:
+Measured with `tools/metrics/rule16_gate.py` (`measure_function` / `classes` —
+the AST span the gate itself fails on). *First cut* = `883ff8f`, the shipped
+slice; *close-out* = this change; *baseline* = `3fc511b`, the commit the
+feature started from.
 
-| Symbol | Before | After | Limit |
+### 3.1 The close-out — RULE 18 ideals on the code this feature wrote
+
+The first cut fit RULE 16's hard limits but grew files and classes that were
+already over RULE 18's ideals (§16.5 forbids making a legacy offender worse).
+The close-out moved each theme out of the file that had outgrown it:
+
+| Where | First cut (883ff8f) | Close-out |
+|---|---|---|
+| `services/history/mutate.py` | 291 lines, class 268 LOC / 19 methods | **196 lines, class 160 LOC / 12 methods** (baseline 177 / 163 / 12) — the trash theme moved to `trash.py`, the transactional writer to module-level `_write_world_undo` (9 LOC) + `_undo_rows` (7) |
+| `services/history/trash.py` (new) | — | 129 lines, **no class**: `begin_session` 7, `_trash_persons` 8, `open_world` 11, `purge_trash` 12, `forget_old_trash` 15, `purge_tokens` 24 LOC (CC ≤ 6); `HistoryService` keeps the four public entry points as one-line delegates in `__init__.py` (the §16.0 facade row) |
+| `services/history/runtime.py` | 296 lines, 5 collaborators | **233 lines, 4** — `HistoryMigration` moved to `migrate.py` (92 lines) when the file hit the 300-line mark; `WorldSwitcher` is 107 / 7, its new `load_labels` (9 LOC) de-duplicates the init and reload paths |
+| `services/history/export.py` | 160 lines, class 142 / 21, `init` 46 LOC / CC 12 / cog 12 | **154 lines, class 133 / 21, `init` 37 LOC / CC 9 / cog 8** — `init` is back below the 39 LOC it had at the baseline (it was a §16.5 landmine): the closed-session sweep is one `open_world(self)` — the guard lives in `trash.py` — and the world's label load is one `WorldSwitcher.load_labels` (the init and the switch path now share it) instead of the 7-line block each used to carry |
+| `services/undo_service.py` | 664 lines, `UndoService` 524 LOC / 39 methods | **561 lines, class 399 LOC / 26 methods** (baseline 563 / 444 / 28) — `services/undo_timeline.py::TimelineCommit` owns commit + store split + dropped-token purge + task spawning; `_log_command` 8, `_apply_people_command` 7, `_apply_labels_command` 11 became module-level beside `_values_equal` / `_same_entry` / `_position_of` |
+| `services/undo_timeline.py` (new) | — | 146 lines, `TimelineCommit` 104 LOC / 10 methods: `commit` 21 (CC 5), `_purge_tokens` 20, `_store_timeline` 13, everything else 2–8 LOC |
+| `stores/history_db.py` | 305 lines, class 266 LOC / 31 methods | **300 lines, class 232 LOC / 30 methods** (baseline 272 / 235 / 30) — `init` back to its baseline 54 LOC, `close` 19 → 8, `commit` 5 → 2; the new plumbing is module-level `_gated` 10 / `_release` 6 / `_closed` 8 |
+| `stores/user_memory.py` | 274 lines, class 228 LOC / 21 methods | **267 lines, class 213 LOC / 21 methods** (baseline 256 / 218 / 21) — `world_lock.world_transaction` commits and releases the turn for every write site, so no method spells either out; `replace_all` 40 → 35 LOC (CC 14 → 13, cog 18 → 17) |
+| `stores/world_lock.py` | 214 lines | 241 lines — `world_transaction` 16 LOC / CC 3 / cog 1 + `_rollback` 6 |
+| `stores/history_repo_lifecycle.py` | 421 lines, class 399 / 21 | **418 lines, class 367 / 18** (baseline 390 / 368 / 18) — the erase steps became module-level `_delete_hidden` / `_erase_person` / `_erase_tombstones`; the file stays above 300 on purpose: §18.2 asks for the second responsibility and the person lifecycle *is* the one this file owns, while the class itself is now at its baseline |
+| `bridge/history_bridge.py` | 530 lines, class 488 LOC / 45 methods | **528 lines, class 486 LOC / 45 methods** (= the 3fc511b baseline, ratchet 493 / 45) — the unused "empty trash" bridge slot hands back to the world store's own `purge_deleted`, so the landmine shrinks instead of growing |
+| `services/history/__init__.py` | 48 lines, `HistoryService` 23 LOC / 1 method | 62 lines, `HistoryService` 36 LOC / 5 methods — `__init__` plus the four one-line trash delegates |
+
+**Clone baseline.** The extraction removed two exact-AST groups (import-header
+windows: `app/lifecycle.py` ↔ `services/history/export.py`, and
+`services/history/mutate.py` ↔ `services/undo_service.py`) and left one new
+header window (`services/history/query.py` ↔ `services/undo_service.py`,
+because `undo_service.py` no longer imports `asyncio`). `CLONE_BASELINE` in
+`tools/metrics/rule16_gate.py` (11 entries) carries that history in its
+comment — the same treatment the pre-existing `db_bridge` ↔ `history_bridge`
+header already had; the scan reports 11 groups / 83 lines. No *logic* is
+cloned anywhere.
+
+### 3.2 The hot spots, before and after
+
+| Symbol | 3fc511b | Close-out | Limit |
 |---|---|---|---|
 | `UndoService._apply_archive_command` | 37 LOC, CC 10, cog 22 | **17 LOC, CC 5, cog 4** | 30 / 10 / 15 |
-| `UndoService.apply_command` | 27 LOC, CC 12 | **15 LOC, CC 6** (two extractions) | 30 / 10 |
-| `UndoService.undo` / `redo` | 29 / 24 LOC | unchanged (29 / 24) | 30 |
-| `ArchiveCommands` (new class) | — | 7 methods, 82 LOC, no function over 21 LOC | 15 methods / 150 LOC |
-| new helpers (`_position_of`, `_spawn`, `_crash_log`, `_disagrees`, `_row_verdict`, …) | — | 4–19 LOC, CC ≤ 6, cog ≤ 9 | 30 / 10 / 15 |
-| `WorldGate` / `WriteTurn` (new) | — | 5 + 4 methods, 48 + 23 LOC, longest method 17 LOC | 15 / 150 |
-| `HistoryBridge` class (ratchet) | 486 LOC / 45 methods | **488 / 45** | 493 / 45 frozen — LOC only |
-| `PersonLifecycle.purge_deleted` | 17 LOC | **19 LOC** (the row work extracted to `_delete_hidden` / `_sweep_tombstones` / `_drop_person`) | 30 LOC; only private helpers added to the class |
-| `HistoryMutateService.save_world_undo` | 12 LOC, 1 statement per entry, no retry | **19 LOC** in one transaction + `_write_world_undo` (9 LOC) | 30 |
-| `HistoryMutateService.begin_session` / `forget_old_trash` / `purge_tokens` (new) | — | 14 / 16 / 26 LOC, CC ≤ 6 | 30 / CC 10 |
-| `UndoService._commit_timeline` | 24 LOC | **20 LOC** (identity stamping and the store split extracted to `_stamp_seq` / `_store_timeline`) | 30 |
-| `UndoService._purge_tokens` / `_dropped_tokens` (new) | — | 20 / 5 LOC | 30 |
-| `HistoryDB.close()` | released the turn before committing | commits first, drops the turn last | — |
+| `UndoService.apply_command` | 28 LOC, CC 12, cog 15 | **15 LOC, CC 6, cog 5** (two extractions) | 30 / 10 / 15 |
+| `UndoService.undo` / `redo` | 30 / 25 LOC | 29 / 24 LOC | 30 |
+| `ArchiveCommands` (new class) | — | 84 LOC, 7 methods, longest 21 LOC | 150 / 15 |
+| `WorldGate` / `WriteTurn` (new) | — | 53 LOC / 5 methods and 25 / 4, longest method 17 LOC | 150 / 15 |
+| `HistoryBridge` class (ratchet) | 486 LOC / 45 methods | **486 / 45** | 493 / 45 frozen |
+| `PersonLifecycle.purge_deleted` | 17 LOC | **19 LOC** — the row work extracted to `_delete_hidden` / `_erase_person` / `_erase_tombstones` | 30 |
+| `HistoryMutateService.save_world_undo` | 12 LOC, CC 8 | **9 LOC, CC 3, cog 2** — one `retry_locked` call on `_write_world_undo` (9) + `_undo_rows` (7) | 30 / 10 |
+| `TimelineCommit.commit` (new) | `_commit_timeline` 20 LOC | 21 LOC, CC 5 — identity stamping, store split and the dropped-token purge are their own methods | 30 |
+| `TimelineCommit._purge_tokens` / `_dropped_tokens` (new) | — | 20 / 5 LOC | 30 |
+| `HistoryDB.close()` | 12 LOC, released the turn before committing | **8 LOC** — commits first, drops the turn last | 30 |
+| `HistoryDB.commit()` | 2 LOC inline | **2 LOC** delegating to `_release` (commit + turn back on every path) | 30 |
+| new helpers (`_position_of`, `spawn`, `_crash_log`, `_disagrees`, `_row_verdict`, `_person_verdict`, …) | — | 4–24 LOC, CC ≤ 6, cog ≤ 9 | 30 / 10 / 15 |
 
-`stores/world_lock.py` is a leaf (no Qt, no `backend/`/`services/` imports) and
-223 lines including its rationale. No function was split to game LOC: every
-extraction names a step of the workflow, and the undo path is *more*
-verifiable than before, not less.
+The gate (`tools/metrics/rule16_gate.py --with-clones`) exits **0** on the
+finished tree: every owned function fits, the ratchet holds, no override is
+stale, and the clone scan reports 0 new groups and 0 stale baseline entries.
+An independent diff audit (every changed file, class and function against
+`3fc511b`) reports **`problems: 0`** — the only remaining findings are the
+`legacy over:` annotations that were already there at the baseline, on the
+same or smaller values.
 
 ## 4. Tests
 

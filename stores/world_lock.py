@@ -175,6 +175,33 @@ async def world_write(path: str, token=None):
             gate.leave(token)
 
 
+async def _rollback(conn) -> None:
+    """Best effort: the error that caused the rollback is the one to report."""
+    try:
+        await conn.rollback()
+    except Exception:                                   # noqa: BLE001
+        pass
+
+
+@asynccontextmanager
+async def world_transaction(path: str, conn):
+    """One writer turn = ONE transaction: commit on exit, rollback on error.
+
+    The call site says what to write; committing and giving the turn back are
+    the context manager's job, so a write site can forget neither. An early
+    `return` inside the block commits as well — the all-or-nothing semantics
+    `replace_all` used to spell out by hand.
+    """
+    async with world_write(path, conn):
+        try:
+            yield
+        except Exception:                                   # noqa: BLE001
+            await _rollback(conn)
+            raise
+        else:
+            await conn.commit()
+
+
 async def retry_locked(work: Callable, attempts: int = 4, delay: float = 0.3):
     """Call `work()` again while the file is locked by something outside.
 

@@ -38,7 +38,7 @@ from core.events import LogMessage  # noqa: E402
 from core.result import Err  # noqa: E402
 from services import undo_service  # noqa: E402
 from services.history import HistoryService  # noqa: E402
-from services.history import mutate  # noqa: E402
+from services.history import trash  # noqa: E402
 from services.undo_archive import (ArchiveCommands, _disagrees,  # noqa: E402
                                    _outcome, _person_verdict, _reason,
                                    _rows, _row_verdict, _state)
@@ -73,6 +73,12 @@ async def wait_until(predicate, timeout=6.0, step=0.05):
 # the gate itself
 # ═════════════════════════════════════════════════════════════════
 class TestGateUnit(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
     async def test_classifies_writes_and_locks(self):
         self.assertTrue(world_lock.is_write_sql("INSERT INTO users(nick) …"))
         self.assertTrue(world_lock.is_write_sql("  update users SET a=1"))
@@ -83,6 +89,43 @@ class TestGateUnit(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(world_lock.is_locked_error(
             sqlite3.OperationalError("database is busy")))
         self.assertFalse(world_lock.is_locked_error(ValueError("nope")))
+
+    async def test_a_transaction_commits_when_the_block_ends(self):
+        """`world_write` only excludes; `world_transaction` also commits."""
+        import aiosqlite
+        path = os.path.join(self.tmp.name, "gate.db")
+        conn = await aiosqlite.connect(path)
+        try:
+            async with world_lock.world_transaction(path, conn):
+                await conn.execute("CREATE TABLE t(x)")
+                await conn.execute("INSERT INTO t VALUES(1)")
+            reader = await aiosqlite.connect(path)
+            try:
+                rows = await (await reader.execute("SELECT x FROM t")).fetchall()
+            finally:
+                await reader.close()
+            self.assertEqual(rows, [(1,)], "the block committed before leaving")
+            self.assertFalse(world_lock.gate_for(path).busy,
+                             "the turn is back when the block ends")
+        finally:
+            await conn.close()
+
+    async def test_a_failed_transaction_rolls_back_and_frees_the_turn(self):
+        import aiosqlite
+        path = os.path.join(self.tmp.name, "gate.db")
+        conn = await aiosqlite.connect(path)
+        try:
+            await conn.execute("CREATE TABLE t(x)")
+            await conn.commit()
+            with self.assertRaises(RuntimeError):
+                async with world_lock.world_transaction(path, conn):
+                    await conn.execute("INSERT INTO t VALUES(1)")
+                    raise RuntimeError("boom")
+            rows = await (await conn.execute("SELECT x FROM t")).fetchall()
+            self.assertEqual(rows, [], "a failed block leaves no half write")
+            self.assertFalse(world_lock.gate_for(path).busy)
+        finally:
+            await conn.close()
 
     async def test_one_gate_per_file_and_two_per_two_files(self):
         first = world_lock.gate_for("/tmp/a/world.db")
@@ -614,7 +657,7 @@ class TestTrashLifecycle(WorldCase):
                               if e.get("kind") == "archive"], [],
                              "no timeline entry may promise a restore")
             self.assertEqual(await fresh.db.get_meta("session"),
-                             mutate.SESSION_TOKEN,
+                             trash.SESSION_TOKEN,
                              "the world now belongs to this run")
         finally:
             await fresh.close()
@@ -702,6 +745,17 @@ class TestTrashLifecycle(WorldCase):
                              for m in self.messages()),
                          "a dropped step must never report a restore")
         self.assertNotIn("Mloni", await self.db_nicks())
+
+    async def test_a_sweep_that_fails_is_a_warning_not_a_broken_open(self):
+        """Erasing a closed session's trash must never block the world open."""
+        from unittest import mock
+        with mock.patch.object(trash, "begin_session",
+                               side_effect=RuntimeError("database is locked")):
+            with self.assertLogs("chatbot", level="WARNING") as captured:
+                await trash.open_world(self.service)     # must not raise
+        self.assertTrue(any("trash sweep on" in line
+                            and "database is locked" in line
+                            for line in captured.output), captured.output)
 
 
 if __name__ == "__main__":

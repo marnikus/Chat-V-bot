@@ -7,18 +7,11 @@ import logging
 import os
 from datetime import datetime
 from functools import partial
-from uuid import uuid4
-
 from stores.world_lock import retry_locked
 
 from .query import MAX_FILE_MB_DEFAULT, _merge
 
 log = logging.getLogger("chatbot")
-
-#: one token per app RUN: a world whose stored token differs was last opened
-#: by a previous run, so the trash it still hides belongs to a closed session
-#: and is erased on open (Ctrl+Z reaches back only within a session)
-SESSION_TOKEN = uuid4().hex
 
 
 class HistoryMutateService:
@@ -173,119 +166,31 @@ class HistoryMutateService:
         return bool(moved)
 
     async def save_world_undo(self, entries: list[dict]) -> None:
-        """Persist the world's half of the timeline, retrying while locked.
-
-        The user's log showed “undo save to …v.db failed: database is locked”:
-        a lock by anything outside the app used to cost one save. The rows are
-        written in ONE transaction and retried, so Ctrl+Z after a break is
-        still undoable.
-        """
+        """Rewrite the world's timeline in ONE transaction, retrying if locked."""
         if not self.db.is_open:
             return
-        stamp = datetime.now().isoformat(timespec="seconds")
-        rows = [(int(e["seq"]), str(e.get("kind") or ""),
-                 json.dumps(e.get("value"), ensure_ascii=False), stamp)
-                for e in entries or []
-                if isinstance(e, dict) and isinstance(e.get("seq"), int)]
         try:
-            await retry_locked(partial(self._write_world_undo, rows))
+            await retry_locked(partial(_write_world_undo, self,
+                                       _undo_rows(entries)))
         except Exception as exc:                            # noqa: BLE001
             log.warning("undo save to %s failed: %s", self.db.path, exc)
 
-    async def purge_trash(self, nick: str = "") -> dict:
-        """Erase what a soft delete only hid.
 
-        Returns ``{"persons": n, "messages": m}``. With a nick the sweep
-        covers that person (their hidden messages, and their tombstone when
-        they are a removed person); without one it is the whole world. The
-        app calls this with no nick when a world is OPENED — a trash that
-        outlived its session must not come back (see `forget_old_trash`).
-        """
-        clean = " ".join(str(nick or "").split()).strip()
-        people = await self._trash_persons(clean)
-        messages = int(await self.repo.purge_deleted(clean))
-        self._forget_labels(people)
-        return {"persons": len(people), "messages": messages}
+def _undo_rows(entries: list) -> list[tuple]:
+    """The timeline rows to store, stamped once for the whole write."""
+    stamp = datetime.now().isoformat(timespec="seconds")
+    return [(int(e["seq"]), str(e.get("kind") or ""),
+             json.dumps(e.get("value"), ensure_ascii=False), stamp)
+            for e in entries or []
+            if isinstance(e, dict) and isinstance(e.get("seq"), int)]
 
-    async def begin_session(self) -> dict:
-        """Open this world for THIS app run.
 
-        A world that was last opened by another run still holds the trash of
-        that closed session — hidden rows and tombstones nobody can reach any
-        more — so it is erased here, once, before anything reads the world.
-        Mid-session calls (a re-init, a restart, a switch back to a world
-        this run already opened) see this run's token and do nothing.
-        """
-        if await self.db.get_meta("session", "") == SESSION_TOKEN:
-            return {"persons": 0, "messages": 0}
-        erased = await self.forget_old_trash()
-        await self.db.set_meta("session", SESSION_TOKEN)
-        return erased
-
-    async def forget_old_trash(self) -> dict:
-        """A world that was closed keeps neither its trash nor a way back.
-
-        Ctrl+Z is a session-sized safety net: the hidden rows and tombstones
-        a previous session left behind are erased, and the archive entries
-        that pointed at them are dropped from this world's timeline, so no
-        later undo can promise a restore the rows cannot deliver.
-        """
-        erased = await self.purge_trash("")
-        await self.db.execute("DELETE FROM undo_history WHERE kind='archive'")
-        await self.db.commit()
-        if erased["persons"] or erased["messages"]:
-            log.info("world reopened: erased %d person(s) and %d hidden "
-                     "message(s) left by a closed session",
-                     erased["persons"], erased["messages"])
-        return erased
-
-    async def purge_tokens(self, tokens: list) -> dict:
-        """Erase the rows kept alive by undo steps that are now gone.
-
-        Called when the timeline drops an archive entry (the cap, or a new
-        edit after an undo truncating the redo branch): its hidden messages
-        and its tombstone are erased for good, because nothing can reach
-        them any more — “above the undo memory, the data is lost”.
-        """
-        clean = [str(t) for t in dict.fromkeys(tokens or []) if t]
-        if not clean:
-            return {"persons": 0, "messages": 0}
-        marks = ",".join("?" * len(clean))
-        params = tuple(clean)
-        people = await self.db.fetchdicts(
-            f"SELECT nick FROM persons WHERE deleted_at IN ({marks})", params)
-        messages = int(await self.db.scalar(
-            f"SELECT COUNT(*) FROM messages WHERE deleted_at IN ({marks})",
-            params, 0))
-        for row in people:                  # the person + their hidden rows
-            await self.repo.purge_deleted(str(row["nick"]))
-        await self.db.execute(
-            f"DELETE FROM messages WHERE deleted_at IN ({marks})", params)
-        await self.db.commit()
-        self._forget_labels(people)
-        return {"persons": len(people), "messages": messages}
-
-    def _forget_labels(self, people: list) -> None:
-        """Erased people leave no label rows behind."""
-        for row in people:
-            if self._labels is not None:
-                self._labels.forget(row["nick"])
-
-    async def _trash_persons(self, nick: str) -> list:
-        """The tombstoned persons a purge will erase (count + label cleanup)."""
-        sql = "SELECT id, nick FROM persons WHERE deleted_at<>''"
-        params: tuple = ()
-        if nick:
-            sql += " AND nick=?"
-            params = (nick,)
-        return await self.db.fetchdicts(sql, params)
-
-    async def _write_world_undo(self, rows: list[tuple]) -> None:
-        """Rewrite the world's undo history in one transaction."""
-        await self.db.execute("DELETE FROM undo_history")
-        await self.db.executemany(
-            "INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) "
-            "VALUES(?,?,?,?)", rows)
-        await self.db.execute(
-            "DELETE FROM sqlite_sequence WHERE name='undo_history'")
-        await self.db.commit()
+async def _write_world_undo(host, rows: list[tuple]) -> None:
+    """Rewrite the world's undo history in one transaction."""
+    await host.db.execute("DELETE FROM undo_history")
+    await host.db.executemany(
+        "INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) "
+        "VALUES(?,?,?,?)", rows)
+    await host.db.execute(
+        "DELETE FROM sqlite_sequence WHERE name='undo_history'")
+    await host.db.commit()

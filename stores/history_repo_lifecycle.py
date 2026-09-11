@@ -20,6 +20,35 @@ from stores.history_repo_identity import TAIL_FP_LIMIT
 log = logging.getLogger("chatbot")
 
 
+async def _delete_hidden(owner, nick: str, person) -> None:
+    """The row work of one purge: hidden messages, then tombstones."""
+    if not nick:
+        await owner.db.execute("DELETE FROM messages WHERE deleted_at<>''")
+        await _erase_tombstones(owner)
+        return
+    await owner.db.execute(
+        "DELETE FROM messages WHERE deleted_at<>'' AND person_id=?",
+        (int(person["id"]),))
+    if person.get("deleted_at"):
+        await _erase_person(owner, int(person["id"]))
+
+
+async def _erase_person(owner, pid: int) -> None:
+    """Erase every row that belongs to one person, then the person."""
+    for table in ("messages", "cursors", "gaps"):
+        await owner.db.execute(f"DELETE FROM {table} WHERE person_id=?", (pid,))
+    await owner.db.execute("DELETE FROM persons WHERE id=?", (pid,))
+
+
+async def _erase_tombstones(owner) -> None:
+    """Erase every row of every tombstoned person, then the persons."""
+    for table in ("messages", "cursors", "gaps"):
+        await owner.db.execute(
+            f"DELETE FROM {table} WHERE person_id IN "
+            "(SELECT id FROM persons WHERE deleted_at<>'')")
+    await owner.db.execute("DELETE FROM persons WHERE deleted_at<>''")
+
+
 class PersonLifecycle:
     """What happens to a whole conversation, not to one row."""
 
@@ -198,12 +227,12 @@ class PersonLifecycle:
             "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0))
 
     async def purge_deleted(self, nick: str = "") -> int:
-        """Erase hidden rows for good — the ONLY path that removes bytes.
+        """Erase hidden rows — and a removed person — for good.
 
-        With no nick this is “Empty trash”: hidden messages AND tombstoned
-        persons go, rows included. With a nick it is that person's hidden
-        messages — and, when they are a removed person, their tombstone with
-        them (a nickname alone never keeps a row pointing at nothing).
+        With no nick this is the whole trash: hidden messages AND tombstoned
+        persons go. With a nick it is that person's hidden messages, plus
+        their tombstone when they are a removed person (a nick never keeps a
+        row pointing at nothing).
         """
         person = None
         if nick:
@@ -211,40 +240,11 @@ class PersonLifecycle:
             if not person:
                 return 0
         before = await self.deleted_count(nick)
-        await self._delete_hidden(nick, person)
+        await _delete_hidden(self._owner, nick, person)
         await self._owner.db.commit()
         if person:
             await self._owner._recount(int(person["id"]))
         return before
-
-    async def _delete_hidden(self, nick: str, person) -> None:
-        """The row work of a purge: hidden messages, then tombstones."""
-        if not nick:
-            await self._owner.db.execute(
-                "DELETE FROM messages WHERE deleted_at<>''")
-            await self._sweep_tombstones()
-            return
-        await self._owner.db.execute(
-            "DELETE FROM messages WHERE deleted_at<>'' AND person_id=?",
-            (int(person["id"]),))
-        if person.get("deleted_at"):
-            await self._drop_person(int(person["id"]))
-
-    async def _sweep_tombstones(self) -> None:
-        """Every row of every tombstoned person, then the person itself."""
-        for table in ("messages", "cursors", "gaps"):
-            await self._owner.db.execute(
-                f"DELETE FROM {table} WHERE person_id IN "
-                "(SELECT id FROM persons WHERE deleted_at<>'')")
-        await self._owner.db.execute(
-            "DELETE FROM persons WHERE deleted_at<>''")
-
-    async def _drop_person(self, pid: int) -> None:
-        """Erase a tombstoned person's remaining rows, then the person."""
-        for table in ("cursors", "gaps"):
-            await self._owner.db.execute(
-                f"DELETE FROM {table} WHERE person_id=?", (pid,))
-        await self._owner.db.execute("DELETE FROM persons WHERE id=?", (pid,))
 
     async def delete_person(self, nick: str, hard: bool = False,
                             token: str = "") -> bool:
@@ -262,10 +262,7 @@ class PersonLifecycle:
             return False
         pid = int(person["id"])
         if hard:
-            await self._owner.db.execute("DELETE FROM messages WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM cursors WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM gaps WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM persons WHERE id=?", (pid,))
+            await _erase_person(self._owner, pid)
         else:
             stamp = token or self._owner.new_op_token()
             await self._owner.db.execute(

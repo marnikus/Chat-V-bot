@@ -12,9 +12,17 @@ from datetime import datetime
 from typing import Optional
 import aiosqlite
 
-from stores.world_lock import apply_busy_timeout, world_write
+from stores.world_lock import apply_busy_timeout, world_transaction
 
 log = logging.getLogger("chatbot")
+
+
+async def _connect(path: str):
+    """Open the queue's connection with the external-holder courtesy set."""
+    conn = await aiosqlite.connect(path)
+    await apply_busy_timeout(conn, path)
+    return conn
+
 
 _SCHEMA = """CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nick TEXT UNIQUE NOT NULL,
@@ -73,8 +81,7 @@ class UserMemory:
     async def init(self) -> None:
         if self._db is not None:
             await self.close()
-        self._db = await aiosqlite.connect(self._db_path)
-        await apply_busy_timeout(self._db, self._db_path)
+        self._db = await _connect(self._db_path)
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
         log.info("UserMemory DB ready: %s", self._db_path)
@@ -91,9 +98,8 @@ class UserMemory:
             raise ValueError("no database path given")
         # Connect FIRST: when the target is corrupt the old world stays
         # connected instead of stranding the queue on a broken handle.
-        new_db = await aiosqlite.connect(target)
+        new_db = await _connect(target)
         try:
-            await apply_busy_timeout(new_db, target)
             await new_db.executescript(_SCHEMA)
             await new_db.commit()
         except Exception:
@@ -116,20 +122,18 @@ class UserMemory:
 
     async def upsert_user(self, user: UserRecord) -> str:
         now = datetime.now().isoformat(timespec="seconds")
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             cur = await self._db.execute("SELECT id,messaged FROM users WHERE nick=?", (user.nick,))
             row = await cur.fetchone()
             if row:
                 await self._db.execute(
                     "UPDATE users SET last_seen=?,gender=?,registered=?,anonymous=?,guest=? WHERE nick=?",
                     (now, user.gender, user.registered, user.anonymous, user.guest, user.nick))
-                await self._db.commit()
                 return "known"
             await self._db.execute(
                 "INSERT INTO users(nick,gender,registered,anonymous,guest,first_seen,last_seen,messaged) "
                 "VALUES(?,?,?,?,?,?,?,0)",
                 (user.nick, user.gender, user.registered, user.anonymous, user.guest, now, now))
-            await self._db.commit()
         return "new"
 
     async def upsert_many(self, users: list[UserRecord]) -> tuple[int, int]:
@@ -141,11 +145,10 @@ class UserMemory:
 
     async def mark_messaged(self, nick: str) -> None:
         now = datetime.now().isoformat(timespec="seconds")
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             await self._db.execute(
                 "UPDATE users SET messaged=1,message_count=message_count+1,last_messaged=? WHERE nick=?",
                 (now, nick))
-            await self._db.commit()
 
     # ── reads (delegated to UserQuery, which owns the SELECT) ────
     async def get_queue(self) -> list[UserRecord]:
@@ -165,9 +168,8 @@ class UserMemory:
 
     async def delete_user(self, nick: str) -> bool:
         """Delete a single user by nick. Returns True when a row was removed."""
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             cur = await self._db.execute("DELETE FROM users WHERE nick=?", (nick,))
-            await self._db.commit()
         removed = cur.rowcount > 0
         log.info("delete_user(%s) → %s", nick, "removed" if removed else "not found")
         return removed
@@ -178,7 +180,7 @@ class UserMemory:
         if not nicks:
             return 0
         total = 0
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             # chunk to stay well below SQLite's variable limit
             for i in range(0, len(nicks), 500):
                 chunk = nicks[i:i + 500]
@@ -186,13 +188,12 @@ class UserMemory:
                 cur = await self._db.execute(
                     f"DELETE FROM users WHERE nick IN ({marks})", chunk)
                 total += cur.rowcount
-            await self._db.commit()
         log.info("delete_users(%d requested) → %d removed", len(nicks), total)
         return total
 
     async def set_messaged(self, nick: str, messaged: bool) -> bool:
         """Manually flip a user's messaged flag (per-row Mark done / Undo)."""
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             if messaged:
                 now = datetime.now().isoformat(timespec="seconds")
                 cur = await self._db.execute(
@@ -202,7 +203,6 @@ class UserMemory:
                 cur = await self._db.execute(
                     "UPDATE users SET messaged=0,last_messaged=NULL WHERE nick=?",
                     (nick,))
-            await self._db.commit()
         return cur.rowcount > 0
 
     async def reset_messaged(self) -> int:
@@ -212,16 +212,14 @@ class UserMemory:
         alongside the flag (message_count stays — it is a historical
         counter, exactly like the per-row ↩ Undo).
         """
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             cur = await self._db.execute(
                 "UPDATE users SET messaged=0,last_messaged=NULL")
-            await self._db.commit()
         return cur.rowcount
 
     async def clear_all(self) -> int:
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             cur = await self._db.execute("DELETE FROM users")
-            await self._db.commit()
         return cur.rowcount
 
     async def replace_all(self, rows: list[dict]) -> int:
@@ -230,38 +228,33 @@ class UserMemory:
         Used by the global undo/redo system to restore the people list to a
         previously recorded state. Timestamps, message_count and notes are
         preserved verbatim (not re-stamped with CURRENT_TIMESTAMP), so a
-        restored person is indistinguishable from the original.
+        restored person is indistinguishable from the original. The whole
+        restore is ONE transaction: a garbage row can never leave the table
+        half-replaced.
         """
         count = 0
-        async with world_write(self._db_path, self._db):
+        async with world_transaction(self._db_path, self._db):
             await self._db.execute("DELETE FROM users")
-            try:
-                for row in rows or []:
-                    nick = str(row.get("nick", "")).strip()
-                    if not nick:
-                        continue
-                    await self._db.execute(
-                        "INSERT INTO users(nick,gender,registered,anonymous,guest,"
-                        "first_seen,last_seen,messaged,message_count,last_messaged,"
-                        "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                        (nick,
-                         str(row.get("gender") or "unknown"),
-                         1 if row.get("registered") else 0,
-                         1 if row.get("anonymous") else 0,
-                         1 if row.get("guest") else 0,
-                         row.get("first_seen") or "",
-                         row.get("last_seen") or "",
-                         1 if row.get("messaged") else 0,
-                         int(row.get("message_count") or 0),
-                         row.get("last_messaged"),
-                         str(row.get("notes") or "")))
-                    count += 1
-            except Exception:
-                # All-or-nothing: a garbage row must never leave the table
-                # half-replaced (the DELETE above is still uncommitted).
-                await self._db.rollback()
-                raise
-            await self._db.commit()
+            for row in rows or []:
+                nick = str(row.get("nick", "")).strip()
+                if not nick:
+                    continue
+                await self._db.execute(
+                    "INSERT INTO users(nick,gender,registered,anonymous,guest,"
+                    "first_seen,last_seen,messaged,message_count,last_messaged,"
+                    "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (nick,
+                     str(row.get("gender") or "unknown"),
+                     1 if row.get("registered") else 0,
+                     1 if row.get("anonymous") else 0,
+                     1 if row.get("guest") else 0,
+                     row.get("first_seen") or "",
+                     row.get("last_seen") or "",
+                     1 if row.get("messaged") else 0,
+                     int(row.get("message_count") or 0),
+                     row.get("last_messaged"),
+                     str(row.get("notes") or "")))
+                count += 1
         log.info("replace_all → %d rows restored", count)
         return count
 
