@@ -30,8 +30,8 @@ column is the same measurement at commit `3820136` — so "mine" and
 | `_order_by` | — | *(did not exist)* | 25 LOC · 2 prm · CC 7 · cog 10 · nest 2 | ✅ new, fits |
 | `HistoryQuery.list_persons` | 30 / 4 / 10 | **47 LOC · 5 prm · CC 15** | **46 LOC · 6 prm · CC 14** | ❌ fails — and already failed |
 | `HistoryBridge.userdb_page` | 30 / 4 / 10 | 21 LOC · 2 prm · CC 2 | 24 LOC · 2 prm · CC 2 | ✅ fits |
-| `class HistoryQuery` | 300 LOC / 15 methods | **362 LOC** · 14 methods | **361 LOC** · 14 methods | ❌ pre-existing |
-| `class HistoryBridge` | 300 LOC / 15 methods | **490 LOC · 45 methods** | **493 LOC · 45 methods** | ❌ pre-existing |
+| `class HistoryQuery` | 150 LOC / 15 methods | **362 LOC** · 14 methods | **361 LOC** · 14 methods | ❌ pre-existing |
+| `class HistoryBridge` | 150 LOC / 15 methods | **490 LOC · 45 methods** | **493 LOC · 45 methods** | ❌ pre-existing |
 | line coverage, new lines | ≥ 80% | — | **96.6%** (28/29) | ✅ |
 | branch coverage, new lines | ≥ 75% | — | **91.7%** (11/12) | ✅ |
 | new duplicated blocks | 0 | 2 pre-existing pairs | **0 new** | ✅ |
@@ -84,7 +84,7 @@ this change, for two concrete repo-specific reasons:
 
 This feature *shrinks* `HistoryQuery` (362 → 340 LOC, measured) as a side
 effect. Getting
-either class under 300 is a separate refactor with its own design doc.
+either class under 150 is a separate refactor with its own design doc.
 
 ---
 
@@ -207,7 +207,7 @@ branch coverage both reach 100%.
    so this cannot silently rot:
    * every function this feature owns is ≤30 LOC, ≤4 params, CC ≤10,
      cognitive ≤15, nesting ≤4 — hard fail;
-   * `PersonPageRequest` itself is ≤300 LOC / ≤15 methods;
+   * `PersonPageRequest` itself is ≤150 LOC / ≤15 methods;
    * a **ratchet** on the two pre-existing oversized classes: their LOC and
      method count must not exceed the recorded baseline, so debt cannot grow
      quietly while the rule is "known failing";
@@ -281,8 +281,8 @@ inside limits.
 
 | Class | Baseline | Now | Still failing |
 |---|---|---|---|
-| `HistoryQuery` | 362 LOC / 14 methods | **340 LOC** / 14 methods | LOC > 300 |
-| `HistoryBridge` | 490 LOC / 45 methods | **486 LOC** / 45 methods | LOC > 300, methods > 15 |
+| `HistoryQuery` | 362 LOC / 14 methods | **340 LOC** / 14 methods | LOC > 150 |
+| `HistoryBridge` | 490 LOC / 45 methods | **486 LOC** / 45 methods | LOC > 150, methods > 15 |
 
 Both shrank. Neither is fixed, for the contract reasons in §1.3. The ratchet in
 `tests/test_rule16_new_code.py` pins these numbers so they cannot creep back up.
@@ -408,7 +408,7 @@ inflate the result; it can only shrink what is measured.
 tests/test_person_item.py            12 passed
 tests/test_person_page_request.py    20 passed
 tests/test_userdb_sort_query.py      31 passed   (23 sort + 8 envelope)
-tests/test_rule16_new_code.py         9 passed
+tests/test_rule16_new_code.py         9 passed   (15 at that point; 23 after §9)
 full pytest (--noconftest, --deselect test_sash_webengine.py)
                                   2199 passed, 3 skipped, 1 xfailed,
                                   771 subtests, 1 collection error
@@ -423,3 +423,129 @@ will not import. That is an environment gap, not a code failure — the file
 collected and passed in the §7.4 run. `--noconftest` is used because
 `tests/conftest.py` imports the same WebEngine bindings at module scope; it
 provides only a teardown hook, and none of the suites above use its fixtures.
+
+---
+
+## 9. Enforcement — one implementation, three callers
+
+Everything above was measured by hand. That does not survive the next change,
+so the limits now live in one module that three callers share:
+
+| Artifact | Role |
+|---|---|
+| `tools/metrics/rule16_gate.py` | the limits, the policy tables (`OWNED`, `RATCHET`, `OVERRIDES`, `CLONE_BASELINE`), the measurement, and a human-readable report. Exits 1 on any breach. |
+| `tests/test_rule16_new_code.py` | asserts the same module's output. Holds **no copy** of the thresholds — a second copy is how a gate starts disagreeing with itself. |
+| `.pre-commit-config.yaml` | runs the gate before a commit lands. |
+| `tools/ci/quality-gate.yml` | the CI workflow, **written but not installed** — see §9.5. |
+
+The rule itself is written down in `docs/AGENT_RULES_CODE_QUALITY.md`.
+
+### 9.1 The gate checks that it is not vacuous
+
+A gate that passes because it measured nothing is worse than no gate. So the
+suite pins a **canary**: `HistoryQuery.page` is 53 LOC, over the limit, and not
+in `OWNED`. If the measurement ever stops reporting it, the suite fails.
+
+The `OVERRIDES` escape hatch is audited the same way — an entry must name a
+gated function, carry a justification of at least 40 characters that is not
+`TODO`/`noqa`, and still be *needed*. An override whose function has since been
+fixed is reported as stale and must be deleted. `OVERRIDES` is empty today.
+
+### 9.2 A defect this process caught in itself
+
+The first draft of `rule16_gate.py` shipped a `smells()` helper that was never
+called and ended in `return out if not missing else out` — both branches
+identical. Dead code, in the module that enforces "zero dead code". It was
+caught by reading the diff against the claims in the doc, wired into `run()`,
+and given a test. Worth recording because it is the failure mode the whole
+exercise is about: a check that looks present and is not.
+
+### 9.3 Verification for this section
+
+```
+python3 tools/metrics/rule16_gate.py                 exit 0 in 2.8s
+python3 tools/metrics/rule16_gate.py --with-clones   exit 0 in 23.4s
+                                                     0 new, 0 stale clone groups
+tests/test_rule16_new_code.py                        23 passed
+.pre-commit-config.yaml                              parses; hook target exists
+tools/ci/quality-gate.yml                            parses; jobs rule16-gate,
+                                                     test-suite (written, NOT
+                                                     installed — §9.5)
+full pytest (--noconftest, --deselect test_sash_webengine.py)
+                                                  2551 passed, 3 skipped,
+                                                  1 xfailed, 771 subtests,
+                                                  1 collection error
+```
+
+The suite count moved twice and both steps reconcile. 2205 was the figure
+before `origin/main` was merged in; main's four commits brought 338 tests of
+their own and this branch added 4, giving 2547. The duplication scan of §9.4
+then added 4 more: 2547 + 4 = 2551. The gate suite grew 15 → 19 (the class
+limit enforcement) → 23 (the clone baseline).
+
+The single collection error is still `tests/unit/app/test_app_bootstrap.py` on
+missing `libGL.so.1` (§8.3), which is an environment gap on this machine — the
+CI workflow installs the system libraries PySide6 needs, so it collects there.
+
+### 9.4 Duplication — the AST clone scan
+
+`docs/AGENT_RULES_CODE_QUALITY.md` §4 and §7.1 both define duplication as
+"jscpd and/or pylint `R0801`; repo also uses exact-AST clones ≥ 6 lines", and
+`tools/metrics/clone_scan.py` exists to do the AST half. The gate ran `R0801`
+only, so one of the two named checks was simply absent — the doc promised a
+check the tooling did not perform.
+
+`clones()` now delegates to the repo's own `clone_scan.py` rather than
+re-implementing a scan, so the gate and the audit report cannot drift apart.
+`CLONE_BASELINE` freezes the 12 groups already in the tree, measured by running
+the scanner. The spec fails on *new* groups, not on existing ones, so the
+baseline works the way `RATCHET` does: entries may disappear, they may not be
+joined by new ones. A baseline entry whose group is gone is reported stale, so
+the list ratchets down instead of quietly rotting into fiction.
+
+One baseline group touches an owned file — `bridge/db_bridge.py` with
+`bridge/history_bridge.py`. It is the standard import header (`from __future__`
+/ `json` / `logging` / `os` / `PySide6.QtCore`), present since the base commit
+`3820136`, verified with `git log -L 8,15:bridge/history_bridge.py`. Recorded in
+the comment so the next reader does not have to re-derive it.
+
+The scan is opt-in behind `--with-clones`. It walks every production package and
+takes ~20s, which is too slow to impose on every commit, and spec §7 puts
+duplication in CI rather than pre-commit. Measured: 2.8s without the flag,
+23.4s with it. A skipped scan prints "clone scan: SKIPPED — not a pass" and
+sets `clones_checked` false; it is never allowed to read as a clean result,
+which is the same rule the missing-tool path already follows.
+
+The test worth naming: every `CLONE_BASELINE` entry must be sorted, because
+`clones()` compares against `tuple(sorted(...))`. An unsorted entry could never
+match, so its group would be reported as new forever — a permanently red gate
+nobody could explain.
+
+### 9.5 The CI workflow could not be installed
+
+The workflow was committed at `.github/workflows/quality-gate.yml` and the push
+was refused:
+
+```
+! [remote rejected] ... (refusing to allow a GitHub App to create or update
+  workflow `.github/workflows/quality-gate.yml` without `workflows` permission)
+```
+
+A GitHub App token cannot author workflow files, and that is not something to
+route around — it is the protection working. The file was therefore moved to
+`tools/ci/quality-gate.yml`, where it stays as the record of the intended
+configuration, with the activation command in its header. Someone with
+`workflows` permission has to run:
+
+```
+mkdir -p .github/workflows
+cp tools/ci/quality-gate.yml .github/workflows/quality-gate.yml
+```
+
+**Until that happens the gate runs from the pre-commit hook only, and
+`git commit --no-verify` bypasses it unguarded.** That is a real gap, stated
+here rather than papered over: the doc's own standard is that a check must be
+wired up or recorded as not wired up.
+
+The same limitation applies to the PR bot comment and merge block from the
+proposal — both need repo/org settings that cannot be set from a commit.
