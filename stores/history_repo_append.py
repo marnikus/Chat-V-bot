@@ -38,7 +38,7 @@ class AppendPlanner:
                      session_id: str = "",
                      head_any: Optional[str] = None,
                      tail_any: Optional[str] = None,
-                     prepend: bool = False) -> AppendResult:
+                     prepend: bool = False) -> AppendResult:  # quality-override: loc=54 params=13 cc=11 reason=signature mirrors HistoryRepo.append, the store keyword API
         """Archive one collected batch. See `HistoryRepo.append` for the
         contract; the steps are `_align`, `_write_rows` and `_after_write`."""
         now = now or datetime.now()

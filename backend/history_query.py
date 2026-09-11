@@ -212,6 +212,67 @@ def _person_item(row, my_nicks: list) -> dict:
     }
 
 
+_MEDIA = object()
+"""`_ITEM_FIELDS` marker: this entry is built by `_item_media`, not read."""
+
+#: One message row → the item the window and the QWebChannel wire consume:
+#: `(output key, source column, default, caster)`. The alias pairs are
+#: deliberate — the UI reads `dir` / `from` / `time`, the collector and the
+#: parsers write `direction` / `from_nick` / `ts_display`, and the archive only
+#: stores the second set. Every key here has been on the wire since the first
+#: history build, so all of them stay present: the table IS the contract.
+_ITEM_FIELDS: tuple[tuple[str, object, object, object], ...] = (
+    ("id", "id", 0, int),
+    ("ord", "ord", 0, int),
+    ("fp", "fp", "", None),
+    ("dir", "direction", "in", None),
+    ("direction", "direction", "in", None),
+    ("from", "from_nick", "", None),
+    ("from_nick", "from_nick", "", None),
+    ("my_nick", "my_nick", "", None),
+    ("kind", "kind", "text", None),
+    ("text", "text", "", None),
+    ("media", _MEDIA, None, None),
+    ("time", "ts_display", "", None),
+    ("ts_display", "ts_display", "", None),
+    ("ts_resolved", "ts_resolved", "", None),
+    ("day", "day", "", None),
+    ("occ", "occ", 0, int),
+)
+
+
+def _item_media(data: dict):
+    """The attached media as the window renders it, or None for a text row.
+
+    A row whose cache file vanished is reported as `state="missing"` with an
+    empty path rather than as a broken `<img>` pointing at a dead local file:
+    the UI then shows the "click to restore" marker instead of a blank box.
+    """
+    if not data.get("media_id"):
+        return None
+    path = data.get("cache_path") or ""
+    state = data.get("media_state") or "pending"
+    if path and not os.path.exists(path):
+        state, path = "missing", ""
+    return {"id": data.get("media_id"), "url": data.get("media_url"),
+            "kind": data.get("media_kind") or data.get("kind"),
+            "state": state,
+            "path": path}
+
+
+def _item_value(data: dict, spec):
+    """Resolve one `_ITEM_FIELDS` entry against a message row.
+
+    The `or default` fallback is the archive's own convention: a stored `""`
+    means "not captured", exactly like a missing key (RULE 4).
+    """
+    _key, source, default, cast = spec
+    if source is _MEDIA:
+        return _item_media(data)
+    value = data.get(source) or default
+    return cast(value) if cast is not None else value
+
+
 class HistoryQuery:
     """Every read the UI performs against the archive."""
 
@@ -234,39 +295,14 @@ class HistoryQuery:
 
     @staticmethod
     def _item(row) -> dict:
+        """One message row, in the exact shape the window renders.
+
+        The mapping lives in the module-level `_ITEM_FIELDS` table: the alias
+        pairs and their defaults ARE the wire contract, so they read better as
+        data than as a 20-way `or` chain (that chain was CC 22).
+        """
         data = dict(row)
-        media = None
-        if data.get("media_id"):
-            path = data.get("cache_path") or ""
-            state = data.get("media_state") or "pending"
-            # A cached row whose file vanished must not render as a broken
-            # <img> from a dead local path: report it as missing so the UI
-            # shows a "click to restore" marker instead.
-            if path and not os.path.exists(path):
-                state = "missing"
-                path = ""
-            media = {"id": data.get("media_id"), "url": data.get("media_url"),
-                     "kind": data.get("media_kind") or data.get("kind"),
-                     "state": state,
-                     "path": path}
-        return {
-            "id": int(data.get("id") or 0),
-            "ord": int(data.get("ord") or 0),
-            "fp": data.get("fp") or "",
-            "dir": data.get("direction") or "in",
-            "direction": data.get("direction") or "in",
-            "from": data.get("from_nick") or "",
-            "from_nick": data.get("from_nick") or "",
-            "my_nick": data.get("my_nick") or "",
-            "kind": data.get("kind") or "text",
-            "text": data.get("text") or "",
-            "media": media,
-            "time": data.get("ts_display") or "",
-            "ts_display": data.get("ts_display") or "",
-            "ts_resolved": data.get("ts_resolved") or "",
-            "day": data.get("day") or "",
-            "occ": int(data.get("occ") or 0),
-        }
+        return {spec[0]: _item_value(data, spec) for spec in _ITEM_FIELDS}
 
     _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
                "md.state AS media_state, md.cache_path AS cache_path "

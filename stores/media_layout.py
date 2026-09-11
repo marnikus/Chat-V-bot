@@ -44,6 +44,51 @@ RESERVED = {"con", "prn", "aux", "nul", "clock$"} | {
     f"{stem}{i}" for stem in ("com", "lpt") for i in range(1, 10)}
 
 
+def _transliterated(ch: str) -> tuple[str, bool]:
+    """`(replacement, lossy)` for one character of a nick.
+
+    Latin letters, digits and `._-` pass through untouched, whitespace becomes
+    `_`, and a known Cyrillic letter is transliterated keeping its case.
+    Anything else — emoji, CJK, stray punctuation — leaves no identity behind
+    and marks the slug lossy, which is what forces the hash suffix.
+    """
+    low = ch.lower()
+    if ch in SAFE_CHARS or ch in "._-":
+        return ch, False
+    if ch.isspace():
+        return "_", False
+    if low in TRANSLIT:
+        mapped = TRANSLIT[low]
+        return (mapped.capitalize() if (ch != low and mapped) else mapped), False
+    return "_", True
+
+
+def _dedupe_underscores(raw: str, slug: str) -> str:
+    """Collapse runs of `_`, but only for a nick that did not write them.
+
+    A nick carrying a literal `__` keeps its own separators: folding them would
+    make `a__b` and `a_b` collide on disk.
+    """
+    if "__" in raw:
+        return slug
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug
+
+
+def _usable_slug(slug: str, lossy: bool) -> tuple[str, bool]:
+    """Give a name-less slug and a reserved device name a usable form.
+
+    Both cases lose information, so both mark the result lossy and let the hash
+    suffix decide who the person actually was.
+    """
+    if not slug or set(slug) <= {"_"}:
+        slug, lossy = "user", True
+    if slug.lower() in RESERVED:
+        slug, lossy = slug + "_", True
+    return slug, lossy
+
+
 def slugify_nick(nick: str) -> str:
     """A Latin, filesystem-safe folder name for a person.
 
@@ -56,26 +101,11 @@ def slugify_nick(nick: str) -> str:
         return "unknown"
     out, lossy = [], False
     for ch in raw:
-        low = ch.lower()
-        if ch in SAFE_CHARS or ch in "._-":
-            out.append(ch)
-        elif ch.isspace():
-            out.append("_")
-        elif low in TRANSLIT:
-            mapped = TRANSLIT[low]
-            out.append(mapped.capitalize() if (ch != low and mapped)
-                       else mapped)
-        else:
-            lossy = True
-            out.append("_")
-    slug = "".join(out).strip("._ ")
-    if "__" not in raw:
-        while "__" in slug:
-            slug = slug.replace("__", "_")
-    if not slug or set(slug) <= {"_"}:
-        slug, lossy = "user", True
-    if slug.lower() in RESERVED:
-        slug, lossy = slug + "_", True
+        piece, piece_lossy = _transliterated(ch)
+        out.append(piece)
+        lossy = lossy or piece_lossy
+    slug, lossy = _usable_slug(
+        _dedupe_underscores(raw, "".join(out).strip("._ ")), lossy)
     if lossy:
         slug += "_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:4]
     return slug[:64]

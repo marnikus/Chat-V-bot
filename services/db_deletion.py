@@ -32,10 +32,10 @@ def canonical(path: str) -> str:
     try:
         # realpath resolves symlinks/junctions; falls back to abspath.
         return os.path.realpath(os.path.abspath(str(path or "")))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- realpath unavailable: abspath is next
         try:
             return os.path.abspath(str(path or ""))
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- compare the raw string, never drop
             return str(path or "")
 
 
@@ -50,14 +50,14 @@ def is_within(child_abs: str, root_abs: str) -> bool:
         return common == root_c
     except ValueError:  # different drives / mixed absolute
         return False
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- unknown = not inside, which retains
         return False
 
 
 def is_same_file(a: str, b: str) -> bool:
     try:
         return canonical(a) == canonical(b)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- textual identity instead
         return os.path.abspath(str(a)) == os.path.abspath(str(b))
 
 
@@ -92,7 +92,7 @@ def _registry_active_dir(registry) -> str:
     try:
         return os.path.dirname(
             os.path.abspath(registry.active_path())) or ""
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- "" is this module's "cannot say"
         return ""
 
 
@@ -102,7 +102,7 @@ def _registry_root(registry) -> str:
         # DbRegistry host has .root; be defensive.
         host = getattr(registry, "_host", None)
         return os.path.abspath(getattr(host, "root", "") or "")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- "" is this module's "cannot say"
         return ""
 
 
@@ -343,7 +343,7 @@ def _outside_root_reason(cand: str, base: str) -> str | None:
     try:
         if canonical(cand) == canonical(base):
             return "retain:root"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- unresolvable: keep, do not remove
         pass
     return "retain:outside_root"
 
@@ -353,45 +353,54 @@ def _exact_root_reason(cand: str, base: str) -> str | None:
     try:
         if canonical(cand) == canonical(base):
             return "retain:root"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- outside_root already retained it
         pass
     return None
 
 
 def _other_folder_reason(cand: str, other_folders) -> str | None:
-    """Another world's media folder (or anything inside it) is retained."""
+    """Another world's media folder (or anything inside it) is retained.
+
+    Fails closed like every other guard in this ladder: when a path cannot be
+    resolved, the protection is assumed to apply, because the cost of being
+    wrong is deleting a file that belongs to a different world.
+    """
     try:
         cand_c = canonical(cand)
-        for other in (other_folders or frozenset()):
-            try:
-                other_c = canonical(other)
-            except Exception:  # noqa: BLE001
-                continue
-            if cand_c == other_c:
+    except Exception:  # noqa: BLE001 -- cannot resolve: keep the file
+        return "retain:other_world_folder"
+    for other in (other_folders or frozenset()):
+        try:
+            other_c = canonical(other)
+        except Exception:  # noqa: BLE001 -- unreadable folder still protects
+            return "retain:other_world_folder"
+        if cand_c == other_c:
+            return "retain:other_world_folder"
+        try:
+            if os.path.commonpath([other_c, cand_c]) == other_c:
                 return "retain:other_world_folder"
-            try:
-                if os.path.commonpath([other_c, cand_c]) == other_c:
-                    return "retain:other_world_folder"
-            except ValueError:
-                continue
-    except Exception:  # noqa: BLE001
-        pass
+        except ValueError:
+            continue                      # different drives: not inside it
     return None
 
 
 def _shared_reference_reason(cand: str, keep) -> str | None:
-    """A file another world references is shared and retained."""
+    """A file another world references is shared and retained.
+
+    Also fail-closed: an unreadable reference cannot be ruled out, so the
+    file stays on disk.
+    """
     try:
         cand_c = canonical(cand)
-        for ref in (keep or frozenset()):
-            try:
-                if os.path.abspath(str(ref)) == cand or \
-                        canonical(str(ref)) == cand_c:
-                    return "retain:shared"
-            except Exception:  # noqa: BLE001
-                continue
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:  # noqa: BLE001 -- cannot resolve: keep the file
+        return "retain:shared"
+    for ref in (keep or frozenset()):
+        try:
+            if os.path.abspath(str(ref)) == cand or \
+                    canonical(str(ref)) == cand_c:
+                return "retain:shared"
+        except Exception:  # noqa: BLE001 -- unresolvable ref may still match
+            return "retain:shared"
     return None
 
 
@@ -423,7 +432,8 @@ def classify_candidate(*, candidate_abs: str, base_abs: str,
 
     The predicate order is the safety ladder; do not reorder without a
     design doc (symlink → outside root → root → other folder → shared →
-    ambiguous folder → file type).
+    ambiguous folder → file type). Every predicate fails closed: when a
+    lookup raises, the candidate is retained, never removed.
     """
     cand = os.path.abspath(str(candidate_abs or ""))
     base = os.path.abspath(str(base_abs or ""))

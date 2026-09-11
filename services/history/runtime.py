@@ -138,65 +138,97 @@ class WorldSwitcher:
             await host.db.close()
         return True
 
+    def _open_db(self, path: str) -> HistoryDB:
+        """A database handle for `path`, with this world's FTS preference."""
+        return HistoryDB(path,
+                         use_fts=bool(self._host._settings.get("use_fts", True)))
+
+    async def _rebind_queue(self, path: str) -> None:
+        """Tell the queue store which file to read; a world without one is fine."""
+        host = self._host
+        if host.memory is not None:
+            await host.memory.switch_db(path)
+
+    async def _save_gaze_quietly(self) -> None:
+        """Park the gaze numbers before the switch; losing them is not a reason
+        to refuse the switch, and not a reason to bother the operator."""
+        try:
+            await self._host.save_gaze()
+        except Exception:                              # noqa: BLE001
+            pass
+
+    def _record_db_path(self, target: str) -> None:
+        """The new path goes to settings and to app.json, so a restart opens
+        the same world the operator just chose."""
+        host = self._host
+        host._settings["db_path"] = target
+        if host.config is None:
+            return
+        host.config.set("history", {k: v for k, v in host._settings.items()
+                                    if k != "collector"})
+        host.config.save()
+
+    def _reset_collector_state(self) -> None:
+        try:
+            self._host.collector.reset_state()
+        except Exception:                              # noqa: BLE001
+            pass
+
+    async def _reopen_previous(self, previous: str, parked) -> None:
+        """Best effort: hand the operator back the world they were on.
+
+        The caller still re-raises the reason the switch failed, so a second
+        failure here is only logged — but every step counts on its own: an
+        archive that reopens while its queue or its labels stay on the new file
+        is worse than one that fails loudly.
+        """
+        host = self._host
+        fallback = self._open_db(previous)
+        try:
+            await fallback.init()
+        except Exception as inner:                     # noqa: BLE001
+            log.error("reopening %s failed too: %s", previous, inner)
+            host._restart_collector(parked)
+            return
+        try:
+            await self._rebind_queue(previous)
+        except Exception as inner:                     # noqa: BLE001
+            log.warning("queue reopen on %s failed: %s", previous, inner)
+        self._rebind_db(fallback)
+        try:
+            await self._load_world_state()
+        except Exception as inner:                     # noqa: BLE001
+            log.warning("reloading previous world state failed: %s", inner)
+        host._restart_collector(parked)
+
     async def switch_db(self, path: str) -> dict:
+        """Switch the archive to another world file, or fail closed: a switch
+        that cannot open the new file reopens the old one, then re-raises."""
         host = self._host
         target = str(path or "").strip()
         if not target:
             raise ValueError("no database path given")
         previous = host.db.path
-        parked = getattr(host, "_detached_running", None) \
-            or await host._stop_collector()
+        parked = getattr(host, "_detached_running", None) or await host._stop_collector()
         host._detached_running = None
-        try:
-            await host.save_gaze()
-        except Exception:                              # noqa: BLE001
-            pass
+        await self._save_gaze_quietly()
         await self._flush_labels()
         if host.db.is_open:
             await host.db.close()
-        fresh = HistoryDB(target,
-                          use_fts=bool(host._settings.get("use_fts", True)))
+        fresh = self._open_db(target)
         try:
-            if host.memory is not None:
-                await host.memory.switch_db(target)
+            await self._rebind_queue(target)
             await fresh.init()
-        except Exception as exc:
-            log.warning("cannot open %s (%s) — reopening %s", target, exc,
-                        previous)
-            fallback = HistoryDB(previous, use_fts=bool(
-                host._settings.get("use_fts", True)))
-            try:
-                await fallback.init()
-                if host.memory is not None:
-                    try:
-                        await host.memory.switch_db(previous)
-                    except Exception as inner:         # noqa: BLE001
-                        log.warning("queue reopen on %s failed: %s",
-                                    previous, inner)
-                self._rebind_db(fallback)
-                try:
-                    await self._load_world_state()
-                except Exception as inner:             # noqa: BLE001
-                    log.warning("reloading previous world state failed: %s",
-                                inner)
-            except Exception as inner:                 # noqa: BLE001
-                log.error("reopening %s failed too: %s", previous, inner)
-            host._restart_collector(parked)
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("cannot open %s (%s) — reopening %s", target, exc, previous)
+            await self._reopen_previous(previous, parked)
             raise
         self._rebind_db(fresh)
-        host._settings["db_path"] = target
-        if host.config is not None:
-            host.config.set("history", {k: v for k, v in host._settings.items()
-                                        if k != "collector"})
-            host.config.save()
-        try:
-            host.collector.reset_state()
-        except Exception:                              # noqa: BLE001
-            pass
+        self._record_db_path(target)
+        self._reset_collector_state()
         await self._load_world_state()
         host._restart_collector(parked)
-        log.info("Message archive switched to %s (world restart complete)",
-                 target)
+        log.info("Message archive switched to %s (world restart complete)", target)
         return host.settings()
 
 

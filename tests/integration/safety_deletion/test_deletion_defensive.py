@@ -290,8 +290,10 @@ class TestClassifyDefensive(unittest.TestCase):
                 victim_folder_abs=self.vf, folder_exclusive=True,
                 keep=frozenset(), other_world_folders=frozenset(),
                 is_discovered=False)
-        # root check swallowed → falls through to remove (regular file)
-        self.assertEqual(v, "remove")
+        # root check swallowed → the next guard cannot resolve either, and a
+        # guard that cannot judge retains (2026-09-11: fail-closed ladder;
+        # a surviving file is recoverable, a deleted one is not)
+        self.assertEqual(v, "retain:other_world_folder")
 
     def test_other_canonical_raises(self):
         a = write(os.path.join(self.vf, "a.jpg"))
@@ -309,7 +311,8 @@ class TestClassifyDefensive(unittest.TestCase):
                 keep=frozenset(),
                 other_world_folders=frozenset(["/tmp/bad-other"]),
                 is_discovered=False)
-        self.assertEqual(v, "remove")
+        # the unreadable folder is the one that would protect this file
+        self.assertEqual(v, "retain:other_world_folder")
 
     def test_commonpath_valueerror_other(self):
         a = write(os.path.join(self.vf, "a.jpg"))
@@ -346,7 +349,8 @@ class TestClassifyDefensive(unittest.TestCase):
             victim_folder_abs=self.vf, folder_exclusive=True,
             keep=frozenset([Bad()]), other_world_folders=frozenset(),
             is_discovered=False)
-        self.assertEqual(v, "remove")
+        # an entry we cannot read cannot be ruled out as a shared reference
+        self.assertEqual(v, "retain:shared")
 
     def test_keep_block_raises(self):
         a = write(os.path.join(self.vf, "a.jpg"))

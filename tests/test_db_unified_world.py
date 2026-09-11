@@ -86,6 +86,111 @@ class WorldCase(unittest.IsolatedAsyncioTestCase):
             return await cur.fetchall()
 
 
+class TestLegacyImportReaders(WorldCase):
+    """The reader tables `services/history/mutate.py` folds a legacy world in with.
+
+    The importers used to hold their coercions inline, which meant a column
+    could disagree with the SQL next to it. Each test here pins one table: the
+    row as it arrives from a file written by an older version, and the value the
+    world must end up holding.
+    """
+
+    LEGACY_SCHEMA = (
+        "CREATE TABLE users(nick TEXT PRIMARY KEY, gender TEXT, registered "
+        "INTEGER, anonymous INTEGER, guest INTEGER, first_seen TEXT, "
+        "last_seen TEXT, messaged INTEGER, message_count INTEGER, "
+        "last_messaged TEXT, notes TEXT)")
+
+    async def write_legacy(self, rows):
+        import aiosqlite
+        path = os.path.join(self.dir, "legacy-queue.db")
+        async with aiosqlite.connect(path) as conn:
+            await conn.execute(self.LEGACY_SCHEMA)
+            await conn.executemany("INSERT INTO users VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                                   rows)
+            await conn.commit()
+        return path
+
+    async def test_a_legacy_row_is_read_column_by_column(self):
+        from services.history.mutate import _legacy_row
+        row = {"nick": "  olga ", "gender": None, "registered": "1", "anonymous": 0,
+               "guest": None, "first_seen": "", "last_seen": 1709, "messaged": "2",
+               "message_count": None, "last_messaged": None, "notes": 12}
+        self.assertEqual(
+            _legacy_row(row),
+            ("  olga ", "unknown", 1, 0, 0, "", 1709, 2, 0, None, "12"))
+        empty = _legacy_row({})
+        self.assertEqual(empty[0], "")
+        self.assertEqual(empty[1], "unknown")
+        self.assertEqual(empty[9], None, "last_messaged stays raw: no value is not ''")
+        with self.assertRaises(ValueError):
+            # A counter that is not a number is a corrupt file, not a zero.
+            _legacy_row({"messaged": "yes"})
+
+    async def test_merging_a_legacy_queue_lands_in_the_world_file(self):
+        import aiosqlite
+        legacy = await self.write_legacy([
+            ("ann", "female", 1, 0, 0, "2024-01-01", "2024-02-02", 1, 3, "x", "hi"),
+            ("bob", None, None, None, None, None, None, None, None, None, None),
+        ])
+        await self.service._merge_legacy_queue(legacy)
+        rows = await self.read_world(self.db_path,
+                                     "SELECT nick, gender, registered, notes, "
+                                     "message_count FROM users ORDER BY nick")
+        self.assertEqual(rows, [("ann", "female", 1, "hi", 3),
+                                ("bob", "unknown", 0, "", 0)])
+        self.assertFalse(os.path.exists(legacy),
+                         "the source is renamed, so the next start cannot merge twice")
+
+    async def test_an_unreadable_legacy_file_names_the_file(self):
+        broken = os.path.join(self.dir, "not-a-db.db")
+        with open(broken, "w", encoding="utf-8") as handle:
+            handle.write("this is not sqlite")
+        with self.assertRaises(RuntimeError) as caught:
+            await self.service._merge_legacy_queue(broken)
+        self.assertIn("not-a-db.db", str(caught.exception))
+
+    async def test_gaze_values_are_stored_as_the_table_holds_them(self):
+        from services.history.mutate import _gaze_values
+        collector = type("C", (), {"_nick": "me", "_added": "5", "_total": None,
+                                   "_last_sync_reason": None, "_last_sync_added": 0,
+                                   "_last_sync_count": 2.9})()
+        self.assertEqual(_gaze_values(collector), [
+            ("partner", "me"), ("added", "5"), ("total", "0"),
+            ("last_sync_reason", ""), ("last_sync_added", "0"),
+            ("last_sync_count", "2")])
+
+    async def test_a_collector_without_a_nick_writes_no_gaze_row(self):
+        self.service.collector._nick = ""
+        await self.service.save_gaze()
+        self.assertEqual([], await self.read_world(
+            self.db_path, "SELECT key FROM gaze_data"))
+
+    async def test_the_undo_tables_split_world_from_app_json(self):
+        from services.history.mutate import (_app_json_undo, _undo_entries,
+                                             _undo_needing_a_number, _world_undo)
+        raw = [{"kind": "people", "value": 1}, {"kind": "chat", "seq": 2},
+               {"kind": None}, "not-a-dict", None, 7]
+        entries = _undo_entries(raw)
+        self.assertEqual([{"kind": "people", "value": 1},
+                          {"kind": "chat", "seq": 2}], entries)
+        self.assertEqual([], _undo_entries("nope"))
+        self.assertEqual([{"kind": "people", "value": 1}], _world_undo(entries))
+        self.assertEqual([{"kind": "chat", "seq": 2}], _app_json_undo(entries))
+        self.assertTrue(_undo_needing_a_number(_undo_entries(
+            [{"kind": "people"}, {"kind": "chat", "seq": "2"}])))
+        self.assertFalse(_undo_needing_a_number([{"kind": "people", "seq": 1}]))
+
+    async def test_only_the_wellformed_half_of_a_config_label_block_survives(self):
+        from services.history.mutate import _config_label_payload
+        payload = _config_label_payload({"defs": [1, {"id": 1}, None],
+                                         "assign": "not-a-dict",
+                                         "filter": 5, "next_id": "3"})
+        self.assertEqual({"defs": [{"id": 1}], "assign": {}, "filter": 5,
+                          "next_id": 3}, payload)
+        self.assertEqual([], _config_label_payload({})["defs"])
+
+
 class TestUnifiedSchema(WorldCase):
     async def test_a_newly_created_world_has_all_twelve_tables(self):
         made = await self.manager.create("work")

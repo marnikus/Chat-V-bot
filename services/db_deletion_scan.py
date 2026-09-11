@@ -144,31 +144,60 @@ def _resolve_footprint(st: _DeleteState, victim_scan):
     return footprint, outside_refs
 
 
-def _resolve_folder_policy(st: _DeleteState, inventory):
-    """Other-world media folders + victim-folder exclusivity."""
-    other_folders: set[str] = set()
+def _refuse_unreadable_world(st: _DeleteState, world, exc) -> None:
+    """One refusal for any other world whose media folder we cannot read."""
+    log.debug("media_dir failed for %s: %s", world, exc)
+    name = os.path.basename(str(world)) or "another world"
+    raise_refusal(
+        st, "scan",
+        f"cannot resolve the media folder of {name}; deletion refused to "
+        "keep that world's files out of reach",
+        _Fail(extra={"unverifiable_worlds": [str(world)]}))
+
+
+def _other_world_folders(st: _DeleteState, inventory) -> set:
+    """Media folders of every other world — the guard that spares their files.
+
+    A world that cannot answer is fatal rather than skipped: `other_folders`
+    is what keeps another world's media out of the removal set, so guessing
+    here would delete files the scan promised to protect.
+    """
+    folders: set[str] = set()
     for world in inventory.worlds:
         try:
-            other_folders.add(os.path.abspath(
-                st.registry.media_dir(world)))
-        except Exception:  # noqa: BLE001
-            continue
-    exclusive = True
+            folders.add(os.path.abspath(st.registry.media_dir(world)))
+        except Exception as exc:  # noqa: BLE001 -- unreadable: refuse, see above
+            _refuse_unreadable_world(st, world, exc)
+    return folders
+
+
+def _folder_exclusive(st: _DeleteState, other_folders) -> bool:
+    """True when the victim's media folder holds only the victim's media."""
+    if _victim_folder_is_shared(st, other_folders):
+        return False
+    try:
+        return db_deletion.is_within(
+            st.victim_folder_abs, st.base_abs)
+    except Exception:  # noqa: BLE001 -- unprovable containment: treat shared
+        return False
+
+
+def _victim_folder_is_shared(st: _DeleteState, other_folders) -> bool:
+    """True when another world points at the same media folder."""
     try:
         victim_c = db_deletion.canonical(st.victim_folder_abs)
         for other in other_folders:
             if db_deletion.canonical(str(other)) == victim_c:
-                exclusive = False
-                break
-    except Exception:  # noqa: BLE001
-        exclusive = False
-    try:
-        if not db_deletion.is_within(
-                st.victim_folder_abs, st.base_abs):
-            exclusive = False
-    except Exception:  # noqa: BLE001
-        exclusive = False
-    return other_folders, exclusive
+                return True
+    except Exception:  # noqa: BLE001 -- unprovable identity: assume shared
+        return True
+    return False
+
+
+def _resolve_folder_policy(st: _DeleteState, inventory):
+    """Other-world media folders + victim-folder exclusivity (fail closed)."""
+    other_folders = _other_world_folders(st, inventory)
+    return other_folders, _folder_exclusive(st, other_folders)
 
 
 # ── plan + snapshots ────────────────────────────────────────────────

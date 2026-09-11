@@ -87,6 +87,22 @@ def _as_record(item) -> MessageRecord:
     return MessageRecord.from_dict(item)
 
 
+def _signatures_agree(cursor: dict, head: str, tail: str,
+                      keys: tuple[str, str]) -> bool:
+    """Whether both ends of the pane equal what the cursor stored for `keys`.
+
+    An empty side on either end is "not observed", never a match: a signature
+    is only evidence when both the head and the tail of it exist. That is what
+    makes the author-agnostic pair (`head_any`/`tail_any`) need no extra guard
+    of its own — equality with a truthy side already implies a stored value.
+    """
+    head_key, tail_key = keys
+    stored_head = str(cursor.get(head_key) or "")
+    stored_tail = str(cursor.get(tail_key) or "")
+    return bool(head and tail and head == stored_head
+                and tail == stored_tail)
+
+
 class ConversationIdentity:
     """Who a line belongs to, and how it becomes a row."""
 
@@ -272,16 +288,10 @@ class ConversationIdentity:
             return False
         if dom_count >= 0 and int(cursor.get("dom_count") or -1) != dom_count:
             return False
-        same_exact = bool(
-            head_sig and tail_sig
-            and head_sig == str(cursor.get("head_sig") or "")
-            and tail_sig == str(cursor.get("tail_sig") or ""))
-        same_any = bool(
-            head_any and tail_any
-            and str(cursor.get("head_any") or "")
-            and head_any == str(cursor.get("head_any") or "")
-            and tail_any == str(cursor.get("tail_any") or ""))
-        return same_exact or same_any
+        return (_signatures_agree(cursor, head_sig, tail_sig,
+                                  ("head_sig", "tail_sig"))
+                or _signatures_agree(cursor, head_any, tail_any,
+                                     ("head_any", "tail_any")))
 
     async def _apply_rename(self, pid: int, old_nick: str,
                             clean: str) -> bool:
