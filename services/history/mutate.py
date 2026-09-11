@@ -6,6 +6,8 @@ import json
 import logging
 import os
 from datetime import datetime
+from functools import partial
+from stores.world_lock import retry_locked
 
 from .query import MAX_FILE_MB_DEFAULT, _merge
 
@@ -164,14 +166,31 @@ class HistoryMutateService:
         return bool(moved)
 
     async def save_world_undo(self, entries: list[dict]) -> None:
+        """Rewrite the world's timeline in ONE transaction, retrying if locked."""
         if not self.db.is_open:
             return
         try:
-            await self.db.execute("DELETE FROM undo_history")
-            for entry in entries or []:
-                if isinstance(entry, dict) and isinstance(entry.get("seq"), int):
-                    await self.db.execute("INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) VALUES(?,?,?,?)", (int(entry["seq"]), str(entry.get("kind") or ""), json.dumps(entry.get("value"), ensure_ascii=False), datetime.now().isoformat(timespec="seconds")))
-            await self.db.execute("DELETE FROM sqlite_sequence WHERE name='undo_history'")
-            await self.db.commit()
-        except Exception as exc:
+            await retry_locked(partial(_write_world_undo, self,
+                                       _undo_rows(entries)))
+        except Exception as exc:                            # noqa: BLE001
             log.warning("undo save to %s failed: %s", self.db.path, exc)
+
+
+def _undo_rows(entries: list) -> list[tuple]:
+    """The timeline rows to store, stamped once for the whole write."""
+    stamp = datetime.now().isoformat(timespec="seconds")
+    return [(int(e["seq"]), str(e.get("kind") or ""),
+             json.dumps(e.get("value"), ensure_ascii=False), stamp)
+            for e in entries or []
+            if isinstance(e, dict) and isinstance(e.get("seq"), int)]
+
+
+async def _write_world_undo(host, rows: list[tuple]) -> None:
+    """Rewrite the world's undo history in one transaction."""
+    await host.db.execute("DELETE FROM undo_history")
+    await host.db.executemany(
+        "INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) "
+        "VALUES(?,?,?,?)", rows)
+    await host.db.execute(
+        "DELETE FROM sqlite_sequence WHERE name='undo_history'")
+    await host.db.commit()

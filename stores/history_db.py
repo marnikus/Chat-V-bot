@@ -32,6 +32,7 @@ from stores.history_schema import (                                   # noqa: F4
     _create_table_sql,                                                # noqa: F401
     _version_tuple,                                                   # noqa: F401
 )
+from stores.world_lock import WriteTurn, apply_busy_timeout, is_write_sql
 
 log = logging.getLogger("chatbot")
 
@@ -48,6 +49,7 @@ class HistoryDB:
         self.fts_enabled = False
         self._conn: Optional[aiosqlite.Connection] = None
         self.migrator = SchemaMigrator(self)
+        self.turn = WriteTurn(self, path)
 
     # ── lifecycle ────────────────────────────────────────────────
     @property
@@ -65,11 +67,11 @@ class HistoryDB:
             # Re-init reconnects cleanly instead of leaking the old handle
             # (and close() commits first, so pending writes survive).
             await self.close()
-        folder = os.path.dirname(os.path.abspath(self.path))
-        if folder:
-            os.makedirs(folder, exist_ok=True)
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)),
+                    exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
+        await apply_busy_timeout(self._conn, self.path)
         stored_version = None
         try:
             await self._conn.execute("PRAGMA journal_mode=WAL")
@@ -199,21 +201,17 @@ class HistoryDB:
         # which used to hang the second caller forever.
         conn, self._conn = self._conn, None
         if conn is not None:
-            try:
-                await conn.commit()
-            except Exception:                       # noqa: BLE001
-                pass
-            await conn.close()
+            await _closed(conn, self.turn)   # commits, closes, drops the turn
 
     # ── helpers ──────────────────────────────────────────────────
     async def execute(self, sql: str, params: Iterable[Any] = ()):
-        return await self.conn.execute(sql, tuple(params))
+        return await _gated(self.turn, self.conn.execute, sql, params)
 
     async def executemany(self, sql: str, seq):
-        return await self.conn.executemany(sql, seq)
+        return await _gated(self.turn, self.conn.executemany, sql, seq)
 
     async def commit(self) -> None:
-        await self.conn.commit()
+        await _release(self.conn.commit, self.turn)
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list:
         """Rows as plain tuples — the shape callers (and tests) compare."""
@@ -270,3 +268,33 @@ class HistoryDB:
             except OSError:
                 continue
         return total
+
+
+async def _gated(turn, run, sql: str, params):
+    """One statement; a write holds the world's turn until `commit()`."""
+    if not is_write_sql(sql):
+        return await run(sql, params)
+    await turn.begin()
+    try:
+        return await run(sql, params)
+    except Exception:
+        turn.drop()
+        raise
+
+
+async def _release(commit, turn) -> None:
+    """Commit, and hand the world's writer turn back even if the commit fails."""
+    try:
+        await commit()
+    finally:
+        turn.end()
+
+
+async def _closed(conn, turn) -> None:
+    """Commit what is pending (best effort), close, and hand the turn back."""
+    try:
+        await conn.commit()
+    except Exception:                           # noqa: BLE001
+        pass
+    await conn.close()
+    turn.drop()

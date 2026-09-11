@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**78 documents in 11 groups.**
+**79 documents in 12 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -24,6 +24,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-10-quality-gates/`](#2026-09-10-quality-gates) | 2 | Where the RULE 16 thresholds came from, and how one feature was measured against them. |
 | [`2026-09-10-history-push-and-sort/`](#2026-09-10-history-push-and-sort) | 3 | The `__cvbPush` lifecycle hardening and sortable columns in the Full User Database. |
 | [`2026-09-10-agent-rules-v1/`](#2026-09-10-agent-rules-v1) | 2 | The two rules files that [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) replaced. Kept for history — **do not follow these; follow the current file.** |
+| [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 
 ---
 
@@ -202,3 +203,14 @@ The two rules files that [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.
 - [`AGENT_RULES.md`](2026-09-10-agent-rules-v1/AGENT_RULES.md) — Code generation rules for this repository
 - [`AGENT_RULES_CODE_QUALITY.md`](2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md) — RULE 16 — Code quality gates (mandatory for every agent change)
 
+---
+
+## 2026-09-11-db-undo-restore
+
+Ctrl+Z in the Full User Database window reported success while the person stayed deleted
+(`database is locked` inside a scheduled task), and the DB list never refreshed on its own.
+This folder holds the design for both fixes.
+
+*1 doc.*
+
+- [`DB_UNDO_RESTORE_DESIGN_2026-09-11.md`](2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) — One write gate per world file, an archive command that proves itself, DB-window auto-refresh, instant deletes and the session-sized trash
