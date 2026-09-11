@@ -419,6 +419,14 @@ byte-for-byte.
 | **Person History** message | the small `✕` on a message row | Removes that single message. |
 | **Full User Database** row | `🧹` / `🗑` | The same two actions for any archived person, straight from the table. |
 
+Removing a person always asks first (one **Remove** to confirm, anything
+else stays put). The Full User Database table keeps itself current: a new
+person collected by the archive, a deletion, a label change and every
+undo/redo refresh it on the spot — no manual reload. And the undo is
+honest: if the person row can no longer be restored (e.g. the database was
+switched in between), the log says `❌ Undo failed …` instead of claiming
+success.
+
 The People list keeps working the way it did: a person deleted from the
 archive is also dropped from the queue table, and the undo restores both
 sides together.

@@ -151,6 +151,7 @@ class ArchiveUndoApplied(Event):
     forward: bool
     op: str = ""
     nick: str = ""
+    ok: bool = True                     # False = the state could not be re-applied
 
 
 class EventBus:

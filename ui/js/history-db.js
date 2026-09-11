@@ -18,6 +18,12 @@ const HistoryDb = {
   preloadRows: 40,
   _seq: 0,
   _els: {},
+  // _gen: bumped on every reload — a page response from an older generation
+  // must never overwrite a newer view (a delete's page landing after the
+  // undo's page used to freeze the list on the pre-undo state forever).
+  _gen: 0,
+  _flightGen: 0,            // the generation the in-flight page belongs to
+  _changeTimer: null,
 
   init() {
     const $ = (id) => document.getElementById(id);
@@ -87,22 +93,35 @@ const HistoryDb = {
     if (preview.page_size) this.pageSize = Number(preview.page_size);
   },
 
+  /** A fresh list from the top. Always issues its request right away — a
+      change or a user action must never be deferred behind an in-flight
+      page (that is how the list got frozen on the pre-undo state): the
+      generation guard simply drops the older response when it lands. */
   reload() {
+    if (!App.bridge || !App.bridge.userdb_page) return;
+    this._gen += 1;
     this.rows = [];
+    this.total = 0;
     this.hasMore = true;
-    this.loading = false;
-    this._request(0);
+    this.loading = true;
+    this._flightGen = this._gen;
+    this._requestPage(0);
     this._requestStats();
   },
 
-  _request(offset) {
-    if (this.loading || !this.hasMore) return;
-    if (!App.bridge || !App.bridge.userdb_page) return;
-    this.loading = true;
+  _requestPage(offset) {
     const id = 'u' + (++this._seq);
     App.bridge.userdb_page(id, JSON.stringify({
       q: this.query, limit: this.pageSize, offset: offset, sort: this.sort,
     }));
+  },
+
+  /** Scroll pagination — one page at a time, no duplicates. */
+  _request(offset) {
+    if (this.loading || !this.hasMore) return;
+    this.loading = true;
+    this._flightGen = this._gen;
+    this._requestPage(offset);
   },
 
   _requestStats() {
@@ -110,15 +129,21 @@ const HistoryDb = {
     App.bridge.userdb_stats('s' + (++this._seq));
   },
 
+  /** A page landed (or the request died): free the in-flight slot. */
+  _settle() {
+    this.loading = false;
+  },
+
   onPage(reqId, json) {
     let data = null;
     try { data = JSON.parse(json); } catch (e) { data = null; }
-    if (!data) { this.loading = false; return; }
-    this.loading = false;
-    if (data.persons !== undefined && data.items === undefined) {
+    if (!data) { this._settle(); return; }
+    if (data.items === undefined) {     // the stats payload, not a page
       this.onStats(data);
       return;
     }
+    this._settle();
+    if (this._flightGen !== this._gen) return;  // stale page: never overwrite
     const items = data.items || [];
     if (data.offset ? data.offset === 0 : !this.rows.length) this.rows = items;
     else {
@@ -142,8 +167,11 @@ const HistoryDb = {
     this._els.foot.textContent = parts.join(' · ');
   },
 
+  /** Anything upstream changed (delete, undo, new person, label…). Burst
+      coalesced into one reload: an undo fires several wire events at once. */
   onChanged() {
-    this.reload();
+    clearTimeout(this._changeTimer);
+    this._changeTimer = setTimeout(() => this.reload(), 250);
   },
 
   _onScroll() {
@@ -153,10 +181,21 @@ const HistoryDb = {
     if (remaining < 120) this._request(this.rows.length);
   },
 
-  /** Remove the person AND their whole history (one undoable step). */
+  /** Remove the person AND their whole history — behind a confirm, since
+      one misclick would erase a person + every one of their messages
+      (undoable with Ctrl+Z, but still destructive). */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
-    App.bridge.history_delete_person(nick, false);
+    const remove = () => App.bridge.history_delete_person(nick, false);
+    if (window.Dialog && Dialog.confirm) {
+      Dialog.confirm(
+        'Remove person?',
+        '“' + nick + '” and their entire message history will be removed ' +
+        'from the database. Ctrl+Z restores both.',
+        'Remove', remove);
+      return;
+    }
+    remove();
   },
 
   /** Wipe the conversation but keep the person in the database. */

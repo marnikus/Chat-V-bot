@@ -324,6 +324,10 @@ function setupBridgeListeners() {
     let users = [];
     try { users = JSON.parse(json); } catch (e) { users = []; }
     UserTable.render(users);
+    // the Full User Database shows the same people from the archive side —
+    // a new person (collector), a deletion, a restore must not wait for a
+    // manual refresh (BUG: DB list never auto-refreshed)
+    if (typeof HistoryDb !== 'undefined') HistoryDb.onChanged();
   });
 
   // people list: deletions (single / selection / clear all)
@@ -418,8 +422,13 @@ function setupBridgeListeners() {
   }
 
   // ── labels + database management ──────────────────────────
-  if (b.labels_changed)
-    b.labels_changed.connect((json) => Labels.applyState(json));
+  if (b.labels_changed) {
+    b.labels_changed.connect((json) => {
+      Labels.applyState(json);
+      // labels render per row in the Full User Database too
+      if (typeof HistoryDb !== 'undefined') HistoryDb.onChanged();
+    });
+  }
   if (b.db_info_ready)
     b.db_info_ready.connect((req, json) => DbPanel.onInfo(req, json));
   if (b.db_changed) {

@@ -1,0 +1,65 @@
+{
+  "date": "2026-09-11",
+  "feature": "Person DB: undo restore + auto-refresh + delete confirm (bug fix)",
+  "design": "docs/USERDB_UNDO_RESTORE_FIX_DESIGN_2026-09-11.md",
+  "branch": "arena/01a08c75-chat-v-bot",
+  "new_production_files": [
+    "services/archive_undo.py"
+  ],
+  "touched_production_files": [
+    "services/undo_service.py",
+    "core/events.py",
+    "ui/js/history-db.js",
+    "ui/js/app.js",
+    "README.md"
+  ],
+  "new_test_files": [
+    "tests/test_userdb_undo_restore.py",
+    "tests/test_userdb_refresh_ui.js"
+  ],
+  "gates": {
+    "function_loc_max": 20,
+    "function_loc_limit": 30,
+    "params_max": 4,
+    "params_limit": 4,
+    "radon_cc_max": 10,
+    "radon_cc_limit": 10,
+    "cognitive_max": 11,
+    "cognitive_limit": 15,
+    "nesting_max": 3,
+    "nesting_limit": 4,
+    "vulture_new_findings": 0,
+    "overrides_used": 0
+  },
+  "new_functions": {
+    "archive_undo.apply_archive_op": "loc=23 params=4 radon=B(7)  cognitive=7  nest=1",
+    "archive_undo.apply_delete_forward": "loc=14 params=2 radon=B(9)  cognitive=9  nest=3",
+    "archive_undo.apply_delete_restore": "loc=22 params=2 radon=B(10) cognitive=11 nest=2",
+    "archive_undo.re_hide_message": "loc=8  params=3 radon=A(4)  cognitive=3  nest=1",
+    "archive_undo._failure_line": "loc=3  params=4 radon=A(2)  cognitive=1  nest=0"
+  },
+  "rewritten_functions": {
+    "UndoService._apply_archive_command": "loc=18 params=2 radon=B(7) cognitive=8 (base: 36 LOC, radon B(10))",
+    "core.events.ArchiveUndoApplied": "added ok: bool = True (frozen dataclass; default keeps every existing emit valid)"
+  },
+  "preexisting_exceptions_unchanged": {
+    "UndoService.apply_command": "radon C(12) cognitive=15 — identical to base, untouched",
+    "UndoService class": "base 444 LOC / 26 methods -> after 426 LOC / 26 methods (net Δ 0; the 5 archive-op methods moved to services/archive_undo.py). §6.2 satisfied: no method-count growth on a legacy over-15 class."
+  },
+  "tests": {
+    "new_python_tests": 8,
+    "new_js_tests": 7,
+    "python_pin_verification": "the 4 honest-failure tests FAIL on pre-fix undo_service (no error surfaced, no undo_failed event); the 8/8 pass with the fix",
+    "js_pin_verification": "5 of 7 tests FAIL on pre-fix history-db.js (stale page overwrites, in-flight reload dropped, no confirm); 7/7 pass with the fix",
+    "regression": "tests/test_archive_delete_undo.py 25/25 still green; all 22 JS suites green (incl. test_history_panels_boot.js which caught a real regression from the first debounce-and-defer draft)"
+  },
+  "rules_16_18_revision_2": {
+    "trigger": "final audit found §6.2 violation: 5 new methods added to UndoService (named landmine, already 26 > 15) and the archive-undo logic scattered across the 444-line class (RULE 18 reader budget)",
+    "action": "extracted the apply/reverse semantics into services/archive_undo.py (~95 lines, one screen)",
+    "after": {
+      "UndoService": "loc=426 methods=26 (base: 444 / 26)",
+      "new_module_coverage": "88% line / 87.5% branch on the undo test files (floors: 80/75)",
+      "overrides_used": 0
+    }
+  }
+}

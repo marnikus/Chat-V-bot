@@ -23,11 +23,11 @@ import os
 from typing import Any, Optional
 
 from backend.config_manager import MAX_STACK_HISTORY
-from core.events import (EventBus, ArchiveUndoApplied, DbChanged,
-                         GridLayoutChanged, LabelsChanged, LogMessage,
-                         PeopleChanged, StackLoaded, UndoHistoryChanged,
-                         UserDbChanged)
+from core.events import (EventBus, DbChanged, GridLayoutChanged,
+                         LabelsChanged, LogMessage, PeopleChanged,
+                         StackLoaded, UndoHistoryChanged, UserDbChanged)
 from core.result import Err, Ok, Result
+from services.archive_undo import apply_archive_op
 from services.layout_service import LayoutService  # noqa: F401  API parity
 from services.run import normalize_blocks
 from services.service_log import emit_log
@@ -388,11 +388,12 @@ class UndoService:
             return False
 
     def _apply_archive_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a message, chat or person deletion (soft)."""
+        """Re-apply / reverse a message, chat or person deletion (soft).
+
+        The op itself — and the honest success/failure announcement —
+        lives in `services.archive_undo`, kept small on purpose (RULE 18).
+        """
         archive = self._archive
-        op = str(value.get("op") or "")
-        nick = str(value.get("nick") or "")
-        token = str(value.get("token") or "")
         people = value.get("people") if isinstance(value.get("people"),
                                                    dict) else None
         if people is not None and self._people is not None:
@@ -401,29 +402,10 @@ class UndoService:
                 self._schedule(self._people.apply(rows))
         if archive is None:
             return people is not None
-
-        async def work():
-            repo = archive.repo
-            if forward:
-                if op == "delete_message":
-                    await repo.soft_delete_message(
-                        nick, int(value.get("message_id") or 0), token=token)
-                elif op == "clear_history":
-                    await repo.soft_delete_history(nick, token=token)
-                elif op == "delete_person":
-                    await repo.delete_person(nick, hard=False, token=token)
-            else:
-                if op == "delete_person":
-                    await repo.restore_person(nick, token=token)
-                else:
-                    await repo.restore_deleted(nick, token)
-            self._bus.emit(UserDbChanged(payload=json.dumps(
-                {"action": "undo" if not forward else "redo", "op": op,
-                 "nick": nick}, ensure_ascii=False)))
-            self._bus.emit(ArchiveUndoApplied(forward=forward, op=op,
-                                              nick=nick))
-        self._schedule(work())
+        self._schedule(apply_archive_op(self._bus, archive.repo, value,
+                                        forward))
         return True
+
 
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
         """Re-apply / reverse a DB Connection action (legacy entries)."""
