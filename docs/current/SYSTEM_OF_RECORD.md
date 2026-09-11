@@ -7,8 +7,8 @@ and are linked from here.
 | | |
 |---|---|
 | Last verified against code | 2026-09-11 (this checkout) |
-| Test suite | `2593 passed, 3 skipped, 1 deselected, 1 xfailed, 775 subtests passed` + 23 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **89.50%** · branch **84.78%** (floors: 80% / 75%) |
+| Test suite | `2614 passed, 3 skipped, 1 deselected, 1 xfailed, 774 subtests passed` + 23 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **89.74%** · branch **85.06%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -229,7 +229,7 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2593 tests + 775 subtests)
+# Python (2614 tests + 774 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
@@ -272,7 +272,7 @@ dict, and the collector status strings.
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 31 (legacy), mean 3.25 |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **89.50% / 84.78%** |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **89.74% / 85.06%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (58.8% in band) · median file 130 lines — RULE 18 |
 

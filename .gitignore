@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .coverage
 .coverage.*
+coverage.json
 htmlcov/
 *.db
 logs/*.log
