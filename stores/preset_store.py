@@ -67,13 +67,7 @@ class PresetStore(JsonFileStore):
 
     def __new__(cls, config: Any = None, path: Optional[str] = None):
         key = os.path.abspath(_file_for(config, path))
-        cached = cls._by_path.get(key)
-        if cached is not None:
-            return cached
-        instance = super().__new__(cls)
-        instance._cache_key = key
-        cls._by_path[key] = instance
-        return instance
+        return cls._instance_for(key)
 
     def __init__(self, config: Any = None, path: Optional[str] = None):
         if getattr(self, "_initialized", False):

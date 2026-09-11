@@ -82,6 +82,25 @@ class JsonFileStore:
             self._owned = AtomicJsonStore(self._path)
         return self._owned
 
+    # ── per-path identity (stores cached by file) ────────────────
+    @classmethod
+    def _instance_for(cls, key: str):
+        """The one instance per absolute path, creating + caching it.
+
+        Used by the stores whose callers must share a single writer per
+        file (`PresetStore`, `WindowPresetStore`): the subclass owns its
+        `_by_path` dict, and this is the lookup/create dance both of their
+        `__new__` used to carry verbatim (RULE 16 §16.4 — one named helper
+        in the owning layer instead of one clone per store).
+        """
+        cached = cls._by_path.get(key)
+        if cached is not None:
+            return cached
+        instance = super().__new__(cls)
+        instance._cache_key = key
+        cls._by_path[key] = instance
+        return instance
+
     # ── normalisation ────────────────────────────────────────────
     def _coerce(self, raw: Any) -> dict[str, Any]:
         """The payload as stored. A non-dict file is an empty one."""

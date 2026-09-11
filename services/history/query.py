@@ -81,6 +81,15 @@ class HistoryQueryService:
         data = {row["key"]: row["value"] for row in rows}
         media = dict(self._settings.get("media") or {})
         preview = dict(self._settings.get("preview") or {})
+        media, preview = self._decode_app_settings(data, media, preview)
+        self._settings["media"], self._settings["preview"] = media, preview
+        self.media.max_file_bytes = int(float(media.get("max_file_mb", MAX_FILE_MB_DEFAULT)) * 1024 * 1024)
+        self.media.max_cache_bytes = int(float(media.get("max_cache_mb", 200)) * 1024 * 1024)
+
+    def _decode_app_settings(self, data: dict, media: dict,
+                             preview: dict) -> tuple:
+        """my_nick → media caps → preview, ONE guarded sequence (order pinned:
+        one unreadable value aborts the rest, matching the legacy ladder)."""
         try:
             if "my_nick" in data:
                 nick = json.loads(str(data["my_nick"]))
@@ -96,9 +105,7 @@ class HistoryQueryService:
                     preview = _merge(preview, stored)
         except (TypeError, ValueError, KeyError, json.JSONDecodeError):
             pass
-        self._settings["media"], self._settings["preview"] = media, preview
-        self.media.max_file_bytes = int(float(media.get("max_file_mb", MAX_FILE_MB_DEFAULT)) * 1024 * 1024)
-        self.media.max_cache_bytes = int(float(media.get("max_cache_mb", 200)) * 1024 * 1024)
+        return media, preview
 
     async def load_gaze(self) -> None:
         try:

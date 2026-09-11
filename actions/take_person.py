@@ -59,20 +59,22 @@ class TakePerson(BaseAction):
             order via queue_order).
         """
         new = [u for u in rows if not getattr(u, "messaged", False)]
-        done = [u for u in rows if getattr(u, "messaged", False)]
-        if self.pick_mode == "random_done":
-            pool = done
-        elif self.pick_mode == "order_first":
-            if not new:
-                return None
-            if engine is not None and hasattr(engine, "queue_order"):
-                ordered = engine.queue_order(rows)
-                if ordered:
-                    return ordered[0]
-            return new[0].nick
-        else:  # random_new
-            pool = new
+        if self.pick_mode == "order_first":
+            return self._order_pick(rows, new, engine)
+        pool = ([u for u in rows if getattr(u, "messaged", False)]
+                if self.pick_mode == "random_done" else new)
         return random.choice(pool).nick if pool else None
+
+    def _order_pick(self, rows: list, new: list,
+                    engine: Optional[object]) -> Optional[str]:
+        """First person per the engine's Order (#); else first unmessaged."""
+        if not new:
+            return None
+        if engine is not None and hasattr(engine, "queue_order"):
+            ordered = engine.queue_order(rows)
+            if ordered:
+                return ordered[0]
+        return new[0].nick
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:

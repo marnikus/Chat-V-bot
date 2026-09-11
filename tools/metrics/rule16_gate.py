@@ -76,16 +76,25 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # __future__ / json / logging / os / PySide6.QtCore), present since the base
 # commit 3820136, i.e. it predates this feature. Verified with
 # `git log -L 8,15:bridge/history_bridge.py`.
+#
+# Maintenance 2026-09-11 (DB undo/restore): the AREA C sized split removed two
+# of these outright — ('app/lifecycle.py', 'services/history/export.py') and
+# ('services/history/mutate.py', 'services/undo_service.py') no longer share a
+# window (export.py gained one import, UndoService shed the commit/scheduling
+# code). One new group appeared and is the same kind of noise:
+# ('services/history/query.py', 'services/undo_service.py') is the plain
+# `from __future__ / copy / json / logging / os` header — undo_service no
+# longer imports asyncio (the task plumbing moved to undo_timeline.py), which
+# left those two files with the identical 6-line header. No logic is copied.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("app/lifecycle.py", "services/history/export.py"),
     ("backend/media_handler.py", "backend/message_injector.py"),
     ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("bridge/stack_bridge.py", "services/collector_service.py"),
-    ("services/history/mutate.py", "services/undo_service.py"),
+    ("services/history/query.py", "services/undo_service.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),
     ("stores/atomic.py", "stores/jsonio.py"),

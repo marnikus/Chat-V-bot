@@ -42,26 +42,31 @@ class MediaCachePolicy:
         moved = 0
         root = os.path.abspath(self._owner.cache_dir)
         for row in rows:
-            old = row["cache_path"]
-            if not old or not os.path.exists(old):
-                continue
-            if os.path.dirname(os.path.abspath(old)) != root:
-                continue                       # already inside the tree
-            ext = os.path.splitext(old)[1] or _extension(row["url"], "")
-            day = self._owner._day(row.get("day") or row.get("created_at"))
-            try:
-                new = self._owner._target_path(row.get("owner") or "",
-                                        row.get("kind") or "image", day, ext)
-                os.replace(old, new)
-            except OSError as e:               # noqa: PERF203
-                log.warning("cannot move %s into the media tree: %s", old, e)
-                continue
-            await self._owner.db.execute(
-                "UPDATE media SET cache_path=? WHERE id=?", (new, row["id"]))
-            moved += 1
+            if await self._rehome_one(row, root):
+                moved += 1
         if moved:
             await self._owner.db.commit()
         return moved
+
+    async def _rehome_one(self, row: dict, root: str) -> bool:
+        """Move one flat-cached file into its person folder (False = skipped)."""
+        old = row["cache_path"]
+        if not old or not os.path.exists(old):
+            return False
+        if os.path.dirname(os.path.abspath(old)) != root:
+            return False                       # already inside the tree
+        ext = os.path.splitext(old)[1] or _extension(row["url"], "")
+        day = self._owner._day(row.get("day") or row.get("created_at"))
+        try:
+            new = self._owner._target_path(row.get("owner") or "",
+                                    row.get("kind") or "image", day, ext)
+            os.replace(old, new)
+        except OSError as e:               # noqa: PERF203
+            log.warning("cannot move %s into the media tree: %s", old, e)
+            return False
+        await self._owner.db.execute(
+            "UPDATE media SET cache_path=? WHERE id=?", (new, row["id"]))
+        return True
 
     async def cache_usage(self) -> dict:
         row = await self._owner.db.fetchone(

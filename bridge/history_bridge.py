@@ -22,6 +22,27 @@ from backend.history_query import (
 log = logging.getLogger("chatbot")
 
 
+def _qt_clipboard():
+    """The Qt clipboard object, or None when there is no app (headless)."""
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance()
+    return None if app is None else app.clipboard()
+
+
+def _file_mime(path: str, mode: str):
+    """Clipboard content for a FILE: URL + path text (+ pixels for images)."""
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QImage
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(path)])
+    mime.setText(path)
+    if mode == "image":
+        image = QImage(path)
+        if not image.isNull():
+            mime.setImageData(image)
+    return mime
+
+
 def _person_request(opts: dict) -> PersonPageRequest:
     """The UI's JSON blob as a `PersonPageRequest`.
 
@@ -326,14 +347,16 @@ class HistoryBridge(QObject):
             return False
 
         async def work():
-            gone = await self.ctx.archive.repo.purge_deleted(
-                " ".join(str(nick or "").split()).strip())
+            clean = " ".join(str(nick or "").split()).strip()
+            erased = await self.ctx.archive.purge_trash(clean)
             self.ctx.bus.emit(LogMessage(
-                message=f"🔥 {gone} hidden message(s) erased permanently",
+                message=f"🔥 Trash emptied — {erased['persons']} person(s) "
+                        f"and {erased['messages']} message(s) erased",
                 level="warn"))
             self.userdb_changed.emit(json.dumps(
-                {"action": "purged", "nick": nick, "count": gone},
-                ensure_ascii=False))
+                {"action": "purged", "nick": clean, "count": erased["messages"],
+                 "persons": erased["persons"]}, ensure_ascii=False))
+            self._refresh_people()
         self._run_async("history_purge_deleted", work())
         return True
 
@@ -461,11 +484,7 @@ class HistoryBridge(QObject):
     @staticmethod
     def _to_clipboard(payload: dict) -> bool:
         try:
-            from PySide6.QtGui import QGuiApplication, QImage
-            app = QGuiApplication.instance()
-            if app is None:
-                return False
-            clipboard = app.clipboard()
+            clipboard = _qt_clipboard()
             if clipboard is None:
                 return False
             mode = payload.get("mode")
@@ -473,15 +492,7 @@ class HistoryBridge(QObject):
             if path and os.path.exists(path):
                 # Carry the FILE itself, the path as text, and — for
                 # still images — the pixels as well.
-                from PySide6.QtCore import QMimeData, QUrl
-                mime = QMimeData()
-                mime.setUrls([QUrl.fromLocalFile(path)])
-                mime.setText(path)
-                if mode == "image":
-                    image = QImage(path)
-                    if not image.isNull():
-                        mime.setImageData(image)
-                clipboard.setMimeData(mime)
+                clipboard.setMimeData(_file_mime(path, mode))
                 return True
             if path:
                 clipboard.setText(path)

@@ -177,7 +177,6 @@ const App = {
 
 function initApp() {
   setupHeader();
-  if (typeof WindowPresets !== 'undefined') WindowPresets.init();
   UserTable.init();
   // Message archive windows (Person History / Full User Database /
   // Chat Message Collector). They are inert without a bridge.
@@ -194,7 +193,6 @@ function initApp() {
     // authoritative config.json copy now that the bridge is available.
     if (typeof SashGrid !== 'undefined' && SashGrid._loadFromBackend)
       SashGrid._loadFromBackend();
-    if (typeof WindowPresets !== 'undefined') WindowPresets.refresh();
     // fill the people list on start, not only after connecting to a tab
     App.bridge.refresh_users();
     // single payload with everything needed to restore the session (BUG #2)
@@ -379,8 +377,6 @@ function setupBridgeListeners() {
       PresetsUI.setCustomBlocks(list);
     } catch (e) { /* ignore */ }
   });
-  if (b.window_preset_list_updated && b.window_preset_list_updated.connect)
-    b.window_preset_list_updated.connect((json) => WindowPresets.setPresets(json));
   b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
   // backend records people-list edits in the global timeline itself — keep
   // the local mirror + undo/redo buttons in sync whenever it grows/moves.
@@ -423,7 +419,10 @@ function setupBridgeListeners() {
 
   // ── labels + database management ──────────────────────────
   if (b.labels_changed)
-    b.labels_changed.connect((json) => Labels.applyState(json));
+    b.labels_changed.connect((json) => {
+      Labels.applyState(json);
+      HistoryDb.liveChanged('labels');   // the badges live in the DB table too
+    });
   if (b.db_info_ready)
     b.db_info_ready.connect((req, json) => DbPanel.onInfo(req, json));
   if (b.db_changed) {
@@ -444,6 +443,7 @@ function setupBridgeListeners() {
     b.history_appended.connect((json) => {
       HistoryStore.onLiveAppend(json);
       CollectorPanel.onAppended(json);
+      HistoryDb.liveChanged('appended');   // a new person must appear here
     });
   }
   if (b.media_ready)

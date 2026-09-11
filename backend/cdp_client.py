@@ -14,6 +14,20 @@ from urllib.parse import urlparse
 
 log = logging.getLogger("chatbot")
 
+
+def _cookie_matches(cookie: dict, host: str) -> bool:
+    """Domain scoping: the cookie may go to `host` (host '' ⇒ jar open)."""
+    if not cookie.get("name"):
+        return False
+    domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
+    if not (host and domain):
+        return True
+    return domain == host or host.endswith("." + domain)
+
+
+def _pair_of(cookie: dict) -> str:
+    return f"{cookie.get('name')}={cookie.get('value') or ''}"
+
 HIGH, LOW = 0, 1
 
 
@@ -184,19 +198,24 @@ class CDPClient(QObject):
     def base_url(self) -> str:
         return f"http://{self._host}:{self._port}"
 
-    async def fetch_tabs(self) -> list[TabInfo]:
-        tabs: list[TabInfo] = []
+    async def _list_targets(self) -> list:
+        """GET /json/list ([] on any transport failure, logged)."""
         try:
+            timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession() as s:
                 async with s.get(f"{self.base_url}/json/list",
-                                 timeout=aiohttp.ClientTimeout(total=5)) as r:
-                    for item in (await r.json() if r.status == 200 else []):
-                        if item.get("type") == "page":
-                            tabs.append(TabInfo(item.get("id",""), item.get("title",""),
-                                                item.get("url",""), item.get("webSocketDebuggerUrl","")))
+                                 timeout=timeout) as r:
+                    return await r.json() if r.status == 200 else []
         except Exception as e:
             log.warning("Tab discovery failed: %s", e)
-        return tabs
+            return []
+
+    async def fetch_tabs(self) -> list[TabInfo]:
+        return [TabInfo(item.get("id",""), item.get("title",""),
+                        item.get("url",""),
+                        item.get("webSocketDebuggerUrl",""))
+                for item in await self._list_targets()
+                if item.get("type") == "page"]
 
     async def connect(self, ws_url: str) -> bool:
         await self.disconnect()
@@ -251,24 +270,19 @@ class CDPClient(QObject):
         can be blocked by CORS. Downloading from Python with the same cookies
         bypasses that while still authenticating like the page.
         """
+        cookies = await self._all_cookies()
+        host = str(urlparse(str(url or "")).hostname or "").lower()
+        return "; ".join(_pair_of(cookie) for cookie in cookies
+                         if _cookie_matches(cookie, host))
+
+    async def _all_cookies(self) -> list:
+        """The browser cookie jar ([] when the send fails — fail-open)."""
         try:
             result = await self.send("Network.getAllCookies")
         except Exception as e:                     # noqa: BLE001
             log.debug("getCookies failed: %s", e)
-            return ""
-        cookies = result.get("result", {}).get("cookies", []) or []
-        host = str(urlparse(str(url or "")).hostname or "").lower()
-        pairs = []
-        for cookie in cookies:
-            name, value = cookie.get("name"), cookie.get("value")
-            if not name:
-                continue
-            domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
-            if host and domain:
-                if not (domain == host or host.endswith("." + domain)):
-                    continue
-            pairs.append(f"{name}={value or ''}")
-        return "; ".join(pairs)
+            return []
+        return result.get("result", {}).get("cookies", []) or []
 
     async def click_at(self, x: float, y: float) -> None:
         for t in ("mousePressed", "mouseReleased"):

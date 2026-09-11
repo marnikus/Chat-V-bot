@@ -19,6 +19,20 @@ from backend.visual_click import find_and_click_exact
 log = logging.getLogger("chatbot")
 
 
+def _tab_evidence(before: Optional[dict], after: dict, nick: str) -> dict:
+    """What changed in the tab list after the click (count delta / title)."""
+    before_count = int((before or {}).get("count", 0) or 0)
+    after_count = int(after.get("count", 0) or 0)
+    titles = [str(t) for t in (after.get("titles") or [])]
+    opened = after_count > before_count \
+        or any(nick and nick in title for title in titles)
+    return {"opened": opened, "before_count": before_count,
+            "after_count": after_count, "titles": titles,
+            "how": (f"tab count {before_count} → {after_count}"
+                    if after_count > before_count
+                    else f"a tab titled “{nick}” is open")}
+
+
 def build_tab_count_js(tab_selector: str, title_selector: str) -> str:
     """JS returning the open chat tabs and their titles."""
     return """(function(){
@@ -172,6 +186,13 @@ class ClickUser(BaseAction):
         if note is not None:
             note(nick)
 
+    async def _pause_for_tab(self, engine) -> None:
+        """Give the site a moment to open the chat tab (with the info line)."""
+        if self.tab_pause_ms:
+            self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
+                              "tab…", "info")
+            await asyncio.sleep(self.tab_pause_ms / 1000.0)
+
     async def _verify_new_tab(self, cdp: CDPClient, engine, nick: str,
                               label: str, before: Optional[dict]) -> str:
         """The tab check: a new tab, or a tab that now carries the nick's name.
@@ -180,25 +201,20 @@ class ClickUser(BaseAction):
         tab count is evidence, not a veto, because the click itself already
         succeeded.
         """
-        if self.tab_pause_ms:
-            self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
-                              "tab…", "info")
-            await asyncio.sleep(self.tab_pause_ms / 1000.0)
+        await self._pause_for_tab(engine)
         after = await self._read_tabs(cdp)
         if after is None:
             self._say(engine, "⚠ Could not read the tab list to confirm the "
                               "new tab — assuming the click worked", "warn")
             return ActionResult.OK
-        before_count = int((before or {}).get("count", 0) or 0)
-        after_count = int(after.get("count", 0) or 0)
-        titles = [str(t) for t in (after.get("titles") or [])]
-        if after_count <= before_count and not any(nick and nick in t
-                                                   for t in titles):
-            return self._no_new_tab(engine, nick, label, before_count,
-                                    after_count, titles)
-        how = (f"tab count {before_count} → {after_count}" if
-               after_count > before_count else f"a tab titled “{nick}” is open")
-        self._say(engine, f"✅ New tab confirmed for {label} ({how})", "success")
+        evidence = _tab_evidence(before, after, nick)
+        if not evidence["opened"]:
+            return self._no_new_tab(engine, nick, label,
+                                    evidence["before_count"],
+                                    evidence["after_count"],
+                                    evidence["titles"])
+        self._say(engine, f"✅ New tab confirmed for {label} "
+                          f"({evidence['how']})", "success")
         log.info("Opened chat tab for %s", nick)
         return ActionResult.OK
 

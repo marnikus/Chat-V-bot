@@ -446,6 +446,27 @@ def _candidate_lines(result: dict) -> str:
     return " Candidates: " + "; ".join(parts) + "."
 
 
+def _found_state_bits(result: dict) -> str:
+    """`visible`/`NOT visible` badge (+ disabled marker), for the found line."""
+    state = ("visible" if result.get("visible")
+             else "⚠ NOT visible (hidden/zero-size)")
+    if result.get("disabled"):
+        state += ", ⚠ disabled (or pointer-events:none)"
+    return state
+
+
+def _highlight_note(result: dict) -> str:
+    """The red-outline suffix (position when the probe returned a rect)."""
+    if not result.get("highlighted"):
+        return " — (highlight off)" if result.get("visible") else ""
+    r = result.get("rect") or {}
+    if not r:
+        return " — 🟥 red outline drawn"
+    return (" — 🟥 red outline drawn"
+            f" at {int(r.get('x', 0))},{int(r.get('y', 0))} "
+            f"{int(r.get('width', 0))}×{int(r.get('height', 0))}px")
+
+
 def interpret_find(result, label: str = "element") -> tuple[str, str]:
     """Turn a FIND-phase result into a (message, level) pair."""
     if not result:
@@ -460,19 +481,9 @@ def interpret_find(result, label: str = "element") -> tuple[str, str]:
                 + _candidate_lines(result)), "error"
     text = str(result.get("text", ""))[:60]
     idx = result.get("index", -1)
-    state = "visible" if result.get("visible") else "⚠ NOT visible (hidden/zero-size)"
-    if result.get("disabled"):
-        state += ", ⚠ disabled (or pointer-events:none)"
-    msg = f"✅ FIND success: {label} — matched node #{idx} “{text}” ({state})"
-    if result.get("highlighted"):
-        r = result.get("rect") or {}
-        size = ""
-        if r:
-            size = (f" at {int(r.get('x', 0))},{int(r.get('y', 0))} "
-                    f"{int(r.get('width', 0))}×{int(r.get('height', 0))}px")
-        msg += f" — 🟥 red outline drawn{size}"
-    elif result.get("visible"):
-        msg += " — (highlight off)"
+    msg = f"✅ FIND success: {label} — matched node #{idx} “{text}”" \
+          f" ({_found_state_bits(result)})"
+    msg += _highlight_note(result)
     level = "success" if result.get("visible") else "warn"
     return msg, level
 

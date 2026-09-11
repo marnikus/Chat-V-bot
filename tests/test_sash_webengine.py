@@ -44,6 +44,26 @@ except Exception as e:  # ImportError or missing system libs
     QT_IMPORT_ERROR = str(e)
 
 
+def _qt_webengine_works() -> bool:
+    """A real QWebEngineView shows + paints without aborting, probed in a
+    subprocess. PySide6 can import fine yet SIGABRT at runtime on minimal
+    machines (no GL/RHI for the Chromium compositor) — that would kill the
+    whole test process, so the probe must cover exactly the fatal steps."""
+    if not HAVE_QT:
+        return False
+    probe = ("import sys;"
+             "from PySide6.QtWidgets import QApplication;"
+             "from PySide6.QtWebEngineWidgets import QWebEngineView;"
+             "app = QApplication(sys.argv);"
+             "v = QWebEngineView(); v.resize(1400, 900); v.show();"
+             "app.processEvents()")
+    try:
+        return subprocess.run([sys.executable, "-c", probe],
+                              capture_output=True, timeout=60).returncode == 0
+    except Exception:
+        return False
+
+
 class _FakeBridge(QObject):
     """Stand-in for backend.bridge.Bridge — every slot the UI may call."""
 
@@ -155,7 +175,8 @@ class _FakeBridge(QObject):
     def delete_custom_block(self, _n): pass
 
 
-@unittest.skipUnless(HAVE_QT, "PySide6/QtWebEngine not available: " + QT_IMPORT_ERROR)
+@unittest.skipUnless(_qt_webengine_works(),
+                     "Qt WebEngine cannot start here (no GL): " + QT_IMPORT_ERROR)
 class TestSashWebEngine(unittest.TestCase):
 
     def test_grid_in_real_webengine(self):

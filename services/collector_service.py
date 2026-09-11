@@ -443,33 +443,48 @@ class Collector(QObject):
             # No tick has verified this conversation (or the last one
             # refused it): the observer may be describing another pane.
             return 0
+        if not self._push_gate(data, items):
+            return 0
+        result = await self._append_pushed(items)
+        if result is None:
+            return 0
+        if result.added:
+            await self._announce_push(result)
+        return result.added
+
+    def _push_gate(self, data: dict, items: list) -> bool:
+        """RULE 15 gate: refuse the push unless the pane proves private."""
         check = verify_private(
             {"tab": data.get("tab") or "private",
              "partner": data.get("partner") or self._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
             self._nick, self.my_nick, items=items)
-        if not check.ok:
-            self._refuse(*self._gate_status(check, self._nick))
-            return 0
+        if check.ok:
+            return True
+        self._refuse(*self._gate_status(check, self._nick))
+        return False
+
+    async def _append_pushed(self, items: list):
+        """Archive the pushed records; None when the write failed (logged)."""
         try:
-            result = await self.repo.append(self._nick, items,
-                                            my_nick=self.my_nick,
-                                            align=False, now=self.now())
+            return await self.repo.append(self._nick, items,
+                                          my_nick=self.my_nick,
+                                          align=False, now=self.now())
         except Exception as e:                        # noqa: BLE001
             log.warning("push append failed: %s", e)
-            return 0
-        if result.added:
-            self._added = result.added
-            self._total = result.total
-            await self._notify_appended(self._nick,
-                                        list(result.records[:200]),
-                                        result.added, result.total)
-            self._set(CollectorState.COLLECTED,
-                      f"Collected {result.added} new "
-                      f"message{'s' if result.added != 1 else ''} "
-                      f"from {self._nick}")
-        return result.added
+            return None
+
+    async def _announce_push(self, result) -> None:
+        """Counters + notify + the COLLECTED status line (strings pinned)."""
+        self._added = result.added
+        self._total = result.total
+        await self._notify_appended(self._nick, list(result.records[:200]),
+                                    result.added, result.total)
+        self._set(CollectorState.COLLECTED,
+                  f"Collected {result.added} new "
+                  f"message{'s' if result.added != 1 else ''} "
+                  f"from {self._nick}")
 
     @staticmethod
     def _payload(payload) -> dict:

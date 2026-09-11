@@ -588,9 +588,9 @@ reference implementation of that count is the AST walker in
   the extractions this repo actually made: `_gate_before_cycle`,
   `_announce_stopped`, `_try_prepare_cycle_queue`, `choose_cycle_mode`,
   `inspect_stack`.
-* *Measured today:* of 1 668 production functions, **57.7% are 4–20 lines**
-  (median 6, mean 10.3, p90 23). 29.0% are 1–3 lines, 8.9% are 21–30, and only
-  0.4% (7 functions) exceed 56.
+* *Measured today:* of 1 943 production functions, **63.9% are 4–20 lines**
+  (median 7, mean 9.6, p90 20). 26.4% are 1–3 lines, 7.6% are 21–30, and only
+  0.1% (2 functions) exceed 56 — down from 7 after the 2026-09-11 CC round 3.
 
 ### 18.2 Files — 150–300 lines
 
@@ -609,14 +609,15 @@ reference implementation of that count is the AST walker in
   `stores/history_repo.py` → `_append` / `_identity` / `_lifecycle` / `_media`;
   `services/db_lifecycle.py` → `db_deletion` / `db_deletion_scan` /
   `db_deletion_flow`.
-* *Measured today:* 141 production files, median **130** lines, mean 177;
-  55.3% are under 150, 26.2% are in the 150–300 band, and **9 files are still
-  over 500**: `backend/chat_sync.py` (771), `backend/scroll_parser.py` (671),
-  `services/db_deletion.py` (665), `services/collector_service.py` (578),
-  `services/undo_service.py` (563), `backend/history_query.py` (554),
-  `bridge/history_bridge.py` (528), `backend/dom_highlight.py` (512),
-  `services/db_deletion_flow.py` (509). Those are known debt (§16.5 landmines)
-  — do not grow them; extract from them when you next touch them.
+* *Measured today:* 149 production files, median **146** lines, mean 183;
+  51.0% are under 150, 31.5% are in the 150–300 band, and **10 files are still
+  over 500**: `backend/chat_sync.py` (791), `backend/scroll_parser.py` (674),
+  `services/db_deletion.py` (665), `backend/history_query.py` (606),
+  `services/collector_service.py` (593), `services/undo_service.py` (570),
+  `bridge/history_bridge.py` (539), `backend/dom_highlight.py` (523),
+  `services/db_deletion_flow.py` (509), `backend/config_manager.py` (502).
+  Those are known debt (§16.5 landmines) — do not grow them; extract from
+  them when you next touch them.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -627,11 +628,12 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured today:* `core/` 5, `app/` 4, `services/history/` 5,
-  `services/run/` 9, `bridge/` 12, `services/` 16 — inside the ideal. Over it:
-  `stores/` 35, `backend/` 30, `actions/` 23, each held together by prefix
-  families. When a family grows again, promote it to a sub-package rather than
-  adding file 36.
+* *Measured today:* `core/` 5, `app/` 4, `services/history/` 7,
+  `services/run/` 10, `bridge/` 13 — inside the ideal. Slightly over:
+  `services/` 19 (its `undo_*.py` family is one module by the cohesion
+  test). Over it: `stores/` 37, `backend/` 30, `actions/` 23, each held
+  together by prefix families. When a family grows again, promote it to a
+  sub-package rather than adding file 38.
 
 ### 18.4 Context files — 60–200 lines
 

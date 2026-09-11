@@ -23,6 +23,20 @@ from stores.history_repo_identity import (_as_record, align_batch,
 log = logging.getLogger("chatbot")
 
 
+def _gap_detail(reason: str, expect_idx: Optional[int], first_idx) -> str:
+    """The gap's human note; a dom_jump explains the idx it tripped on."""
+    return (f"expected idx {expect_idx}, got "
+            f"{first_idx}" if reason == "dom_jump" else "")
+
+
+def _fill_counts(result: "AppendResult", person, added: int,
+                 batch: int) -> None:
+    """added/skipped/total — the counters the caller reports back."""
+    result.added = added
+    result.skipped = batch - added
+    result.total = int(person["message_count"]) if person else 0
+
+
 class AppendPlanner:
     """Aligning a collected batch with what is stored, then writing it."""
 
@@ -64,9 +78,8 @@ class AppendPlanner:
         result.first_ord = last_ord + 1
         if gap:
             await self._record_gap(person_id, last_ord, reason,
-                                   f"expected idx {expect_idx}, got "
-                                   f"{recs[0].idx}" if reason == "dom_jump"
-                                   else "")
+                                   _gap_detail(reason, expect_idx,
+                                               recs[0].idx))
 
         added, last_ord = await self._write_rows(
             person_id, recs[start:], days[start:], my_nick, nick, session_id,
@@ -77,12 +90,10 @@ class AppendPlanner:
                                 tail_sig, bootstrapped=True,
                                 head_any=head_any, tail_any=tail_any)
         person = await self._owner.get_person_by_id(person_id)
-        result.added = added
-        result.skipped = len(recs) - added
         result.gap = gap
         result.reason = reason
         result.last_ord = last_ord
-        result.total = int(person["message_count"]) if person else 0
+        _fill_counts(result, person, added, len(recs))
         return result
 
     async def _report_unchanged(self, person_id: int, result: AppendResult,

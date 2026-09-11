@@ -124,6 +124,18 @@ def _rep(report: Optional[Callable], message: str, level: str = "info") -> None:
     log.log(getattr(logging, level.upper(), logging.INFO), "%s", message)
 
 
+def _glob_of(low: str) -> str:
+    """One lowercase token as a glob: a bare name/ext becomes ``*.name``;
+    a token carrying its own wildcard is kept as-is."""
+    if low.startswith("*."):
+        return low
+    if low.startswith("."):
+        return "*" + low
+    if "*" in low or "?" in low:
+        return low
+    return "*." + low.lstrip(".")
+
+
 def parse_patterns(file_pattern: str) -> list[str]:
     """Normalize a comma/space/semicolon list into lowercase glob patterns.
 
@@ -133,17 +145,7 @@ def parse_patterns(file_pattern: str) -> list[str]:
     """
     tokens = [t.strip() for t in re.split(r"[,\s;]+", file_pattern or "")
               if t.strip()]
-    patterns = []
-    for token in tokens:
-        low = token.lower()
-        if low.startswith("*."):
-            patterns.append(low)
-        elif low.startswith("."):
-            patterns.append("*" + low)
-        elif "*" in low or "?" in low:
-            patterns.append(low)
-        else:
-            patterns.append("*." + low.lstrip("."))
+    patterns = [_glob_of(token.lower()) for token in tokens]
     return patterns or [p.strip() for p in DEFAULT_FILE_PATTERN.split(",")]
 
 
@@ -353,8 +355,8 @@ async def _open_dialog(cdp: CDPClient, state: _AttachState) -> None:
                      "hidden file input directly", "warn")
 
 
-async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
-    """Step 5: wait for the hidden input, write the file, read it back."""
+async def _guard_file_input(cdp: CDPClient, state: "_AttachState") -> None:
+    """Find + report the hidden upload input (refuses when unusable)."""
     report = state.options.report
     try:
         raw = await cdp.evaluate(build_probe(selector=state.input_sel))
@@ -368,20 +370,33 @@ async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
     msg, level = interpret_wait(res, f"file input '{state.input_sel}'")
     _rep(report, msg, level)
 
-    state.baseline = await _message_count(cdp, state.shell_css)
+
+async def _set_upload_file(cdp: CDPClient, state: "_AttachState") -> None:
     try:
         await cdp.set_file_input_files(state.input_sel,
                                        [os.path.abspath(state.path)])
     except Exception as exc:
-        _refuse(report, f"❌ File injection failed: {exc}")
+        _refuse(state.options.report, f"❌ File injection failed: {exc}")
 
+
+async def _readback_count(cdp: CDPClient, input_sel: str) -> int:
+    """input.files.length after the write; -1 when unreadable."""
+    try:
+        raw = await cdp.evaluate(_readback_js(input_sel))
+        return int(str(raw).strip()) if str(raw).strip().isdigit() else -1
+    except Exception:
+        return -1
+
+
+async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
+    """Step 5: wait for the hidden input, write the file, read it back."""
+    report = state.options.report
+    await _guard_file_input(cdp, state)
+    state.baseline = await _message_count(cdp, state.shell_css)
+    await _set_upload_file(cdp, state)
     # Read back: DOM.setFileInputFiles can silently no-op (node id 0) —
     # never trust it without proof the file actually landed.
-    try:
-        raw = await cdp.evaluate(_readback_js(state.input_sel))
-        got = int(str(raw).strip()) if str(raw).strip().isdigit() else -1
-    except Exception:
-        got = -1
+    got = await _readback_count(cdp, state.input_sel)
     if got != 1:
         _refuse(report, f"❌ File injection did not stick (input.files.length "
                         f"= {got}) — nothing was sent")

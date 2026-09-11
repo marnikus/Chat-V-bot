@@ -67,31 +67,43 @@ class SchemaMigrator:
             if columns is None:
                 await self._owner._conn.execute(TABLE_SQL[name])
                 continue
-            if name == "messages" and "person_id" not in columns:
-                await self._rebuild_legacy_messages(columns)
+            if await self._realign_table(name, columns):
                 repaired = True
                 continue
-            if name == "messages" and \
-                    await self._has_legacy_messages_constraint():
-                await self._rebuild_messages_constraint()
-                repaired = True
-                continue
-            have = set(columns)
-            missing = [(col, decl) for col, decl in TABLE_COLUMNS[name]
-                       if col not in have]
-            for col, decl in missing:
-                try:
-                    await self._owner._conn.execute(
-                        f"ALTER TABLE {name} ADD COLUMN {col} {decl}")
-                    log.info("%s: added missing column %s.%s",
-                             os.path.basename(self._owner.path), name, col)
-                    repaired = True
-                except Exception as e:              # noqa: BLE001
-                    log.warning("cannot add %s.%s: %s", name, col, e)
+            repaired = (await self._widen_table(name, columns)) or repaired
         if repaired:
             await self._owner._conn.commit()
             log.info("%s: schema repaired (v%s)",
                      os.path.basename(self._owner.path), SCHEMA_VERSION)
+
+    async def _realign_table(self, name: str, columns: list[str]) -> bool:
+        """The structural rebuilds; False means 'plain widening is fine'."""
+        if name != "messages":
+            return False
+        if "person_id" not in columns:
+            await self._rebuild_legacy_messages(columns)
+            return True
+        if await self._has_legacy_messages_constraint():
+            await self._rebuild_messages_constraint()
+            return True
+        return False
+
+    async def _widen_table(self, name: str, columns: list[str]) -> bool:
+        """Add the missing columns of one existing table; True when widened."""
+        have = set(columns)
+        missing = [(col, decl) for col, decl in TABLE_COLUMNS[name]
+                   if col not in have]
+        added = False
+        for col, decl in missing:
+            try:
+                await self._owner._conn.execute(
+                    f"ALTER TABLE {name} ADD COLUMN {col} {decl}")
+                log.info("%s: added missing column %s.%s",
+                         os.path.basename(self._owner.path), name, col)
+                added = True
+            except Exception as e:              # noqa: BLE001
+                log.warning("cannot add %s.%s: %s", name, col, e)
+        return added
 
     async def _rebuild_legacy_messages(self, columns: list[str]) -> None:
         """Rebuild a pre-persons `messages` table into the canonical shape.
@@ -154,27 +166,38 @@ class SchemaMigrator:
         person_cache: dict[str, int] = {}
         copied = 0
         for row in rows:
-            nick = self._owner.normalise_nick(row.get("nick") or "")
-            if not nick:
-                nick = "Unknown"
-            person_id = person_cache.get(nick)
-            if person_id is None:
-                person_id = await self._person_for_nick(nick)
-                person_cache[nick] = person_id
-            values = [row.get(col) for col in shared]
-            try:
-                cur = await self._owner._conn.execute(
-                    f"INSERT INTO messages(person_id, {', '.join(shared)}) "
-                    f"VALUES(?, {', '.join('?' for _ in shared)})",
-                    [person_id] + values)
+            nick = self._owner.normalise_nick(row.get("nick") or "") \
+                or "Unknown"
+            person_id = await self._legacy_person_id(nick, person_cache)
+            if await self._copy_one_legacy(row, shared, person_id, nick):
                 copied += 1
-            except Exception as e:                  # noqa: BLE001
-                log.warning("cannot copy legacy message row: %s", e)
-                continue
-            # recompute the identity this row never had (payload = the media
-            # url when the row points at media, the text otherwise)
-            await self._stamp_legacy_identity(cur.lastrowid, row, nick)
         return copied, len(person_cache)
+
+    async def _legacy_person_id(self, nick: str, person_cache: dict) -> int:
+        """Resolve + cache the person behind one legacy nick."""
+        person_id = person_cache.get(nick)
+        if person_id is None:
+            person_id = await self._person_for_nick(nick)
+            person_cache[nick] = person_id
+        return person_id
+
+    async def _copy_one_legacy(self, row: dict, shared: list,
+                               person_id: int, nick: str) -> bool:
+        """Insert one legacy row into the canonical table; False when it
+        stays quarantined (a row that cannot be inserted is left behind)."""
+        values = [row.get(col) for col in shared]
+        try:
+            cur = await self._owner._conn.execute(
+                f"INSERT INTO messages(person_id, {', '.join(shared)}) "
+                f"VALUES(?, {', '.join('?' for _ in shared)})",
+                [person_id] + values)
+        except Exception as e:                  # noqa: BLE001
+            log.warning("cannot copy legacy message row: %s", e)
+            return False
+        # recompute the identity this row never had (payload = the media
+        # url when the row points at media, the text otherwise)
+        await self._stamp_legacy_identity(cur.lastrowid, row, nick)
+        return True
 
     async def _stamp_legacy_identity(self, row_id, row: dict,
                                       nick: str) -> None:

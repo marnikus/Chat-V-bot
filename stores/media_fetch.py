@@ -31,6 +31,12 @@ from stores.media_layout import _extension, _now, infer_kind
 log = logging.getLogger("chatbot")
 
 
+def _mime_of(response: dict) -> str:
+    """The real MIME of a network response (header fallback)."""
+    return (response.get("mimeType")
+            or (response.get("headers") or {}).get("Content-Type", ""))
+
+
 class _NetworkWatch:
     """The CDP network events of the one request an `<img>` triggers.
 
@@ -91,9 +97,7 @@ class _NetworkWatch:
         # a CORS/CDN redirect can change the visible URL; keep the bytes
         # and the real MIME for any response on the request we started.
         if rid and rid == self.info["request_id"]:
-            self.info["mime"] = (response.get("mimeType")
-                                 or (response.get("headers") or {})
-                                 .get("Content-Type", ""))
+            self.info["mime"] = _mime_of(response)
 
     def on_finished(self, params) -> None:
         if self.fut.done():
@@ -191,27 +195,27 @@ class MediaFetcher:
             return False
         return await self._file_bytes(row, url, data, payload)
 
-    async def _download(self, url: str) -> tuple[dict, list]:
-        """The three tiers in order, plus the errors worth telling the user.
-
-        "no downloadable media" is noise when a later tier also failed for a
-        real reason, so it only survives as the report when nothing else was
-        said at all.
-        """
+    async def _tier_results(self, url: str) -> tuple[dict, list]:
+        # (payload, errors): the in-page payload, then the fallback tiers.
         payload = await self._fetch_in_page(url)
-        errors: list = ([] if payload.get("ok")
-                        else [payload.get("error") or ""])
+        errors: list = ([] if payload.get("ok") else [payload.get("error") or ""])
         for step in (self._fetch_via_python, self._fetch_via_network):
             if payload.get("ok"):
                 break
             payload = await step(url)
             if not payload.get("ok"):
                 errors.append(payload.get("error") or "")
+        return payload, errors
+
+    async def _download(self, url: str) -> tuple[dict, list]:
+        # The three tiers in order, plus the errors worth telling the user.
+        # "no downloadable media" is noise when a later tier also failed for
+        # a real reason, so it only survives when nothing else was said.
+        payload, errors = await self._tier_results(url)
         if payload.get("ok"):
             return payload, []
         useful = [e for e in errors if e and e != "no downloadable media"]
-        return payload, useful or [payload.get("error")
-                                   or "no downloadable media"]
+        return payload, useful or [payload.get("error") or "no downloadable media"]
 
     async def _file_bytes(self, row: dict, url: str, data: bytes,
                           payload: dict) -> bool:
@@ -257,16 +261,8 @@ class MediaFetcher:
             return {"ok": False, "error": str(reason or "no answer")}
         return payload
 
-    async def _fetch_via_python(self, url: str) -> dict:
-        """Download with the browser session cookies (CORS-free fallback)."""
-        if callable(self._owner._http_fetcher):
-            return await self._owner._http_fetcher(url)
-        if self._owner.cdp is None or not hasattr(self._owner.cdp, "get_cookies"):
-            return {"ok": False, "error": "no authenticated download available"}
-        try:
-            cookies = await self._owner.cdp.get_cookies(url)
-        except Exception:                               # noqa: BLE001
-            cookies = ""
+    def _session_headers(self, cookies: str, url: str) -> dict:
+        # Page-flavoured HTTP headers (+ the session cookies when present).
         parsed = urlparse(str(url or ""))
         referer = f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc \
             else "https://ru.virt-chat.com/"
@@ -280,6 +276,10 @@ class MediaFetcher:
         }
         if cookies:
             headers["Cookie"] = cookies
+        return headers
+
+    async def _python_session_get(self, url: str, headers: dict) -> dict:
+        # One aiohttp GET with the page's flavour → the payload dict.
         try:
             timeout = aiohttp.ClientTimeout(total=30)
             async with aiohttp.ClientSession() as session:
@@ -300,6 +300,19 @@ class MediaFetcher:
                             "bytes": len(data)}
         except Exception as e:                        # noqa: BLE001
             return {"ok": False, "error": str(e)}
+
+    async def _fetch_via_python(self, url: str) -> dict:
+        """Download with the browser session cookies (CORS-free fallback)."""
+        if callable(self._owner._http_fetcher):
+            return await self._owner._http_fetcher(url)
+        if self._owner.cdp is None or not hasattr(self._owner.cdp, "get_cookies"):
+            return {"ok": False, "error": "no authenticated download available"}
+        try:
+            cookies = await self._owner.cdp.get_cookies(url)
+        except Exception:                               # noqa: BLE001
+            cookies = ""
+        return await self._python_session_get(
+            url, self._session_headers(cookies, url))
 
     async def _fetch_via_network(self, url: str) -> dict:
         """Grab the response bytes through the browser's normal <img> path.

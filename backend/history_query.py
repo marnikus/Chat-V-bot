@@ -212,6 +212,86 @@ def _person_item(row, my_nicks: list) -> dict:
     }
 
 
+#: (output keys, row column, default, as_int) — the message-row → UI-item
+#: field map. Alias pairs share one source (`dir`/`direction`,
+#: `from`/`from_nick`, `time`/`ts_display`) so the legacy and current
+#: spellings can never disagree. The spec rows are in exact output order:
+#: the UI contract pins both key set and order (backend_api_snapshot.json).
+_FIELD_SPECS = (
+    (("id",), "id", 0, True),
+    (("ord",), "ord", 0, True),
+    (("fp",), "fp", "", False),
+    (("dir", "direction"), "direction", "in", False),
+    (("from", "from_nick"), "from_nick", "", False),
+    (("my_nick",), "my_nick", "", False),
+    (("kind",), "kind", "text", False),
+    (("text",), "text", "", False),
+)
+#: the fields that follow the `media` block in the output dict
+_FIELD_SPECS_TAIL = (
+    (("time", "ts_display"), "ts_display", "", False),
+    (("ts_resolved",), "ts_resolved", "", False),
+    (("day",), "day", "", False),
+    (("occ",), "occ", 0, True),
+)
+
+
+def _apply_specs(data: dict, specs) -> dict:
+    """One ordered group of the UI item: coalesce-empty + int casts."""
+    out = {}
+    for keys, source, default, as_int in specs:
+        value = data.get(source) or default
+        for key in keys:
+            out[key] = int(value) if as_int else value
+    return out
+
+
+def _stat_int(data: dict, key: str) -> int:
+    return int(data.get(key) or 0)
+
+
+async def _day_bounds(db, pid: int) -> tuple[str, str, int]:
+    """(first_day, last_day, distinct days) over visible messages."""
+    row = await db.fetchone(
+        "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
+        "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
+        "AND deleted_at=''", (pid,))
+    if not row:
+        return "", "", 0
+    return (row["first_day"] or "", row["last_day"] or "",
+            int(row["days"] or 0))
+
+
+async def _day_bounds(db, pid: int) -> tuple[str, str, int]:
+    """(first_day, last_day, distinct days) over visible messages."""
+    row = await db.fetchone(
+        "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
+        "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
+        "AND deleted_at=''", (pid,))
+    if not row:
+        return "", "", 0
+    return (row["first_day"] or "", row["last_day"] or "",
+            int(row["days"] or 0))
+
+
+def _item_media(data: dict) -> dict | None:
+    """The joined media block for one message row, or None."""
+    if not data.get("media_id"):
+        return None
+    path = data.get("cache_path") or ""
+    state = data.get("media_state") or "pending"
+    # A cached row whose file vanished must not render as a broken
+    # <img> from a dead local path: report it as missing so the UI
+    # shows a "click to restore" marker instead.
+    if path and not os.path.exists(path):
+        state = "missing"
+        path = ""
+    return {"id": data.get("media_id"), "url": data.get("media_url"),
+            "kind": data.get("media_kind") or data.get("kind"),
+            "state": state,
+            "path": path}
+
+
 class HistoryQuery:
     """Every read the UI performs against the archive."""
 
@@ -235,38 +315,10 @@ class HistoryQuery:
     @staticmethod
     def _item(row) -> dict:
         data = dict(row)
-        media = None
-        if data.get("media_id"):
-            path = data.get("cache_path") or ""
-            state = data.get("media_state") or "pending"
-            # A cached row whose file vanished must not render as a broken
-            # <img> from a dead local path: report it as missing so the UI
-            # shows a "click to restore" marker instead.
-            if path and not os.path.exists(path):
-                state = "missing"
-                path = ""
-            media = {"id": data.get("media_id"), "url": data.get("media_url"),
-                     "kind": data.get("media_kind") or data.get("kind"),
-                     "state": state,
-                     "path": path}
-        return {
-            "id": int(data.get("id") or 0),
-            "ord": int(data.get("ord") or 0),
-            "fp": data.get("fp") or "",
-            "dir": data.get("direction") or "in",
-            "direction": data.get("direction") or "in",
-            "from": data.get("from_nick") or "",
-            "from_nick": data.get("from_nick") or "",
-            "my_nick": data.get("my_nick") or "",
-            "kind": data.get("kind") or "text",
-            "text": data.get("text") or "",
-            "media": media,
-            "time": data.get("ts_display") or "",
-            "ts_display": data.get("ts_display") or "",
-            "ts_resolved": data.get("ts_resolved") or "",
-            "day": data.get("day") or "",
-            "occ": int(data.get("occ") or 0),
-        }
+        item = _apply_specs(data, _FIELD_SPECS)
+        item["media"] = _item_media(data)
+        item.update(_apply_specs(data, _FIELD_SPECS_TAIL))
+        return item
 
     _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
                "md.state AS media_state, md.cache_path AS cache_path "
@@ -528,24 +580,24 @@ class HistoryQuery:
                     "my_nicks": []}
         data = dict(person)
         pid = int(data["id"])
-        row = await self.db.fetchone(
-            "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
-            "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
-            "AND deleted_at=''", (pid,))
+        first_day, last_day, days = await _day_bounds(self.db, pid)
         return {
             "nick": data["nick"],
             "missing": False,
-            "message_count": int(data.get("message_count") or 0),
-            "messages": int(data.get("message_count") or 0),
-            "in_count": int(data.get("in_count") or 0),
-            "out_count": int(data.get("out_count") or 0),
-            "media_count": int(data.get("media_count") or 0),
+            "message_count": _stat_int(data, "message_count"),
+            "messages": _stat_int(data, "message_count"),
+            "in_count": _stat_int(data, "in_count"),
+            "out_count": _stat_int(data, "out_count"),
+            "media_count": _stat_int(data, "media_count"),
             "my_nicks": self._my_nicks(person),
             "first_seen": data.get("first_seen") or "",
             "last_seen": data.get("last_seen") or "",
-            "first_day": (row["first_day"] if row else "") or "",
-            "last_day": (row["last_day"] if row else "") or "",
-            "days": int((row["days"] if row else 0) or 0),
+            "first_day": first_day,
+            "last_day": last_day,
+            "days": days,
+            "hidden": int(await self.db.scalar(
+                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+                "deleted_at<>''", (pid,), 0)),
             "hidden": int(await self.db.scalar(
                 "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
                 "deleted_at<>''", (pid,), 0)),

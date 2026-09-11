@@ -1,17 +1,20 @@
 """HistoryExportService — runtime/export mixin (AREA C facade).
 
 The four concerns this mixin used to fold together now live in
-`services/history/runtime.py` (PushBindings, CollectorRuntime,
-WorldSwitcher, HistoryMigration, ChatExporter). Every method name and
-signature here is unchanged — each delegates to its lazily-created
-collaborator, so `HistoryService.__init__` (which deliberately calls no
-`super().__init__`) is untouched and callers see the same surface.
+`services/history/runtime.py` (PushBindings, CollectorRuntime, WorldSwitcher,
+ChatExporter), `migrate.py` (HistoryMigration) and `trash.py` (the
+session-sized trash). Every method name and signature here is unchanged —
+each delegates to its lazily-created collaborator, so
+`HistoryService.__init__` (which deliberately calls no `super().__init__`)
+is untouched and callers see the same surface.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+
+from services.history.trash import open_world
 
 log = logging.getLogger("chatbot")
 
@@ -42,7 +45,7 @@ class HistoryExportService:
     @property
     def _migrator(self):
         if getattr(self, "__migrator", None) is None:
-            from services.history.runtime import HistoryMigration
+            from services.history.migrate import HistoryMigration
             self.__migrator = HistoryMigration(self)
         return self.__migrator
 
@@ -54,23 +57,15 @@ class HistoryExportService:
         return self.__exporter
 
     # ── lifecycle ────────────────────────────────────────────────
-    async def init(self):
-        await self.db.init()
-        await self.migrate_install()
-        await self.load_app_settings()
-        self._apply_world_media_dir()
-        if self._labels is not None:
-            try:
-                await self._labels.load_from_db(self.db)
-            except Exception as exc:                   # noqa: BLE001
-                log.warning("label load from %s failed: %s", self.db.path,
-                            exc)
-        await self.load_gaze()
+    def _ensure_media_dir(self) -> None:
         try:
             import os
             os.makedirs(self.world_media_dir(), exist_ok=True)
         except OSError as exc:
             log.warning("media cache folder unavailable: %s", exc)
+
+    async def _migrate_media(self) -> None:
+        """Fold the old flat cache into the per-person tree (fail-open)."""
         try:
             moved = await self.media.migrate_layout()
             retried = await self.media.retry_failed_uncached()
@@ -82,7 +77,9 @@ class HistoryExportService:
                          "downloader", retried)
         except Exception as exc:                       # noqa: BLE001
             log.warning("media layout migration skipped: %s", exc)
-        await self._install_push_binding()
+
+    def _wire_cdp_signals(self) -> None:
+        """Rebind-on-connect + disconnect hook, when the page exposes them."""
         connected = getattr(self.cdp, "connected", None)
         disconnected = getattr(self.cdp, "disconnected", None)
         if connected is not None and hasattr(connected, "connect"):
@@ -90,6 +87,21 @@ class HistoryExportService:
                 lambda: asyncio.ensure_future(self._rebind()))
         if disconnected is not None and hasattr(disconnected, "connect"):
             disconnected.connect(self._on_disconnected)
+
+    async def init(self):
+        await self.db.init()
+        # Ctrl+Z reaches back only as far as this session: a world a closed
+        # run left behind opens without its trash (trash.py, design §2.4)
+        await open_world(self)
+        await self.migrate_install()
+        await self.load_app_settings()
+        self._apply_world_media_dir()
+        await self._worlds.load_labels()
+        await self.load_gaze()
+        self._ensure_media_dir()
+        await self._migrate_media()
+        await self._install_push_binding()
+        self._wire_cdp_signals()
         log.info("Message archive ready: %s (fts=%s, world=%s)", self.db.path,
                  self.db.fts_enabled, self.world_media_dir())
         return self

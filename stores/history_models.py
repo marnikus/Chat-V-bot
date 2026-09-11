@@ -41,6 +41,21 @@ def _int_or(value, default: int) -> int:
         return default
 
 
+def _media_payload(data: dict) -> dict:
+    media = data.get("media")
+    if not isinstance(media, dict):
+        media = {}          # a garbage `media` degrades to no-media
+    return media
+
+
+def _first(d: dict, *keys: str, _also=None, default: str = "") -> str:
+    """First non-empty value among `_also` then the JSON `keys` (stringified)."""
+    for value in (_also, *(d.get(key) for key in keys)):
+        if value:
+            return str(value)
+    return default
+
+
 def fingerprint(direction: str, from_nick: str, ts_display: str, kind: str,
                 payload: str, occ: int = 0) -> str:
     """Stable identity of one chat line.
@@ -109,18 +124,16 @@ class MessageRecord:
     def from_dict(cls, data: dict) -> "MessageRecord":
         """Build a record from the JSON the in-page agent produces."""
         data = data or {}
-        media = data.get("media")
-        if not isinstance(media, dict):
-            media = {}          # a garbage `media` degrades to no-media
+        media = _media_payload(data)
         rec = cls(
             fp=str(data.get("fp", "")),
-            direction=str(data.get("dir") or data.get("direction") or "in"),
-            from_nick=str(data.get("from") or data.get("from_nick") or ""),
-            kind=str(data.get("kind") or "text"),
-            text=str(data.get("text") or ""),
-            media_url=str(media.get("url") or data.get("media_url") or ""),
-            media_kind=str(media.get("kind") or data.get("media_kind") or ""),
-            ts_display=str(data.get("time") or data.get("ts_display") or ""),
+            direction=_first(data, "dir", "direction", default="in"),
+            from_nick=_first(data, "from", "from_nick"),
+            kind=_first(data, "kind", default="text"),
+            text=_first(data, "text"),
+            media_url=_first(data, "media_url", _also=media.get("url")),
+            media_kind=_first(data, "media_kind", _also=media.get("kind")),
+            ts_display=_first(data, "time", "ts_display"),
             occ=_int_or(data.get("occ"), 0),
             idx=_int_or(data.get("idx"), 0),
         )

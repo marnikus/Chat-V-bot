@@ -67,6 +67,44 @@ def _site_key(host: str) -> str:
     return host
 
 
+def _tab_url(tab: dict) -> str:
+    """The address a tab record is matched on (ws_url is the fallback)."""
+    return tab.get("url") or tab.get("ws_url") or ""
+
+
+def _parsed_target(tab_url: str) -> tuple[str, str]:
+    """(host, path) of a tab URL; ("", "") when parsing fails."""
+    try:
+        parsed = urlparse(tab_url)
+    except Exception:
+        return "", ""
+    return (parsed.hostname or "").lower(), unquote(parsed.path or "")
+
+
+def _score_url_like(query_parts: tuple[str, str], q_norm: str,
+                    tab_parts: tuple[str, str]) -> Optional[tuple[int, str]]:
+    """The site-ladder verdict for a URL-like query, or None."""
+    q_host, q_path = query_parts
+    tab_host, tab_path = tab_parts
+    if _site_key(tab_host) != _site_key(q_host):
+        # full keyword against host+path
+        return (60, "keyword") if q_norm in f"{tab_host}{tab_path}" else None
+    if q_path and tab_path.startswith(q_path):
+        return 300, "url_path"
+    if not q_path:
+        return 200, "host"
+    # same site root but different path → weak host match
+    return 60, "keyword"
+
+
+def _score_keyword(q_norm: str, url_norm: str,
+                   tab_title: str) -> tuple[int, str]:
+    """Keyword fallback: anywhere in normalized URL or title."""
+    if q_norm and (q_norm in url_norm or q_norm in (tab_title or "").lower()):
+        return 60, "keyword"
+    return 0, ""
+
+
 def score_tab(query: str, tab_url: str, tab_title: str = "") -> tuple[int, str]:
     """Return (score, kind) for one tab URL vs a query. 0 = no match."""
     query = (query or "").strip()
@@ -80,45 +118,27 @@ def score_tab(query: str, tab_url: str, tab_title: str = "") -> tuple[int, str]:
         return 500, "url_exact"
 
     q_host, q_path, is_url_like = _parse(query)
-
     if is_url_like and q_host:
-        try:
-            parsed = urlparse(tab_url)
-            tab_host = (parsed.hostname or "").lower()
-            tab_path = unquote(parsed.path or "")
-        except Exception:
-            tab_host, tab_path = "", ""
-        if _site_key(tab_host) == _site_key(q_host):
-            if q_path and tab_path.startswith(q_path):
-                return 300, "url_path"
-            if not q_path:
-                return 200, "host"
-            # same site root but different path → weak host match
-            return 60, "keyword"
-        # full keyword against host+path
-        if q_norm in f"{tab_host}{tab_path}":
-            return 60, "keyword"
+        verdict = _score_url_like((q_host, q_path), q_norm,
+                                  _parsed_target(tab_url))
+        if verdict is not None:
+            return verdict
 
-    # 2) keyword fallback: anywhere in normalized URL or title
-    if q_norm and (q_norm in url_norm or q_norm in (tab_title or "").lower()):
-        return 60, "keyword"
-    return 0, ""
+    # 2) keyword fallback
+    return _score_keyword(q_norm, url_norm, tab_title)
 
 
 def best_matches(query: str, tabs: Iterable[dict], top_n: int = 5) -> list[dict]:
     """Score tabs; return sorted list of match dicts (best first)."""
     scored: list[tuple[int, dict]] = []
     for tab in tabs or []:
-        url = tab.get("url") or tab.get("ws_url") or ""
-        title = tab.get("title") or ""
-        score, _kind = score_tab(query, url, title)
+        score, _kind = score_tab(query, _tab_url(tab), tab.get("title") or "")
         if score > 0:
             scored.append((score, tab))
     scored.sort(key=lambda x: -x[0])
     out: list[dict] = []
     for score, tab in scored[: max(1, int(top_n))]:
-        url = tab.get("url") or tab.get("ws_url") or ""
-        _sc, kind = score_tab(query, url, tab.get("title") or "")
+        _sc, kind = score_tab(query, _tab_url(tab), tab.get("title") or "")
         out.append({
             "id": tab.get("id", ""),
             "title": tab.get("title", ""),

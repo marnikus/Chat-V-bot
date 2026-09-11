@@ -321,8 +321,9 @@ const UserTable = {
   },
 
   // ── actions ─────────────────────────────────────────────────
-  // No confirmation dialogs on purpose: every remove / reset action is
-  // recorded in the global undo history, so Ctrl+Z is the safety net.
+  // No confirmation dialogs: every remove / reset action is recorded in the
+  // global undo history, so Ctrl+Z is the safety net (the list and the
+  // database behave the same — bug report 2026-09-11).
 
   deleteNick(nick) {
     if (!this._bridge()) return;

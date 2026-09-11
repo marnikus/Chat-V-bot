@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from backend.criteria_engine import CriteriaEngine
     from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
+from .collect_phase import CollectPhaseMixin
 from .cycle_loop import CycleLoopMixin
 from .cycle_plan import choose_cycle_mode, inspect_stack
 from .error_recovery import RetryPolicy, RunExecutionMixin
@@ -30,7 +31,7 @@ from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
 
 class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, RunExecutionMixin,
-                     CycleLoopMixin, RunLifecycleMixin):
+                     CollectPhaseMixin, CycleLoopMixin, RunLifecycleMixin):
     step_complete = Signal(str, str); user_complete = Signal(str, bool); person_marked = Signal(str)
     stack_complete = Signal(); log_msg = Signal(str); debug_msg = Signal(str, str)
     step_started = Signal(int, str, str); person_found = Signal(str); person_removed = Signal(str)

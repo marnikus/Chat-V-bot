@@ -10,6 +10,9 @@ management. This file pins the seams the AREA C refactor extracts
     cap, index rules, write-back);
   * the world-store seams through the public API: app/world split on
     commit, pending-save settlement, seq backfill, archive-closed fallback;
+  * the timeline-commit seams (services/undo_timeline.py): async steps that
+    die are logged, a failed command rewinds onto its entry, dropped undo
+    steps take their hidden rows with them;
   * history() stack-block cleaning.
 
 Every test drives the PUBLIC UndoService API — the refactor is only
@@ -18,12 +21,14 @@ allowed to move code, not to change these observables.
 Run with:  python3 -m pytest tests/integration/services/test_undo_support_contract.py
 """
 
+import asyncio
 import json
 import os
 import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
@@ -46,6 +51,7 @@ class FakeArchive:
         self._world = list(world or [])
         self.saved = []
         self.loads = 0
+        self.purged = []
 
     async def save_world_undo(self, entries):
         self.saved.append(entries)
@@ -53,6 +59,10 @@ class FakeArchive:
     async def load_world_undo(self):
         self.loads += 1
         return list(self._world)
+
+    async def purge_tokens(self, tokens):
+        self.purged.append(list(tokens))
+        return {"persons": 0, "messages": 0}
 
 
 class UndoContractCase(unittest.TestCase):
@@ -333,6 +343,96 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
         stored = self.cfg.get_state("undo_history")
         self.assertEqual(stored[0]["value"], STACK_A)
         self.assertEqual(self.cfg.get_state("undo_history_index"), 0)
+
+
+# ══════════════════════════════════════════════════════════════════
+# timeline-commit seams (services/undo_timeline.py)
+# ══════════════════════════════════════════════════════════════════
+class TestTimelineCommitSeams(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
+        self.archive = FakeArchive()
+        self.undo = UndoService(config=self.cfg, bus=EventBus(),
+                                archive=self.archive)
+        self.hub = self.undo._timeline_commit
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    async def test_a_step_that_dies_is_logged_never_silent(self):
+        """The silent task is what let a locked world keep a person deleted."""
+        async def boom():
+            raise RuntimeError("world closed")
+
+        with self.assertLogs("chatbot", level="WARNING") as captured:
+            self.assertTrue(self.hub.spawn("trash purge", boom()))
+            await asyncio.sleep(0.01)      # let the done callback run
+        self.assertTrue(any("trash purge failed: world closed" in line
+                            for line in captured.output), captured.output)
+
+    async def test_a_step_that_succeeds_says_nothing(self):
+        ran = []
+
+        async def fine():
+            ran.append(True)
+
+        with self.assertNoLogs("chatbot", level="WARNING"):
+            self.assertTrue(self.hub.spawn("trash purge", fine()))
+            await asyncio.sleep(0.01)
+        self.assertEqual(ran, [True])
+
+    def test_spawn_without_a_loop_is_a_no_op_not_a_crash(self):
+        """No event loop (shutdown, a sync caller) must not leak a coroutine."""
+        async def step():
+            return 1
+
+        coro = step()
+        with mock.patch("services.undo_timeline.asyncio.ensure_future",
+                        side_effect=RuntimeError("no running event loop")):
+            self.assertFalse(self.hub.spawn("no loop", coro))
+        self.assertIsNone(coro.cr_frame,
+                          "the un-runnable coroutine is closed, not leaked")
+
+    async def test_a_dropped_step_takes_its_hidden_rows_with_it(self):
+        entry = {"kind": "archive", "value": {"op": "delete_person",
+                                              "token": "tok-1"}, "seq": 1}
+        self.undo.set_history([entry], 0)
+        await asyncio.sleep(0.01)                # the purge is a spawned step
+        self.assertEqual(self.archive.purged, [],
+                         "a step still in the timeline keeps its rows")
+        self.undo.set_history([{"kind": "stack", "value": STACK_A, "seq": 2}], 0)
+        await asyncio.sleep(0.01)
+        self.assertEqual(self.archive.purged, [["tok-1"]],
+                         "the step left the timeline: its rows go with it")
+
+    async def test_a_world_change_does_not_erase_the_other_world(self):
+        self.undo.set_history([
+            {"kind": "archive", "value": {"op": "delete_person",
+                                          "token": "tok-2"}, "seq": 1},
+        ], 0)
+        self.undo.attach(archive=None)              # world CHANGE mid-flight
+        await self.undo.sync_world_state()
+        await asyncio.sleep(0.01)
+        self.assertEqual(self.archive.purged, [],
+                         "a world change must never purge the old world's rows")
+
+    async def test_a_failed_command_stays_where_ctrl_z_finds_it(self):
+        first = {"kind": "people", "value": {"before": [], "after": []},
+                 "seq": 1}
+        second = {"kind": "people", "value": {"before": [], "after": []},
+                  "seq": 2}
+        self.undo.set_history([first, second], 1)
+        self.undo.rewind_after_failure(first, forward=False)
+        self.assertEqual(self.undo.history()[1], 0,
+                         "a failed undo points AT the entry it could not apply")
+        self.undo.rewind_after_failure(first, forward=True)
+        self.assertEqual(self.undo.history()[1], 0,
+                         "a failed redo points IN FRONT of it")
+        self.undo.rewind_after_failure({"kind": "stack", "value": []},
+                                       forward=False)
+        self.assertEqual(self.undo.history()[1], 0,
+                         "an entry that is gone is not a crash")
 
 
 if __name__ == "__main__":

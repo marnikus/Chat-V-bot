@@ -327,6 +327,17 @@ class ScrollParser:
         await self._cdp.mouse_wheel(0, self.options.scroll_dy, cx, cy)
         return True
 
+    def _new_people(self, snap: dict, seen_before: set, waited: int) -> bool:
+        """True (with the info line) when lazy-loading delivered fresh nicks."""
+        nicks = {u.get("nick") for u in snap.get("users", [])
+                 if u.get("nick")}
+        if not (nicks - seen_before):
+            return False
+        if waited > self.options.poll_ms:
+            self._say(f"⏳ New people appeared after {waited} ms of "
+                      "lazy loading", "info")
+        return True
+
     async def _settle(self, seen_before: set, prev_top: float) -> dict | None:
         """Wait for lazy-loaded people after a scroll.
 
@@ -335,9 +346,7 @@ class ScrollParser:
         loading" from "end of the list".
         """
         options = self.options
-        waited = 0
-        snap = None
-        stable = 0
+        waited, snap, stable = 0, None, 0
         while waited < options.load_timeout_ms:
             if self._stop_requested():
                 # Distinguish "user stopped" from "page context lost": return
@@ -349,20 +358,14 @@ class ScrollParser:
             snap = await self._snapshot()
             if snap is None:
                 return None
-            nicks = {u.get("nick") for u in snap.get("users", []) if u.get("nick")}
-            if nicks - seen_before:
-                if waited > options.poll_ms:
-                    self._say(f"⏳ New people appeared after {waited} ms of "
-                              "lazy loading", "info")
+            if self._new_people(snap, seen_before, waited):
                 return snap
             # nothing new yet — has the viewport stopped moving?
-            if abs(float(snap.get("scrollTop", 0)) - prev_top) < 1:
-                stable += 1
-                if stable >= 2:
-                    return snap
-            else:
-                stable = 0
-                prev_top = float(snap.get("scrollTop", 0))
+            top = float(snap.get("scrollTop", 0))
+            stable = 0 if abs(top - prev_top) >= 1 else stable + 1
+            prev_top = top
+            if stable >= 2:
+                return snap
         self._say(f"⏳ Still nothing new after {options.load_timeout_ms} ms — "
                   "treating as loaded", "info")
         return snap

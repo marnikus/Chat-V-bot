@@ -206,7 +206,23 @@ class DbRegistry:
         path = self.active_path()
         media_dir = self.media_dir(path)
         media_bytes, media_files = folder_size(media_dir)
-        payload = {
+        payload = self._base_payload(path, media_dir, media_bytes, media_files)
+        service = self._host._service
+        if service is None or not getattr(service.db, "is_open", False):
+            return _with_totals(payload)
+        try:
+            stats = await service.query.db_stats()
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("db stats failed: %s", exc)
+            payload["error"] = str(exc)
+            return _with_totals(payload)
+        _apply_live_stats(payload, stats)
+        return _with_totals(payload)
+
+    def _base_payload(self, path: str, media_dir: str, media_bytes: int,
+                      media_files: int) -> dict:
+        """What info() reports before the world offers live counts."""
+        return {
             "path": path,
             "name": os.path.basename(path),
             "exists": os.path.exists(path),
@@ -219,31 +235,27 @@ class DbRegistry:
             "connected": False,
             "trash_dir": self.trash_dir(),
         }
-        service = self._host._service
-        if service is None or not getattr(service.db, "is_open", False):
-            payload["total_bytes"] = payload["db_bytes"] + media_bytes
-            return payload
-        try:
-            stats = await service.query.db_stats()
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("db stats failed: %s", exc)
-            payload["error"] = str(exc)
-            payload["total_bytes"] = payload["db_bytes"] + media_bytes
-            return payload
-        payload.update({
-            "connected": True,
-            "db_bytes": int(stats.get("db_bytes") or payload["db_bytes"]),
-            "text_bytes": int(stats.get("text_bytes") or 0),
-            "persons": int(stats.get("persons") or 0),
-            "persons_deleted": int(stats.get("persons_deleted") or 0),
-            "messages": int(stats.get("messages") or 0),
-            "messages_hidden": int(stats.get("messages_hidden") or 0),
-            "media": int(stats.get("media") or 0),
-            "media_cached": int(stats.get("media_cached") or 0),
-            "fts": bool(stats.get("fts")),
-        })
-        payload["total_bytes"] = payload["db_bytes"] + media_bytes
-        return payload
+
+
+def _with_totals(payload: dict) -> dict:
+    payload["total_bytes"] = payload["db_bytes"] + payload["media_bytes"]
+    return payload
+
+
+def _apply_live_stats(payload: dict, stats: dict) -> None:
+    """Fill the payload's live counts from the open world's stats."""
+    payload.update({
+        "connected": True,
+        "db_bytes": int(stats.get("db_bytes") or payload["db_bytes"]),
+        "text_bytes": int(stats.get("text_bytes") or 0),
+        "persons": int(stats.get("persons") or 0),
+        "persons_deleted": int(stats.get("persons_deleted") or 0),
+        "messages": int(stats.get("messages") or 0),
+        "messages_hidden": int(stats.get("messages_hidden") or 0),
+        "media": int(stats.get("media") or 0),
+        "media_cached": int(stats.get("media_cached") or 0),
+        "fts": bool(stats.get("fts")),
+    })
 
 
 # ── raw source helpers for the deletion inventory ──────────────────
