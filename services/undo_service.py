@@ -23,14 +23,14 @@ import os
 from typing import Any, Optional
 
 from backend.config_manager import MAX_STACK_HISTORY
-from core.events import (EventBus, ArchiveUndoApplied, DbChanged,
-                         GridLayoutChanged, LabelsChanged, LogMessage,
-                         PeopleChanged, StackLoaded, UndoHistoryChanged,
-                         UserDbChanged)
+from core.events import (EventBus, DbChanged, GridLayoutChanged,
+                         LabelsChanged, LogMessage, PeopleChanged, StackLoaded,
+                         UndoHistoryChanged, UserDbChanged)
 from core.result import Err, Ok, Result
 from services.layout_service import LayoutService  # noqa: F401  API parity
 from services.run import normalize_blocks
 from services.service_log import emit_log
+from services.undo_archive import ArchiveCommands
 from services.undo_support import UndoProjection, UndoWorldStore
 
 log = logging.getLogger("chatbot")
@@ -54,6 +54,17 @@ def _same_entry(a: dict, b: dict) -> bool:
     return (isinstance(a, dict) and isinstance(b, dict)
             and a.get("kind") == b.get("kind")
             and _values_equal(a.get("value"), b.get("value")))
+
+
+def _position_of(history: list, entry: dict) -> int:
+    """Where this exact entry sits in the timeline (-1 when it is gone)."""
+    for pos, item in enumerate(history):
+        if item is entry:
+            return pos
+    for pos, item in enumerate(history):
+        if _same_entry(item, entry):
+            return pos
+    return -1
 
 
 def emit_db_change(bus: EventBus, action: str, result) -> None:
@@ -149,6 +160,7 @@ class UndoService:
         self._undo_pendings: list = []
         self._projection = UndoProjection(self._history_entry)
         self._world_store = UndoWorldStore(self)
+        self._archive_commands = ArchiveCommands(self)
 
     # ── wiring (main.py / attach_history) ────────────────────────
     def attach(self, archive=None, people=None, labels=None, dbs=None,
@@ -356,74 +368,101 @@ class UndoService:
         if not isinstance(value, dict):
             return False
         if kind == "people":
-            rows = value.get("after" if forward else "before")
-            if rows is None or self._people is None:
-                return False
-            self._schedule(self._people.apply(rows))
-            return True
+            return self._apply_people_command(value, forward)
         if kind == "labels":
-            snapshot = value.get("after" if forward else "before")
-            if not isinstance(snapshot, dict) or self._labels is None:
-                return False
-            self._labels.restore(snapshot)
-            self._bus.emit(LabelsChanged(
-                payload=json.dumps(self._labels.state(),
-                                   ensure_ascii=False)))
-            # labels can hide people from the queue: the # column changes
-            self._bus.emit(PeopleChanged(reason="labels"))
-            return True
+            return self._apply_labels_command(value, forward)
         if kind == "archive":
-            return self._apply_archive_command(value, forward)
+            return self._apply_archive_command(value, forward, entry)
         if kind == "dbconn":
             return self._apply_db_command(value, forward)
         return False
 
+    def _apply_people_command(self, value: dict, forward: bool) -> bool:
+        """Restore / re-apply the people-list snapshot the entry carries."""
+        rows = value.get("after" if forward else "before")
+        if rows is None or self._people is None:
+            return False
+        self._schedule(self._people.apply(rows))
+        return True
+
+    def _apply_labels_command(self, value: dict, forward: bool) -> bool:
+        """Restore / re-apply the label snapshot the entry carries."""
+        snapshot = value.get("after" if forward else "before")
+        if not isinstance(snapshot, dict) or self._labels is None:
+            return False
+        self._labels.restore(snapshot)
+        self._bus.emit(LabelsChanged(
+            payload=json.dumps(self._labels.state(), ensure_ascii=False)))
+        # labels can hide people from the queue: the # column changes
+        self._bus.emit(PeopleChanged(reason="labels"))
+        return True
+
     @staticmethod
-    def _schedule(coro) -> bool:
+    def _schedule_task(coro) -> Optional[asyncio.Task]:
+        """Run `coro` now; None when there is no loop to run it on."""
         try:
-            asyncio.ensure_future(coro)
-            return True
+            return asyncio.ensure_future(coro)
         except RuntimeError:
             coro.close()
+            return None
+
+    @staticmethod
+    def _schedule(coro) -> bool:
+        return UndoService._schedule_task(coro) is not None
+
+    @staticmethod
+    def _crash_log(scope: str, task) -> None:
+        """A background step that dies must never do so silently."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            log.warning("%s failed: %s", scope, exc)
+
+    def _spawn(self, scope: str, coro) -> bool:
+        task = self._schedule_task(coro)
+        if task is None:
             return False
-
-    def _apply_archive_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a message, chat or person deletion (soft)."""
-        archive = self._archive
-        op = str(value.get("op") or "")
-        nick = str(value.get("nick") or "")
-        token = str(value.get("token") or "")
-        people = value.get("people") if isinstance(value.get("people"),
-                                                   dict) else None
-        if people is not None and self._people is not None:
-            rows = people.get("after" if forward else "before")
-            if isinstance(rows, list):
-                self._schedule(self._people.apply(rows))
-        if archive is None:
-            return people is not None
-
-        async def work():
-            repo = archive.repo
-            if forward:
-                if op == "delete_message":
-                    await repo.soft_delete_message(
-                        nick, int(value.get("message_id") or 0), token=token)
-                elif op == "clear_history":
-                    await repo.soft_delete_history(nick, token=token)
-                elif op == "delete_person":
-                    await repo.delete_person(nick, hard=False, token=token)
-            else:
-                if op == "delete_person":
-                    await repo.restore_person(nick, token=token)
-                else:
-                    await repo.restore_deleted(nick, token)
-            self._bus.emit(UserDbChanged(payload=json.dumps(
-                {"action": "undo" if not forward else "redo", "op": op,
-                 "nick": nick}, ensure_ascii=False)))
-            self._bus.emit(ArchiveUndoApplied(forward=forward, op=op,
-                                              nick=nick))
-        self._schedule(work())
+        task.add_done_callback(lambda done: self._crash_log(scope, done))
         return True
+
+    def _apply_archive_command(self, value: dict, forward: bool,
+                               entry: Optional[dict] = None) -> bool:
+        """Reverse / re-apply a message, chat or person deletion (soft).
+
+        The work is ONE self-verifying task (`services/undo_archive.py`):
+        it applies the command, reads the database back, reports what the
+        rows now show — and, when it cannot, says so and leaves the entry
+        where Ctrl+Z finds it again. Announcing success from the *intent* is
+        what let a locked database keep a person deleted while the log said
+        “archive restored” (bug 2026-09-11).
+        """
+        if str(value.get("op") or "") not in ArchiveCommands.OPS:
+            return False
+        if self._archive is None and self._people is None:
+            return False
+        return self._spawn("archive undo",
+                           self._archive_commands.run(entry, value, forward))
+
+    def rewind_after_failure(self, entry: Optional[dict],
+                             forward: bool) -> None:
+        """A command that could not be applied stays where Ctrl+Z finds it.
+
+        A failed undo puts the pointer back ON the entry and a failed redo
+        puts it back IN FRONT of it, so the next key press tries the same
+        command again instead of skipping a state the database never
+        reached.
+        """
+        if not isinstance(entry, dict):
+            return
+        history, index = self.history()
+        at = _position_of(history, entry)
+        if at < 0:
+            return
+        target = max(0, min(at - 1 if forward else at, len(history) - 1))
+        if target != index:
+            self.set_history(history, target)
+            self._bus.emit(UndoHistoryChanged())
 
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
         """Re-apply / reverse a DB Connection action (legacy entries)."""
@@ -477,6 +516,15 @@ class UndoService:
         self._schedule(work())
         return True
 
+    def _log_command(self, entry: dict, forward: bool) -> None:
+        """Announce a command entry; archive ones report themselves later,
+        with the database state they actually produced."""
+        kind = entry.get("kind")
+        if kind == "archive":
+            return
+        self._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
+                  + self.UNDO_LABELS.get(kind, kind + " restored"), "info")
+
     # ── apply one entry's state (walk onto a snapshot entry) ──────
     def _apply_entry(self, entry) -> None:
         """Apply the state a history entry represents."""
@@ -519,8 +567,7 @@ class UndoService:
             self.set_history(history, index)
             self._bus.emit(UndoHistoryChanged())
             kind = entry["kind"]
-            self._log("↩ Undo — " + self.UNDO_LABELS.get(
-                kind, kind + " restored"), "info")
+            self._log_command(entry, forward=False)
             value = entry.get("value") or {}
             payload = (value.get("before")
                        if kind in ("people", "labels") else value)
@@ -549,8 +596,7 @@ class UndoService:
             self.set_history(history, index)
             self._bus.emit(UndoHistoryChanged())
             kind = entry["kind"]
-            self._log("↪ Redo — " + self.UNDO_LABELS.get(
-                kind, kind + " restored"), "info")
+            self._log_command(entry, forward=True)
             value = entry.get("value") or {}
             payload = (value.get("after")
                        if kind in ("people", "labels") else value)

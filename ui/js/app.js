@@ -419,7 +419,10 @@ function setupBridgeListeners() {
 
   // ── labels + database management ──────────────────────────
   if (b.labels_changed)
-    b.labels_changed.connect((json) => Labels.applyState(json));
+    b.labels_changed.connect((json) => {
+      Labels.applyState(json);
+      HistoryDb.liveChanged('labels');   // the badges live in the DB table too
+    });
   if (b.db_info_ready)
     b.db_info_ready.connect((req, json) => DbPanel.onInfo(req, json));
   if (b.db_changed) {
@@ -440,6 +443,7 @@ function setupBridgeListeners() {
     b.history_appended.connect((json) => {
       HistoryStore.onLiveAppend(json);
       CollectorPanel.onAppended(json);
+      HistoryDb.liveChanged('appended');   // a new person must appear here
     });
   }
   if (b.media_ready)

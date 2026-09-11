@@ -249,10 +249,14 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # runtime in services/run/progress.py) and D's chat_sync extraction
         # (+3: SyncResult/MAX_LIVE_ITEMS/align_batch/MessageRecord) added
         # legitimate imports *before* B was merged; the B merge itself adds
-        # zero. The invariant this pins is "the stores refactor must not
-        # force another area to edit an import" — bump this number only when
-        # another area legitimately grows the surface.
-        self.assertEqual(count, 37,
+        # zero. The undo-restore fix (2026-09-11) adds +2: the new leaf
+        # module stores/world_lock.py is imported by services/undo_archive.py
+        # (the archive command retries a locked world) and by
+        # services/history/mutate.py (the timeline save does the same). The
+        # invariant this pins is "the stores refactor must not force another
+        # area to edit an import" — bump this number only when another area
+        # legitimately grows the surface.
+        self.assertEqual(count, 39,
                          "stores/ must be refactored without touching a single "
                          "import in another area (integrated baseline: 37)")
 

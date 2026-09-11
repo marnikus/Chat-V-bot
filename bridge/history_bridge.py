@@ -326,14 +326,16 @@ class HistoryBridge(QObject):
             return False
 
         async def work():
-            gone = await self.ctx.archive.repo.purge_deleted(
-                " ".join(str(nick or "").split()).strip())
+            clean = " ".join(str(nick or "").split()).strip()
+            erased = await self.ctx.archive.purge_trash(clean)
             self.ctx.bus.emit(LogMessage(
-                message=f"🔥 {gone} hidden message(s) erased permanently",
+                message=f"🔥 Trash emptied — {erased['persons']} person(s) "
+                        f"and {erased['messages']} message(s) erased",
                 level="warn"))
             self.userdb_changed.emit(json.dumps(
-                {"action": "purged", "nick": nick, "count": gone},
-                ensure_ascii=False))
+                {"action": "purged", "nick": clean, "count": erased["messages"],
+                 "persons": erased["persons"]}, ensure_ascii=False))
+            self._refresh_people()
         self._run_async("history_purge_deleted", work())
         return True
 

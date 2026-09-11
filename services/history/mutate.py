@@ -6,6 +6,9 @@ import json
 import logging
 import os
 from datetime import datetime
+from functools import partial
+
+from stores.world_lock import retry_locked
 
 from .query import MAX_FILE_MB_DEFAULT, _merge
 
@@ -164,14 +167,56 @@ class HistoryMutateService:
         return bool(moved)
 
     async def save_world_undo(self, entries: list[dict]) -> None:
+        """Persist the world's half of the timeline, retrying while locked.
+
+        The user's log showed “undo save to …v.db failed: database is locked”:
+        a lock by anything outside the app used to cost one save. The rows are
+        written in ONE transaction and retried, so Ctrl+Z after a break is
+        still undoable.
+        """
         if not self.db.is_open:
             return
+        stamp = datetime.now().isoformat(timespec="seconds")
+        rows = [(int(e["seq"]), str(e.get("kind") or ""),
+                 json.dumps(e.get("value"), ensure_ascii=False), stamp)
+                for e in entries or []
+                if isinstance(e, dict) and isinstance(e.get("seq"), int)]
         try:
-            await self.db.execute("DELETE FROM undo_history")
-            for entry in entries or []:
-                if isinstance(entry, dict) and isinstance(entry.get("seq"), int):
-                    await self.db.execute("INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) VALUES(?,?,?,?)", (int(entry["seq"]), str(entry.get("kind") or ""), json.dumps(entry.get("value"), ensure_ascii=False), datetime.now().isoformat(timespec="seconds")))
-            await self.db.execute("DELETE FROM sqlite_sequence WHERE name='undo_history'")
-            await self.db.commit()
-        except Exception as exc:
+            await retry_locked(partial(self._write_world_undo, rows))
+        except Exception as exc:                            # noqa: BLE001
             log.warning("undo save to %s failed: %s", self.db.path, exc)
+
+    async def purge_trash(self, nick: str = "") -> dict:
+        """Erase what a soft delete only hid — the explicit “Empty trash”.
+
+        Returns ``{"persons": n, "messages": m}``. With a nick the sweep
+        covers that person (their hidden messages, and their tombstone when
+        they are a removed person); without one it is the whole world. This
+        is the ONLY irreversible archive action, so the UI asks first.
+        """
+        clean = " ".join(str(nick or "").split()).strip()
+        people = await self._trash_persons(clean)
+        messages = int(await self.repo.purge_deleted(clean))
+        for row in people:
+            if self._labels is not None:
+                self._labels.forget(row["nick"])
+        return {"persons": len(people), "messages": messages}
+
+    async def _trash_persons(self, nick: str) -> list:
+        """The tombstoned persons a purge will erase (count + label cleanup)."""
+        sql = "SELECT id, nick FROM persons WHERE deleted_at<>''"
+        params: tuple = ()
+        if nick:
+            sql += " AND nick=?"
+            params = (nick,)
+        return await self.db.fetchdicts(sql, params)
+
+    async def _write_world_undo(self, rows: list[tuple]) -> None:
+        """Rewrite the world's undo history in one transaction."""
+        await self.db.execute("DELETE FROM undo_history")
+        await self.db.executemany(
+            "INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) "
+            "VALUES(?,?,?,?)", rows)
+        await self.db.execute(
+            "DELETE FROM sqlite_sequence WHERE name='undo_history'")
+        await self.db.commit()

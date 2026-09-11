@@ -32,6 +32,8 @@ from stores.history_schema import (                                   # noqa: F4
     _create_table_sql,                                                # noqa: F401
     _version_tuple,                                                   # noqa: F401
 )
+from stores.world_lock import (WriteTurn, apply_busy_timeout,        # noqa: F401
+                               is_write_sql)
 
 log = logging.getLogger("chatbot")
 
@@ -48,6 +50,9 @@ class HistoryDB:
         self.fts_enabled = False
         self._conn: Optional[aiosqlite.Connection] = None
         self.migrator = SchemaMigrator(self)
+        # the file's shared writer turn (stores/world_lock.py) — the People
+        # queue writes the same file through its own connection
+        self.turn = WriteTurn(self, path)
 
     # ── lifecycle ────────────────────────────────────────────────
     @property
@@ -70,6 +75,7 @@ class HistoryDB:
             os.makedirs(folder, exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
+        await apply_busy_timeout(self._conn, self.path)
         stored_version = None
         try:
             await self._conn.execute("PRAGMA journal_mode=WAL")
@@ -198,22 +204,49 @@ class HistoryDB:
         # committing/closing an already-closed aiosqlite connection —
         # which used to hang the second caller forever.
         conn, self._conn = self._conn, None
-        if conn is not None:
+        if conn is None:
+            self.turn.drop()
+            return
+        try:
             try:
                 await conn.commit()
             except Exception:                       # noqa: BLE001
                 pass
             await conn.close()
+        finally:
+            # the turn is the LAST thing given back: another writer must
+            # not start until the final commit has landed (RULE 14)
+            self.turn.drop()
 
     # ── helpers ──────────────────────────────────────────────────
     async def execute(self, sql: str, params: Iterable[Any] = ()):
-        return await self.conn.execute(sql, tuple(params))
+        """Run one statement, taking the world's writer turn for a write.
+
+        The turn is held until `commit()` (SQLite's transaction boundary), so
+        the queue's connection waits for this transaction instead of failing
+        with “database is locked” in the middle of it.
+        """
+        return await self._run(self.conn.execute, sql, params)
 
     async def executemany(self, sql: str, seq):
-        return await self.conn.executemany(sql, seq)
+        return await self._run(self.conn.executemany, sql, seq)
+
+    async def _run(self, run, sql: str, params):
+        """One statement, gated when it can take the writer slot."""
+        if not is_write_sql(sql):
+            return await run(sql, params)
+        await self.turn.begin()
+        try:
+            return await run(sql, params)
+        except Exception:
+            self.turn.drop()
+            raise
 
     async def commit(self) -> None:
-        await self.conn.commit()
+        try:
+            await self.conn.commit()
+        finally:
+            self.turn.end()
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list:
         """Rows as plain tuples — the shape callers (and tests) compare."""

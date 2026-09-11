@@ -198,18 +198,30 @@ class PersonLifecycle:
             "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0))
 
     async def purge_deleted(self, nick: str = "") -> int:
-        """Erase hidden rows for good — the ONLY path that removes bytes."""
-        params: tuple = ()
-        sql = "DELETE FROM messages WHERE deleted_at<>''"
+        """Erase hidden rows for good — the ONLY path that removes bytes.
+
+        With no nick this is “Empty trash”: hidden messages AND tombstoned
+        persons go, rows included, which is why the UI asks first.
+        """
         person = None
         if nick:
             person = await self._owner.get_person(nick)
             if not person:
                 return 0
-            sql += " AND person_id=?"
-            params = (int(person["id"]),)
         before = await self.deleted_count(nick)
-        await self._owner.db.execute(sql, params)
+        if nick:
+            await self._owner.db.execute(
+                "DELETE FROM messages WHERE deleted_at<>'' AND person_id=?",
+                (int(person["id"]),))
+        else:
+            await self._owner.db.execute(
+                "DELETE FROM messages WHERE deleted_at<>''")
+            for table in ("messages", "cursors", "gaps"):
+                await self._owner.db.execute(
+                    f"DELETE FROM {table} WHERE person_id IN "
+                    "(SELECT id FROM persons WHERE deleted_at<>'')")
+            await self._owner.db.execute(
+                "DELETE FROM persons WHERE deleted_at<>''")
         await self._owner.db.commit()
         if person:
             await self._owner._recount(int(person["id"]))

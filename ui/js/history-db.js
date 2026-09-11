@@ -1,6 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════
    history-db.js — the Full User Database window
 
+   ideal-size: 431 lines reason=this is the ONE module behind the window's
+   DOM (list, sort headers, paging, live refresh, per-row actions and the
+   trash button); splitting it would put one window's behaviour in two files
+   and break the `HistoryDb.<method>` surface the Node harness loads.
+
    Every person the archive has ever seen, merged by nick (one row per
    person, never a duplicate), loaded lazily as the user scrolls, with a
    search over nicks and a live message-count. Clicking a row opens that
@@ -40,6 +45,7 @@ const HistoryDb = {
       foot: $('userdbFoot'),
       preload: $('userdbPreload'),
       refresh: $('userdbRefreshBtn'),
+      emptyTrash: $('userdbEmptyTrash'),
     };
     this._flashNick = '';
     if (!this._els.body) return;
@@ -88,6 +94,8 @@ const HistoryDb = {
     }
     if (this._els.refresh)
       this._els.refresh.addEventListener('click', () => this.reload());
+    if (this._els.emptyTrash)
+      this._els.emptyTrash.addEventListener('click', () => this.emptyTrash());
     this.reload();
   },
 
@@ -146,12 +154,14 @@ const HistoryDb = {
     });
   },
 
-  reload() {
+  reload(options) {
     this.rows = [];
     this.hasMore = true;
     this.loading = false;
-    // A new order (or a new query) makes the old scroll position meaningless.
-    if (this._els.list) this._els.list.scrollTop = 0;
+    // A live append must not throw the reader back to the top of the table;
+    // a new order or a new query makes the old position meaningless.
+    if (this._els.list && !(options && options.keepScroll))
+      this._els.list.scrollTop = 0;
     this._request(0);
     this._requestStats();
   },
@@ -207,7 +217,39 @@ const HistoryDb = {
   },
 
   onChanged() {
+    clearTimeout(this._liveTimer);       // a named change beats the batch
     this.reload();
+  },
+
+  /** A change heard through the bridge (someone was collected, a label was
+   *  edited): refresh, but not once per message — the collector writes in
+   *  chunks. The scroll position is kept so a live chat does not jump. */
+  liveChanged(reason) {
+    this._liveReason = reason || '';
+    clearTimeout(this._liveTimer);
+    this._liveTimer = setTimeout(() => {
+      this._liveReason = '';
+      if (this._els.body) this.reload({ keepScroll: true });
+    }, 400);
+  },
+
+  /** The only irreversible action in this window — always asks first. */
+  emptyTrash() {
+    const bridge = (typeof App !== 'undefined' && App.bridge) || null;
+    if (!bridge || !bridge.history_purge_deleted) return;
+    this._confirm(
+      'Empty the trash?',
+      'Every hidden message and every removed person is erased for good. ' +
+      'Ctrl+Z cannot bring them back.',
+      'Empty trash', () => bridge.history_purge_deleted(''));
+  },
+
+  /** Ask before an action that hides data; without a dialog, do it at once
+   *  (the tests run headless — the backend stays the authority either way). */
+  _confirm(title, text, okLabel, run) {
+    const dialog = (typeof window !== 'undefined' && window.Dialog) || null;
+    if (dialog && dialog.confirm) dialog.confirm(title, text, okLabel, run);
+    else run();
   },
 
   _onScroll() {
@@ -220,7 +262,11 @@ const HistoryDb = {
   /** Remove the person AND their whole history (one undoable step). */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
-    App.bridge.history_delete_person(nick, false);
+    this._confirm(
+      'Remove this person?',
+      '“' + nick + '” and their entire history are hidden in this database. ' +
+      'Ctrl+Z restores both; “Empty trash” is what erases them for good.',
+      'Remove', () => App.bridge.history_delete_person(nick, false));
   },
 
   /** Wipe the conversation but keep the person in the database. */
