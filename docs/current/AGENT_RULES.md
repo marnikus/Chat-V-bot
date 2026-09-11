@@ -7,7 +7,7 @@ here. This file replaces the former `AGENT_RULES.md` +
 
 * Current behaviour, invariants and flows: [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
 * Doc map (what is current vs historical): [`docs/README.md`](../README.md)
-* Rule numbers are **stable** — production code cites them (`RULE 1` … `RULE 18`).
+* Rule numbers are **stable** — production code cites them (`RULE 1` … `RULE 19`).
   Never renumber; append instead.
 
 | # | Rule | Kind |
@@ -30,6 +30,7 @@ here. This file replaces the former `AGENT_RULES.md` +
 | 16 | Code-quality gates on every production change | quality |
 | 17 | One current doc, dated archive | docs |
 | 18 | Ideal sizes: write for the reader's context budget | quality |
+| 19 | Fix complexity before size (nesting → CC → cognitive → size) | quality |
 
 ---
 
@@ -56,33 +57,8 @@ visually confirmed click:
   never intercept the click or shift layout;
 * fixing or improving the confirmation UX happens in exactly one file.
 
-### Correct
-
-```python
-from backend.visual_click import find_and_click
-
-class MyBlock(BaseAction):
-    async def execute(self, user_nick, cdp, engine=None):
-        await self.pre_delay()
-        return await find_and_click(
-            cdp,
-            selector=self.selector,
-            label_selector=self.label_selector,
-            match_text=self.match_text,
-            click_selector=self.click_selector,
-            highlight_enabled=self.highlight_enabled,
-            confirm_pause_ms=self.confirm_pause_ms,
-            label=f"my thing “{self.match_text}”",
-            engine=engine,
-        )
-```
-
-### Incorrect — do not do this
-
-```python
-raw = await cdp.evaluate("document.querySelector('.x').click()")   # ✗ no logging
-raw = await cdp.evaluate(build_probe(..., click=True))             # ✗ no overlays
-```
+Worked correct/incorrect code: [`docs/archive/2026-09-11-rules-appendices/RULE1_VISUAL_CLICK_EXAMPLES.md`](../archive/2026-09-11-rules-appendices/RULE1_VISUAL_CLICK_EXAMPLES.md)
+(extracted from this file to keep it loadable in one read — RULE 18 §18.4).
 
 ### Required params on every such block
 
@@ -483,7 +459,7 @@ Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
 
 1. **Understand the problem fully.** Read [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
    and rules 1–15, plus the size ideals in RULE 18. Then the matching archived
-   design (§16.7 tells you where).
+   design — [`docs/archive/README.md`](../archive/README.md) indexes all of them.
 2. **Research and design the structure in a doc first** when the change moves
    complexity across files (new class, extraction from a hotspot). Record
    current radon numbers, target numbers, and the dishonest reductions you
@@ -491,7 +467,7 @@ Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
 3. **Tests first** for behaviour changes (RULE 8). Refactors claiming
    behaviour-preservation run the existing suite as the equivalence gate.
 4. **Measure**: `radon cc -s path/to/file.py`. Any new function at `C` or worse
-   (CC ≥ 11) → stop and redesign.
+   (CC ≥ 11) → stop and redesign, in the order RULE 19 prescribes.
 5. **Update the current docs** in the same change (RULE 17).
 
 ### 16.7 Acceptance checklist (self-review before claiming done)
@@ -508,6 +484,8 @@ Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
 [ ] did not game metrics with dummy helpers
 [ ] new code aims at the RULE 18 ideals (function 4-20 lines, file 150-300,
     module 5-15 files); every deviation carries an `ideal-size:` reason
+[ ] any complexity/size remediation followed the RULE 19 order
+    (nesting -> cyclomatic -> cognitive -> size last)
 [ ] SYSTEM_OF_RECORD.md + docs/README.md updated if behaviour/docs moved
 ```
 
@@ -584,13 +562,8 @@ reference implementation of that count is the AST walker in
 * **4–20** is the band where a reader holds the whole body in mind at once,
   including every `except` branch. Most new code should land here.
 * **Over 20** usually means a second responsibility is hiding inside the first.
-  Extract by responsibility, using names that already exist in the domain —
-  the extractions this repo actually made: `_gate_before_cycle`,
-  `_announce_stopped`, `_try_prepare_cycle_queue`, `choose_cycle_mode`,
-  `inspect_stack`.
-* *Measured today:* of 1 668 production functions, **57.7% are 4–20 lines**
-  (median 6, mean 10.3, p90 23). 29.0% are 1–3 lines, 8.9% are 21–30, and only
-  0.4% (7 functions) exceed 56.
+  How to get back down — and in which order — is RULE 19.
+* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1 — **57.7%** of 1 668 functions are in band (median 6 lines).
 
 ### 18.2 Files — 150–300 lines
 
@@ -603,20 +576,11 @@ reference implementation of that count is the AST walker in
   always change together; otherwise the separate name is worth more than the
   saved file.
 * **Over 300** — stop and look for the second responsibility before adding the
-  next feature. The split pattern used repeatedly here:
-  `services/run/coordinator.py` → `cycle_plan` / `cycle_loop` / `error_recovery`
-  / `hooks` / `progress` / `run_lifecycle` / `state_machine`;
-  `stores/history_repo.py` → `_append` / `_identity` / `_lifecycle` / `_media`;
-  `services/db_lifecycle.py` → `db_deletion` / `db_deletion_scan` /
-  `db_deletion_flow`.
-* *Measured today:* 141 production files, median **130** lines, mean 177;
-  55.3% are under 150, 26.2% are in the 150–300 band, and **9 files are still
-  over 500**: `backend/chat_sync.py` (771), `backend/scroll_parser.py` (671),
-  `services/db_deletion.py` (665), `services/collector_service.py` (578),
-  `services/undo_service.py` (563), `backend/history_query.py` (554),
-  `bridge/history_bridge.py` (528), `backend/dom_highlight.py` (512),
-  `services/db_deletion_flow.py` (509). Those are known debt (§16.5 landmines)
-  — do not grow them; extract from them when you next touch them.
+  next feature, then split by single responsibility (RULE 19 §19.4 has the
+  worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
+* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §2 — 141 files, median **130** lines, and the **9 files still
+  over 500** are listed there. They are known debt (§16.5 landmines): do not grow
+  them, extract from them when you next touch them.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -627,11 +591,9 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured today:* `core/` 5, `app/` 4, `services/history/` 5,
-  `services/run/` 9, `bridge/` 12, `services/` 16 — inside the ideal. Over it:
-  `stores/` 35, `backend/` 30, `actions/` 23, each held together by prefix
-  families. When a family grows again, promote it to a sub-package rather than
-  adding file 36.
+* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §3 — `core/` 5, `bridge/` 12, `services/` 16 in band;
+  `stores/` 35, `backend/` 30, `actions/` 23 over it, each held together by prefix
+  families. When a family grows again, promote it to a sub-package.
 
 ### 18.4 Context files — 60–200 lines
 
@@ -645,20 +607,21 @@ all of it and still have room for the code it must change?"**
 * **Over 200 lines**, move the detail into `docs/archive/<date>-<topic>/` (or a
   linked appendix) and leave the link here. A context file is a map, not the
   territory.
-* *Measured 2026-09-10* (`wc -l docs/README.md docs/current/*.md`): the map
-  `docs/README.md` is in band (~80 lines). Over the band: `SYSTEM_OF_RECORD.md`
-  ~300 and `DOM_SELECTORS.md` ~340. Re-measure rather than trusting a number
-  written here — these files move.
-* Those two are accepted overruns: their value is that every invariant sits next
-  to the module and the test that enforces it, which is lost the moment it is
-  split. They are **at their ceiling** — the next edit to either moves detail
-  into `docs/archive/` instead of adding lines.
+* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §4 (re-run `wc -l docs/current/*.md` rather than trusting a
+  number written here — these files move). `SYSTEM_OF_RECORD.md` and
+  `DOM_SELECTORS.md` are accepted overruns: their value is that every invariant
+  sits next to the module and the test that enforces it, which is lost the moment
+  it is split. They are **at their ceiling** — the next edit to either moves
+  detail into `docs/archive/` instead of adding lines.
 * `AGENT_RULES.md` is measured against a different budget: an agent must be able
   to load *all* the rules in one read, so splitting them would defeat the
-  purpose. Its budget is **~700 lines** and it is at that budget now. The next
-  rule added here must either fit inside it, or push an existing rule's detail
-  (threshold tables, worked examples, measurement dumps) into a dated archive
-  doc and leave the norm plus a link behind.
+  purpose. **Budget: ~730 lines.** It is at that budget now — adding RULE 19
+  (2026-09-11) pushed it past the ~700 set when RULE 18 was written, and the
+  difference was paid by moving detail out, not by cutting norms: RULE 1's worked
+  code went to a linked appendix, the measurement dumps went to
+  `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, and the remediation prose that
+  RULE 18 and RULE 19 both carried now lives once, in RULE 19. The next rule
+  added here must do the same — extract first, then add.
 
 ### 18.5 When you exceed an ideal
 
@@ -673,25 +636,102 @@ Allowed, with a reason the next reader can see:
   slot signature, a frozen contract that forbids the split), not convenience.
 * No tooling parses `ideal-size:` — it is for the reader, unlike the
   `quality-override:` comment in §16.4 which review does parse.
-* Never satisfy an ideal by gaming it: no `foo_part1`/`foo_part2`, no lambdas
-  that only hide `if` count, no splitting a JS literal to shrink a file. Same
-  rule as §16.2, and it applies to preferences too.
+* Never satisfy an ideal by gaming it (§16.2): no `foo_part1`/`foo_part2`, no
+  lambdas that only hide `if` count, no splitting a JS literal to shrink a file.
 
 ### 18.6 Measuring (copy-paste)
 
-```bash
-# file sizes (largest first)
-wc -l $(git ls-files '*.py' | grep -E '^(core|actions|backend|bridge|services|stores|app)/') main.py | sort -n | tail -15
+Copy-paste commands are in the *Reproduction* section of
+`reports/IDEAL_SIZE_BASELINE_2026-09-11.md` (`wc -l` per file, `radon raw -s`,
+directory counts). Function lengths come from the AST walker in
+`tests/test_rule16_new_code.py` (`node.end_lineno - node.lineno + 1`) — use that
+count, not a line grep.
 
-# per-file LOC/SLOC/comment stats
-.venv/bin/radon raw -s services/db_deletion_flow.py
+---
 
-# module size
-ls stores/*.py | wc -l
+## RULE 19 — Fix complexity before size (the remediation order)
 
-# context files
-wc -l docs/README.md docs/current/*.md
+> When code is over the line, fix it in this order: **nesting → cyclomatic →
+> cognitive → size.** Size is a *symptom*; the other three are the cause.
+> Splitting first turns one complicated function into several files that share
+> one complicated decision — greener metrics, worse code (§16.2 gaming).
+
+```
+Step 1:  Fix NESTING DEPTH first (> 4 → flatten)
+         ├── Guard clauses / early returns
+         ├── Invert conditions
+         └── Extract deeply nested blocks
+
+Step 2:  Fix CYCLOMATIC COMPLEXITY (> 10 → simplify)
+         ├── Replace conditionals with polymorphism / dispatch
+         ├── Strategy pattern for branching
+         └── Lookup tables instead of if/elif chains
+
+Step 3:  Fix COGNITIVE COMPLEXITY (> 15 → clarify)
+         ├── Break compound boolean expressions into named variables
+         ├── Replace clever tricks with obvious code
+         └── Simplify control flow
+
+Step 4:  NOW check SIZE — it's probably already fixed
+         ├── If function still > 20 LOC → extract by concept
+         ├── If class still > 120 LOC → single responsibility split
+         └── If params > 3 → introduce parameter object
 ```
 
-Function lengths are measured by the AST walker in `tests/test_rule16_new_code.py`
-(`node.end_lineno - node.lineno + 1`) — use that count, not a line grep.
+Steps 1–3 quote the **fail lines** (RULE 16: nesting 4, CC 10, cognitive 15).
+Step 4 quotes the **ideals** (RULE 18 / §16.1 "prefer": 20 / 120 / 3) — *not*
+fail lines, which are 30 / 150 / 4. Nothing in step 4 rejects a change on its own.
+
+Why the order works: each earlier step **deletes decisions**, and deleting
+decisions is what moves every later metric. Flattening a six-deep branch usually
+removes 2–4 CC; a lookup table replacing an `if/elif` chain removes the CC, the
+nesting *and* most of the cognitive load; and a function whose branches are gone
+is often short enough that no extraction is needed at all.
+
+**19.1 Step 1 — nesting (> 4).** Guard clauses: refuse early and return so the
+happy path is never indented — structurally, the way `services/db_deletion_flow.py`
+raises `_PhaseRefusal` from a phase and catches it once in `delete_world`,
+instead of 27 nested early-return blocks. Invert (`if not ok: return`, not
+`if ok:` around the body). Extract the *innermost* deep block first — smallest
+scope, safest move. Measured by the AST walker in `tests/test_rule16_new_code.py`.
+
+**19.2 Step 2 — cyclomatic (> 10).** Dispatch instead of branching on a type:
+the 16 blocks are a registry lookup (`actions/registry.py` `get_action_class`),
+not an `if/elif` over block ids. Lookup tables are data, not branches:
+`choose_cycle_mode()` returns `CycleDecision(mode, reason)` from a precedence
+table; `DB_GROUP_SUFFIXES`, `MIME_EXT`, `IMAGE_EXT` are tuples/dicts. Two
+interchangeable back-ends behind one call, not a branch at every call site:
+archive search is FTS5 when SQLite offers it and a `text_lc LIKE` scan when it
+does not (`backend/history_query.py`). Never delete a real decision to reach the
+number — four independent binary outcomes cost CC 5 minimum (§16.2).
+
+**19.3 Step 3 — cognitive (> 15).** Name the compound: `if _is_self_chat(names)`
+reads, `if a and not b and c or d` does not; `StackFacts.has_mem_click` exists so
+nobody re-scans the stack inside a condition. Obvious beats clever — a comment
+explaining a trick is a request to delete the trick. Scored by
+`cognitive-complexity` 1.3.x.
+
+**19.4 Step 4 — size, last.** By now the function is often already inside the
+ideal. If not, extract **by concept** with a name that already exists in the
+domain (`_gate_before_cycle`, `_announce_stopped`, `inspect_stack`) — never
+`foo_part1`. A class over the ideal gets a single-responsibility split, the way
+`services/run/` and `stores/history_repo*` were split (§18.2). Too many params
+get a parameter object: `PersonPageRequest` in `backend/history_query.py` is the
+model — `needle` / `where` / `order` / `spec` / `columns` as properties of one
+typed request instead of five arguments.
+
+**19.5 When the ladder does not apply.** A function that is long but *flat* —
+sequential phases or a fallback ladder, little nesting — is not fixed by steps
+1–3. Two real cases: `DbLifecycle._delete_unlocked` was 631 LOC at CC 143
+because it ran seven sequential phases, and the fix was extraction by phase
+(`validate → scan → switch → detach → database → media → finalize`);
+`backend/message_injector.py` `_run_type_strategies` (70 LOC) is a verified
+typing ladder — value setter → Ctrl+V → `insertText` — whose length is three
+real attempts plus their read-backs, so it extracts per attempt, not per branch.
+In both, step 4 was the tool rather than the fallback. Read the shape before
+picking a step: nested → 1, branching → 2, dense → 3, long-and-flat → 4.
+
+**19.6 Verify after every step.** `radon cc -s <file>`, then the gate:
+`.venv/bin/python tests/test_rule16_new_code.py`. A step is not finished because
+the number moved — it is finished when the existing suite is still green
+(§16.6 step 3), because steps 1–3 must be behaviour-preserving.
