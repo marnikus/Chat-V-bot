@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from types import SimpleNamespace
 
+import bridge.window_preset_bridge as preset_bridge
 from bridge.context import BridgeContext
 from bridge.window_preset_bridge import WindowPresetBridge
 from backend.config_manager import ConfigManager
@@ -69,6 +72,66 @@ def test_missing_config_degrades_to_empty_without_false_success():
     assert bridge.load_window_preset("ghost") == "null"
     assert not bridge.save_window_preset("Desk", json.dumps(document()))
     assert not bridge.delete_window_preset("ghost")
+
+
+def test_export_selects_folder_writes_portable_file_and_reveals_it(tmp_path, monkeypatch):
+    bridge, config = make_bridge(tmp_path)
+    assert bridge.save_window_preset("Desk", json.dumps(document()))
+    export_folder = tmp_path / "exports"
+    export_folder.mkdir()
+    dialog = types.SimpleNamespace(
+        getExistingDirectory=lambda *args: str(export_folder))
+    monkeypatch.setitem(sys.modules, "PySide6.QtWidgets",
+                        types.SimpleNamespace(QFileDialog=dialog))
+    assert preset_bridge._choose_export_folder() == str(export_folder)
+    assert preset_bridge._safe_filename("Desk / blue") == "window-preset-Desk-blue.json"
+    real_open = preset_bridge._open_in_folder
+    monkeypatch.setattr(preset_bridge, "_choose_export_folder",
+                        lambda: str(export_folder))
+
+    result = json.loads(bridge.export_window_preset("Desk"))
+    exported = export_folder / "window-preset-Desk.json"
+    assert result == {"ok": True, "name": "Desk", "path": str(exported)}
+    assert json.loads(exported.read_text(encoding="utf-8"))["name"] == "Desk"
+
+    opened = []
+    monkeypatch.setattr(preset_bridge, "_open_in_folder",
+                        lambda path: opened.append(path) or True)
+    assert bridge.show_window_preset_in_folder("Desk")
+    assert opened == [str(exported)]
+    services = types.SimpleNamespace(
+        QDesktopServices=types.SimpleNamespace(
+            openUrl=lambda url: opened.append(url) or True))
+    monkeypatch.setitem(sys.modules, "PySide6.QtGui", services)
+    assert real_open(str(exported))
+
+    bad_folder = tmp_path / "not-a-folder"
+    bad_folder.write_text("not a folder", encoding="utf-8")
+    monkeypatch.setattr(preset_bridge, "_choose_export_folder",
+                        lambda: str(bad_folder))
+    failed = json.loads(bridge.export_window_preset("Desk"))
+    assert not failed["ok"]
+
+    cancelled = WindowPresetBridge(BridgeContext(config=config))
+    monkeypatch.setattr(preset_bridge, "_choose_export_folder", lambda: "")
+    result = json.loads(cancelled.export_window_preset("Desk"))
+    assert result == {"ok": False, "cancelled": True}
+
+    fallback = WindowPresetBridge(BridgeContext(config=config))
+    assert fallback.show_window_preset_in_folder("Desk")
+    assert opened[-1] == config.window_presets.path
+
+    monkeypatch.setattr(preset_bridge, "_open_in_folder", lambda _path: False)
+    assert not fallback.show_window_preset_in_folder("Desk")
+
+    def raise_open(_path):
+        raise RuntimeError("explorer unavailable")
+
+    monkeypatch.setattr(preset_bridge, "_open_in_folder", raise_open)
+    assert not fallback.show_window_preset_in_folder("Desk")
+    empty = WindowPresetBridge(BridgeContext())
+    assert not empty.show_window_preset_in_folder("Desk")
+    assert not json.loads(empty.export_window_preset("Desk"))["ok"]
 
 
 class _FakeStore:

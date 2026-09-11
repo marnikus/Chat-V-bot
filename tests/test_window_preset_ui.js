@@ -52,6 +52,7 @@ test('saved presets render as visible quick buttons and panel rows', () => {
   assert(elements.windowPresetQuickChips.children.length === 2, 'quick chips');
   assert(elements.windowPresetList.children.length === 2, 'panel rows');
   assert(elements.windowPresetList.children[0].children[0].textContent === 'Desk', 'row name');
+  assert(elements.windowPresetList.children[0].children[2].children.length === 4, 'row actions');
   assert(!elements.exportWindowPresetBtn.disabled, 'export enabled');
 });
 
@@ -91,6 +92,25 @@ test('invalid imported file reports an error and does not open a preview', () =>
   presets._readFile({ target: { files: [{}], value: 'chosen.json' } });
   assert(elements.windowPresetStatus.textContent.includes('Import rejected'), 'import error');
   assert(presets.pending.action === 'restore', 'pending preview unchanged');
+});
+
+test('export uses the native folder response and show-in-folder bridge action', () => {
+  global.App.bridge = {
+    export_window_preset(name, callback) {
+      callback(JSON.stringify({ ok: true, name, path: '/exports/window-preset-Desk.json' }));
+    },
+    show_window_preset_in_folder(name, callback) {
+      callback(name === 'Desk');
+    },
+  };
+  presets.export('Desk');
+  assert(elements.windowPresetStatus.textContent.includes('/exports/'), 'export path');
+  presets.showInFolder('Desk');
+  assert(elements.windowPresetStatus.textContent.includes('Opened the folder'), 'show folder');
+  global.App.bridge.export_window_preset = (_name, callback) =>
+    callback(JSON.stringify({ ok: false, cancelled: true }));
+  presets.export('Desk');
+  assert(elements.windowPresetStatus.textContent.includes('cancelled'), 'cancelled export');
 });
 
 if (failed) process.exit(1);

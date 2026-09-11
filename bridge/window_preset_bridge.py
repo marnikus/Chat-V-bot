@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -11,6 +14,43 @@ from core.events import LogMessage
 from services.window_preset_service import WindowPresetService
 
 log = logging.getLogger("chatbot")
+
+
+def _safe_filename(name: str) -> str:
+    stem = re.sub(r"[^\w-]+", "-", str(name), flags=re.UNICODE).strip("-_")
+    return f"window-preset-{stem or 'untitled'}.json"
+
+
+def _choose_export_folder() -> str:
+    from PySide6.QtWidgets import QFileDialog
+
+    return str(QFileDialog.getExistingDirectory(
+        None, "Export window preset — choose a folder", str(Path.home())))
+
+
+def _write_export(folder: str, document: dict) -> Path:
+    target = Path(folder) / _safe_filename(document["name"])
+    temporary = target.with_name(f".{target.name}.tmp")
+    payload = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
+    try:
+        temporary.write_text(payload, encoding="utf-8")
+        os.replace(temporary, target)
+    except OSError:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+    return target
+
+
+def _open_in_folder(path: str) -> bool:
+    target = Path(path)
+    folder = target if target.is_dir() else target.parent
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+
+    return bool(QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))))
 
 
 class WindowPresetBridge(QObject):
@@ -21,6 +61,7 @@ class WindowPresetBridge(QObject):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
+        self._exported_paths = {}
 
     def _store(self):
         config = self.ctx.config
@@ -39,6 +80,19 @@ class WindowPresetBridge(QObject):
             return True
         store.load()
         return False
+
+    def _validated_document(self, name):
+        store = self._store()
+        if store is None:
+            return None, "window presets are unavailable"
+        try:
+            document = store.load_preset(name)
+        except Exception as exc:  # noqa: BLE001
+            return None, f"load failed: {exc}"
+        if document is None:
+            return None, f"preset “{name}” was not found"
+        clean, error = WindowPresetService.validate(document, name=name)
+        return (None, error) if error else (clean, None)
 
     @Slot(result=str)
     def list_window_presets(self):
@@ -75,20 +129,51 @@ class WindowPresetBridge(QObject):
 
     @Slot(str, result=str)
     def load_window_preset(self, name):
-        store = self._store()
-        try:
-            document = store.load_preset(name) if store else None
-        except Exception as exc:  # noqa: BLE001
-            self._log(f"❌ Window preset load failed: {exc}", "error")
-            return "null"
-        if document is None:
-            self._log(f"❌ Window preset “{name}” not found", "error")
-            return "null"
-        clean, error = WindowPresetService.validate(document, name=name)
+        document, error = self._validated_document(name)
         if error:
-            self._log(f"❌ Window preset “{name}” is invalid: {error}", "error")
+            self._log(f"❌ Window preset “{name}”: {error}", "error")
             return "null"
-        return json.dumps(clean, ensure_ascii=False)
+        return json.dumps(document, ensure_ascii=False)
+
+    @Slot(str, result=str)
+    def export_window_preset(self, name):
+        document, error = self._validated_document(name)
+        if error:
+            self._log(f"❌ Window preset export refused: {error}", "error")
+            return json.dumps({"ok": False, "error": error})
+        try:
+            folder = _choose_export_folder()
+            if not folder:
+                self._log("Window preset export cancelled", "info")
+                return json.dumps({"ok": False, "cancelled": True})
+            path = _write_export(folder, document)
+        except Exception as exc:  # noqa: BLE001
+            self._log(f"❌ Window preset export failed: {exc}", "error")
+            return json.dumps({"ok": False, "error": str(exc)})
+        self._exported_paths[document["name"]] = str(path)
+        self._log(f"📤 Window preset exported to {path}", "success")
+        return json.dumps({"ok": True, "name": document["name"],
+                           "path": str(path)}, ensure_ascii=False)
+
+    @Slot(str, result=bool)
+    def show_window_preset_in_folder(self, name):
+        store = self._store()
+        path = self._exported_paths.get(str(name))
+        if not path and store is not None:
+            path = getattr(store, "path", "")
+        if not path:
+            self._log("⚠ Window preset folder is unavailable", "warn")
+            return False
+        try:
+            opened = _open_in_folder(path)
+        except Exception as exc:  # noqa: BLE001
+            self._log(f"❌ Cannot open preset folder: {exc}", "error")
+            return False
+        if opened:
+            self._log(f"📂 Showing preset folder for {name}", "info")
+        else:
+            self._log(f"⚠ Cannot open preset folder for {name}", "warn")
+        return opened
 
     @Slot(str, result=bool)
     def delete_window_preset(self, name):

@@ -41,13 +41,17 @@ the existing audit's values are the baseline above.
    restart without changing the existing stack/template file.
 3. Define a human-readable `.json` document that can be copied between
    machines and app installations.
-4. Export any saved preset with a browser download and import a local file.
-5. Validate an imported document before changing the live grid and show a
+4. Export any saved preset through a native folder picker, write a portable
+   JSON file there, and import a local file.
+5. Offer **Show in folder** for each named preset. Reveal the last exported
+   file when this session has one; otherwise open the app's preset-storage
+   folder so the action is still useful after restart.
+6. Validate an imported document before changing the live grid and show a
    visual preview plus a clear error for malformed/incompatible files.
-6. Apply the tree's percentage allocations on the target screen; use normalized
+7. Apply the tree's percentage allocations on the target screen; use normalized
    bounds only for preview/diagnostics, so a different resolution does not
    replay stale absolute pixels.
-7. Refresh the Grid view menu and its window-preset quick chips from a signal
+8. Refresh the Grid view menu and its window-preset quick chips from a signal
    immediately after save, delete, or import—no page reload. Keep the language
    URL-bookmark toolbar separate from Grid view.
 
@@ -55,9 +59,9 @@ the existing audit's values are the baseline above.
 
 - Persisting application data, Chrome tabs, stack blocks, or message history in
   a window preset.
-- Moving the native Qt file dialog into the backend. Qt WebEngine already has a
-  safe local file input and download mechanism; using it keeps exported files
-  portable and keeps Python free of platform-specific dialog code.
+- Asking the browser to choose a download directory. The desktop app owns the
+  export dialog and writes the selected file atomically, so export behavior is
+  deterministic across WebEngine download settings.
 - Encoding absolute pixel positions as the source of truth. They are included
   as a snapshot, not used to size the target grid.
 - Adding another undo history. Applying a preset uses the existing grid save
@@ -130,14 +134,15 @@ services/window_preset_service.py
 stores/window_preset_store.py
   one atomic config/window_presets.json file; CRUD only
 bridge/window_preset_bridge.py
-  QWebChannel slots/signals for save/list/load/delete
+  QWebChannel slots/signals for save/list/load/delete, native folder export,
+  and reveal-in-folder
 bridge/router.py
   publishes the new domain bridge; no domain logic
 ui/js/sash-grid.js
   builds/validates/applies a portable snapshot; tree remains the source of truth
 ui/js/window-presets.js
-  Grid view menu section, quick chips, save/load/delete, download, file input,
-  preview modal
+  Grid view menu section, quick chips, save/load/delete, native export request,
+  show-in-folder action, file input, and preview modal
 ui/js/url-toolbar.js
   language URL-bookmark controls in their separate toolbar
 ui/index.html + ui/css/*
@@ -175,11 +180,17 @@ and the final mutation are guarded.
 
 ### Load / export
 
-Each saved row has **Restore**, **Export**, and **Delete** actions. Restore
-shows the same preview (and a screen-size note when the source and target
-screens differ), then applies only after confirmation. Export obtains the
-canonical stored document, serializes it with indentation, and starts a
-`window-preset-<safe-name>.json` download.
+Each saved row has **Restore**, **Export**, **Show in folder**, and **Delete**
+actions. Restore shows the same preview (and a screen-size note when the source
+and target screens differ), then applies only after confirmation.
+
+Export is a native desktop flow: the bridge validates the canonical stored
+document, opens a folder picker, and writes
+`window-preset-<safe-name>.json` into the selected folder. Cancelling the picker
+is a non-error and does not create a file. The bridge returns the actual path
+and remembers it for the session. **Show in folder** reveals that exported
+file's containing folder; for a preset not exported in this session it opens
+the app-owned preset-storage folder instead.
 
 ### Import
 
@@ -208,6 +219,11 @@ silently treated as an error.
   intact.
 - A missing/empty preset list is rendered as an explicit empty state, not as a
   broken panel.
+- Cancelling native export leaves storage, the selected preset, and the live
+  grid unchanged; a failed export write reports failure and does not claim a
+  download succeeded.
+- Export writes the canonical document atomically with a safe filename; reveal
+  actions open only a backend-known preset file or the app-owned preset folder.
 - Import/apply is idempotent with respect to the tree: the validated tree is
   cloned before assignment, and the ordinary `_save()` path persists the
   resulting layout plus global history.
@@ -222,11 +238,13 @@ Before implementation changes, add focused tests that exercise real behavior:
 - `tests/test_window_preset_store.py`: atomic save/list/load/delete and restart
   round trip in a temporary config directory.
 - `tests/unit/bridge_safety/test_window_presets.py`: bridge slot round trips,
-  signal refresh, invalid-save refusal, missing-load/delete behavior.
+  signal refresh, invalid-save refusal, missing-load/delete behavior, native
+  export-folder selection, atomic output, cancellation, and reveal routing.
 - `tests/test_window_presets.js` and `tests/test_window_preset_ui.js`: execute
   the real `sash-grid.js` and `window-presets.js` behavior against DOM/file
   stubs; assert that valid imports apply, invalid imports do not, preview is
-  generated, and saved entries render.
+  generated, saved entries render, and export/show-in-folder callbacks are
+  handled without falling back to an uncontrolled browser download.
 
 Existing grid persistence, SashCore, bridge parity, and store split suites
 remain the regression gate. The tests must fail if validation or application

@@ -179,6 +179,7 @@ const WindowPresets = {
       actions.className = 'window-preset-row-actions';
       actions.appendChild(this._rowAction('Restore', () => this.load(item.name)));
       actions.appendChild(this._rowAction('Export', () => this.export(item.name)));
+      actions.appendChild(this._rowAction('Show in folder', () => this.showInFolder(item.name)));
       actions.appendChild(this._rowAction('Delete', () => this.remove(item.name), true));
       row.append(name, meta, actions);
       row.addEventListener('click', () => { this.selectedName = item.name; this.render(); });
@@ -219,26 +220,54 @@ const WindowPresets = {
   },
 
   export(name) {
-    this._getDocument(name, (document) => {
-      if (!document) {
-        this._message('Preset “' + name + '” could not be loaded for export.', 'error');
-        return;
-      }
-      const checked = SashGrid.validatePortablePreset(document);
-      if (!checked.ok) { this._message('Export refused: ' + checked.error, 'error'); return; }
-      this._download(checked.document);
-    });
+    const bridge = typeof App !== 'undefined' ? App.bridge : null;
+    if (!bridge || !bridge.export_window_preset) {
+      this._message('Export requires the desktop bridge to choose a folder.', 'error');
+      return;
+    }
+    let handled = false;
+    const done = (raw) => {
+      if (handled) return;
+      handled = true;
+      this._handleExportResponse(name, raw);
+    };
+    try {
+      const result = bridge.export_window_preset(name, done);
+      if (typeof result === 'string' || (result && typeof result === 'object')) done(result);
+    } catch (error) {
+      done(JSON.stringify({ ok: false, error: error.message }));
+    }
   },
 
-  _download(preset) {
-    const safe = preset.name.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'window-preset';
-    const blob = new Blob([JSON.stringify(preset, null, 2) + '\n'], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'window-preset-' + safe + '.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 0);
-    this._message('Exported “' + preset.name + '” as ' + link.download + '.', 'success');
+  _handleExportResponse(name, raw) {
+    let result = raw;
+    try { result = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+    catch (error) { result = { ok: false, error: 'invalid export response' }; }
+    if (!result || !result.ok) {
+      if (result && result.cancelled) this._message('Export cancelled.', 'info');
+      else this._message('Export failed: ' + ((result && result.error) || 'unknown error'), 'error');
+      return;
+    }
+    this._message('Exported “' + name + '” to ' + result.path + '.', 'success');
+  },
+
+  showInFolder(name) {
+    const bridge = typeof App !== 'undefined' ? App.bridge : null;
+    if (!bridge || !bridge.show_window_preset_in_folder) {
+      this._message('Show in folder requires the desktop bridge.', 'error');
+      return;
+    }
+    let handled = false;
+    const done = (ok) => {
+      if (handled) return;
+      handled = true;
+      this._message(ok ? 'Opened the folder for “' + name + '”.'
+        : 'Could not open the folder for “' + name + '”.', ok ? 'success' : 'error');
+    };
+    try {
+      const result = bridge.show_window_preset_in_folder(name, done);
+      if (typeof result === 'boolean') done(result);
+    } catch (error) { done(false); }
   },
 
   _openFilePicker() {
