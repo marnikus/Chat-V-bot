@@ -101,6 +101,35 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # *consecutive* statement window and the four imports remain one; and dropping
 # the blank line between import groups would hide the group by shrinking its
 # span below MIN_SPAN, which is gaming the scanner (§18.5), not fixing it.
+#
+# Maintenance 2026-09-12 (Round F, step F2): decomposing `Collector`
+# (526 class LOC / 40 methods) into the `services/collector_*` family removed
+# one group and added one, so the count is unchanged at 12. Both halves are
+# recorded because they were verified separately, not assumed.
+#
+# REMOVED — ('bridge/stack_bridge.py', 'services/collector_service.py'). Same
+# header noise as the others: both opened
+# `from __future__ / asyncio / json / logging / datetime`. Moving the payload
+# shaping into services/collector_report.py left collector_service.py with no
+# `json` use at all, so the dead import was deleted and the header shrank to
+# four statements. The ratchet working as intended, not a scanner dodge: the
+# import genuinely went unused (pylint W0611 flagged it).
+#
+# ADDED — ('services/collector_partner.py', 'services/collector_report.py'),
+# span 6 at line 9 in both: `from __future__ import annotations` / `import
+# json` / `import logging` / `from typing import Optional`. This one only
+# appeared once the two modules were given PEP8-grouped imports (pylint C0411
+# failed on the alphabetical-by-text order the generator first emitted), which
+# is the honest order and the one every other module here uses. No logic is
+# copied. Each of the four names is genuinely used in BOTH files — `json.dumps`
+# for the emitted payloads, `log.debug` in the emit-failure handlers, `Optional`
+# in the `nick` parameter — and vulture at confidence 90 reports no dead code in
+# either module, so there is no unused import to delete that would dissolve the
+# window. Tried and rejected: reordering the imports back to dissolve the group
+# would reintroduce C0411 and is exactly the cosmetic span-shrinking §18.5
+# forbids. This is the same situation as the F1 pair
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py')
+# directly below.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector.py"),
@@ -108,7 +137,7 @@ CLONE_BASELINE = frozenset({
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
-    ("bridge/stack_bridge.py", "services/collector_service.py"),
+    ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_service.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),

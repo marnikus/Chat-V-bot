@@ -28,7 +28,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 1's worked visual-click examples. |
 | [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
-| [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 1 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, and the design for the `services/db_deletion.py` split that it does not block. |
+| [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 2 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, the `services/db_deletion.py` split that it does not block, and the decomposition of the two god classes the snapshot does not cover — `Collector` and `UndoService`. |
 
 ---
 
@@ -266,6 +266,7 @@ holds the design for the round that works that tail, including the finding that 
 files — the two worst among them — sit behind the frozen AREA D public-API snapshot, which skips
 packages and counts only symbols a module owns.
 
-*1 doc.*
+*2 docs.*
 
 - [`ROUND_F_DESIGN_2026-09-12.md`](2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md) — The 500-line tail, the snapshot that freezes half of it, and the six-file split of `services/db_deletion.py` with its measured dependency DAG and rejected dishonest reductions
+- [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md) — Steps F2 and F3: decomposing the two §16.5 landmine god classes the AREA D snapshot does *not* freeze, `Collector` (526 class LOC / 40 methods / LCOM 0.92) and `UndoService` (418 / 28 / 0.92), into collaborator families following the convention `tests/unit/stores/test_stores_structure.py` already pins. §8 records F2's executed outcome against every target, the three targets it missed and why, two frozen contracts it touched (the clone baseline and the `stores/` import pin), and the RULE 16 / RULE 18 recheck
