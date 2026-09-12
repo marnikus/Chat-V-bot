@@ -349,23 +349,51 @@ class ScrollParser:
             snap = await self._snapshot()
             if snap is None:
                 return None
-            nicks = {u.get("nick") for u in snap.get("users", []) if u.get("nick")}
-            if nicks - seen_before:
-                if waited > options.poll_ms:
-                    self._say(f"⏳ New people appeared after {waited} ms of "
-                              "lazy loading", "info")
+            if self._new_people(snap, seen_before, waited):
                 return snap
             # nothing new yet — has the viewport stopped moving?
-            if abs(float(snap.get("scrollTop", 0)) - prev_top) < 1:
-                stable += 1
-                if stable >= 2:
-                    return snap
-            else:
-                stable = 0
-                prev_top = float(snap.get("scrollTop", 0))
+            stable, prev_top, arrived = self._settle_poll(snap, prev_top,
+                                                          stable)
+            if arrived:
+                return snap
         self._say(f"⏳ Still nothing new after {options.load_timeout_ms} ms — "
                   "treating as loaded", "info")
         return snap
+
+    def _new_people(self, snap: dict, seen_before: set, waited: int) -> bool:
+        """True (with the info line) when lazy-loading delivered fresh nicks."""
+        nicks = {u.get("nick") for u in snap.get("users", []) if u.get("nick")}
+        if not (nicks - seen_before):
+            return False
+        if waited > self.options.poll_ms:
+            self._say(f"⏳ New people appeared after {waited} ms of "
+                      "lazy loading", "info")
+        return True
+
+    def _settle_poll(self, snap: dict, prev_top: float,
+                     stable: int) -> tuple[int, float, bool]:
+        """One "nothing new yet" poll → (stable count, reference top, arrived).
+
+        Two consecutive polls at (almost) the same scrollTop are what mean the
+        pane arrived, so the reference position only moves while it is still
+        scrolling — a stopped viewport keeps comparing against the same mark.
+        """
+        stopped, top = self._scroll_stopped(snap, prev_top)
+        if not stopped:
+            return 0, top, False
+        stable += 1
+        return stable, prev_top, stable >= 2
+
+    @staticmethod
+    def _scroll_stopped(snap: dict, prev_top: float) -> tuple[bool, float]:
+        """Whether the viewport stopped moving, and where it is now.
+
+        The caller only adopts the new position while the pane is still
+        moving, so a stopped viewport keeps comparing against the same
+        reference — two consecutive still polls are what mean "arrived".
+        """
+        top = float(snap.get("scrollTop", 0))
+        return abs(top - prev_top) < 1, top
 
     async def _notify_collected(self, record, result) -> None:
         """Tell the caller a person was added, so the UI can refresh now."""

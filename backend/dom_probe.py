@@ -160,6 +160,45 @@ def build_probe(
     return expr
 
 
+def _candidate_snip(cand: dict) -> str:
+    """One candidate of a failed probe, exactly as the log shows it."""
+    return (f"[{cand.get('index')}] “{cand.get('text','')[:40]}”"
+            f"({('visible,' if cand.get('visible') else 'hidden,')}"
+            f"{'clickable' if cand.get('clickable') else 'not clickable'})")
+
+
+def _candidates_suffix(candidates: list) -> str:
+    """The " Candidates: …." tail of a failure message ("" when there are none).
+
+    Four is the pinned sample size: enough to recognise the wrong pane
+    without turning one log line into a DOM dump.
+    """
+    if not candidates:
+        return ""
+    return (" Candidates: "
+            + "; ".join(_candidate_snip(c) for c in candidates[:4]) + ".")
+
+
+def _failure_message(result: dict, total: int, label: str) -> str:
+    """The not-found message, naming up to four of the matched candidates."""
+    return (f"❌ Failed to find element: {label} — selector matched {total} "
+            f"node(s), none with the required text/properties."
+            + _candidates_suffix(result.get("candidates") or []))
+
+
+def _found_message(result: dict, base: str) -> tuple[str, str]:
+    """The visibility / clickability verdict for an element that WAS found."""
+    if not result.get("visible"):
+        return base + " — ⚠ NOT visible (hidden/zero-size) — will not click", "warn"
+    if result.get("disabled"):
+        return base + " — ⚠ disabled (or pointer-events:none) — will not click", "warn"
+    if result.get("clicked") is True:
+        return base + " — clickable: yes — clicked ✔", "success"
+    if "clicked" in result:
+        return base + " — clickable: yes — click FAILED", "error"
+    return base + " — clickable: yes", "success"
+
+
 def interpret(result, label: str = "element") -> tuple[str, str]:
     """Turn the probe result into a (message, level) pair.
 
@@ -169,35 +208,13 @@ def interpret(result, label: str = "element") -> tuple[str, str]:
     if not isinstance(result, dict):
         return f"❌ Probe returned no usable data for “{label}”", "error"
     total = int(result.get("total", 0) or 0)
-    found = bool(result.get("found"))
     if result.get("error"):
         return f"❌ Probe error while searching {label}: {result['error']}", "error"
-    if not found:
-        msg = (f"❌ Failed to find element: {label} — selector matched {total} "
-               f"node(s), none with the required text/properties.")
-        cands = result.get("candidates") or []
-        if cands:
-            parts = []
-            for c in cands[:4]:
-                parts.append(f"[{c.get('index')}] “{c.get('text','')[:40]}”"
-                             f"({('visible,' if c.get('visible') else 'hidden,')}"
-                             f"{'clickable' if c.get('clickable') else 'not clickable'})")
-            msg += " Candidates: " + "; ".join(parts) + "."
-        return msg, "error"
+    if not result.get("found"):
+        return _failure_message(result, total, label), "error"
     # found — report visibility/clickability
-    visible = bool(result.get("visible"))
-    disabled = bool(result.get("disabled"))
     text = result.get("text", "")[:60]
-    base = f"✅ {label} found: “{text}”"
-    if not visible:
-        return base + " — ⚠ NOT visible (hidden/zero-size) — will not click", "warn"
-    if disabled:
-        return base + " — ⚠ disabled (or pointer-events:none) — will not click", "warn"
-    if result.get("clicked") is True:
-        return base + " — clickable: yes — clicked ✔", "success"
-    if "clicked" in result:
-        return base + " — clickable: yes — click FAILED", "error"
-    return base + " — clickable: yes", "success"
+    return _found_message(result, f"✅ {label} found: “{text}”")
 
 
 def interpret_wait(result, label: str = "element") -> tuple[str, str]:

@@ -180,27 +180,49 @@ class ClickUser(BaseAction):
         tab count is evidence, not a veto, because the click itself already
         succeeded.
         """
-        if self.tab_pause_ms:
-            self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
-                              "tab…", "info")
-            await asyncio.sleep(self.tab_pause_ms / 1000.0)
+        await self._wait_for_new_tab(engine)
         after = await self._read_tabs(cdp)
         if after is None:
             self._say(engine, "⚠ Could not read the tab list to confirm the "
                               "new tab — assuming the click worked", "warn")
             return ActionResult.OK
-        before_count = int((before or {}).get("count", 0) or 0)
-        after_count = int(after.get("count", 0) or 0)
-        titles = [str(t) for t in (after.get("titles") or [])]
-        if after_count <= before_count and not any(nick and nick in t
-                                                   for t in titles):
+        before_count, after_count, titles = self._tab_evidence(before, after)
+        if (after_count <= before_count
+                and not self._nick_in_titles(nick, titles)):
             return self._no_new_tab(engine, nick, label, before_count,
                                     after_count, titles)
-        how = (f"tab count {before_count} → {after_count}" if
-               after_count > before_count else f"a tab titled “{nick}” is open")
+        how = self._confirm_phrase(nick, before_count, after_count)
         self._say(engine, f"✅ New tab confirmed for {label} ({how})", "success")
         log.info("Opened chat tab for %s", nick)
         return ActionResult.OK
+
+    async def _wait_for_new_tab(self, engine) -> None:
+        """The configured pause that gives a new tab time to open."""
+        if not self.tab_pause_ms:
+            return
+        self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
+                          "tab…", "info")
+        await asyncio.sleep(self.tab_pause_ms / 1000.0)
+
+    @staticmethod
+    def _tab_evidence(before: Optional[dict], after: dict) -> tuple:
+        """(tab count before, tab count after, the titles now open)."""
+        before_count = int((before or {}).get("count", 0) or 0)
+        after_count = int(after.get("count", 0) or 0)
+        return before_count, after_count, [str(t) for t in
+                                           (after.get("titles") or [])]
+
+    @staticmethod
+    def _nick_in_titles(nick: str, titles: list) -> bool:
+        """Whether one of the open tabs already carries the nick's name."""
+        return any(nick and nick in title for title in titles)
+
+    @staticmethod
+    def _confirm_phrase(nick: str, before_count: int, after_count: int) -> str:
+        """Which of the two proofs confirmed the tab, as the log shows it."""
+        if after_count > before_count:
+            return f"tab count {before_count} → {after_count}"
+        return f"a tab titled “{nick}” is open"
 
     def _no_new_tab(self, engine, nick: str, label: str, before_count: int,
                     after_count: int, titles: list) -> str:

@@ -431,44 +431,67 @@ class Collector(QObject):
         return (CollectorState.NOT_PRIVATE, "Not in private tab now")
 
     # ── the live push channel ────────────────────────────────────
-    async def handle_push(self, payload) -> int:
-        """Store what the in-page observer pushed. Never raises."""
+    def _push_ready(self) -> bool:
+        """Whether a push may be stored at all right now.
+
+        Both halves are pure reads of the collector's own state, so answering
+        them before the payload is parsed cannot reorder anything observable.
+        """
         if not self._nick or not self.enabled or self._paused:
-            return 0
-        data = self._payload(payload)
-        items = self._records(data)
-        if not items:
-            return 0
+            return False
         if not self._verified:
             # No tick has verified this conversation (or the last one
             # refused it): the observer may be describing another pane.
-            return 0
-        check = verify_private(
+            return False
+        return True
+
+    def _gate_check(self, data: dict, items: list):
+        """Re-verify the conversation this push claims to describe."""
+        return verify_private(
             {"tab": data.get("tab") or "private",
              "partner": data.get("partner") or self._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
             self._nick, self.my_nick, items=items)
+
+    async def _append_push(self, items: list):
+        """Store the pushed records; None when the write raised."""
+        try:
+            return await self.repo.append(self._nick, items,
+                                          my_nick=self.my_nick,
+                                          align=False, now=self.now())
+        except Exception as e:                        # noqa: BLE001
+            log.warning("push append failed: %s", e)
+            return None
+
+    async def _announce_push(self, result) -> None:
+        """Publish what the push added and move the collector to COLLECTED."""
+        self._added = result.added
+        self._total = result.total
+        await self._notify_appended(self._nick, list(result.records[:200]),
+                                    result.added, result.total)
+        self._set(CollectorState.COLLECTED,
+                  f"Collected {result.added} new "
+                  f"message{'s' if result.added != 1 else ''} "
+                  f"from {self._nick}")
+
+    async def handle_push(self, payload) -> int:
+        """Store what the in-page observer pushed. Never raises."""
+        if not self._push_ready():
+            return 0
+        data = self._payload(payload)
+        items = self._records(data)
+        if not items:
+            return 0
+        check = self._gate_check(data, items)
         if not check.ok:
             self._refuse(*self._gate_status(check, self._nick))
             return 0
-        try:
-            result = await self.repo.append(self._nick, items,
-                                            my_nick=self.my_nick,
-                                            align=False, now=self.now())
-        except Exception as e:                        # noqa: BLE001
-            log.warning("push append failed: %s", e)
+        result = await self._append_push(items)
+        if result is None:
             return 0
         if result.added:
-            self._added = result.added
-            self._total = result.total
-            await self._notify_appended(self._nick,
-                                        list(result.records[:200]),
-                                        result.added, result.total)
-            self._set(CollectorState.COLLECTED,
-                      f"Collected {result.added} new "
-                      f"message{'s' if result.added != 1 else ''} "
-                      f"from {self._nick}")
+            await self._announce_push(result)
         return result.added
 
     @staticmethod

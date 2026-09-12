@@ -60,19 +60,30 @@ class TakePerson(BaseAction):
         """
         new = [u for u in rows if not getattr(u, "messaged", False)]
         done = [u for u in rows if getattr(u, "messaged", False)]
-        if self.pick_mode == "random_done":
-            pool = done
-        elif self.pick_mode == "order_first":
-            if not new:
-                return None
-            if engine is not None and hasattr(engine, "queue_order"):
-                ordered = engine.queue_order(rows)
-                if ordered:
-                    return ordered[0]
-            return new[0].nick
-        else:  # random_new
-            pool = new
+        if self.pick_mode == "order_first":
+            return self._order_first_pick(new, rows, engine)
+        # random_done picks from the messaged half; random_new — and any mode
+        # this build does not know — picks from the un-messaged half.
+        pool = done if self.pick_mode == "random_done" else new
         return random.choice(pool).nick if pool else None
+
+    @staticmethod
+    def _order_first_pick(new: list, rows: list,
+                          engine: Optional[object]) -> Optional[str]:
+        """The Order (#) rule: whoever the engine's own ordering puts first.
+
+        The engine's `queue_order` already applies the label filter and the
+        visible Order (#) column, so it wins when it has an opinion; the
+        first un-messaged person is the fallback, and an empty `new` list
+        means there is nobody left to pick.
+        """
+        if not new:
+            return None
+        if engine is not None and hasattr(engine, "queue_order"):
+            ordered = engine.queue_order(rows)
+            if ordered:
+                return ordered[0]
+        return new[0].nick
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
