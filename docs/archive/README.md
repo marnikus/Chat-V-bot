@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**82 documents in 15 groups.**
+**83 documents in 16 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -28,6 +28,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 1's worked visual-click examples. |
 | [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
+| [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 1 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, and the design for the `services/db_deletion.py` split that it does not block. |
 
 ---
 
@@ -254,3 +255,17 @@ the 2026-09-11 doc.
 *1 doc.*
 
 - [`PORT_NOTES_2026-09-12.md`](2026-09-12-db-undo-restore-port/PORT_NOTES_2026-09-12.md) — The hand port: four merge conflicts and how each was resolved, the `init()` bug that left a world holding its own write gate, and the re-measured RULE 16 / RULE 18 numbers
+
+---
+
+## 2026-09-12-round-f-size-tail
+
+The 2026-09-12 audit closed out complexity (0 / 1,997 functions above CC 10) and left size as the
+only failing category: 10 files over 500 lines, 38 classes over the 150-LOC gate line. This folder
+holds the design for the round that works that tail, including the finding that five of those ten
+files — the two worst among them — sit behind the frozen AREA D public-API snapshot, which skips
+packages and counts only symbols a module owns.
+
+*1 doc.*
+
+- [`ROUND_F_DESIGN_2026-09-12.md`](2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md) — The 500-line tail, the snapshot that freezes half of it, and the six-file split of `services/db_deletion.py` with its measured dependency DAG and rejected dishonest reductions

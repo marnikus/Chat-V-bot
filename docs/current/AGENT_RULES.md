@@ -578,9 +578,14 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* 2026-09-12 — 154 files, median **142** lines, **10 files still over
-  500** (today's ten are listed in the port notes; the 2026-09-11 nine are in report
-  §2). Known debt (§16.5 landmines): do not grow them, extract when you next touch.
+* *Measured:* 2026-09-12, after Round F step F1 — 159 files, median **141** lines,
+  **9 files still over 500**. `services/db_deletion.py` (665, MI 20.5) became the
+  six-file `db_deletion_*` family, largest member 205. Five of the remaining nine
+  are `backend/` files that the frozen AREA D API snapshot forbids splitting —
+  the reason, and the decision it needs, are in
+  [`docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
+  §2 and §7. Known debt (§16.5 landmines): do not grow them, extract when you next
+  touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -592,8 +597,9 @@ reference implementation of that count is the AST walker in
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
 * *Measured:* 2026-09-12 — `core/` 6, `app/` 4, `bridge/` 14, `services/history/` 7,
-  `services/run/` 10 in band; `services/` 21, `stores/` 37, `backend/` 30, `actions/` 23
-  over it, held by prefix families (`history_*` 9, `label_*` 6, `undo_*` 4, `media_*` 4).
+  `services/run/` 10 in band; `services/` 26, `stores/` 37, `backend/` 30, `actions/` 23
+  over it, held by prefix families (`history_*` 9, `db_deletion_*` 8, `label_*` 6,
+  `undo_*` 4, `media_*` 4).
 
 ### 18.4 Context files — 60–200 lines
 

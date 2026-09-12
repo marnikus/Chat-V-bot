@@ -80,14 +80,14 @@ class TestCanonicalWithin(unittest.TestCase):
         # different drives (ValueError) → False
         with mock.patch("os.path.commonpath", side_effect=ValueError("x")):
             self.assertFalse(is_within(child, tmp))
-        with mock.patch("services.db_deletion.canonical",
+        with mock.patch("services.db_deletion_paths.canonical",
                         side_effect=RuntimeError("boom")):
             self.assertFalse(is_within(child, tmp))
 
     def test_is_same_file(self):
         self.assertTrue(is_same_file("/tmp/a", "/tmp/a"))
         self.assertFalse(is_same_file("/tmp/a", "/tmp/b"))
-        with mock.patch("services.db_deletion.canonical",
+        with mock.patch("services.db_deletion_paths.canonical",
                         side_effect=RuntimeError("boom")):
             self.assertTrue(is_same_file("/tmp/a", "/tmp/a"))
 

@@ -86,6 +86,21 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # `from __future__ / copy / json / logging / os` header — undo_service no
 # longer imports asyncio (the task plumbing moved to undo_timeline.py), which
 # left those two files with the identical 6-line header. No logic is copied.
+#
+# Maintenance 2026-09-12 (Round F, step F1): splitting `services/db_deletion.py`
+# (665 lines) into the `db_deletion_*` family added one group of the same kind —
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py') share
+# the 6-line header `from __future__ / os / dataclasses(dataclass, field) /
+# from services import db_deletion_paths as _paths`. Both modules genuinely need
+# exactly those four imports, and the shared `_paths` alias is not incidental:
+# it is what keeps `canonical()` patchable at one place now that its callers
+# live in five files (see the note in tests/integration/safety_deletion/
+# test_deletion_defensive.py). No logic is copied.
+# Tried and rejected as fixes: a module constant between the imports and the
+# code does NOT dissolve the group, because the scanner hashes every
+# *consecutive* statement window and the four imports remain one; and dropping
+# the blank line between import groups would hide the group by shrinking its
+# span below MIN_SPAN, which is gaming the scanner (§18.5), not fixing it.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector.py"),
@@ -94,6 +109,7 @@ CLONE_BASELINE = frozenset({
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("bridge/stack_bridge.py", "services/collector_service.py"),
+    ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_service.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),

@@ -12,7 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
-import services.db_deletion as D  # noqa: E402
+# `canonical` is patched on the module that OWNS it, not on the `db_deletion`
+# shim: since the 2026-09-12 family split every caller looks it up through
+# `db_deletion_paths`, so patching there governs all of them. Patching the shim
+# would silently no-op and leave these defensive tests passing vacuously.
+import services.db_deletion_inventory as INV  # noqa: E402
+import services.db_deletion_paths as PATHS  # noqa: E402
 from services.db_deletion import (  # noqa: E402
     DeletionOutcome, build_deletion_inventory, canonical,
     classify_candidate, collect_discovered_files, plan_deletion,
@@ -64,10 +69,10 @@ class BareRegistry:
 
 class TestDedupDefensive(unittest.TestCase):
     def test_canonical_raises(self):
-        with mock.patch.object(D, "canonical",
+        with mock.patch.object(PATHS, "canonical",
                                side_effect=RuntimeError("boom")):
             # falls back to abspath
-            out = D._dedup(["/tmp/a.db", "/tmp/a.db", "/tmp/b.db"])
+            out = INV._dedup(["/tmp/a.db", "/tmp/a.db", "/tmp/b.db"])
         self.assertEqual(len(out), 2)
 
 
@@ -197,7 +202,7 @@ class TestInventoryDefensive(unittest.TestCase):
     def test_victim_canonical_empty(self):
         # victim_c falsy → in_scope False (covers `if victim_c else False`).
         reg = FakeRegistry(self.tmp, self.a, [self.a], [])
-        with mock.patch.object(D, "canonical", return_value=""):
+        with mock.patch.object(PATHS, "canonical", return_value=""):
             inv = build_deletion_inventory(registry=reg, victim_abs=self.a)
         self.assertFalse(inv.victim_in_scope)
 
@@ -262,7 +267,7 @@ class TestClassifyDefensive(unittest.TestCase):
 
     def test_canonical_raises_outside(self):
         outside = write(os.path.join(self.tmp, "o.jpg"))
-        with mock.patch.object(D, "canonical",
+        with mock.patch.object(PATHS, "canonical",
                                side_effect=RuntimeError("boom")):
             v = classify_candidate(
                 candidate_abs=outside, base_abs=self.base,
@@ -284,7 +289,7 @@ class TestClassifyDefensive(unittest.TestCase):
                 raise RuntimeError("boom")
             return real(p)
 
-        with mock.patch.object(D, "canonical", side_effect=flaky):
+        with mock.patch.object(PATHS, "canonical", side_effect=flaky):
             v = classify_candidate(
                 candidate_abs=a, base_abs=self.base,
                 victim_folder_abs=self.vf, folder_exclusive=True,
@@ -302,7 +307,7 @@ class TestClassifyDefensive(unittest.TestCase):
                 raise RuntimeError("boom")
             return real(p)
 
-        with mock.patch.object(D, "canonical", side_effect=flaky):
+        with mock.patch.object(PATHS, "canonical", side_effect=flaky):
             v = classify_candidate(
                 candidate_abs=a, base_abs=self.base,
                 victim_folder_abs=self.vf, folder_exclusive=True,
@@ -360,7 +365,7 @@ class TestClassifyDefensive(unittest.TestCase):
                 raise RuntimeError("boom")
             return real(p)
 
-        with mock.patch.object(D, "canonical", side_effect=flaky):
+        with mock.patch.object(PATHS, "canonical", side_effect=flaky):
             v = classify_candidate(
                 candidate_abs=a, base_abs=self.base,
                 victim_folder_abs=self.vf, folder_exclusive=True,
@@ -433,7 +438,7 @@ class TestPruneDefensive(unittest.TestCase):
                 raise RuntimeError("boom")
             return real(p)
 
-        with mock.patch.object(D, "canonical", side_effect=flaky):
+        with mock.patch.object(PATHS, "canonical", side_effect=flaky):
             removed = prune_empty_dirs(
                 start_dirs={d}, base_abs=base,
                 other_world_folders=frozenset())
@@ -452,7 +457,7 @@ class TestPruneDefensive(unittest.TestCase):
                 raise RuntimeError("boom")
             return real(p)
 
-        with mock.patch.object(D, "canonical", side_effect=flaky):
+        with mock.patch.object(PATHS, "canonical", side_effect=flaky):
             removed = prune_empty_dirs(
                 start_dirs={d}, base_abs=base,
                 other_world_folders=frozenset(["/tmp/bad-other"]))
@@ -463,7 +468,7 @@ class TestPruneDefensive(unittest.TestCase):
         base = os.path.join(tmp, "base")
         d = os.path.join(base, "a")
         os.makedirs(d, exist_ok=True)
-        with mock.patch.object(D, "canonical",
+        with mock.patch.object(PATHS, "canonical",
                                side_effect=RuntimeError("boom")):
             removed = prune_empty_dirs(
                 start_dirs={d}, base_abs=base,
