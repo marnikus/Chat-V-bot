@@ -62,133 +62,123 @@ def _raise(exc: Exception):
     raise exc
 
 
+#: Blocks the per-user loop never executes itself — the engine runs these at
+#: cycle level (Scroll & Parse, the repeat loop, Take Person), so seeing one
+#: in the stack means "step over it", not "run it".
+_PER_USER_SKIP_IDS = {"SCROLL_PARSE", "REPEAT_LOOP", "TAKE_PERSON"}
+
+
 class RunExecutionMixin:
-    async def _run_collect_phase(self, block):
-        self.log_msg.emit("📜 Collecting people (Scroll & Parse)…")
-        self._tracer.note({"type": "phase", "phase": "collect"})
-        self._ctx = {"block_id": block.block_id, "block_name": block.display_name, "phase": "collect"}
-        self.step_started.emit(1, block.block_id, "—")
-        try:
-            known = {u.nick for u in await self._memory.get_all() if u.messaged}
-        except Exception:
-            known = set()
-        from actions.cancellation import RunStopped, is_stop_requested
+    """One user against the whole stack: the verdicts, the boundaries, the step.
+
+    The collect phase lives in `services/run/collect_phase.py`
+    (`CollectPhaseMixin`); this mixin is the per-user execution half.
+    """
+
+    def _stack_stopped_status(self) -> str:
+        """The per-user stop verdict, announced + traced on every boundary."""
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        self._tracer.note({"type": "run_end", "reason": "stopped"})
+        return "stop"
+
+    def _all_disabled_guard(self) -> str | None:
+        """The nothing-to-run verdict when every block is disabled."""
+        if sum(1 for b in self._stack if getattr(b, "enabled", True)):
+            return None
+        # B5 regression guard: reporting "ok" here marks the queue
+        # person as messaged although no block ever ran. "skip" tells
+        # the coordinator the user was NOT completed.
+        self.debug_msg.emit("⚠ All blocks are disabled — nothing to run",
+                            "warn")
+        self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
+        return "skip"
+
+    async def _between_blocks_gate(self) -> bool:
+        """The between-blocks stop/pause boundary → True when stopped."""
+        from actions.cancellation import is_stop_requested
+        if is_stop_requested(self):
+            return True
+        await self._wait_if_paused()
+        return is_stop_requested(self)
+
+    def _block_verdict(self, block, idx: int, user) -> str | None:
+        """Whether the loop runs this block for this user.
+
+        None ⇒ run it. "continue" ⇒ step over it (announced and traced where
+        pinned). "skip" ⇒ abandon the whole user (conditional skip).
+        """
+        if not getattr(block, "enabled", True):
+            self.debug_msg.emit(f"      ⏭ Skipped disabled block [{block.block_id}] {block.display_name}", "warn")
+            self._tracer.note({"type": "step_skip", "reason": "disabled", "block_id": block.block_id, "block_name": block.display_name, "step": idx})
+            return "continue"
+        if block.block_id == "CONDITIONAL_SKIP":
+            if user.messaged:
+                self.debug_msg.emit(f"      ⏭ Conditional skip: {user.nick} already messaged", "warn")
+                self._tracer.note({"type": "user_skip", "nick": user.nick})
+                return "skip"
+            return "continue"
+        if block.block_id in _PER_USER_SKIP_IDS:
+            return "continue"
+        return None
+
+    async def _step_status(self, block, user):
+        """Run the step → (result, status): CancelledError alone propagates."""
+        from actions.cancellation import RunStopped
         try:
             result = await self._retry.retry_with_backoff(
-                lambda: block.run_pipeline(self._cdp, self, panel_criteria=self._criteria, known_messaged=known),
-                fallback=lambda exc: self._collect_failed(block, exc),
+                lambda: block.execute(user.nick, self._cdp, self),
+                fallback=lambda exc: self._step_failed(block, user.nick, exc),
                 stop=self)
+            return result, "ok"
         except asyncio.CancelledError:
-            self._ctx = {}
             raise
         except RunStopped:
-            self._ctx = {}
-            self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
-            # run_end/stopped is noted once at the cycle boundary.
-            raise
+            self._tracer.note({"type": "step_end", "status": "stop", **self._ctx})
+            self.debug_msg.emit(f"      ⏹ {block.display_name} stopped on request", "warn")
+            self.step_complete.emit(block.display_name, user.nick)
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            return None, "stop"
         except Exception:
-            self._ctx = {}
-            return []
-        for person in result.collected:
-            try:
-                await self._memory.upsert_user(person)
-            except Exception as exc:
-                log.warning("upsert failed for %s: %s", person.nick, exc)
-        if result.seeking and result.found is not None:
-            self.log_msg.emit(f"🎯 Scroll-only: found “{result.found.nick}” on the page — no new people were added")
-        elif result.seeking:
-            self.log_msg.emit("🔎 Scroll-only: no un-messaged person from the list is currently on the page")
-        else:
-            msg = f"📜 Seen {len(result.all_people)} person(s), {len(result.collected)} matched the filter"
-            if result.purged:
-                msg += f", {len(result.purged)} removed"
-            self.log_msg.emit(msg)
-        self._tracer.note({"type": "phase_end", "phase": "collect", "seen": len(result.all_people), "collected": len(result.collected), "scrolls": result.scrolls, "reached_end": result.reached_end, "stopped_early": result.stopped_early, "stopped": result.stopped, "seeking": result.seeking, "found": getattr(result.found, "nick", None), "purged": len(result.purged)})
-        self.step_complete.emit(block.display_name, "—")
-        self._ctx = {}
-        if is_stop_requested(self):
-            self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
-            raise RunStopped
-        if result.stopped:
-            # Pipeline-reported stop without an engine flag (test fakes /
-            # direct run_pipeline callers): legacy [] return, no raise, so the
-            # pre-existing collect-phase contract stays green. Real engine
-            # stops always set the flag (predicate is engine.is_stopping).
-            self.debug_msg.emit("      ⏹ Collection stopped by user — not queueing anyone from this run", "warn")
-            return []
-        return [person for person in result.collected if not person.messaged]
+            return None, "fail"
 
-    async def _collect_failed(self, block, exc: Exception):
-        log.exception("Collect phase failed")
-        self.debug_msg.emit(f"      ❌ Scroll & Parse raised: {exc}", "error")
-        self._tracer.note({"type": "phase_end", "phase": "collect", "status": "exception", "error": str(exc)})
-        raise exc
+    async def _run_one_block(self, block, idx: int, total: int, user) -> str:
+        """Execute one enabled block for one user → "ok"/"skip"/"fail"/"stop"."""
+        self._ctx = {"step": idx, "total_steps": total, "block_id": block.block_id, "block_name": block.display_name, "user": user.nick}
+        self.step_started.emit(idx, block.block_id, user.nick)
+        started = time.monotonic()
+        self.debug_msg.emit(f"▶▶ Step {idx}/{total} [{block.icon}] {block.display_name} — user: {user.nick}", "info")
+        self._tracer.note({"type": "step_start", **self._ctx})
+        originals = self._expand_nick_on_block(block, self.selected_nick or user.nick)
+        try:
+            result, status = await self._step_status(block, user)
+            if status == "ok":
+                status = self._handle_step_result(block, user.nick, idx,
+                                                  started, result)
+                await self._call_action_hook(block, user.nick, status)
+            return status
+        finally:
+            self._restore_block_attrs(block, originals)
+            self._ctx = {}
 
     async def _execute_for_user(self, user, has_skip: bool) -> str:
-        from actions.cancellation import RunStopped, is_stop_requested
         if user.messaged and has_skip:
             self.log_msg.emit(f"⏭ Skipping (already messaged): {user.nick}")
             return "skip"
         total = len(self._stack)
-        if not sum(1 for b in self._stack if getattr(b, "enabled", True)):
-            # B5 regression guard: reporting "ok" here marks the queue
-            # person as messaged although no block ever ran. "skip" tells
-            # the coordinator the user was NOT completed.
-            self.debug_msg.emit("⚠ All blocks are disabled — nothing to run",
-                                "warn")
-            self._tracer.note({"type": "run_skip", "reason": "all_disabled"})
-            return "skip"
+        guard = self._all_disabled_guard()
+        if guard is not None:
+            return guard
         for idx, block in enumerate(self._stack, start=1):
-            if is_stop_requested(self):
-                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-                self._tracer.note({"type": "run_end", "reason": "stopped"})
-                return "stop"
-            await self._wait_if_paused()
-            if is_stop_requested(self):
-                self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-                self._tracer.note({"type": "run_end", "reason": "stopped"})
-                return "stop"
-            if not getattr(block, "enabled", True):
-                self.debug_msg.emit(f"      ⏭ Skipped disabled block [{block.block_id}] {block.display_name}", "warn")
-                self._tracer.note({"type": "step_skip", "reason": "disabled", "block_id": block.block_id, "block_name": block.display_name, "step": idx})
+            if await self._between_blocks_gate():
+                return self._stack_stopped_status()
+            verdict = self._block_verdict(block, idx, user)
+            if verdict == "continue":
                 continue
-            if block.block_id == "CONDITIONAL_SKIP":
-                if user.messaged:
-                    self.debug_msg.emit(f"      ⏭ Conditional skip: {user.nick} already messaged", "warn")
-                    self._tracer.note({"type": "user_skip", "nick": user.nick})
-                    return "skip"
-                continue
-            if block.block_id in {"SCROLL_PARSE", "REPEAT_LOOP", "TAKE_PERSON"}:
-                continue
-            self._ctx = {"step": idx, "total_steps": total, "block_id": block.block_id, "block_name": block.display_name, "user": user.nick}
-            self.step_started.emit(idx, block.block_id, user.nick)
-            started = time.monotonic()
-            self.debug_msg.emit(f"▶▶ Step {idx}/{total} [{block.icon}] {block.display_name} — user: {user.nick}", "info")
-            self._tracer.note({"type": "step_start", **self._ctx})
-            originals = self._expand_nick_on_block(block, self.selected_nick or user.nick)
-            try:
-                try:
-                    result = await self._retry.retry_with_backoff(
-                        lambda: block.execute(user.nick, self._cdp, self),
-                        fallback=lambda exc: self._step_failed(block, user.nick, exc),
-                        stop=self)
-                except asyncio.CancelledError:
-                    raise
-                except RunStopped:
-                    self._tracer.note({"type": "step_end", "status": "stop", **self._ctx})
-                    self.debug_msg.emit(f"      ⏹ {block.display_name} stopped on request", "warn")
-                    self.step_complete.emit(block.display_name, user.nick)
-                    self._tracer.note({"type": "run_end", "reason": "stopped"})
-                    return "stop"
-                except Exception:
-                    return "fail"
-                status = self._handle_step_result(block, user.nick, idx, started, result)
-                await self._call_action_hook(block, user.nick, status)
-                if status != "ok":
-                    return status
-            finally:
-                self._restore_block_attrs(block, originals)
-                self._ctx = {}
+            if verdict == "skip":
+                return "skip"
+            status = await self._run_one_block(block, idx, total, user)
+            if status != "ok":
+                return status
         self.debug_msg.emit(f"      ✅ All steps done for {user.nick}", "success")
         return "ok"
 

@@ -90,18 +90,28 @@ class RunQueueMixin:
             else:
                 skipped.append(str(nick))
         if skipped and announce:
-            samples = []
-            for nick in skipped[:5]:
-                why = ""
-                if callable(self.label_reason):
-                    try:
-                        why = str(self.label_reason(nick) or "")
-                    except Exception:
-                        why = ""
-                samples.append(f"{nick}{f' ({why})' if why else ''}")
-            more = f" +{len(skipped) - len(samples)} more" if len(skipped) > len(samples) else ""
-            self.debug_msg.emit(f"🏷 Label filter skipped {len(skipped)} person(s): " + ", ".join(samples) + more, "info")
+            self._announce_label_skips(skipped)
         return kept
+
+    def _label_reason_for(self, nick) -> str:
+        """Why the label filter rejected one nick (fail-open to no reason)."""
+        if not callable(self.label_reason):
+            return ""
+        try:
+            return str(self.label_reason(nick) or "")
+        except Exception:
+            return ""
+
+    def _announce_label_skips(self, skipped: list) -> None:
+        """One info line naming the first few rejected people (+N more)."""
+        samples = []
+        for nick in skipped[:5]:
+            why = self._label_reason_for(nick)
+            samples.append(f"{nick}{f' ({why})' if why else ''}")
+        more = (f" +{len(skipped) - len(samples)} more"
+                if len(skipped) > len(samples) else "")
+        self.debug_msg.emit(f"🏷 Label filter skipped {len(skipped)} person(s): "
+                            + ", ".join(samples) + more, "info")
 
     def queue_order(self, users: list) -> list[str]:
         block = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
@@ -120,19 +130,27 @@ class RunQueueMixin:
         except (TypeError, ValueError):
             return 1
 
+    def _respect_order_wanted(self) -> bool:
+        """CLICK_USER wants the queue in the visible Order (#) column order."""
+        return any(b.block_id == "CLICK_USER" and getattr(b, "respect_order", False)
+                   and getattr(b, "enabled", True) for b in self._stack)
+
+    def _rank_queue(self, rows) -> list:
+        """The queue in Order (#) column order, from the memory rows."""
+        order = self.queue_order(rows)
+        by_nick = {getattr(row, "nick", ""): row for row in rows}
+        return [by_nick[nick] for nick in order if nick in by_nick]
+
     async def _order_queue_by_column(self, queue: list[UserRecord]) -> list[UserRecord]:
         # Local import: keeps "import services.run" light (actions/__init__
         # scans every block module); same for the other lazy imports below.
         from actions.cancellation import check_stopped
         check_stopped(self)
-        wants = any(b.block_id == "CLICK_USER" and getattr(b, "respect_order", False) and getattr(b, "enabled", True) for b in self._stack)
-        if not wants or not queue:
+        if not self._respect_order_wanted() or not queue:
             return queue
         rows = await self._memory.get_all()
         check_stopped(self)
-        order = self.queue_order(rows)
-        by_nick = {getattr(row, "nick", ""): row for row in rows}
-        ranked = [by_nick[nick] for nick in order if nick in by_nick]
+        ranked = self._rank_queue(rows)
         if ranked:
             self.log_msg.emit(f"🔢 Respecting the Order (#) column — running {len(ranked)} person(s) in list order (#1 first)")
             if self._tracer is not None:
@@ -146,22 +164,14 @@ class RunQueueMixin:
     async def _run_single_target_cycle(self, has_skip: bool, take_matched: bool) -> str:
         from actions.cancellation import RunStopped, is_stop_requested
         take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
-        if take_present and not take_matched:
-            self.log_msg.emit("⚠ Use Person from Memory: Pick Person found no one to work — nothing to click this cycle")
-            self.debug_msg.emit("ℹ Single-target cycle ended — a Repeat Loop stops here, exactly like an empty queue", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "no_take_match"})
-            return "empty"
-        if not self.selected_nick:
-            self.log_msg.emit("⚠ Use Person from Memory: no person is saved in memory this run — add a Pick Person block before the Click User block (or let an earlier Click User click someone first) so {{nick}} has a value")
-            self.debug_msg.emit("⚠ Nothing to click: Click User 'Use Person from Memory' needs a nick saved by Pick Person or an earlier Click User this run", "warn")
-            self._tracer.note({"type": "run_skip", "reason": "no_memory_nick"})
-            return "empty"
+        verdict = self._single_target_guard(take_present, take_matched)
+        if verdict is not None:
+            return verdict
         if is_stop_requested(self):
             self.debug_msg.emit("⏹ Stack stopped by user", "warn")
             self._tracer.note({"type": "run_end", "reason": "stopped"})
             return "stopped"
         target = self.selected_nick
-
         self.progress.extend_total(1)
         self.log_msg.emit(f"▶ Single-target run — working the person saved in memory: “{target}” (the user list is ignored)")
         self.debug_msg.emit("ℹ Click User 'Use Person from Memory' is on: this stack runs once per cycle against the saved nick, not once per queued person.", "info")
@@ -172,23 +182,41 @@ class RunQueueMixin:
             # Narrow handler: CancelledError and unexpected errors propagate.
             status = "stop"
         if status == "stop":
-            # Already announced in _execute_for_user; account + return.
-            self.progress.note_status("fail")
-            self.user_complete.emit(target, False)
-            return "stopped"
+            return self._stopped_single_target(target, announce=False)
         if is_stop_requested(self):
             # Stop observed before the automatic-mark boundary.
-            self.progress.note_status("fail")
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            self._tracer.note({"type": "run_end", "reason": "stopped"})
-            self.user_complete.emit(target, False)
-            return "stopped"
+            return self._stopped_single_target(target, announce=True)
         self.progress.note_status(status)
         if status == "ok":
             await self._memory.mark_messaged(target)
             self.person_marked.emit(target)
         self.user_complete.emit(target, status == "ok")
         return "worked"
+
+    def _single_target_guard(self, take_present: bool, take_matched: bool) -> str | None:
+        """The pre-flight verdict of a single-target cycle (None ⇒ proceed)."""
+        if take_present and not take_matched:
+            self.log_msg.emit("⚠ Use Person from Memory: Pick Person found no one to work — nothing to click this cycle")
+            self.debug_msg.emit("ℹ Single-target cycle ended — a Repeat Loop stops here, exactly like an empty queue", "warn")
+            self._tracer.note({"type": "run_skip", "reason": "no_take_match"})
+            return "empty"
+        if not self.selected_nick:
+            self.log_msg.emit("⚠ Use Person from Memory: no person is saved in memory this run — add a Pick Person block before the Click User block (or let an earlier Click User click someone first) so {{nick}} has a value")
+            self.debug_msg.emit("⚠ Nothing to click: Click User 'Use Person from Memory' needs a nick saved by Pick Person or an earlier Click User this run", "warn")
+            self._tracer.note({"type": "run_skip", "reason": "no_memory_nick"})
+            return "empty"
+        return None
+
+    def _stopped_single_target(self, target: str, *, announce: bool) -> str:
+        """Account the stopped single-target cycle (fail per the wire contract)."""
+        # Already announced in _execute_for_user when the status came back as
+        # "stop"; announce only the stop observed at the mark boundary.
+        if announce:
+            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+        self.progress.note_status("fail")
+        self.user_complete.emit(target, False)
+        return "stopped"
 
     async def _run_take_phase(self) -> bool:
         from actions.cancellation import check_stopped

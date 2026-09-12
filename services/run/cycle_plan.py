@@ -28,54 +28,76 @@ def _is_enabled(block) -> bool:
     return bool(getattr(block, "enabled", True))
 
 
-def inspect_stack(blocks) -> StackFacts:
-    """Scan ``blocks`` once and return the facts the mode table needs.
+class _StackScan:
+    """Mutable accumulator for one inspect_stack pass (locals with names).
 
-    Centralises the enabled-block rules previously repeated as five inline
-    scans. ``USER_SCOPED_BLOCKS`` is imported lazily to keep this module free
-    of package-level Qt edges (hooks itself imports no Qt, but the lazy edge
-    documents the one-way dependency).
+    The named fields keep the promise in ``inspect_stack``'s docstring — one
+    pass over the blocks — while each per-block decision lives in ``note``,
+    so the caller is left with the loop and nothing else.
     """
-    from .hooks import USER_SCOPED_BLOCKS
 
-    items = list(blocks or [])
-    if not items:
-        return StackFacts(stack_empty=True, all_disabled=False)
-    scroll_block = None
-    has_mem_click = False
-    has_take = False
-    has_conditional_skip = False
-    user_ids: set[str] = set()
-    enabled_count = 0
-    for block in items:
+    def __init__(self) -> None:
+        self.scroll_block = None
+        self.has_mem_click = False
+        self.has_take = False
+        self.has_conditional_skip = False
+        self.user_ids: set[str] = set()
+        self.enabled_count = 0
+
+    def note(self, block) -> None:
+        """Fold one block into the facts; a disabled block folds in nothing.
+
+        ``USER_SCOPED_BLOCKS`` is imported lazily to keep this module free of
+        package-level Qt edges (hooks itself imports no Qt, but the lazy edge
+        documents the one-way dependency). Re-importing an already-loaded
+        module is a dict lookup, so the per-block call costs nothing.
+        """
+        from .hooks import USER_SCOPED_BLOCKS
+
+        if not _is_enabled(block):
+            return
+        self.enabled_count += 1
         block_id = getattr(block, "block_id", "")
-        enabled = _is_enabled(block)
-        if enabled:
-            enabled_count += 1
-        else:
-            continue
-        if block_id == "SCROLL_PARSE" and scroll_block is None:
-            scroll_block = block
+        if block_id == "SCROLL_PARSE" and self.scroll_block is None:
+            self.scroll_block = block
         if (
             block_id == "CLICK_USER"
             and bool(getattr(block, "use_person_from_memory", False))
         ):
-            has_mem_click = True
+            self.has_mem_click = True
         if block_id == "TAKE_PERSON":
-            has_take = True
+            self.has_take = True
         if block_id == "CONDITIONAL_SKIP":
-            has_conditional_skip = True
+            self.has_conditional_skip = True
         if block_id in USER_SCOPED_BLOCKS:
-            user_ids.add(block_id)
-    return StackFacts(
-        scroll_block=scroll_block,
-        has_mem_click=has_mem_click,
-        has_take=has_take,
-        has_conditional_skip=has_conditional_skip,
-        user_scoped_ids=tuple(sorted(user_ids)),
-        stack_empty=False,
-        all_disabled=(enabled_count == 0),
-    )
+            self.user_ids.add(block_id)
+
+    def facts(self) -> StackFacts:
+        """The immutable snapshot the mode table reads."""
+        return StackFacts(
+            scroll_block=self.scroll_block,
+            has_mem_click=self.has_mem_click,
+            has_take=self.has_take,
+            has_conditional_skip=self.has_conditional_skip,
+            user_scoped_ids=tuple(sorted(self.user_ids)),
+            stack_empty=False,
+            all_disabled=(self.enabled_count == 0),
+        )
+
+
+def inspect_stack(blocks) -> StackFacts:
+    """Scan ``blocks`` once and return the facts the mode table needs.
+
+    Centralises the enabled-block rules previously repeated as five inline
+    scans.
+    """
+    items = list(blocks or [])
+    if not items:
+        return StackFacts(stack_empty=True, all_disabled=False)
+    scan = _StackScan()
+    for block in items:
+        scan.note(block)
+    return scan.facts()
 
 
 @dataclass(frozen=True)
