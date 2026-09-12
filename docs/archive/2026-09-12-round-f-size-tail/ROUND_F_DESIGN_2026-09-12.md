@@ -390,3 +390,41 @@ Two dodges were considered and rejected on the record:
 The group was therefore added to `CLONE_BASELINE` with a recorded reason, which
 is the mechanism the file itself documents and has used before (the 2026-09-11
 maintenance note). `rule16_gate.py --with-clones` now reports **0 new, 0 stale**.
+
+### 8.4 Final RULE 16 / RULE 18 recheck, including what F1 did not fix
+
+Re-measured on the committed tree (`tools/metrics/current_audit.py`):
+
+| Check (§16.7) | Result |
+|---|---|
+| No new function > 30 LOC | ✅ none in the family; longest is 25 (`plan_deletion`) |
+| No new class > 150 LOC / > 15 methods | ✅ largest is `_InventoryCollector` at 84 LOC / 8 methods |
+| No new function > 4 params | ⚠️ two pre-existing, see below |
+| CC ≤ 10, cognitive ≤ 15, nesting ≤ 4 | ✅ worst in family: CC 9, cognitive 11, nesting 4 |
+| Line coverage ≥ 80% and ≥ baseline | ✅ 90.42% (baseline 90.41%) |
+| Branch coverage ≥ 75% | ✅ 86.30% (baseline 86.30%) |
+| Every new function has a test | ✅ n/a — F1 adds no functions, only moves them |
+| No new vulture findings | ✅ 7, unchanged, none in the family |
+| No new duplication groups | ⚠️ one, baselined with reason (§8.3) |
+| Override comments used only with a real constraint | ✅ none used |
+| Metrics not gamed | ✅ two dodges rejected on the record (§8.3) |
+| RULE 18 ideals | ✅ six files at 45–205 lines; the three under 150 are a leaf, a shim and a pure-data module, which §18.2 explicitly allows |
+| RULE 19 order respected | ✅ nesting → CC → cognitive were already clean; size taken last |
+| Current docs updated (RULE 17) | ✅ AGENT_RULES §18.2/§18.3, archive index |
+
+**Two wide-parameter functions now live in the family, and F1 deliberately left
+them alone:** `db_deletion_policy.py::classify_candidate` (7 params) and
+`::plan_deletion` (9). Both are keyword-only (`def f(*, …)`), which prevents
+call-site ordering bugs but does not satisfy the ≤ 4 limit.
+
+They are **not new violations**. Measured at `e4ef002` before the split, they
+were already 7 and 9 params at 23 and 25 LOC, and after the move they are still
+7 and 9 params at 23 and 25 LOC — byte-identical, so §16.5's "never grow a
+legacy offender" holds. Project-wide the count is unchanged at **70 of 1,997**
+functions over 4 params.
+
+Fixing them here would have mixed a parameter-object redesign into a
+behaviour-preservation refactor and invalidated the equivalence gate that caught
+§8.1 — the exact scope discipline §3.5 applied to `_append_db_files`. They are
+therefore handed to **F5**, which is the parameter-object step, with these two as
+its first named targets; `PersonPageRequest` is the in-repo pattern to follow.
