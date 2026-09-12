@@ -351,32 +351,38 @@ class UndoService:
     # ── command application (undo/redo of COMMAND kinds) ─────────
     def apply_command(self, entry, forward: bool) -> bool:
         """Apply one command entry forward (redo) or backward (undo)."""
-        kind = entry.get("kind")
-        value = entry.get("value")
+        kind, value = entry.get("kind"), entry.get("value")
         if not isinstance(value, dict):
             return False
         if kind == "people":
-            rows = value.get("after" if forward else "before")
-            if rows is None or self._people is None:
-                return False
-            self._schedule(self._people.apply(rows))
-            return True
+            return self._apply_people_command(value, forward)
         if kind == "labels":
-            snapshot = value.get("after" if forward else "before")
-            if not isinstance(snapshot, dict) or self._labels is None:
-                return False
-            self._labels.restore(snapshot)
-            self._bus.emit(LabelsChanged(
-                payload=json.dumps(self._labels.state(),
-                                   ensure_ascii=False)))
-            # labels can hide people from the queue: the # column changes
-            self._bus.emit(PeopleChanged(reason="labels"))
-            return True
+            return self._apply_labels_command(value, forward)
         if kind == "archive":
             return self._apply_archive_command(value, forward)
         if kind == "dbconn":
             return self._apply_db_command(value, forward)
         return False
+
+    def _apply_people_command(self, value: dict, forward: bool) -> bool:
+        """Restore one snapshot of the people grid (undo=before, redo=after)."""
+        rows = value.get("after" if forward else "before")
+        if rows is None or self._people is None:
+            return False
+        self._schedule(self._people.apply(rows))
+        return True
+
+    def _apply_labels_command(self, value: dict, forward: bool) -> bool:
+        """Restore one label snapshot and re-publish both projections."""
+        snapshot = value.get("after" if forward else "before")
+        if not isinstance(snapshot, dict) or self._labels is None:
+            return False
+        self._labels.restore(snapshot)
+        self._bus.emit(LabelsChanged(
+            payload=json.dumps(self._labels.state(), ensure_ascii=False)))
+        # labels can hide people from the queue: the # column changes
+        self._bus.emit(PeopleChanged(reason="labels"))
+        return True
 
     @staticmethod
     def _schedule(coro) -> bool:
@@ -425,50 +431,70 @@ class UndoService:
         self._schedule(work())
         return True
 
-    def _apply_db_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a DB Connection action (legacy entries)."""
+    async def _db_delete_op(self, value: dict, forward: bool) -> dict | None:
+        """The delete op (re-do / un-do).
+
+        None means the op did not run and already said why, so the caller
+        must neither restart the world nor emit a change.
+        """
+        path = str(value.get("path") or "")
+        backup = str(value.get("backup") or "")
+        if forward:
+            if not os.path.exists(path):
+                self._log("⚠ Nothing to re-delete — the file is "
+                          "already gone", "warn")
+                return None
+            return await self._dbs.delete(path)
+        if os.path.exists(backup):
+            return await self._dbs.restore_backup(backup, path)
+        self._log("⚠ Database deletions are permanent — "
+                  "no backup exists to restore", "warn")
+        return None
+
+    async def _db_op_forward(self, op: str, path: str) -> dict | None:
+        """The re-do half of create/load/clean; None for an unknown op."""
+        if op in ("create", "load"):
+            return await self._dbs.load(path, create=(op == "create"))
+        if op == "clean":
+            return await self._dbs.clean()
+        return None
+
+    async def _db_switch_op(self, value: dict, forward: bool) -> dict | None:
+        """The create/load/clean ops (re-do / un-do); None for an unknown op.
+
+        Un-doing a create/load goes back to ``before_path``; un-doing a clean
+        restores the backup the clean made.
+        """
         op = str(value.get("op") or "")
         path = str(value.get("path") or "")
         before_path = str(value.get("before_path") or "")
         backup = str(value.get("backup") or "")
-        manager = self._dbs
+        if forward:
+            return await self._db_op_forward(op, path)
+        if op in ("create", "load"):
+            return await self._dbs.load(before_path)
+        if op == "clean":
+            return await self._dbs.restore_backup(backup, path)
+        return None
+
+    def _apply_db_command(self, value: dict, forward: bool) -> bool:
+        """Re-apply / reverse a DB Connection action (legacy entries)."""
+        op = str(value.get("op") or "")
 
         async def work():
             if op == "delete":
-                if forward:
-                    if os.path.exists(path):
-                        result = await manager.delete(path)
-                    else:
-                        self._log("⚠ Nothing to re-delete — the file is "
-                                  "already gone", "warn")
-                        return
-                else:
-                    if os.path.exists(backup):
-                        result = await manager.restore_backup(backup, path)
-                    else:
-                        self._log("⚠ Database deletions are permanent — "
-                                  "no backup exists to restore", "warn")
-                        return
+                result = await self._db_delete_op(value, forward)
+                if result is None:   # the op already said why it did not run
+                    return
                 if result.get("ok"):
                     await restart_world(self._memory, self._archive,
                                         self._labels, self, self._bus,
                                         "delete")
                 emit_db_change(self._bus, "delete", result)
                 return
-            if forward:
-                if op in ("create", "load"):
-                    result = await manager.load(path, create=(op == "create"))
-                elif op == "clean":
-                    result = await manager.clean()
-                else:
-                    return
-            else:
-                if op in ("create", "load"):
-                    result = await manager.load(before_path)
-                elif op == "clean":
-                    result = await manager.restore_backup(backup, path)
-                else:
-                    return
+            result = await self._db_switch_op(value, forward)
+            if result is None:       # unknown op — nothing to apply or emit
+                return
             if op in ("create", "load") and result.get("ok") \
                     and not result.get("unchanged"):
                 await restart_world(self._memory, self._archive,

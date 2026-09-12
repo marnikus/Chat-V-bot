@@ -212,6 +212,78 @@ def _person_item(row, my_nicks: list) -> dict:
     }
 
 
+#: (output keys, source key, default, as_int) — the row→UI-item field map.
+#: Alias pairs share one source so the legacy and current spellings can never
+#: disagree (UI contract; see backend_api_snapshot.json).
+_FIELD_SPECS = (
+    (("id",), "id", 0, True),
+    (("ord",), "ord", 0, True),
+    (("fp",), "fp", "", False),
+    (("dir", "direction"), "direction", "in", False),
+    (("from", "from_nick"), "from_nick", "", False),
+    (("my_nick",), "my_nick", "", False),
+    (("kind",), "kind", "text", False),
+    (("text",), "text", "", False),
+)
+#: The fields after `media`, which the UI contract places between `text` and
+#: `time` — two tables so that position survives the loop.
+_FIELD_SPECS_TAIL = (
+    (("time", "ts_display"), "ts_display", "", False),
+    (("ts_resolved",), "ts_resolved", "", False),
+    (("day",), "day", "", False),
+    (("occ",), "occ", 0, True),
+)
+
+
+def _apply_specs(data: dict, specs) -> dict:
+    """One group of the UI item, coalesced and aliased per a field spec."""
+    out = {}
+    for keys, source, default, as_int in specs:
+        value = data.get(source) or default
+        for key in keys:
+            out[key] = int(value) if as_int else value
+    return out
+
+
+def _item_media(data: dict) -> dict | None:
+    """The joined media block for one message row, or None."""
+    if not data.get("media_id"):
+        return None
+    path = data.get("cache_path") or ""
+    state = data.get("media_state") or "pending"
+    # A cached row whose file vanished must not render as a broken
+    # <img> from a dead local path: report it as missing so the UI
+    # shows a "click to restore" marker instead.
+    if path and not os.path.exists(path):
+        state = "missing"
+        path = ""
+    return {"id": data.get("media_id"), "url": data.get("media_url"),
+            "kind": data.get("media_kind") or data.get("kind"),
+            "state": state, "path": path}
+
+
+def _stat_int(data: dict, key: str) -> int:
+    """One counter of a person row, tolerating NULL/absent."""
+    return int(data.get(key) or 0)
+
+
+async def _day_bounds(db, pid: int) -> tuple[str, str, int]:
+    """(first_day, last_day, distinct days) over the visible messages.
+
+    Module-level on purpose: `HistoryQuery` is already at the RULE 16
+    method cap (enforced by tests/test_rule16_new_code.py through
+    tools/metrics/rule16_gate.py), and this is a pure read over a db
+    handle — it needs nothing from the instance.
+    """
+    row = await db.fetchone(
+        "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
+        "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
+        "AND deleted_at=''", (pid,))
+    if not row:
+        return "", "", 0
+    return (row["first_day"] or ""), (row["last_day"] or ""), int(row["days"] or 0)
+
+
 class HistoryQuery:
     """Every read the UI performs against the archive."""
 
@@ -234,39 +306,12 @@ class HistoryQuery:
 
     @staticmethod
     def _item(row) -> dict:
+        """One archive row as the UI item, key order and defaults intact."""
         data = dict(row)
-        media = None
-        if data.get("media_id"):
-            path = data.get("cache_path") or ""
-            state = data.get("media_state") or "pending"
-            # A cached row whose file vanished must not render as a broken
-            # <img> from a dead local path: report it as missing so the UI
-            # shows a "click to restore" marker instead.
-            if path and not os.path.exists(path):
-                state = "missing"
-                path = ""
-            media = {"id": data.get("media_id"), "url": data.get("media_url"),
-                     "kind": data.get("media_kind") or data.get("kind"),
-                     "state": state,
-                     "path": path}
-        return {
-            "id": int(data.get("id") or 0),
-            "ord": int(data.get("ord") or 0),
-            "fp": data.get("fp") or "",
-            "dir": data.get("direction") or "in",
-            "direction": data.get("direction") or "in",
-            "from": data.get("from_nick") or "",
-            "from_nick": data.get("from_nick") or "",
-            "my_nick": data.get("my_nick") or "",
-            "kind": data.get("kind") or "text",
-            "text": data.get("text") or "",
-            "media": media,
-            "time": data.get("ts_display") or "",
-            "ts_display": data.get("ts_display") or "",
-            "ts_resolved": data.get("ts_resolved") or "",
-            "day": data.get("day") or "",
-            "occ": int(data.get("occ") or 0),
-        }
+        item = _apply_specs(data, _FIELD_SPECS)
+        item["media"] = _item_media(data)
+        item.update(_apply_specs(data, _FIELD_SPECS_TAIL))
+        return item
 
     _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
                "md.state AS media_state, md.cache_path AS cache_path "
@@ -528,24 +573,21 @@ class HistoryQuery:
                     "my_nicks": []}
         data = dict(person)
         pid = int(data["id"])
-        row = await self.db.fetchone(
-            "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
-            "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
-            "AND deleted_at=''", (pid,))
+        first_day, last_day, days = await _day_bounds(self.db, pid)
         return {
             "nick": data["nick"],
             "missing": False,
-            "message_count": int(data.get("message_count") or 0),
-            "messages": int(data.get("message_count") or 0),
-            "in_count": int(data.get("in_count") or 0),
-            "out_count": int(data.get("out_count") or 0),
-            "media_count": int(data.get("media_count") or 0),
+            "message_count": _stat_int(data, "message_count"),
+            "messages": _stat_int(data, "message_count"),
+            "in_count": _stat_int(data, "in_count"),
+            "out_count": _stat_int(data, "out_count"),
+            "media_count": _stat_int(data, "media_count"),
             "my_nicks": self._my_nicks(person),
             "first_seen": data.get("first_seen") or "",
             "last_seen": data.get("last_seen") or "",
-            "first_day": (row["first_day"] if row else "") or "",
-            "last_day": (row["last_day"] if row else "") or "",
-            "days": int((row["days"] if row else 0) or 0),
+            "first_day": first_day,
+            "last_day": last_day,
+            "days": days,
             "hidden": int(await self.db.scalar(
                 "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
                 "deleted_at<>''", (pid,), 0)),

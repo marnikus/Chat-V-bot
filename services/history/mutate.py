@@ -11,6 +11,100 @@ from .query import MAX_FILE_MB_DEFAULT, _merge
 
 log = logging.getLogger("chatbot")
 
+#: The undo kinds that belong to a *world* — they move with the database,
+#: unlike the app-level kinds that stay behind in the config file.
+_WORLD_KINDS = {"people", "labels", "archive", "dbconn"}
+
+
+def _world_entries(raw) -> list[dict] | None:
+    """Well-formed undo entries from the legacy config, or None.
+
+    None means "nothing to rehome": either the state is not a non-empty
+    list, or none of its entries is a world kind, so the caller must leave
+    the config untouched rather than rewrite it.
+    """
+    if not isinstance(raw, list) or not raw:
+        return None
+    entries = [item for item in raw if isinstance(item, dict) and isinstance(item.get("kind"), str)]
+    if not any(item.get("kind") in _WORLD_KINDS for item in entries):
+        return None
+    return entries
+
+
+def _gaze_str(collector, attr: str) -> str:
+    """One of the collector's text run counters, as the gaze table stores it."""
+    return str(getattr(collector, attr, "") or "")
+
+
+def _gaze_int(collector, attr: str) -> str:
+    """One of the collector's numeric run counters, as gaze stores it."""
+    return str(int(getattr(collector, attr, 0) or 0))
+
+
+def _gaze_rows(collector, nick: str) -> list:
+    """The run counters worth remembering when the app closes.
+
+    Module-level (not a method) because `HistoryMutateService` is already at
+    the RULE 16 method cap, and this is a pure projection of the collector.
+    """
+    return [("partner", nick),
+            ("added", _gaze_int(collector, "_added")),
+            ("total", _gaze_int(collector, "_total")),
+            ("last_sync_reason", _gaze_str(collector, "_last_sync_reason")),
+            ("last_sync_added", _gaze_int(collector, "_last_sync_added")),
+            ("last_sync_count", _gaze_int(collector, "_last_sync_count"))]
+
+
+def _config_label_state(raw) -> dict | None:
+    """The label store a legacy config carries, or None when it carries none.
+
+    A config with neither definitions nor assignments is not a label store;
+    importing it would replace a real one with an empty projection.
+    """
+    if not isinstance(raw, dict):
+        return None
+    defs = [item for item in (raw.get("defs") or []) if isinstance(item, dict)]
+    assign = raw.get("assign") if isinstance(raw.get("assign"), dict) else {}
+    if not defs and not assign:
+        return None
+    return {"defs": defs, "assign": assign,
+            "filter": raw.get("filter") or {"include": [], "exclude": []},
+            "next_id": int(raw.get("next_id") or 0)}
+
+
+def _legacy_text(row: dict, key: str, default: str = "") -> str:
+    """One legacy column as text, with its canonical default when empty."""
+    return str(row.get(key) or default)
+
+
+def _legacy_flag(row: dict, key: str) -> int:
+    """One legacy 0/1 column as an int, tolerating NULL."""
+    return int(row.get(key) or 0)
+
+
+def _legacy_user_params(row: dict) -> tuple:
+    """One legacy `users` row as the canonical INSERT tuple.
+
+    The coercion of eleven columns is its own decision, so it lives here
+    rather than inline in the insert loop.
+    """
+    return (_legacy_text(row, "nick"),
+            _legacy_text(row, "gender", "unknown"),
+            _legacy_flag(row, "registered"), _legacy_flag(row, "anonymous"),
+            _legacy_flag(row, "guest"), _legacy_text(row, "first_seen"),
+            _legacy_text(row, "last_seen"), _legacy_flag(row, "messaged"),
+            _legacy_flag(row, "message_count"), row.get("last_messaged"),
+            _legacy_text(row, "notes"))
+
+
+def _archive_legacy_trio(legacy_path: str) -> None:
+    """Rename db + wal + shm next to the new world (timestamped)."""
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    for suffix in ("", "-wal", "-shm"):
+        src = legacy_path + suffix
+        if os.path.exists(src):
+            os.replace(src, legacy_path + f".migrated-{stamp}" + suffix)
+
 
 class HistoryMutateService:
     def apply_settings(self, patch: dict) -> dict:
@@ -76,17 +170,12 @@ class HistoryMutateService:
     async def save_gaze(self) -> None:
         if not self.db.is_open:
             return
-        nick = str(getattr(self.collector, "_nick", "") or "")
+        nick = _gaze_str(self.collector, "_nick")
         if not nick:
             return
         stamp = datetime.now().isoformat(timespec="seconds")
-        rows = [("partner", nick), ("added", str(int(getattr(self.collector, "_added", 0) or 0))),
-                ("total", str(int(getattr(self.collector, "_total", 0) or 0))),
-                ("last_sync_reason", str(getattr(self.collector, "_last_sync_reason", "") or "")),
-                ("last_sync_added", str(int(getattr(self.collector, "_last_sync_added", 0) or 0))),
-                ("last_sync_count", str(int(getattr(self.collector, "_last_sync_count", 0) or 0)))]
         try:
-            for key, value in rows:
+            for key, value in _gaze_rows(self.collector, nick):
                 await self.db.execute("INSERT INTO gaze_data(key, value, updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (key, value, stamp))
             await self.db.commit()
         except Exception as exc:
@@ -99,68 +188,77 @@ class HistoryMutateService:
         except Exception as exc:
             log.warning("cannot set migration flag %s: %s", key, exc)
 
-    async def _merge_legacy_queue(self, legacy_path: str) -> None:
+    async def _legacy_user_rows(self, legacy_path: str) -> list[dict]:
+        """All rows of the legacy `users` table (RuntimeError on unreadable)."""
         import aiosqlite
         async with aiosqlite.connect(legacy_path) as src:
             src.row_factory = aiosqlite.Row
             try:
                 rows = await src.execute("SELECT nick, gender, registered, anonymous, guest, first_seen, last_seen, messaged, message_count, last_messaged, notes FROM users")
-                legacy = [dict(row) for row in await rows.fetchall()]
+                return [dict(row) for row in await rows.fetchall()]
             except Exception as exc:
                 raise RuntimeError(f"cannot read {legacy_path}: {exc}")
+
+    async def _insert_legacy_users(self, legacy: list[dict]) -> int:
+        """INSERT OR IGNORE every legacy row; return how many landed."""
         inserted = 0
         for row in legacy:
-            cur = await self.db.execute("INSERT OR IGNORE INTO users(nick, gender, registered, anonymous, guest, first_seen, last_seen, messaged, message_count, last_messaged, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (str(row.get("nick") or ""), str(row.get("gender") or "unknown"), int(row.get("registered") or 0), int(row.get("anonymous") or 0), int(row.get("guest") or 0), row.get("first_seen") or "", row.get("last_seen") or "", int(row.get("messaged") or 0), int(row.get("message_count") or 0), row.get("last_messaged"), str(row.get("notes") or "")))
+            cur = await self.db.execute(
+                "INSERT OR IGNORE INTO users(nick, gender, registered, "
+                "anonymous, guest, first_seen, last_seen, messaged, "
+                "message_count, last_messaged, notes) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)", _legacy_user_params(row))
             inserted += int(cur.rowcount or 0)
         await self.db.commit()
-        stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        for suffix in ("", "-wal", "-shm"):
-            src = legacy_path + suffix
-            if os.path.exists(src):
-                os.replace(src, legacy_path + f".migrated-{stamp}" + suffix)
+        return inserted
+
+    async def _merge_legacy_queue(self, legacy_path: str) -> None:
+        legacy = await self._legacy_user_rows(legacy_path)
+        inserted = await self._insert_legacy_users(legacy)
+        _archive_legacy_trio(legacy_path)
         if self.memory is not None:
             await self.memory.switch_db(self.db.path)
         log.info("merged %d/%d queue row(s) from %s into %s", inserted, len(legacy), os.path.basename(legacy_path), os.path.basename(self.db.path))
 
     async def _import_config_labels(self) -> bool:
-        raw = self.config.get("labels", default=None)
-        if not isinstance(raw, dict):
-            return False
-        defs = [item for item in (raw.get("defs") or []) if isinstance(item, dict)]
-        assign = raw.get("assign") if isinstance(raw.get("assign"), dict) else {}
-        if not defs and not assign:
+        """One-time import of a label store the config file still carries."""
+        state = _config_label_state(self.config.get("labels", default=None))
+        if state is None:
             return False
         if int(await self.db.scalar("SELECT COUNT(*) FROM labels")):
             return False
-        self._labels._memory = copy.deepcopy({"defs": defs, "assign": assign,
-            "filter": raw.get("filter") or {"include": [], "exclude": []},
-            "next_id": int(raw.get("next_id") or 0)})
+        self._labels._memory = copy.deepcopy(state)
         self._labels._dirty = True
         await self._labels.flush_to_db()
         return True
 
-    async def _rehome_undo_entries(self) -> bool:
-        raw = self.config.get_state("undo_history", None)
-        if not isinstance(raw, list) or not raw:
-            return False
-        entries = [item for item in raw if isinstance(item, dict) and isinstance(item.get("kind"), str)]
-        world_kinds = {"people", "labels", "archive", "dbconn"}
-        if not any(item.get("kind") in world_kinds for item in entries):
-            return False
+    def _backfill_seqs(self, entries: list[dict]) -> None:
+        """Give every entry a seq when none had one (and persist that)."""
         if all(not isinstance(item.get("seq"), int) for item in entries):
             for seq, entry in enumerate(entries, start=1):
                 entry["seq"] = seq
             self.config.set_state(undo_history=copy.deepcopy(entries))
-        stamp = datetime.now().isoformat(timespec="seconds")
+
+    async def _insert_world_entries(self, entries, stamp) -> int:
+        """Move the world-scoped undo entries into the database; count them."""
         moved = 0
         for entry in entries:
-            if entry.get("kind") not in world_kinds:
+            if entry.get("kind") not in _WORLD_KINDS:
                 continue
             await self.db.execute("INSERT OR IGNORE INTO undo_history(seq, kind, value, created_at) VALUES(?,?,?,?)", (int(entry.get("seq") or 0), entry["kind"], json.dumps(entry.get("value"), ensure_ascii=False), stamp))
             moved += 1
         await self.db.commit()
+        return moved
+
+    async def _rehome_undo_entries(self) -> bool:
+        entries = _world_entries(self.config.get_state("undo_history", None))
+        if entries is None:
+            return False
+        self._backfill_seqs(entries)
+        moved = await self._insert_world_entries(
+            entries, datetime.now().isoformat(timespec="seconds"))
         if moved:
-            self.config.set_state(undo_history=[e for e in entries if e.get("kind") not in world_kinds])
+            self.config.set_state(undo_history=[e for e in entries if e.get("kind") not in _WORLD_KINDS])
         return bool(moved)
 
     async def save_world_undo(self, entries: list[dict]) -> None:

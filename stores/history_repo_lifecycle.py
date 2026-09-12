@@ -20,6 +20,20 @@ from stores.history_repo_identity import TAIL_FP_LIMIT
 log = logging.getLogger("chatbot")
 
 
+def _hidden_row_key(row: dict) -> str:
+    """The identity a hidden row would have once it is visible again."""
+    return dedupe_key(row.get("direction") or "in",
+                      row.get("from_nick") or "",
+                      row.get("ts_display") or "",
+                      row.get("kind") or "text",
+                      row.get("media_url") or row.get("text") or "")
+
+
+def _sig_or(current: dict, key: str, value):
+    """`value` wins unless it is None, which means "leave the cursor as is"."""
+    return current.get(key, "") if value is None else value
+
+
 class PersonLifecycle:
     """What happens to a whole conversation, not to one row."""
 
@@ -165,26 +179,33 @@ class PersonLifecycle:
             "deleted_at='' AND dup_key<>''", (person_id,))}
         restored = 0
         for row in rows:
-            key = dedupe_key(row.get("direction") or "in",
-                             row.get("from_nick") or "",
-                             row.get("ts_display") or "",
-                             row.get("kind") or "text",
-                             row.get("media_url") or row.get("text") or "")
-            if key and key in alive:
-                # re-collected while hidden: the visible copy is the message
-                # now; the stale tombstone must not resurrect as a double
-                await self._owner.db.execute(
-                    "DELETE FROM messages WHERE id=? AND deleted_at=?",
-                    (int(row["id"]), token))
-                continue
-            await self._owner.db.execute(
-                "UPDATE messages SET deleted_at='', dup_key=? WHERE id=?",
-                (key, int(row["id"])))
-            if key:
-                alive.add(key)
-            restored += 1
+            if await self._restore_one_row(row, token, alive):
+                restored += 1
         await self._owner.db.commit()
         return restored
+
+    async def _restore_one_row(self, row, token: str, alive: set) -> bool:
+        """Resurrect one hidden row, recomputing its identity.
+
+        False means the row was purged instead: the same message was
+        re-collected while it sat hidden, so the tombstone must not come
+        back as a double. `alive` is the caller's set of visible identities
+        and grows with every row this restores.
+        """
+        key = _hidden_row_key(row)
+        if key and key in alive:
+            # re-collected while hidden: the visible copy is the message
+            # now; the stale tombstone must not resurrect as a double
+            await self._owner.db.execute(
+                "DELETE FROM messages WHERE id=? AND deleted_at=?",
+                (int(row["id"]), token))
+            return False
+        await self._owner.db.execute(
+            "UPDATE messages SET deleted_at='', dup_key=? WHERE id=?",
+            (key, int(row["id"])))
+        if key:
+            alive.add(key)
+        return True
 
     async def deleted_count(self, nick: str = "") -> int:
         if nick:
@@ -342,10 +363,10 @@ class PersonLifecycle:
             "bootstrapped=excluded.bootstrapped, updated_at=excluded.updated_at",
             (person_id, await self._owner._last_ord(person_id),
              dom_count or current.get("dom_count") or 0,
-             current.get("head_sig", "") if head_sig is None else head_sig,
-             current.get("tail_sig", "") if tail_sig is None else tail_sig,
-             current.get("head_any", "") if head_any is None else head_any,
-             current.get("tail_any", "") if tail_any is None else tail_any,
+             _sig_or(current, "head_sig", head_sig),
+             _sig_or(current, "tail_sig", tail_sig),
+             _sig_or(current, "head_any", head_any),
+             _sig_or(current, "tail_any", tail_any),
              json.dumps(tail_fps), json.dumps(tail_keys), 1 if flag else 0,
              datetime.now().isoformat(timespec="seconds")))
         await self._owner.db.commit()

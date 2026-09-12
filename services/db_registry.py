@@ -21,6 +21,31 @@ from services.db_service import (TRASH_DIR, SUFFIXES, db_stem,
 log = logging.getLogger("chatbot")
 
 
+def _stat_int(stats: dict, key: str) -> int:
+    """One counter of a `db_stats()` payload, tolerating NULL/absent."""
+    return int(stats.get(key) or 0)
+
+
+def _apply_stats(payload: dict, stats: dict) -> None:
+    """Fold a live `db_stats()` reading into the window payload.
+
+    `db_bytes` keeps the on-disk measurement when the engine reports no
+    size, so a connected world never shows 0 bytes.
+    """
+    payload.update({
+        "connected": True,
+        "db_bytes": int(stats.get("db_bytes") or payload["db_bytes"]),
+        "text_bytes": _stat_int(stats, "text_bytes"),
+        "persons": _stat_int(stats, "persons"),
+        "persons_deleted": _stat_int(stats, "persons_deleted"),
+        "messages": _stat_int(stats, "messages"),
+        "messages_hidden": _stat_int(stats, "messages_hidden"),
+        "media": _stat_int(stats, "media"),
+        "media_cached": _stat_int(stats, "media_cached"),
+        "fts": bool(stats.get("fts")),
+    })
+
+
 class DbRegistry:
     """Path resolution, remembered paths and world listing (reads only)."""
 
@@ -230,18 +255,7 @@ class DbRegistry:
             payload["error"] = str(exc)
             payload["total_bytes"] = payload["db_bytes"] + media_bytes
             return payload
-        payload.update({
-            "connected": True,
-            "db_bytes": int(stats.get("db_bytes") or payload["db_bytes"]),
-            "text_bytes": int(stats.get("text_bytes") or 0),
-            "persons": int(stats.get("persons") or 0),
-            "persons_deleted": int(stats.get("persons_deleted") or 0),
-            "messages": int(stats.get("messages") or 0),
-            "messages_hidden": int(stats.get("messages_hidden") or 0),
-            "media": int(stats.get("media") or 0),
-            "media_cached": int(stats.get("media_cached") or 0),
-            "fts": bool(stats.get("fts")),
-        })
+        _apply_stats(payload, stats)
         payload["total_bytes"] = payload["db_bytes"] + media_bytes
         return payload
 

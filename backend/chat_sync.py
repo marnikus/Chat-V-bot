@@ -213,12 +213,34 @@ class SyncPlanner:
                     and count >= int(cursor.get("dom_count") or 0))
 
     @staticmethod
+    def _resolved_count(state: dict, count: Optional[int]) -> int:
+        """The count to plan against: the caller's override, else the pane's."""
+        return int(state.get("count") or 0) if count is None else int(count)
+
+    @staticmethod
+    def _capped_start(count: int, cursor: dict, options: SyncOptions,
+                      delta: bool) -> tuple[int, bool]:
+        """Where the read starts, after the max-messages cap.
+
+        A delta read resumes at the archived DOM count, a full read starts at
+        0; either way the cap wins. Starting late *because of the cap* means
+        messages were skipped, so the plan reports that as a gap.
+        """
+        start = int(cursor.get("dom_count") or 0) if delta else 0
+        gap = False
+        cap = int(options.max_messages or 0)
+        if cap and (count - start) > cap:
+            start = count - cap
+            gap = True
+        return start, gap
+
+    @staticmethod
     def plan(state: dict, cursor: dict, options: Optional[SyncOptions] = None,
              *, count: Optional[int] = None) -> ReadPlan:
         state = state if isinstance(state, dict) else {}
         cursor = cursor if isinstance(cursor, dict) else {}
         options = options or SyncOptions()
-        count = int(state.get("count") or 0) if count is None else int(count)
+        count = SyncPlanner._resolved_count(state, count)
         sigs = SyncPlanner.signatures(state)
         head_sig = sigs["head_sig"]
 
@@ -229,12 +251,7 @@ class SyncPlanner:
                             streaming=True, **sigs)
 
         delta = SyncPlanner.is_delta(count, head_sig, cursor)
-        start = int(cursor.get("dom_count") or 0) if delta else 0
-        gap = False
-        cap = int(options.max_messages or 0)
-        if cap and (count - start) > cap:
-            start = count - cap
-            gap = True
+        start, gap = SyncPlanner._capped_start(count, cursor, options, delta)
         return ReadPlan(mode=MODE_DELTA if delta else MODE_FULL,
                         count=count, start=start, gap=gap,
                         streaming=delta or not cursor.get("tail_fps"),
@@ -630,7 +647,12 @@ class SyncSession:
             return                                   # a page that cannot scroll
         await self._settle_at_top()
 
-    async def _settle_at_top(self) -> None:
+    async def _fetch_settled_state(self) -> None:
+        """Read the pane after the scroll-to-top, settling it if it can.
+
+        A settle that raises is not fatal: fall back to a plain state read,
+        and keep the previous state if even that returns a non-dict.
+        """
         wait = max(float(self.options.backfill_wait_s or 2.0), 4.0)
         try:
             state = await self.parser.settle_after_top(
@@ -640,26 +662,33 @@ class SyncSession:
             state = await self.parser.state()
         self.state = state if isinstance(state, dict) else self.state
         self._sync_sigs()
+
+    def _settled_ok(self) -> bool:
+        """The backfill landed: at the top, settled, and nothing was lost."""
         after = self.state.get("scroll") or {}
-        post_count = int(self.state.get("count") or 0)
-        settled = (bool(after.get("atTop")) and bool(self.state.get("_settled"))
-                   and post_count >= self.before_count)
-        if settled:
+        return (bool(after.get("atTop")) and bool(self.state.get("_settled"))
+                and int(self.state.get("count") or 0) >= self.before_count)
+
+    async def _recover_emptied_pane(self) -> None:
+        """The pane emptied while it re-rendered older lines. Put the
+        viewport back and read what is visible now; do NOT mark the
+        full scan complete, so a later tick retries from the top."""
+        await self.restore_viewport()
+        fallback = await self.parser.state()
+        if int((fallback or {}).get("count") or 0) > 0:
+            self.state = fallback
+            self._sync_sigs()
+
+    async def _settle_at_top(self) -> None:
+        await self._fetch_settled_state()
+        if self._settled_ok():
             self.result.backfilled = True
             self.restored_top = self.old_top or None
             return
-        if self.before_count > 0 and post_count < self.before_count:
-            # The pane emptied while it re-rendered older lines. Put the
-            # viewport back and read what is visible now; do NOT mark the
-            # full scan complete, so a later tick retries from the top.
-            self.result.backfill_pending = True
-            await self.restore_viewport()
-            fallback = await self.parser.state()
-            if int((fallback or {}).get("count") or 0) > 0:
-                self.state = fallback
-                self._sync_sigs()
-        else:
-            self.result.backfill_pending = True
+        self.result.backfill_pending = True
+        if (self.before_count > 0
+                and int(self.state.get("count") or 0) < self.before_count):
+            await self._recover_emptied_pane()
 
     async def restore_viewport(self, position: Optional[int] = None) -> int:
         """Put the conversation back where the user had it.
