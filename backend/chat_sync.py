@@ -22,6 +22,13 @@ that loses its nodes mid-read updates the count and the signatures, and the
 final cursor write must reflect what was actually read, not what we hoped for).
 """
 
+# ideal-size: 800 lines reason=the frozen AREA D public-API snapshot
+# (tests/unit/backend/test_backend_api_snapshot.py, built by
+# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
+# only when this module owns it, so neither promoting this file to a package nor
+# thinning it into a re-export shim survives the contract. The size is a known,
+# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+
 from __future__ import annotations
 
 import asyncio

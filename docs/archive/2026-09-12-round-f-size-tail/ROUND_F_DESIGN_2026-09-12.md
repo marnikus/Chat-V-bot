@@ -292,6 +292,34 @@ Recommendation: apply **(b) now** in every case (it is free and honest), and tak
 guarantee. This is a scope decision for the repository owner, so Round F proceeds
 on the unfrozen half and does not assume it.
 
+**(b) has been applied.** Each of the five frozen files now carries an
+`ideal-size:` note directly under its module docstring, naming the AREA D
+snapshot as the constraint and pointing here — so a reader who opens
+`backend/chat_sync.py` and sees 800 lines learns at line 24 that this is a
+documented contract limitation rather than neglect. The frozen snapshot test
+still passes 9/9 and the gate still reports ratchet intact with 0 new clone
+groups (comments are not statements, so the AST-window scanner cannot see them);
+no signature or class span moved. Option **(a)** remains open and unassumed.
+
+Two measured side-effects, stated rather than glossed, because one of them cuts
+against a rule:
+
+* **Each file grew by 7 lines** (chat_sync 800 → 807, scroll_parser 699 → 706,
+  history_query 596 → 603, dom_highlight 527 → 534, config_manager 502 → 509).
+  §16.5 says never grow a legacy offender, and these are the five worst
+  offenders in the tree. The growth is nevertheless the prescribed remedy: §18.5
+  requires a deviation from an ideal to carry a visible reason, and a reason has
+  to occupy lines. The gate's `RATCHET` measures *class* spans, not file length,
+  so it is unaffected and still reports intact — but the tension is real and is
+  recorded here instead of being left implicit.
+* **MI rose slightly on all five** (11.10 → 11.35, 28.30 → 28.58, 35.00 → 35.41,
+  55.30 → 55.91, 40.50 → 40.96), because MI rewards comment ratio. This was not
+  the purpose and must not be read as progress: §16.2 treats lifting a metric
+  with prose as gaming. The notes were added to satisfy §18.5, the movement is
+  +0.25 to +0.61 index points against a floor of 11.1, and every file remains far
+  outside the 150–300 ideal. If anything the notes make the debt more visible,
+  which is the opposite of what gaming tries to do.
+
 ## 8. Outcome (recorded after execution)
 
 F1 is implemented. All six files exist, the equivalence gate passes, and the

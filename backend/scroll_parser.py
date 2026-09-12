@@ -12,6 +12,13 @@ distinguishes the two explicitly:
 Every decision is reported through the log callback so the run is observable.
 """
 
+# ideal-size: 699 lines reason=the frozen AREA D public-API snapshot
+# (tests/unit/backend/test_backend_api_snapshot.py, built by
+# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
+# only when this module owns it, so neither promoting this file to a package nor
+# thinning it into a re-export shim survives the contract. The size is a known,
+# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+
 import asyncio
 import dataclasses
 import json
