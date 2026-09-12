@@ -25,6 +25,24 @@ from stores.label_rules import (
 )
 
 
+def _unassign(data: dict, wanted: str) -> None:
+    """Drop a label id from every person's assignment list."""
+    for nick in list(data["assign"]):
+        kept = [i for i in data["assign"][nick] if i != wanted]
+        if kept:
+            data["assign"][nick] = kept
+        else:
+            data["assign"].pop(nick, None)
+
+
+def _unfilter(data: dict, wanted: str) -> None:
+    """Drop a label id from both the include and the exclude verdicts."""
+    data["filter"]["include"] = [i for i in data["filter"]["include"]
+                                 if i != wanted]
+    data["filter"]["exclude"] = [i for i in data["filter"]["exclude"]
+                                 if i != wanted]
+
+
 class LabelAssignments:
     """Label definitions, per-person assignment and undo snapshots."""
 
@@ -124,16 +142,8 @@ class LabelAssignments:
         data["defs"] = [d for d in data["defs"] if d["id"] != wanted]
         if len(data["defs"]) == before:
             return False
-        for nick in list(data["assign"]):
-            kept = [i for i in data["assign"][nick] if i != wanted]
-            if kept:
-                data["assign"][nick] = kept
-            else:
-                data["assign"].pop(nick, None)
-        data["filter"]["include"] = [i for i in data["filter"]["include"]
-                                     if i != wanted]
-        data["filter"]["exclude"] = [i for i in data["filter"]["exclude"]
-                                     if i != wanted]
+        _unassign(data, wanted)
+        _unfilter(data, wanted)
         self._owner._save(data)
         return True
 

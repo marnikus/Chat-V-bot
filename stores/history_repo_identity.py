@@ -87,6 +87,45 @@ def _as_record(item) -> MessageRecord:
     return MessageRecord.from_dict(item)
 
 
+#: (output keys, MessageRecord attr, default, as_int) for `_ui_record` — the
+#: alias pairs the History window expects (dir/direction, from/from_nick,
+#: time/ts_display). Three tables because `my_nick`, `media` and `day` come
+#: from parameters, not from the record, and the key order is a UI contract.
+_UI_HEAD_SPECS = (
+    (("fp",), "fp", "", False),
+    (("dir", "direction"), "direction", "in", False),
+    (("from", "from_nick"), "from_nick", "", False),
+)
+_UI_BODY_SPECS = (
+    (("kind",), "kind", "text", False),
+    (("text",), "text", "", False),
+)
+_UI_TAIL_SPECS = (
+    (("time", "ts_display"), "ts_display", "", False),
+)
+
+
+def _record_fields(rec, specs) -> dict:
+    """One group of the UI record, coalesced and aliased per a spec table."""
+    out = {}
+    for keys, attr, default, as_int in specs:
+        value = getattr(rec, attr) or default
+        for key in keys:
+            out[key] = int(value) if as_int else value
+    return out
+
+
+def _ui_media_payload(row: dict, media_id, rec) -> dict:
+    """The media block the UI record carries (coalesce-empty fields)."""
+    return {
+        "id": int(row.get("id") or media_id),
+        "url": row.get("url") or rec.media_url or "",
+        "kind": row.get("kind") or rec.media_kind or rec.kind,
+        "state": row.get("state") or "pending",
+        "path": row.get("cache_path") or "",
+    }
+
+
 class ConversationIdentity:
     """Who a line belongs to, and how it becomes a row."""
 
@@ -152,22 +191,15 @@ class ConversationIdentity:
         instead of re-reading an entire page.
         """
         media = await self._ui_media(media_id, rec) if media_id else None
-        return {
-            "ord": int(ord_value or 0),
-            "fp": rec.fp or "",
-            "dir": rec.direction or "in",
-            "direction": rec.direction or "in",
-            "from": rec.from_nick or "",
-            "from_nick": rec.from_nick or "",
-            "my_nick": my_nick or "",
-            "kind": rec.kind or "text",
-            "text": rec.text or "",
-            "media": media,
-            "time": rec.ts_display or "",
-            "ts_display": rec.ts_display or "",
-            "day": day or "",
-            "occ": int(rec.occ or 0),
-        }
+        item = {"ord": int(ord_value or 0)}
+        item.update(_record_fields(rec, _UI_HEAD_SPECS))
+        item["my_nick"] = my_nick or ""
+        item.update(_record_fields(rec, _UI_BODY_SPECS))
+        item["media"] = media
+        item.update(_record_fields(rec, _UI_TAIL_SPECS))
+        item["day"] = day or ""
+        item["occ"] = int(rec.occ or 0)
+        return item
 
     async def _ui_media(self, media_id, rec: MessageRecord):
         """The `media` row joined into a UI record, or None.
@@ -176,21 +208,18 @@ class ConversationIdentity:
         the table when it does not — a hand-assembled bridge has no cache,
         only the archive.
         """
-        if self._owner.media is not None:
-            row = await self._owner.media.get(media_id)
-        else:
-            row = await self._owner.db.fetchone(
-                "SELECT * FROM media WHERE id=?", (media_id,))
-            row = dict(row) if row else None
+        row = await self._read_media_row(media_id)
         if not row:
             return None
-        return {
-            "id": int(row.get("id") or media_id),
-            "url": row.get("url") or rec.media_url or "",
-            "kind": row.get("kind") or rec.media_kind or rec.kind,
-            "state": row.get("state") or "pending",
-            "path": row.get("cache_path") or "",
-        }
+        return _ui_media_payload(row, media_id, rec)
+
+    async def _read_media_row(self, media_id):
+        """The media row via the cache when the repo has one, else the table."""
+        if self._owner.media is not None:
+            return await self._owner.media.get(media_id)
+        row = await self._owner.db.fetchone(
+            "SELECT * FROM media WHERE id=?", (media_id,))
+        return dict(row) if row else None
     async def _media_id(self, rec: MessageRecord, nick: str = "",
                         day: str = "") -> Optional[int]:
         if not rec.media_url:
@@ -272,16 +301,25 @@ class ConversationIdentity:
             return False
         if dom_count >= 0 and int(cursor.get("dom_count") or -1) != dom_count:
             return False
-        same_exact = bool(
+        return (self._exact_match(cursor, head_sig, tail_sig)
+                or self._any_match(cursor, head_any, tail_any))
+
+    @staticmethod
+    def _exact_match(cursor: dict, head_sig: str, tail_sig: str) -> bool:
+        """Both head/tail signatures present and identical to the cursor's."""
+        return bool(
             head_sig and tail_sig
             and head_sig == str(cursor.get("head_sig") or "")
             and tail_sig == str(cursor.get("tail_sig") or ""))
-        same_any = bool(
+
+    @staticmethod
+    def _any_match(cursor: dict, head_any: str, tail_any: str) -> bool:
+        """Author-agnostic head/tail match, with the cursor's pair present."""
+        return bool(
             head_any and tail_any
             and str(cursor.get("head_any") or "")
             and head_any == str(cursor.get("head_any") or "")
             and tail_any == str(cursor.get("tail_any") or ""))
-        return same_exact or same_any
 
     async def _apply_rename(self, pid: int, old_nick: str,
                             clean: str) -> bool:

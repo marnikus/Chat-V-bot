@@ -15,6 +15,70 @@ import copy
 from stores.label_rules import normalize_color, normalize_name, normalize_nick
 
 
+def _clean_def(item: dict) -> dict | None:
+    """One def row, normalised; None when it cannot be a label."""
+    name = normalize_name(item.get("name"))
+    label_id = str(item.get("id") or "").strip()
+    if not name or not label_id:
+        return None
+    return {"id": label_id, "name": name,
+            "color": normalize_color(item.get("color")),
+            "created_at": str(item.get("created_at") or "")}
+
+
+def _clean_defs(raw: dict) -> tuple[list[dict], set[str]]:
+    """Normalised label defs + the set of surviving ids."""
+    defs, seen_ids, seen_names = [], set(), set()
+    for item in raw.get("defs") or []:
+        if not isinstance(item, dict):
+            continue
+        clean = _clean_def(item)
+        if clean is None:
+            continue
+        key = clean["name"].casefold()
+        if clean["id"] in seen_ids or key in seen_names:
+            continue
+        seen_ids.add(clean["id"])
+        seen_names.add(key)
+        defs.append(clean)
+    return defs, seen_ids
+
+
+def _clean_assign(raw: dict, seen_ids: set[str]) -> dict[str, list[str]]:
+    """Nick -> surviving label ids, in first-seen order, known ids only."""
+    assign: dict[str, list[str]] = {}
+    raw_assign = raw.get("assign")
+    if not isinstance(raw_assign, dict):
+        return assign
+    for nick, ids in raw_assign.items():
+        clean_nick = normalize_nick(nick)
+        if not clean_nick or not isinstance(ids, list):
+            continue
+        kept = [str(i) for i in ids if str(i) in seen_ids]
+        kept = list(dict.fromkeys(kept))
+        if kept:
+            assign[clean_nick] = kept
+    return assign
+
+
+def _known_filter_ids(values, seen_ids: set[str]) -> list[str]:
+    """Filter ids reduced to known ones, first occurrence kept."""
+    kept = [str(i) for i in (values or []) if str(i) in seen_ids]
+    return list(dict.fromkeys(kept))
+
+
+def _clean_filter(raw: dict, seen_ids: set[str]) -> dict:
+    """The include/exclude verdicts: known ids, deduped, exclusion wins."""
+    raw_filter = raw.get("filter") if isinstance(raw.get("filter"), dict) else {}
+    include = _known_filter_ids(raw_filter.get("include"), seen_ids)
+    # A label cannot be included and excluded at once: exclusion wins,
+    # because "never message the rude ones" must not be overridable by a
+    # stale include tick.
+    exclude = _known_filter_ids(raw_filter.get("exclude"), seen_ids)
+    include = [i for i in include if i not in exclude]
+    return {"include": include, "exclude": exclude}
+
+
 class LabelState:
     """The live label payload: config section, world memory, normalisation.
 
@@ -73,51 +137,8 @@ class LabelState:
 
     def _normalized(self) -> dict:
         raw = self._raw()
-        defs, seen_ids, seen_names = [], set(), set()
-        for item in raw.get("defs") or []:
-            if not isinstance(item, dict):
-                continue
-            name = normalize_name(item.get("name"))
-            label_id = str(item.get("id") or "").strip()
-            if not name or not label_id or label_id in seen_ids:
-                continue
-            key = name.casefold()
-            if key in seen_names:
-                continue
-            seen_ids.add(label_id)
-            seen_names.add(key)
-            defs.append({
-                "id": label_id,
-                "name": name,
-                "color": normalize_color(item.get("color")),
-                "created_at": str(item.get("created_at") or ""),
-            })
-
-        assign: dict[str, list[str]] = {}
-        raw_assign = raw.get("assign")
-        if isinstance(raw_assign, dict):
-            for nick, ids in raw_assign.items():
-                clean_nick = normalize_nick(nick)
-                if not clean_nick or not isinstance(ids, list):
-                    continue
-                kept = [str(i) for i in ids
-                        if str(i) in seen_ids]
-                kept = list(dict.fromkeys(kept))
-                if kept:
-                    assign[clean_nick] = kept
-
-        raw_filter = raw.get("filter") if isinstance(raw.get("filter"), dict) else {}
-        include = [str(i) for i in (raw_filter.get("include") or [])
-                   if str(i) in seen_ids]
-        exclude = [str(i) for i in (raw_filter.get("exclude") or [])
-                   if str(i) in seen_ids]
-        include = list(dict.fromkeys(include))
-        # A label cannot be included and excluded at once: exclusion wins,
-        # because "never message the rude ones" must not be overridable by a
-        # stale include tick.
-        exclude = [i for i in dict.fromkeys(exclude)]
-        include = [i for i in include if i not in exclude]
-
-        return {"defs": defs, "assign": assign,
-                "filter": {"include": include, "exclude": exclude},
+        defs, seen_ids = _clean_defs(raw)
+        return {"defs": defs,
+                "assign": _clean_assign(raw, seen_ids),
+                "filter": _clean_filter(raw, seen_ids),
                 "next_id": int(raw.get("next_id") or 0)}

@@ -44,16 +44,8 @@ RESERVED = {"con", "prn", "aux", "nul", "clock$"} | {
     f"{stem}{i}" for stem in ("com", "lpt") for i in range(1, 10)}
 
 
-def slugify_nick(nick: str) -> str:
-    """A Latin, filesystem-safe folder name for a person.
-
-    `Хорошо Все` → `Horosho_Vse`, `Lizalo4ka` → `Lizalo4ka`. A short hash is
-    appended only when the nick cannot be transliterated faithfully (emoji,
-    CJK, punctuation), so the common case stays readable.
-    """
-    raw = " ".join(str(nick or "").split())
-    if not raw:
-        return "unknown"
+def _transliterate(raw: str) -> tuple[str, bool]:
+    """Per-character map to a filesystem-safe slug; True when lossy."""
     out, lossy = [], False
     for ch in raw:
         low = ch.lower()
@@ -68,10 +60,29 @@ def slugify_nick(nick: str) -> str:
         else:
             lossy = True
             out.append("_")
-    slug = "".join(out).strip("._ ")
+    return "".join(out).strip("._ "), lossy
+
+
+def _collapse_underscores(slug: str) -> str:
+    """`__` runs folded, unless the raw nick carried them deliberately."""
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug
+
+
+def slugify_nick(nick: str) -> str:
+    """A Latin, filesystem-safe folder name for a person.
+
+    `Хорошо Все` → `Horosho_Vse`, `Lizalo4ka` → `Lizalo4ka`. A short hash is
+    appended only when the nick cannot be transliterated faithfully (emoji,
+    CJK, punctuation), so the common case stays readable.
+    """
+    raw = " ".join(str(nick or "").split())
+    if not raw:
+        return "unknown"
+    slug, lossy = _transliterate(raw)
     if "__" not in raw:
-        while "__" in slug:
-            slug = slug.replace("__", "_")
+        slug = _collapse_underscores(slug)
     if not slug or set(slug) <= {"_"}:
         slug, lossy = "user", True
     if slug.lower() in RESERVED:
