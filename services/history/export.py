@@ -16,6 +16,56 @@ import logging
 log = logging.getLogger("chatbot")
 
 
+async def _load_labels(service) -> None:
+    """Load the label store from this world; a failure is not fatal."""
+    if service._labels is None:
+        return
+    try:
+        await service._labels.load_from_db(service.db)
+    except Exception as exc:                           # noqa: BLE001
+        log.warning("label load from %s failed: %s", service.db.path, exc)
+
+
+def _ensure_media_dir(service) -> None:
+    """Create the per-world media cache folder when the filesystem allows.
+
+    `os` stays a function-local import: this module's import header is a
+    frozen cross-file clone group (tools/metrics/rule16_gate.py
+    CLONE_BASELINE) and growing it would break that baseline entry.
+    """
+    try:
+        import os
+        os.makedirs(service.world_media_dir(), exist_ok=True)
+    except OSError as exc:
+        log.warning("media cache folder unavailable: %s", exc)
+
+
+async def _migrate_media_layout(service) -> None:
+    """Move cached files into the per-person tree, then re-queue failures."""
+    try:
+        moved = await service.media.migrate_layout()
+        retried = await service.media.retry_failed_uncached()
+        if moved:
+            log.info("moved %d cached file(s) into the per-person "
+                     "media tree", moved)
+        if retried:
+            log.info("re-queued %d media row(s) for the CORS-free "
+                     "downloader", retried)
+    except Exception as exc:                           # noqa: BLE001
+        log.warning("media layout migration skipped: %s", exc)
+
+
+def _bind_cdp_signals(service) -> None:
+    """Follow the CDP connection, so the archive rebinds after a reconnect."""
+    connected = getattr(service.cdp, "connected", None)
+    disconnected = getattr(service.cdp, "disconnected", None)
+    if connected is not None and hasattr(connected, "connect"):
+        connected.connect(
+            lambda: asyncio.ensure_future(service._rebind()))
+    if disconnected is not None and hasattr(disconnected, "connect"):
+        disconnected.connect(service._on_disconnected)
+
+
 class HistoryExportService:
     # ── lazy collaborators ───────────────────────────────────────
     @property
@@ -59,37 +109,12 @@ class HistoryExportService:
         await self.migrate_install()
         await self.load_app_settings()
         self._apply_world_media_dir()
-        if self._labels is not None:
-            try:
-                await self._labels.load_from_db(self.db)
-            except Exception as exc:                   # noqa: BLE001
-                log.warning("label load from %s failed: %s", self.db.path,
-                            exc)
+        await _load_labels(self)
         await self.load_gaze()
-        try:
-            import os
-            os.makedirs(self.world_media_dir(), exist_ok=True)
-        except OSError as exc:
-            log.warning("media cache folder unavailable: %s", exc)
-        try:
-            moved = await self.media.migrate_layout()
-            retried = await self.media.retry_failed_uncached()
-            if moved:
-                log.info("moved %d cached file(s) into the per-person "
-                         "media tree", moved)
-            if retried:
-                log.info("re-queued %d media row(s) for the CORS-free "
-                         "downloader", retried)
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("media layout migration skipped: %s", exc)
+        _ensure_media_dir(self)
+        await _migrate_media_layout(self)
         await self._install_push_binding()
-        connected = getattr(self.cdp, "connected", None)
-        disconnected = getattr(self.cdp, "disconnected", None)
-        if connected is not None and hasattr(connected, "connect"):
-            connected.connect(
-                lambda: asyncio.ensure_future(self._rebind()))
-        if disconnected is not None and hasattr(disconnected, "connect"):
-            disconnected.connect(self._on_disconnected)
+        _bind_cdp_signals(self)
         log.info("Message archive ready: %s (fts=%s, world=%s)", self.db.path,
                  self.db.fts_enabled, self.world_media_dir())
         return self

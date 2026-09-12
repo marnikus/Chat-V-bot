@@ -34,6 +34,26 @@ def _db_stem(path: str) -> str:
     return stem or "world"
 
 
+def _merge_media_settings(data: dict, media: dict) -> None:
+    """The media limits the stored rows override, in place.
+
+    A value that does not parse is left to the caller's except clause, which
+    is what keeps one garbage setting from failing the whole open.
+    """
+    if "media_max_file_mb" in data:
+        media["max_file_mb"] = float(data["media_max_file_mb"])
+    if "media_max_cache_mb" in data:
+        media["max_cache_mb"] = float(data["media_max_cache_mb"])
+
+
+def _merge_preview_settings(data: dict, preview: dict) -> dict:
+    """The stored preview payload merged over the in-memory one."""
+    if "preview" not in data:
+        return preview
+    stored = json.loads(str(data["preview"]))
+    return _merge(preview, stored) if isinstance(stored, dict) else preview
+
+
 class HistoryQueryService:
     def _stored(self, section: str) -> dict:
         if self.config is None:
@@ -76,24 +96,23 @@ class HistoryQueryService:
         if self.db.is_open:
             self.media._dirs.clear()
 
+    def _apply_stored_my_nick(self, data: dict) -> None:
+        """Restore My Nick from the stored settings when it parses to a str."""
+        if "my_nick" not in data:
+            return
+        nick = json.loads(str(data["my_nick"]))
+        if isinstance(nick, str):
+            self.collector.configure(my_nick=nick)
+
     async def load_app_settings(self) -> None:
         rows = await self.db.fetchdicts("SELECT key, value FROM app_settings")
         data = {row["key"]: row["value"] for row in rows}
         media = dict(self._settings.get("media") or {})
         preview = dict(self._settings.get("preview") or {})
         try:
-            if "my_nick" in data:
-                nick = json.loads(str(data["my_nick"]))
-                if isinstance(nick, str):
-                    self.collector.configure(my_nick=nick)
-            if "media_max_file_mb" in data:
-                media["max_file_mb"] = float(data["media_max_file_mb"])
-            if "media_max_cache_mb" in data:
-                media["max_cache_mb"] = float(data["media_max_cache_mb"])
-            if "preview" in data:
-                stored = json.loads(str(data["preview"]))
-                if isinstance(stored, dict):
-                    preview = _merge(preview, stored)
+            self._apply_stored_my_nick(data)
+            _merge_media_settings(data, media)
+            preview = _merge_preview_settings(data, preview)
         except (TypeError, ValueError, KeyError, json.JSONDecodeError):
             pass
         self._settings["media"], self._settings["preview"] = media, preview

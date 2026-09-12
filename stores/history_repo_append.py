@@ -23,6 +23,18 @@ from stores.history_repo_identity import (_as_record, align_batch,
 log = logging.getLogger("chatbot")
 
 
+def _gap_note(reason: str, expect_idx, first_idx) -> str:
+    """The detail an alignment gap records; only a dom_jump carries one."""
+    if reason != "dom_jump":
+        return ""
+    return f"expected idx {expect_idx}, got {first_idx}"
+
+
+def _person_total(person) -> int:
+    """The stored message count of a person row (0 when the row is gone)."""
+    return int(person["message_count"]) if person else 0
+
+
 class AppendPlanner:
     """Aligning a collected batch with what is stored, then writing it."""
 
@@ -63,10 +75,9 @@ class AppendPlanner:
         last_ord = await self._owner._last_ord(person_id)
         result.first_ord = last_ord + 1
         if gap:
-            await self._record_gap(person_id, last_ord, reason,
-                                   f"expected idx {expect_idx}, got "
-                                   f"{recs[0].idx}" if reason == "dom_jump"
-                                   else "")
+            await self._record_gap(
+                person_id, last_ord, reason,
+                _gap_note(reason, expect_idx, recs[0].idx))
 
         added, last_ord = await self._write_rows(
             person_id, recs[start:], days[start:], my_nick, nick, session_id,
@@ -82,7 +93,7 @@ class AppendPlanner:
         result.gap = gap
         result.reason = reason
         result.last_ord = last_ord
-        result.total = int(person["message_count"]) if person else 0
+        result.total = _person_total(person)
         return result
 
     async def _report_unchanged(self, person_id: int, result: AppendResult,

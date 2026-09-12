@@ -40,6 +40,35 @@ def _person_request(opts: dict) -> PersonPageRequest:
         include_deleted=bool(opts.get("include_deleted")))
 
 
+def _qt_clipboard():
+    """The running Qt application's clipboard, or None when there is neither.
+
+    Module-level because `HistoryBridge` is ratcheted at its frozen method
+    count (tools/metrics/rule16_gate.py) and this needs nothing from it.
+    """
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance()
+    if app is None:
+        return None
+    return app.clipboard()
+
+
+def _copy_file_to(clipboard, mode: str, path: str) -> bool:
+    """Carry the FILE itself, the path as text, and — for still images —
+    the pixels as well."""
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QImage
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(path)])
+    mime.setText(path)
+    if mode == "image":
+        image = QImage(path)
+        if not image.isNull():
+            mime.setImageData(image)
+    clipboard.setMimeData(mime)
+    return True
+
+
 class HistoryBridge(QObject):
     history_page_ready = Signal(str, str)    # req_id, JSON page
     history_search_ready = Signal(str, str)  # req_id, JSON results
@@ -460,29 +489,14 @@ class HistoryBridge(QObject):
 
     @staticmethod
     def _to_clipboard(payload: dict) -> bool:
+        """Put text, a path or a whole file on the system clipboard."""
         try:
-            from PySide6.QtGui import QGuiApplication, QImage
-            app = QGuiApplication.instance()
-            if app is None:
-                return False
-            clipboard = app.clipboard()
+            clipboard = _qt_clipboard()
             if clipboard is None:
                 return False
-            mode = payload.get("mode")
             path = payload.get("path") or ""
             if path and os.path.exists(path):
-                # Carry the FILE itself, the path as text, and — for
-                # still images — the pixels as well.
-                from PySide6.QtCore import QMimeData, QUrl
-                mime = QMimeData()
-                mime.setUrls([QUrl.fromLocalFile(path)])
-                mime.setText(path)
-                if mode == "image":
-                    image = QImage(path)
-                    if not image.isNull():
-                        mime.setImageData(image)
-                clipboard.setMimeData(mime)
-                return True
+                return _copy_file_to(clipboard, payload.get("mode"), path)
             if path:
                 clipboard.setText(path)
                 return True
