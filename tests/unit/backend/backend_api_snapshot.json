@@ -1031,6 +1031,7 @@
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
+      "click_runner": "(self)",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
@@ -1077,6 +1078,32 @@
    "functions": {},
    "values": {}
   },
+  "actions.cancellation": {
+   "classes": {
+    "RunStopped": {
+     "ancestry": [
+      "RunStopped",
+      "Exception",
+      "BaseException",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {}
+    }
+   },
+   "functions": {
+    "await_with_stop": "(awaitable_factory: 'Callable[[], Awaitable[Any]]', engine, *, slice_s: 'float' = 0.05, deadline_monotonic: 'float | None' = None) -> 'Any'",
+    "check_stopped": "(engine) -> 'None'",
+    "is_stop_requested": "(engine) -> 'bool'",
+    "sleep_with_stop": "(delay_s: 'float', engine, *, slice_s: 'float' = 0.02) -> 'None'"
+   },
+   "values": {}
+  },
   "actions.click_back": {
    "classes": {
     "ClickBack": {
@@ -1102,6 +1129,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1145,6 +1173,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1187,6 +1216,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1416,6 +1446,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1952,23 +1983,14 @@
    "values": {}
   },
   "backend.chat_sync": {
+   "classes": {},
+   "functions": {
+    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync.align": {
    "classes": {
-    "ChunkReader": {
-     "ancestry": [
-      "ChunkReader",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, session: \"'SyncSession'\")",
-      "read": "(self) -> 'None'"
-     }
-    },
     "DeltaAligner": {
      "ancestry": [
       "DeltaAligner",
@@ -1984,63 +2006,13 @@
       "apply": "(self, session: \"'SyncSession'\") -> 'None'",
       "split": "(collected, cursor: 'dict') -> 'list'"
      }
-    },
-    "ReadPlan": {
-     "ancestry": [
-      "ReadPlan",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {
-      "count": {
-       "default": "0",
-       "type": "int"
-      },
-      "gap": {
-       "default": "False",
-       "type": "bool"
-      },
-      "head_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "head_sig": {
-       "default": "''",
-       "type": "str"
-      },
-      "mode": {
-       "default": "'full'",
-       "type": "str"
-      },
-      "start": {
-       "default": "0",
-       "type": "int"
-      },
-      "streaming": {
-       "default": "True",
-       "type": "bool"
-      },
-      "tail_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "tail_sig": {
-       "default": "''",
-       "type": "str"
-      }
-     },
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
-      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
-      "delta": "<property>",
-      "is_empty": "<property>",
-      "signatures": "<property>"
-     }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.options": {
+   "classes": {
     "SyncOptions": {
      "ancestry": [
       "SyncOptions",
@@ -2106,7 +2078,13 @@
       "progress": "(self, done: 'int', total: 'int') -> 'None'",
       "stopping": "(self) -> 'bool'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.persist": {
+   "classes": {
     "SyncPersister": {
      "ancestry": [
       "SyncPersister",
@@ -2131,6 +2109,68 @@
       "write_backfill": "(self, records) -> 'None'",
       "write_batch": "(self, records) -> 'None'"
      }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.plan": {
+   "classes": {
+    "ReadPlan": {
+     "ancestry": [
+      "ReadPlan",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "count": {
+       "default": "0",
+       "type": "int"
+      },
+      "gap": {
+       "default": "False",
+       "type": "bool"
+      },
+      "head_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "head_sig": {
+       "default": "''",
+       "type": "str"
+      },
+      "mode": {
+       "default": "'full'",
+       "type": "str"
+      },
+      "start": {
+       "default": "0",
+       "type": "int"
+      },
+      "streaming": {
+       "default": "True",
+       "type": "bool"
+      },
+      "tail_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "tail_sig": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
+      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
+      "delta": "<property>",
+      "is_empty": "<property>",
+      "signatures": "<property>"
+     }
     },
     "SyncPlanner": {
      "ancestry": [
@@ -2150,7 +2190,35 @@
       "signature": "(value) -> 'str'",
       "signatures": "(state: 'dict') -> 'dict'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.reader": {
+   "classes": {
+    "ChunkReader": {
+     "ancestry": [
+      "ChunkReader",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "read": "(self) -> 'None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.session": {
+   "classes": {
     "SyncSession": {
      "ancestry": [
       "SyncSession",
@@ -2284,8 +2352,7 @@
     }
    },
    "functions": {
-    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'",
-    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
+    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'"
    },
    "values": {}
   },
@@ -2468,6 +2535,59 @@
       "person_stats": "(self, nick: 'str') -> 'dict'",
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+     }
+    },
+    "PersonPageRequest": {
+     "ancestry": [
+      "PersonPageRequest",
+      "object"
+     ],
+     "attrs": {
+      "dir": "''",
+      "include_deleted": "False",
+      "limit": "50",
+      "offset": "0",
+      "q": "''",
+      "sort": "'recent'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "dir": {
+       "default": "''",
+       "type": "str"
+      },
+      "include_deleted": {
+       "default": "False",
+       "type": "bool"
+      },
+      "limit": {
+       "default": "50",
+       "type": "int"
+      },
+      "offset": {
+       "default": "0",
+       "type": "int"
+      },
+      "q": {
+       "default": "''",
+       "type": "str"
+      },
+      "sort": {
+       "default": "'recent'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> None",
+      "columns": "(self) -> 'str'",
+      "needle": "(self) -> 'str'",
+      "order": "(self) -> 'tuple[str, list]'",
+      "resolved_dir": "(self) -> 'str'",
+      "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
+      "where": "(self) -> 'tuple[str, list]'"
      }
     }
    },

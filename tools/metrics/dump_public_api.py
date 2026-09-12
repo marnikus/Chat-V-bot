@@ -69,11 +69,22 @@ def _default_repr(value) -> str:
 
 
 def module_names(package: str):
+    """Every importable module of `package`, recursing into subpackages.
+
+    A directory without `__init__.py` (e.g. `backend/js`, the shipped agent
+    scripts) is data, not code — it is skipped, as were subpackages before
+    `backend.chat_sync` became one (2026-09-12 size-debt round, step 1).
+    """
     pkg = __import__(package, fromlist=["__path__"])
+    base = os.path.dirname(pkg.__file__)
     for info in pkgutil.iter_modules(pkg.__path__):
+        qualname = f"{package}.{info.name}"
         if info.ispkg:
+            if os.path.isfile(os.path.join(base, info.name, "__init__.py")):
+                yield qualname
+                yield from module_names(qualname)
             continue
-        yield f"{package}.{info.name}"
+        yield qualname
 
 
 def dump_module(qualname: str) -> dict:
