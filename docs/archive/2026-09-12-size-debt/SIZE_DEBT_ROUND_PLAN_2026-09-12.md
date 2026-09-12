@@ -169,3 +169,47 @@ Rules followed:
 
 Next: S2 (scroll_parser) on request — design first (the ScrollParser god
 class needs a method-family survey before the cut lines are drawn).
+
+## 7. Round status, 2026-09-12 (afternoon) — parallel session found
+
+A second session (`arena/01a09227-chat-v-bot`, tip `82bfae8`, pushed
+09:16 UTC) landed while this round was running. It did its own CC closure
+(waves C/D/E1/E2 — same end state: 0 fns > CC 10), its own hand port of the
+DB-undo-restore feature (`e4ef002`, "and fix the gate it left held" — differs
+from this branch's port `a882f73` in exactly two files: `undo_archive.py`,
+`undo_timeline.py`), and its own size round **Round F** whose step F1 split
+`services/db_deletion.py` (665 → 6-file prefix family, shim 55 LOC).
+Its design doc: `docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md`
+on that branch.
+
+Independently re-verified on `82bfae8` (worktree at `/home/user/measure01a09227`):
+
+| check | this branch `7671f8b` | their branch `82bfae8` |
+|---|---|---|
+| suite | 2708/0 (777 subtests) | 2710/0 (777 subtests; WebEngine-GL test deselected — see below) |
+| rule16 gate `--with-clones` | exit 0 | exit 0 |
+| coverage line / branch | 94.88% / 82.55% | 94.89% / 82.54% |
+| files >500 LOC | 9 (scroll_parser 674 largest) | 9 (chat_sync 800 largest) |
+| fns >30 LOC / params >4 | 42 / 70 | 42 / 70 |
+| mean MI | 64.82 | 65.27 |
+
+The two size rounds are complementary, not duplicate: **their F1 = my S3**
+(db_deletion), **my S1 = the file their doc §2 calls "structurally frozen"**
+(chat_sync). Their §2 hit the exact same `dump_public_api.py` package-skip
+limitation that §3.4 of this doc fixed — their option (a) was "refresh the
+snapshot" (losing API pinning for those modules); the tool fix implemented
+here achieves the split *while keeping* every chat_sync public class pinned
+under its true submodule in the refreshed snapshot.
+
+Divergences to decide before the rounds can converge (owner decision):
+
+1. **Two ports of the same feature.** Theirs claims a gate fix in
+   `undo_archive.py`/`undo_timeline.py` that mine lacks.
+2. **WebEngine probe missing on their branch.** This branch's `59f45eb`
+   (CC-tail restore) carries the `_qt_webengine_works()` subprocess probe in
+   `tests/test_sash_webengine.py`; without it, their tree's full suite
+   SIGABRTs in this sandbox (no GL) — that is why it was deselected above.
+3. **Queue dedup.** Union view: S1/F1 done (both), S2 = scroll_parser
+   (674/699) is the next shared step — on this branch it is unblocked by the
+   snapshot tool fix; their branch's doc leaves it "frozen" pending decision.
+
