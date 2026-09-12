@@ -263,7 +263,7 @@ dict, and the collector status strings.
 | Metric | Fail line | Measured now |
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
-| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 31 (legacy), mean 3.25 |
+| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 10, mean CC 3.1, mean cognitive 2.17, max nesting 4, zero functions over gate (2026-09-11 CC round 3) |
 | Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **90.44% / 84.38%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 6 lines (57.7% in band) · median file 130 lines — RULE 18, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
@@ -275,6 +275,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-11 | [CC tail fixes — round 3](../archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) | How the 63-function CC queue went to zero over-gate functions |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |
 | 2026-09-10 | [`_delete_unlocked` decomposition](../archive/2026-09-10-safety-refactor/DELETE_FLOW_EXTRACTION_DESIGN_2026-09-10.md) · [CC tail extraction](../archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md) · [remaining tail](../archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md) | How the worst hotspots were split without changing behaviour |
 | 2026-09-10 | [History push lifecycle](../archive/2026-09-10-history-push-and-sort/HISTORY_PUSH_LIFECYCLE_DESIGN_2026-09-10.md) · [Sortable DB columns](../archive/2026-09-10-history-push-and-sort/SORTABLE_DATABASE_COLUMNS_DESIGN_2026-09-10.md) | The `__cvbPush` channel and the sort/query path |

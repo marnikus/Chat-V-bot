@@ -193,32 +193,35 @@ def _foreign_authors(outs, names: _GateNames) -> tuple:
     return me, list(outs) if len(outs) > 1 else []
 
 
-def verify_private(state: dict, nick: str, my_nick: str = "",
-                   items=None, require_private: bool = True) -> PrivateCheck:
-    """The gate. `ok` is False unless BOTH steps pass.
-
-    RULE 15: this is the only place the private-chat decision is made, and it
-    runs before a single record is written. Each guard keeps its own reason
-    code because the run panel shows them to the user verbatim.
-    """
-    state = state if isinstance(state, dict) else {}
-    names = _GateNames.read(state, nick, my_nick)
+def _tab_gate(state: dict, names: "_GateNames",
+              require_private: bool) -> Optional[PrivateCheck]:
+    """Guard 1: the active tab must be tagged private."""
     if require_private and str(state.get("tab") or "") != "private":
         return names.refuse("not_private",
                             "the active tab is not a private chat")
+    return None
+
+
+def _partner_gate(names: "_GateNames") -> Optional[PrivateCheck]:
+    """Guard 2: the tab must name a person to talk to."""
     if not names.target or not names.partner:
         return names.refuse("no_partner",
                             "the active tab does not name a person")
-    # ── step 2: the tab title ─────────────────────────────────────
+    return None
+
+
+def _title_gate(names: "_GateNames") -> Optional[PrivateCheck]:
+    """──── step 2: the tab title must belong to the partner."""
     if not title_matches(names.title, names.target):
         return names.refuse(
             "title_mismatch",
             f"the active tab is “{chat_text.clean(names.title)}”, "
             f"not “{names.target}”")
-    if _is_self_chat(names):
-        return names.refuse("self_chat", "the partner is my own nick")
+    return None
 
-    # ── step 1: exactly two nicks ─────────────────────────────────
+
+def _strangers_verdict(state: dict, items, names: "_GateNames") -> PrivateCheck:
+    """──── step 1: exactly two nicks may appear as authors."""
     authors = _authors_of(state, items, names)
     if authors is None:
         return names.refuse("no_author_data",
@@ -235,7 +238,33 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
                         me, names.partner, strangers)
 
 
+def verify_private(state: dict, nick: str, my_nick: str = "",
+                   items=None, require_private: bool = True) -> PrivateCheck:
+    """The gate. `ok` is False unless BOTH steps pass.
+
+    RULE 15: this is the only place the private-chat decision is made, and it
+    runs before a single record is written. Each guard keeps its own reason
+    code because the run panel shows them to the user verbatim.
+    """
+    state = state if isinstance(state, dict) else {}
+    names = _GateNames.read(state, nick, my_nick)
+    for gate in (_tab_gate(state, names, require_private),
+                 _partner_gate(names),
+                 _title_gate(names)):
+        if gate is not None:
+            return gate
+    if _is_self_chat(names):
+        return names.refuse("self_chat", "the partner is my own nick")
+    return _strangers_verdict(state, items, names)
+
+
 _payload = chat_text.payload
+
+
+def _at_top_of_floor(state: dict, count: int, floor: int) -> bool:
+    """The poll's settle condition: viewport at top AND above the count floor."""
+    scroll = state.get("scroll") or {}
+    return bool(scroll.get("atTop")) and count >= floor
 
 
 class ChatParser:
@@ -331,12 +360,10 @@ class ChatParser:
         deadline = asyncio.get_event_loop().time() + max_wait_s
         state = first_state
         while stable < stable_polls:
-            state = await self.state()
-            state = state if isinstance(state, dict) else {}
-            scroll = state.get("scroll") or {}
+            state = await self._poll_state()
             count = int(state.get("count") or 0)
-            settled = bool(scroll.get("atTop")) and count >= floor
-            if settled and count == last_count:
+            if _at_top_of_floor(state, count, floor) \
+                    and count == last_count:
                 stable += 1
             else:
                 stable = 0
@@ -350,6 +377,11 @@ class ChatParser:
             await asyncio.sleep(wait_ms / 1000.0)
         state["_settled"] = True
         return state
+
+    async def _poll_state(self) -> dict:
+        """One fresh state snapshot, coerced to a dict."""
+        state = await self.state()
+        return state if isinstance(state, dict) else {}
 
     async def pause(self) -> None:
         if self.chunk_pause_ms:

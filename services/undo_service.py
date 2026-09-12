@@ -356,27 +356,33 @@ class UndoService:
         if not isinstance(value, dict):
             return False
         if kind == "people":
-            rows = value.get("after" if forward else "before")
-            if rows is None or self._people is None:
-                return False
-            self._schedule(self._people.apply(rows))
-            return True
+            return self._apply_people_command(value, forward)
         if kind == "labels":
-            snapshot = value.get("after" if forward else "before")
-            if not isinstance(snapshot, dict) or self._labels is None:
-                return False
-            self._labels.restore(snapshot)
-            self._bus.emit(LabelsChanged(
-                payload=json.dumps(self._labels.state(),
-                                   ensure_ascii=False)))
-            # labels can hide people from the queue: the # column changes
-            self._bus.emit(PeopleChanged(reason="labels"))
-            return True
+            return self._apply_labels_command(value, forward)
         if kind == "archive":
             return self._apply_archive_command(value, forward)
         if kind == "dbconn":
             return self._apply_db_command(value, forward)
         return False
+
+    def _apply_people_command(self, value: dict, forward: bool) -> bool:
+        rows = value.get("after" if forward else "before")
+        if rows is None or self._people is None:
+            return False
+        self._schedule(self._people.apply(rows))
+        return True
+
+    def _apply_labels_command(self, value: dict, forward: bool) -> bool:
+        snapshot = value.get("after" if forward else "before")
+        if not isinstance(snapshot, dict) or self._labels is None:
+            return False
+        self._labels.restore(snapshot)
+        self._bus.emit(LabelsChanged(
+            payload=json.dumps(self._labels.state(),
+                               ensure_ascii=False)))
+        # labels can hide people from the queue: the # column changes
+        self._bus.emit(PeopleChanged(reason="labels"))
+        return True
 
     @staticmethod
     def _schedule(coro) -> bool:
@@ -428,47 +434,21 @@ class UndoService:
     def _apply_db_command(self, value: dict, forward: bool) -> bool:
         """Re-apply / reverse a DB Connection action (legacy entries)."""
         op = str(value.get("op") or "")
-        path = str(value.get("path") or "")
-        before_path = str(value.get("before_path") or "")
-        backup = str(value.get("backup") or "")
-        manager = self._dbs
 
         async def work():
             if op == "delete":
-                if forward:
-                    if os.path.exists(path):
-                        result = await manager.delete(path)
-                    else:
-                        self._log("⚠ Nothing to re-delete — the file is "
-                                  "already gone", "warn")
-                        return
-                else:
-                    if os.path.exists(backup):
-                        result = await manager.restore_backup(backup, path)
-                    else:
-                        self._log("⚠ Database deletions are permanent — "
-                                  "no backup exists to restore", "warn")
-                        return
+                result = await self._db_delete_op(value, forward)
+                if result is None:          # warned already — nothing to do
+                    return
                 if result.get("ok"):
                     await restart_world(self._memory, self._archive,
                                         self._labels, self, self._bus,
                                         "delete")
                 emit_db_change(self._bus, "delete", result)
                 return
-            if forward:
-                if op in ("create", "load"):
-                    result = await manager.load(path, create=(op == "create"))
-                elif op == "clean":
-                    result = await manager.clean()
-                else:
-                    return
-            else:
-                if op in ("create", "load"):
-                    result = await manager.load(before_path)
-                elif op == "clean":
-                    result = await manager.restore_backup(backup, path)
-                else:
-                    return
+            result = await self._db_switch_op(value, forward)
+            if result is None:              # unknown op — nothing to do
+                return
             if op in ("create", "load") and result.get("ok") \
                     and not result.get("unchanged"):
                 await restart_world(self._memory, self._archive,
@@ -476,6 +456,42 @@ class UndoService:
             emit_db_change(self._bus, op, result)
         self._schedule(work())
         return True
+
+    async def _db_delete_op(self, value: dict, forward: bool):
+        """Run a delete re-apply (forward) or backup restore (undo)."""
+        manager = self._dbs
+        if forward:
+            path = str(value.get("path") or "")
+            if not os.path.exists(path):
+                self._log("⚠ Nothing to re-delete — the file is "
+                          "already gone", "warn")
+                return None
+            return await manager.delete(path)
+        backup = str(value.get("backup") or "")
+        if not os.path.exists(backup):
+            self._log("⚠ Database deletions are permanent — "
+                      "no backup exists to restore", "warn")
+            return None
+        return await manager.restore_backup(backup,
+                                            str(value.get("path") or ""))
+
+    async def _db_switch_op(self, value: dict, forward: bool):
+        """Run a create/load/clean re-apply or its reverse."""
+        manager = self._dbs
+        op = str(value.get("op") or "")
+        backup = str(value.get("backup") or "")
+        path = str(value.get("path") or "")
+        if forward:
+            if op in ("create", "load"):
+                return await manager.load(path, create=(op == "create"))
+            if op == "clean":
+                return await manager.clean()
+            return None
+        if op in ("create", "load"):
+            return await manager.load(str(value.get("before_path") or ""))
+        if op == "clean":
+            return await manager.restore_backup(backup, path)
+        return None
 
     # ── apply one entry's state (walk onto a snapshot entry) ──────
     def _apply_entry(self, entry) -> None:

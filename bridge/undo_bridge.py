@@ -39,35 +39,47 @@ class UndoBridge(QObject):
         return json.dumps({"history": history, "index": index},
                           ensure_ascii=False)
 
+    @staticmethod
+    def _decode_stack(value_json) -> tuple:
+        """(value, ok) for the stack kind: JSON list or no push."""
+        try:
+            value = json.loads(value_json or "[]")
+        except json.JSONDecodeError:
+            return None, False
+        return value, isinstance(value, list)
+
+    @staticmethod
+    def _decode_grid(value_json) -> tuple:
+        """(value, ok) for the grid kind: canonical payload or no push."""
+        value, err = LayoutService.canonical_grid_payload(value_json or "")
+        return value, not err
+
+    def _remember_pushed(self, kind: str, value) -> None:
+        """Persist the config side of the pushed kind (+ re-rank on stack)."""
+        if kind == "grid":
+            self.ctx.config.set_state(grid_layout=value)
+            return
+        self.ctx.config.set_state(last_stack=value,
+                                  last_stack_preset="")
+        # The stack determines the processing order (# column):
+        # re-rank the people list when a block is added/removed.
+        from core.events import PeopleChanged
+        self.ctx.bus.emit(PeopleChanged(reason="stack"))
+
     @Slot(str, str, result=bool)
     def push_global_history(self, kind, value_json):
         """Record a frontend edit in the one global timeline."""
-        if kind == "stack":
-            try:
-                value = json.loads(value_json or "[]")
-            except json.JSONDecodeError:
-                return False
-            if not isinstance(value, list):
-                return False
-        elif kind == "grid":
-            value, err = LayoutService.canonical_grid_payload(value_json
-                                                              or "")
-            if err:
-                return False
-        else:
+        decoder = {"stack": self._decode_stack,
+                   "grid": self._decode_grid}.get(kind)
+        if decoder is None:
+            return False
+        value, ok = decoder(value_json)
+        if not ok:
             return False
         result = self.undo_service.push(kind, value)
         if result.is_err:
             return False
-        if kind == "grid":
-            self.ctx.config.set_state(grid_layout=value)
-        elif kind == "stack":
-            self.ctx.config.set_state(last_stack=value,
-                                      last_stack_preset="")
-            # The stack determines the processing order (# column):
-            # re-rank the people list when a block is added/removed.
-            from core.events import PeopleChanged
-            self.ctx.bus.emit(PeopleChanged(reason="stack"))
+        self._remember_pushed(kind, value)
         return True
 
     @Slot(result=str)

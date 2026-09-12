@@ -115,6 +115,14 @@ class LayoutBridge(QObject):
                               ensure_ascii=False)
         return ""
 
+    def _state_ids(self, data: dict, key: str) -> list:
+        """The known window ids stored under one state key (non-list ⇒ [])."""
+        raw = data.get(key, [])
+        if not isinstance(raw, list):
+            return []
+        return [i for i in raw
+                if isinstance(i, str) and i in self.WINDOW_IDS]
+
     @Slot(str, result=bool)
     def save_window_states(self, states_json):
         try:
@@ -123,17 +131,9 @@ class LayoutBridge(QObject):
             return False
         if not isinstance(data, dict):
             return False
-        closed = data.get("closed", [])
-        minimized = data.get("minimized", [])
-        if not isinstance(closed, list):
-            closed = []
-        if not isinstance(minimized, list):
-            minimized = []
-        closed = [i for i in closed
-                  if isinstance(i, str) and i in self.WINDOW_IDS]
-        minimized = [i for i in minimized
-                     if isinstance(i, str)
-                     and i in self.WINDOW_IDS and i not in closed]
+        closed = self._state_ids(data, "closed")
+        minimized = [i for i in self._state_ids(data, "minimized")
+                     if i not in closed]
         self.ctx.config.set_state(window_states={"closed": closed,
                                                  "minimized": minimized})
         return True

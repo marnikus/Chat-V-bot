@@ -100,23 +100,29 @@ class CollectorBridge(QObject):
             return
         collector = self.ctx.archive.collector
         action = str(command or "").strip().lower()
-        if action == "pause":
-            collector.pause()
-        elif action == "resume":
-            collector.resume()
-        elif action == "start":
-            collector.start()
-            self.ctx.archive.start()
-        elif action == "stop":
-            collector.stop()
-        elif action == "tick":
-            self._run_async("collector_tick", collector.tick())
-        elif action in ("backfill_older", "backfill"):
-            self._run_async("collector_backfill", collector.backfill_older())
-        else:
+        if not self._run_collector_action(action, collector):
             return
         self.collector_status.emit(json.dumps(collector.state_payload(),
                                               ensure_ascii=False))
+
+    def _run_collector_action(self, action: str, collector) -> bool:
+        """Dispatch one collector verb (named-bound-method table)."""
+        simple = {"pause": collector.pause, "resume": collector.resume,
+                  "stop": collector.stop}
+        if action in simple:
+            simple[action]()
+            return True
+        if action == "start":
+            collector.start()
+            self.ctx.archive.start()
+            return True
+        if action == "tick":
+            self._run_async("collector_tick", collector.tick())
+            return True
+        if action in ("backfill_older", "backfill"):
+            self._run_async("collector_backfill", collector.backfill_older())
+            return True
+        return False
 
     # ── My Nick (pinned header) ──────────────────────────────────
     @Slot(result=str)
@@ -127,6 +133,13 @@ class CollectorBridge(QObject):
     @Slot(str)
     def set_my_nick(self, nick):
         clean = " ".join(str(nick or "").split()).strip()
+        self._store_my_nick(clean)
+        if self.ctx.archive is not None:
+            self.ctx.archive.set_my_nick(clean)
+        self._announce_my_nick(clean)
+
+    def _store_my_nick(self, clean: str) -> None:
+        """Persist the nick (collector section) + the 10-entry recents list."""
         stored = self.ctx.config.get_copy("collector", default={})
         if not isinstance(stored, dict):
             stored = {}
@@ -138,8 +151,9 @@ class CollectorBridge(QObject):
         if clean:
             recent.insert(0, clean)
         self.ctx.config.set_state(my_nick_recent=recent[:10])
-        if self.ctx.archive is not None:
-            self.ctx.archive.set_my_nick(clean)
+
+    def _announce_my_nick(self, clean: str) -> None:
+        """The pinned header + bus fan-out (string pinned)."""
         self.my_nick_changed.emit(clean)
         self.ctx.bus.emit(MyNickChanged(nick=clean))
         self.ctx.bus.emit(LogMessage(

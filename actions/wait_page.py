@@ -37,97 +37,117 @@ class WaitPageLoad(BaseAction):
         self.target_selector = target_selector or TEXTAREA_SEL
         self.timeout_ms = timeout_ms
 
-    async def execute(self, user_nick: str, cdp: CDPClient,
-                      engine: Optional[object] = None) -> str:
-        label = f"element '{self.target_selector}'"
+    @property
+    def _label(self) -> str:
+        """The wait target's display name used in every wait message."""
+        return f"element '{self.target_selector}'"
 
-        def _stopped_report() -> None:
-            if engine:
-                engine.report(
-                    f"⏹ Wait stopped on request — no longer waiting for {label}",
-                    "warn",
-                )
+    def _report_stop(self, engine) -> None:
+        """The pinned "stopped on request" notice (same at every boundary)."""
+        if engine:
+            engine.report(
+                f"⏹ Wait stopped on request — no longer waiting for {self._label}",
+                "warn",
+            )
 
-        # Already-stopped entry: no delay, no probe (C1a).
+    async def _stop_boundary(self, engine) -> None:
+        """Stop check that announces itself once and re-raises."""
         try:
             check_stopped(engine)
         except RunStopped:
-            _stopped_report()
+            self._report_stop(engine)
             raise
+
+    async def _sleep_or_stop(self, delay_s: float, engine,
+                             slice_s: float = 0.02) -> None:
+        """Cooperative sleep that announces a stop and re-raises."""
         try:
-            await sleep_with_stop(self.pre_delay_ms / 1000.0, engine)
+            await sleep_with_stop(delay_s, engine, slice_s=slice_s)
         except RunStopped:
-            _stopped_report()
+            self._report_stop(engine)
             raise
-        deadline = time.monotonic() + self.timeout_ms / 1000
+
+    async def _probe_attempt(self, cdp: CDPClient, deadline: float, engine,
+                             attempt: int) -> tuple:
+        """One bounded probe → (parsed result, "ok" | "timeout" | "failed")."""
+        try:
+            # At least one quick probe even when the deadline already
+            # passed (preserves timeout_ms=0 single-probe semantics, so
+            # the timeout error still reports how many nodes were seen);
+            # otherwise the hanging probe stays bounded by the deadline.
+            probe_deadline = max(deadline, time.monotonic() + 0.05)
+            raw = await await_with_stop(
+                lambda: cdp.evaluate(build_probe(
+                    selector=self.target_selector)),
+                engine, slice_s=0.05, deadline_monotonic=probe_deadline)
+            return (json.loads(raw) if raw else None), "ok"
+        except RunStopped:
+            self._report_stop(engine)
+            raise
+        except TimeoutError:
+            return None, "timeout"
+        except Exception as exc:
+            if engine and attempt % 5 == 1:
+                engine.report(f"❌ Probe error while waiting: {exc}", "error")
+            return None, "failed"
+
+    def _report_progress(self, res, attempt: int, engine) -> None:
+        """Not-found cadence: at most ~once per 2s so the console is readable."""
+        if attempt % 7 != 1:
+            return
+        total = int((res or {}).get("total", 0) or 0)
+        if engine:
+            engine.report(f"⏳ {self._label} not present yet — matched {total} "
+                          f"node(s) (attempt {attempt})", "warn")
+
+    async def _wait_loop(self, cdp: CDPClient, deadline: float,
+                         engine) -> tuple:
+        """Poll until found / timeout / stop → (found, last parsed result)."""
         attempt = 0
         last_res = None
-        if engine:
-            engine.report(f"🔍 Waiting for {label} (timeout {self.timeout_ms} ms)...",
-                          "info")
         while True:
             attempt += 1
-            try:
-                check_stopped(engine)
-            except RunStopped:
-                _stopped_report()
-                raise
-            try:
-                # At least one quick probe even when the deadline already
-                # passed (preserves timeout_ms=0 single-probe semantics, so
-                # the timeout error still reports how many nodes were seen);
-                # otherwise the hanging probe stays bounded by the deadline.
-                probe_deadline = max(deadline, time.monotonic() + 0.05)
-                raw = await await_with_stop(
-                    lambda: cdp.evaluate(
-                        build_probe(selector=self.target_selector)
-                    ),
-                    engine,
-                    slice_s=0.05,
-                    deadline_monotonic=probe_deadline,
-                )
-                res = json.loads(raw) if raw else None
+            await self._stop_boundary(engine)
+            res, outcome = await self._probe_attempt(cdp, deadline, engine,
+                                                     attempt)
+            if outcome == "timeout":
+                return False, last_res
+            if outcome == "ok":
                 last_res = res
-            except RunStopped:
-                _stopped_report()
-                raise
-            except TimeoutError:
-                break
-            except Exception as exc:
-                if engine and attempt % 5 == 1:
-                    engine.report(f"❌ Probe error while waiting: {exc}", "error")
-                res = None
-            try:
-                check_stopped(engine)
-            except RunStopped:
-                _stopped_report()
-                raise
+            await self._stop_boundary(engine)
             if res and res.get("found"):
-                msg, level = interpret_wait(res, label)
+                msg, level = interpret_wait(res, self._label)
                 if engine:
                     engine.report(msg, level)
                 log.info("Element found: %s", self.target_selector[:50])
-                return ActionResult.OK
-            now = time.monotonic()
-            if now >= deadline:
-                break
-            # Report failed probes at most ~once per 2s so the console is readable
-            if attempt % 7 == 1:
-                total = int((res or {}).get("total", 0) or 0)
-                if engine:
-                    engine.report(f"⏳ {label} not present yet — matched {total} "
-                                  f"node(s) (attempt {attempt})", "warn")
-            try:
-                await sleep_with_stop(0.3, engine, slice_s=0.05)
-            except RunStopped:
-                _stopped_report()
-                raise
+                return True, last_res
+            if time.monotonic() >= deadline:
+                return False, last_res
+            self._report_progress(res, attempt, engine)
+            await self._sleep_or_stop(0.3, engine, slice_s=0.05)
+
+    def _report_timeout(self, last_res, engine) -> None:
+        """Terminal failure line with the last known DOM state."""
         total = int((last_res or {}).get("total", 0) or 0)
         if engine:
-            engine.report(f"❌ Failed to find element: {label} — timeout after "
-                          f"{self.timeout_ms} ms, selector matched {total} node(s)",
-                          "error")
+            engine.report(f"❌ Failed to find element: {self._label} — timeout "
+                          f"after {self.timeout_ms} ms, selector matched "
+                          f"{total} node(s)", "error")
         log.warning("Timeout waiting for: %s", self.target_selector[:50])
+
+    async def execute(self, user_nick: str, cdp: CDPClient,
+                      engine: Optional[object] = None) -> str:
+        # Already-stopped entry: no delay, no probe (C1a).
+        await self._stop_boundary(engine)
+        await self._sleep_or_stop(self.pre_delay_ms / 1000.0, engine)
+        deadline = time.monotonic() + self.timeout_ms / 1000
+        if engine:
+            engine.report(f"🔍 Waiting for {self._label} "
+                          f"(timeout {self.timeout_ms} ms)...", "info")
+        found, last_res = await self._wait_loop(cdp, deadline, engine)
+        if found:
+            return ActionResult.OK
+        self._report_timeout(last_res, engine)
         return ActionResult.FAIL
 
     def config_schema(self) -> dict:

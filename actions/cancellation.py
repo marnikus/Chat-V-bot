@@ -116,6 +116,74 @@ async def sleep_with_stop(
         raise RunStopped
 
 
+def _coerce_step(slice_s: float) -> float:
+    """Poll slice in seconds; garbage and non-positive mean the default."""
+    try:
+        step = float(slice_s)
+    except (TypeError, ValueError):
+        step = 0.05
+    if step <= 0:
+        step = 0.05
+    return step
+
+
+def _as_task(awaitable):
+    """The factory's result as ONE supervised task.
+
+    The factory may return a coroutine or an already-created future/task
+    (a Task *is* a Future, so ``isfuture`` covers both spellings).
+    """
+    if asyncio.isfuture(awaitable):
+        return awaitable
+    return asyncio.ensure_future(awaitable)
+
+
+async def _cancel_and_drain(task) -> None:
+    """Cancel the supervised task and await its settlement (no orphan).
+
+    Swallows exactly what the task raises on cancel — ``CancelledError``
+    or an exception it already carried — never ``BaseException``, so an
+    external cancel of the surrounding coroutine still propagates.
+    """
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+def _finished_result(task, engine) -> Any:
+    """The landed result — unless a stop raced it, then :class:`RunStopped`."""
+    if is_stop_requested(engine):
+        # Re-check before accepting a result that landed concurrently
+        # with the request (stop wins over found).
+        try:
+            task.result()
+        except (asyncio.CancelledError, Exception):
+            pass
+        raise RunStopped
+    return task.result()
+
+
+async def _poll_supervised(task, engine, step: float,
+                           deadline_monotonic: float | None) -> Any:
+    """Poll ``task`` in ``step`` slices → result, or the stop/deadline raise."""
+    while True:
+        if is_stop_requested(engine):
+            await _cancel_and_drain(task)
+            raise RunStopped
+        if deadline_monotonic is not None and \
+                time.monotonic() >= deadline_monotonic:
+            await _cancel_and_drain(task)
+            raise TimeoutError
+        if task.done():
+            return _finished_result(task, engine)
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=step)
+        except asyncio.TimeoutError:
+            continue
+
+
 async def await_with_stop(
     awaitable_factory: Callable[[], Awaitable[Any]],
     engine,
@@ -136,58 +204,12 @@ async def await_with_stop(
     """
     if is_stop_requested(engine):
         raise RunStopped
+    task = _as_task(awaitable_factory())
     try:
-        step = float(slice_s)
-    except (TypeError, ValueError):
-        step = 0.05
-    if step <= 0:
-        step = 0.05
-    coro = awaitable_factory()
-    # Factory may return a coroutine or an already-created future/task.
-    if asyncio.isfuture(coro) or isinstance(coro, asyncio.Task):
-        task = coro  # type: ignore[assignment]
-    else:
-        task = asyncio.ensure_future(coro)
-    try:
-        while True:
-            if is_stop_requested(engine):
-                task.cancel()
-                try:
-                    await task
-                except (asyncio.CancelledError, Exception):
-                    pass
-                raise RunStopped
-            if deadline_monotonic is not None and (
-                time.monotonic() >= deadline_monotonic
-            ):
-                task.cancel()
-                try:
-                    await task
-                except (asyncio.CancelledError, Exception):
-                    pass
-                raise TimeoutError
-            if task.done():
-                # Re-check stop before accepting a result that landed
-                # concurrently with the request (stop wins over found).
-                if is_stop_requested(engine):
-                    try:
-                        task.result()
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    raise RunStopped
-                return task.result()
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(task), timeout=step
-                )
-            except asyncio.TimeoutError:
-                continue
+        return await _poll_supervised(task, engine, _coerce_step(slice_s),
+                                      deadline_monotonic)
     except asyncio.CancelledError:
         # External cancellation: cancel + await the inner task, then propagate.
         if not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+            await _cancel_and_drain(task)
         raise

@@ -406,28 +406,40 @@ async def type_search(cdp: CDPClient, text: str,
     return await _run_type_strategies(cdp, sel, text, 0, report, "search")
 
 
-async def click_send(cdp: CDPClient, report: Optional[Callable] = None) -> bool:
-    """Click the send button (submit type, with 'send' icon fallback)."""
-    _rep(report, f"🔍 Searching send button: selector '{SEND_SELECTOR}'", "info")
+async def _probe_send_button(cdp: CDPClient, report) -> Optional[dict]:
+    """Probe the submit-type send button; None on probe exception."""
     try:
-        raw = await cdp.evaluate(build_probe(selector=SEND_SELECTOR, click=True,
-                                             click_root=True))
-        res = json.loads(raw) if raw else None
+        raw = await cdp.evaluate(build_probe(selector=SEND_SELECTOR,
+                                             click=True, click_root=True))
+        return json.loads(raw) if raw else None
     except Exception as exc:
         _rep(report, f"❌ Probe error: {exc}", "error")
-        res = None
-    if res and res.get("found") and res.get("clicked"):
-        _rep(report, f"✅ Send button found — clickable: yes — clicked ✔", "success")
-        log.info("Send button clicked")
-        return True
+        return None
+
+
+def _send_probe_miss(report, res: Optional[dict]) -> None:
+    """Why the primary selector did not land (→ the icon fallback)."""
     if res and res.get("found"):
         _rep(report, "⚠ Send button found but NOT clickable "
                      "(hidden or disabled) — trying icon fallback", "warn")
     else:
         _rep(report, "❌ Failed to find element: send button "
-                     f"'{SEND_SELECTOR}' — trying mat-icon 'send' fallback", "warn")
-    # Fallback: mat-icon 'send' inside a button
-    _rep(report, "🔍 Fallback search: mat-icon 'send'", "info")
+                     f"'{SEND_SELECTOR}' — trying mat-icon 'send' fallback",
+             "warn")
+
+
+def _icon_probe_miss(report, res2: dict) -> None:
+    """Why the icon fallback failed (strings pinned)."""
+    if res2.get("found"):
+        _rep(report, "⚠ Send icon found but its button is NOT clickable "
+                     "(hidden/disabled)", "error")
+    else:
+        _rep(report, f"❌ Failed to find element: no mat-icon 'send' in "
+                     f"{int(res2.get('total', 0))} icon(s) on page", "error")
+
+
+async def _click_send_via_icon(cdp: CDPClient, report) -> bool:
+    """Fallback: mat-icon 'send' inside a button."""
     try:
         raw2 = await cdp.evaluate(_SEND_ICON_JS)
         res2 = json.loads(raw2) if raw2 else None
@@ -442,13 +454,25 @@ async def click_send(cdp: CDPClient, report: Optional[Callable] = None) -> bool:
         _rep(report, f"❌ Send icon probe error: {res2['error']}", "error")
         return False
     if res2.get("clicked"):
-        _rep(report, "✅ Send icon found — clickable: yes — clicked ✔", "success")
+        _rep(report, "✅ Send icon found — clickable: yes — clicked ✔",
+             "success")
         log.info("Send button clicked via icon fallback")
         return True
-    if res2.get("found"):
-        _rep(report, "⚠ Send icon found but its button is NOT clickable "
-                     "(hidden/disabled)", "error")
-    else:
-        _rep(report, f"❌ Failed to find element: no mat-icon 'send' in "
-                     f"{int(res2.get('total', 0))} icon(s) on page", "error")
+    _icon_probe_miss(report, res2)
     return False
+
+
+async def click_send(cdp: CDPClient, report: Optional[Callable] = None) -> bool:
+    """Click the send button (submit type, with 'send' icon fallback)."""
+    _rep(report, f"🔍 Searching send button: selector '{SEND_SELECTOR}'",
+         "info")
+    res = await _probe_send_button(cdp, report)
+    if res and res.get("found") and res.get("clicked"):
+        _rep(report, f"✅ Send button found — clickable: yes — clicked ✔",
+             "success")
+        log.info("Send button clicked")
+        return True
+    _send_probe_miss(report, res)
+    # Fallback: mat-icon 'send' inside a button
+    _rep(report, "🔍 Fallback search: mat-icon 'send'", "info")
+    return await _click_send_via_icon(cdp, report)

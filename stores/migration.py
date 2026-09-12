@@ -36,75 +36,84 @@ def _store_files_present(config_dir: str) -> bool:
                for n in names)
 
 
-def migrate_legacy_config(legacy_path: str, config_dir: str) -> bool:
-    """Split `legacy_path` into the seven store files under `config_dir`.
-
-    Returns True when the legacy file was consumed (renamed away).
-    """
+def _read_legacy_dict(legacy_path: str, config_dir: str) -> dict | None:
+    """The legacy payload, or None on every "start fresh" path."""
     if not legacy_path or not os.path.exists(legacy_path):
-        return False
+        return None
     if _store_files_present(config_dir):
-        return False              # already migrated (or user-provided)
+        return None              # already migrated (or user-provided)
     try:
         with open(legacy_path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
     except (json.JSONDecodeError, OSError) as exc:
         log.warning("legacy config %s unreadable (%s) — starting fresh",
                     legacy_path, exc)
-        return False
+        return None
     if not isinstance(data, dict):
         log.warning("legacy config %s is not an object — starting fresh",
                     legacy_path)
-        return False
+        return None
+    return data
 
-    os.makedirs(config_dir, exist_ok=True)
-    state = data.get("state") if isinstance(data.get("state"), dict) else {}
 
-    # 1 — settings: every dict section nobody else claims
-    settings = {key: value for key, value in data.items()
-                if key not in CLAIMED_SECTIONS}
-    save_json(os.path.join(config_dir, "settings.json"), settings)
-
-    # 2 — presets
-    presets = {
-        "stack_presets": data.get("stack_presets")
-        if isinstance(data.get("stack_presets"), dict) else {},
-        "template_presets": data.get("template_presets")
-        if isinstance(data.get("template_presets"), dict) else {},
-    }
-    save_json(os.path.join(config_dir, "presets.json"), presets)
-
-    # 3 — bookmarks
-    bookmarks = (data.get("url_presets")
-                 if isinstance(data.get("url_presets"), list) else [])
-    save_json(os.path.join(config_dir, "bookmarks.json"), bookmarks)
-
-    # 4 — custom blocks
-    blocks = (data.get("custom_blocks")
-              if isinstance(data.get("custom_blocks"), list) else [])
-    save_json(os.path.join(config_dir, "blocks.json"), blocks)
-
-    # 5 — labels (legacy config-backed section; live labels live in the
-    #     world DB since the unified-DB redesign — this file is the
-    #     migration source and the offline fallback)
+def _section_payloads(data: dict) -> dict:
+    """Files fed from top-level sections (1–5 of the split)."""
     labels = data.get("labels")
-    save_json(os.path.join(config_dir, "labels.json"),
-              labels if isinstance(labels, dict) else {})
+    return {
+        # 1 — settings: every dict section nobody else claims
+        "settings.json": {key: value for key, value in data.items()
+                          if key not in CLAIMED_SECTIONS},
+        # 2 — presets
+        "presets.json": {
+            "stack_presets": data.get("stack_presets")
+            if isinstance(data.get("stack_presets"), dict) else {},
+            "template_presets": data.get("template_presets")
+            if isinstance(data.get("template_presets"), dict) else {},
+        },
+        # 3 — bookmarks
+        "bookmarks.json": (data.get("url_presets")
+                           if isinstance(data.get("url_presets"), list)
+                           else []),
+        # 4 — custom blocks
+        "blocks.json": (data.get("custom_blocks")
+                        if isinstance(data.get("custom_blocks"), list)
+                        else []),
+        # 5 — labels (legacy config-backed section; live labels live in the
+        #     world DB since the unified-DB redesign — this file is the
+        #     migration source and the offline fallback)
+        "labels.json": labels if isinstance(labels, dict) else {},
+    }
 
-    # 6 — session state (everything except the undo timeline)
-    session = {key: value for key, value in state.items()
-               if key not in ("undo_history", "undo_history_index")}
-    save_json(os.path.join(config_dir, "session.json"), session)
 
-    # 7 — the undo timeline
-    undo = {
+def _undo_payload(state: dict) -> dict:
+    """The undo timeline as it must land in undo.json (coerced)."""
+    return {
         "history": state.get("undo_history")
         if isinstance(state.get("undo_history"), list) else [],
         "index": state.get("undo_history_index", -1)
         if isinstance(state.get("undo_history_index"), int) else -1,
     }
-    save_json(os.path.join(config_dir, "undo.json"), undo)
 
+
+def _state_payloads(data: dict) -> dict:
+    """Files fed from the `state` section (6–7 of the split)."""
+    state = data.get("state") if isinstance(data.get("state"), dict) else {}
+    # 6 — session state (everything except the undo timeline)
+    session = {key: value for key, value in state.items()
+               if key not in ("undo_history", "undo_history_index")}
+    # 7 — the undo timeline
+    return {"session.json": session, "undo.json": _undo_payload(state)}
+
+
+def _write_store_files(config_dir: str, files: dict) -> None:
+    """Atomic-write every split file, in the payload dict's order."""
+    os.makedirs(config_dir, exist_ok=True)
+    for name, payload in files.items():
+        save_json(os.path.join(config_dir, name), payload)
+
+
+def _archive_legacy(legacy_path: str) -> None:
+    """Rename the consumed legacy file next to config/ (never delete it)."""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     archived = f"{legacy_path}.migrated-{stamp}"
     try:
@@ -114,4 +123,17 @@ def migrate_legacy_config(legacy_path: str, config_dir: str) -> bool:
                     "next to config/ and is ignored from now on", exc)
     log.info("config.json split into config/ (original archived as %s)",
              os.path.basename(archived))
+
+
+def migrate_legacy_config(legacy_path: str, config_dir: str) -> bool:
+    """Split `legacy_path` into the seven store files under `config_dir`.
+
+    Returns True when the legacy file was consumed (renamed away).
+    """
+    data = _read_legacy_dict(legacy_path, config_dir)
+    if data is None:
+        return False
+    _write_store_files(config_dir,
+                       _section_payloads(data) | _state_payloads(data))
+    _archive_legacy(legacy_path)
     return True

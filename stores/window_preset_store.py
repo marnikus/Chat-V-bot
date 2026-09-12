@@ -30,13 +30,7 @@ class WindowPresetStore(JsonFileStore):
         else:
             raw_path = cls.DEFAULT_FILE
         key = os.path.abspath(raw_path)
-        cached = cls._by_path.get(key)
-        if cached is not None:
-            return cached
-        instance = super().__new__(cls)
-        instance._cache_key = key
-        cls._by_path[key] = instance
-        return instance
+        return cls._instance_for(key)
 
     def __init__(self, config: Any = None, path: Optional[str] = None):
         if getattr(self, "_initialized", False):

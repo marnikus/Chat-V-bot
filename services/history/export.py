@@ -54,23 +54,24 @@ class HistoryExportService:
         return self.__exporter
 
     # ── lifecycle ────────────────────────────────────────────────
-    async def init(self):
-        await self.db.init()
-        await self.migrate_install()
-        await self.load_app_settings()
-        self._apply_world_media_dir()
+    async def _load_labels_once(self) -> None:
+        """Populate the label store from this world (fail-open, logged)."""
         if self._labels is not None:
             try:
                 await self._labels.load_from_db(self.db)
             except Exception as exc:                   # noqa: BLE001
                 log.warning("label load from %s failed: %s", self.db.path,
                             exc)
-        await self.load_gaze()
+
+    def _ensure_media_dir(self) -> None:
         try:
             import os
             os.makedirs(self.world_media_dir(), exist_ok=True)
         except OSError as exc:
             log.warning("media cache folder unavailable: %s", exc)
+
+    async def _migrate_media(self) -> None:
+        """Fold the old flat cache into the per-person tree (fail-open)."""
         try:
             moved = await self.media.migrate_layout()
             retried = await self.media.retry_failed_uncached()
@@ -82,7 +83,9 @@ class HistoryExportService:
                          "downloader", retried)
         except Exception as exc:                       # noqa: BLE001
             log.warning("media layout migration skipped: %s", exc)
-        await self._install_push_binding()
+
+    def _wire_cdp_signals(self) -> None:
+        """Rebind-on-connect + disconnect hook, when the page exposes them."""
         connected = getattr(self.cdp, "connected", None)
         disconnected = getattr(self.cdp, "disconnected", None)
         if connected is not None and hasattr(connected, "connect"):
@@ -90,6 +93,18 @@ class HistoryExportService:
                 lambda: asyncio.ensure_future(self._rebind()))
         if disconnected is not None and hasattr(disconnected, "connect"):
             disconnected.connect(self._on_disconnected)
+
+    async def init(self):
+        await self.db.init()
+        await self.migrate_install()
+        await self.load_app_settings()
+        self._apply_world_media_dir()
+        await self._load_labels_once()
+        await self.load_gaze()
+        self._ensure_media_dir()
+        await self._migrate_media()
+        await self._install_push_binding()
+        self._wire_cdp_signals()
         log.info("Message archive ready: %s (fts=%s, world=%s)", self.db.path,
                  self.db.fts_enabled, self.world_media_dir())
         return self

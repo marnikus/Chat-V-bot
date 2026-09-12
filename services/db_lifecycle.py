@@ -32,6 +32,20 @@ log = logging.getLogger("chatbot")
 _GLOBAL_LOCKS: dict[str, asyncio.Lock] = {}
 
 
+def _copy_backup_trio(source: str, destination: str):
+    """Copy db+wal+shm into place beside the world's path; err-dict on failure."""
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(destination)) or ".",
+                    exist_ok=True)
+        for suffix in SUFFIXES:
+            if not os.path.exists(source + suffix):
+                continue
+            shutil.copyfile(source + suffix, destination + suffix)
+    except OSError as exc:
+        return {"ok": False, "error": str(exc)}
+    return None
+
+
 class DbLifecycle:
     """Create / load / delete / clean / restore world database files."""
 
@@ -243,27 +257,29 @@ class DbLifecycle:
             return {"ok": False, "error": "the backup is gone"}
         destination = self._registry.resolve(target) \
             or self._registry.active_path()
-        active = (os.path.abspath(destination) ==
-                  os.path.abspath(self._registry.active_path()))
-        if active and self._service is not None:
-            try:
-                await self._service.detach_db()
-            except Exception as exc:                   # noqa: BLE001
-                return {"ok": False, "error": str(exc)}
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(destination)) or ".",
-                        exist_ok=True)
-            for suffix in SUFFIXES:
-                if not os.path.exists(source + suffix):
-                    continue
-                shutil.copyfile(source + suffix, destination + suffix)
-        except OSError as exc:
-            return {"ok": False, "error": str(exc)}
+        err = await self._detach_if_active(destination)
+        if err is not None:
+            return err
+        err = _copy_backup_trio(source, destination)
+        if err is not None:
+            return err
         if self._service is not None:
             await self._service.switch_db(destination)
         self._persist_path(destination)
         self._registry._remember(destination)
         return {"ok": True, "path": destination, "backup": source}
+
+    async def _detach_if_active(self, destination: str):
+        """Detach the live world when the restore target IS it; err-dict on failure."""
+        active = (os.path.abspath(destination) ==
+                  os.path.abspath(self._registry.active_path()))
+        if not (active and self._service is not None):
+            return None
+        try:
+            await self._service.detach_db()
+        except Exception as exc:                       # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+        return None
 
     # ── helpers ──────────────────────────────────────────────────
     def _persist_path(self, path: str) -> None:

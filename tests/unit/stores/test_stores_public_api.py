@@ -252,9 +252,13 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # zero. The invariant this pins is "the stores refactor must not
         # force another area to edit an import" — bump this number only when
         # another area legitimately grows the surface.
-        self.assertEqual(count, 37,
+        # 2026-09-11: +1 for backend/preset_store.py, a RULE 16 §16.0
+        # re-export compatibility facade (`from stores.preset_store import
+        # PresetStore`) that arrived with merge f82007c — a facade, not an
+        # area being forced to edit an import.
+        self.assertEqual(count, 38,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 37)")
+                         "import in another area (integrated baseline: 38)")
 
 
 if __name__ == "__main__":

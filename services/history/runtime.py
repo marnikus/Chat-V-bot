@@ -147,6 +147,20 @@ class WorldSwitcher:
         parked = getattr(host, "_detached_running", None) \
             or await host._stop_collector()
         host._detached_running = None
+        await self._teardown_world()
+        try:
+            fresh = await self._open_target(target)
+        except Exception as exc:
+            log.warning("cannot open %s (%s) — reopening %s", target, exc,
+                        previous)
+            await self._rollback_open(previous)
+            host._restart_collector(parked)
+            raise
+        return await self._commit_target(fresh, target, parked)
+
+    async def _teardown_world(self) -> None:
+        """Persist what the old world holds and close its DB."""
+        host = self._host
         try:
             await host.save_gaze()
         except Exception:                              # noqa: BLE001
@@ -154,35 +168,49 @@ class WorldSwitcher:
         await self._flush_labels()
         if host.db.is_open:
             await host.db.close()
+
+    async def _open_target(self, target: str) -> HistoryDB:
+        """Bind memory to `target` and open its fresh DB (raises on failure)."""
+        host = self._host
         fresh = HistoryDB(target,
                           use_fts=bool(host._settings.get("use_fts", True)))
+        if host.memory is not None:
+            await host.memory.switch_db(target)
+        await fresh.init()
+        return fresh
+
+    async def _rollback_open(self, previous: str) -> None:
+        """Re-open the previous world after the target failed; best effort."""
+        host = self._host
+        fallback = HistoryDB(previous, use_fts=bool(
+            host._settings.get("use_fts", True)))
         try:
-            if host.memory is not None:
-                await host.memory.switch_db(target)
-            await fresh.init()
-        except Exception as exc:
-            log.warning("cannot open %s (%s) — reopening %s", target, exc,
-                        previous)
-            fallback = HistoryDB(previous, use_fts=bool(
-                host._settings.get("use_fts", True)))
-            try:
-                await fallback.init()
-                if host.memory is not None:
-                    try:
-                        await host.memory.switch_db(previous)
-                    except Exception as inner:         # noqa: BLE001
-                        log.warning("queue reopen on %s failed: %s",
-                                    previous, inner)
-                self._rebind_db(fallback)
-                try:
-                    await self._load_world_state()
-                except Exception as inner:             # noqa: BLE001
-                    log.warning("reloading previous world state failed: %s",
-                                inner)
-            except Exception as inner:                 # noqa: BLE001
-                log.error("reopening %s failed too: %s", previous, inner)
-            host._restart_collector(parked)
-            raise
+            await fallback.init()
+            await self._warn_memory_switch(previous)
+            self._rebind_db(fallback)
+            await self._warn_load_world_state()
+        except Exception as inner:                     # noqa: BLE001
+            log.error("reopening %s failed too: %s", previous, inner)
+
+    async def _warn_memory_switch(self, target: str) -> None:
+        if self._host.memory is None:
+            return
+        try:
+            await self._host.memory.switch_db(target)
+        except Exception as inner:                     # noqa: BLE001
+            log.warning("queue reopen on %s failed: %s", target, inner)
+
+    async def _warn_load_world_state(self) -> None:
+        try:
+            await self._load_world_state()
+        except Exception as inner:                     # noqa: BLE001
+            log.warning("reloading previous world state failed: %s",
+                        inner)
+
+    async def _commit_target(self, fresh: HistoryDB, target: str,
+                             parked) -> dict:
+        """Install the new world: rebind, persist settings, restart."""
+        host = self._host
         self._rebind_db(fresh)
         host._settings["db_path"] = target
         if host.config is not None:

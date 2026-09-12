@@ -20,6 +20,23 @@ CREATE INDEX IF NOT EXISTS idx_users_nick ON users(nick);
 CREATE INDEX IF NOT EXISTS idx_users_messaged ON users(messaged);"""
 
 
+def _as_flag(value) -> int:
+    return 1 if value else 0
+
+
+def _replacement_params(row: dict) -> tuple | None:
+    """One snapshot row as the INSERT tuple; None when it has no nick."""
+    nick = str(row.get("nick", "")).strip()
+    if not nick:
+        return None
+    return (nick, str(row.get("gender") or "unknown"),
+            _as_flag(row.get("registered")), _as_flag(row.get("anonymous")),
+            _as_flag(row.get("guest")), row.get("first_seen") or "",
+            row.get("last_seen") or "", _as_flag(row.get("messaged")),
+            int(row.get("message_count") or 0), row.get("last_messaged"),
+            str(row.get("notes") or ""))
+
+
 @dataclass
 class UserRecord:
     nick: str
@@ -219,24 +236,13 @@ class UserMemory:
         count = 0
         try:
             for row in rows or []:
-                nick = str(row.get("nick", "")).strip()
-                if not nick:
+                params = _replacement_params(row)
+                if params is None:
                     continue
                 await self._db.execute(
                     "INSERT INTO users(nick,gender,registered,anonymous,guest,"
                     "first_seen,last_seen,messaged,message_count,last_messaged,"
-                    "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    (nick,
-                     str(row.get("gender") or "unknown"),
-                     1 if row.get("registered") else 0,
-                     1 if row.get("anonymous") else 0,
-                     1 if row.get("guest") else 0,
-                     row.get("first_seen") or "",
-                     row.get("last_seen") or "",
-                     1 if row.get("messaged") else 0,
-                     int(row.get("message_count") or 0),
-                     row.get("last_messaged"),
-                     str(row.get("notes") or "")))
+                    "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)", params)
                 count += 1
         except Exception:
             # All-or-nothing: a garbage row must never leave the table
