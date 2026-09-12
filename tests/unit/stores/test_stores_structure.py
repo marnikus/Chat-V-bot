@@ -75,8 +75,16 @@ class TestFileSize(unittest.TestCase):
 
     def test_the_package_keeps_a_reasonable_file_count(self):
         # B2 splits must stay cohesive: 17 modules before, and a decomposition
-        # that quietly exploded into 40 tiny files is just as unreadable
-        self.assertLessEqual(len(py_files()), 36)
+        # that quietly exploded into 40 tiny files is just as unreadable.
+        #
+        # 36 -> 37 (2026-09-12, DB-undo-restore port): stores/world_lock.py —
+        # the ONE write gate every connection to a world file shares. It is a
+        # leaf (no Qt, no `backend/` or `services/` import) and it belongs
+        # beside the two stores it serializes (`history_db`, `user_memory`),
+        # so this is a new cohesive file, not a decomposition fragment.
+        # RULE 18.3 counts the prefix families as the real modules here:
+        # `history_*` 9, `label_*` 6, `media_*` 4.
+        self.assertLessEqual(len(py_files()), 37)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

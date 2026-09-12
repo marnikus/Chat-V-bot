@@ -1,11 +1,12 @@
 """HistoryExportService — runtime/export mixin (AREA C facade).
 
 The four concerns this mixin used to fold together now live in
-`services/history/runtime.py` (PushBindings, CollectorRuntime,
-WorldSwitcher, HistoryMigration, ChatExporter). Every method name and
-signature here is unchanged — each delegates to its lazily-created
-collaborator, so `HistoryService.__init__` (which deliberately calls no
-`super().__init__`) is untouched and callers see the same surface.
+`services/history/runtime.py` (PushBindings, CollectorRuntime, WorldSwitcher,
+ChatExporter), `migrate.py` (HistoryMigration) and `trash.py` (the
+session-sized trash). Every method name and signature here is unchanged —
+each delegates to its lazily-created collaborator, so
+`HistoryService.__init__` (which deliberately calls no `super().__init__`)
+is untouched and callers see the same surface.
 """
 
 from __future__ import annotations
@@ -13,17 +14,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from services.history.trash import open_world
+
 log = logging.getLogger("chatbot")
-
-
-async def _load_labels(service) -> None:
-    """Load the label store from this world; a failure is not fatal."""
-    if service._labels is None:
-        return
-    try:
-        await service._labels.load_from_db(service.db)
-    except Exception as exc:                           # noqa: BLE001
-        log.warning("label load from %s failed: %s", service.db.path, exc)
 
 
 def _ensure_media_dir(service) -> None:
@@ -92,7 +85,7 @@ class HistoryExportService:
     @property
     def _migrator(self):
         if getattr(self, "__migrator", None) is None:
-            from services.history.runtime import HistoryMigration
+            from services.history.migrate import HistoryMigration
             self.__migrator = HistoryMigration(self)
         return self.__migrator
 
@@ -106,10 +99,13 @@ class HistoryExportService:
     # ── lifecycle ────────────────────────────────────────────────
     async def init(self):
         await self.db.init()
+        # Ctrl+Z reaches back only as far as this session: a world a closed
+        # run left behind opens without its trash (trash.py, design §2.4)
+        await open_world(self)
         await self.migrate_install()
         await self.load_app_settings()
         self._apply_world_media_dir()
-        await _load_labels(self)
+        await self._worlds.load_labels()
         await self.load_gaze()
         _ensure_media_dir(self)
         await _migrate_media_layout(self)

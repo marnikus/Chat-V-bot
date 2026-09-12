@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**78 documents in 11 groups.**
+**82 documents in 15 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -24,6 +24,10 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-10-quality-gates/`](#2026-09-10-quality-gates) | 2 | Where the RULE 16 thresholds came from, and how one feature was measured against them. |
 | [`2026-09-10-history-push-and-sort/`](#2026-09-10-history-push-and-sort) | 3 | The `__cvbPush` lifecycle hardening and sortable columns in the Full User Database. |
 | [`2026-09-10-agent-rules-v1/`](#2026-09-10-agent-rules-v1) | 2 | The two rules files that [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) replaced. Kept for history — **do not follow these; follow the current file.** |
+| [`2026-09-11-cc-tail/`](#2026-09-11-cc-tail) | 1 | The complexity tail the quality gates left behind: every over-gate function in the tree decomposed to CC ≤ 10, measured phase by phase. |
+| [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
+| [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 1's worked visual-click examples. |
+| [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
 
 ---
 
@@ -202,3 +206,51 @@ The two rules files that [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.
 - [`AGENT_RULES.md`](2026-09-10-agent-rules-v1/AGENT_RULES.md) — Code generation rules for this repository
 - [`AGENT_RULES_CODE_QUALITY.md`](2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md) — RULE 16 — Code quality gates (mandatory for every agent change)
 
+---
+
+## 2026-09-11-cc-tail
+
+The quality gates were green on *new* code while a tail of legacy functions stayed over them.
+This folder holds the round that closed the tail: CC > 10 went from 63 functions to 0, phase by
+phase, with the measured table at the end.
+
+*1 doc.*
+
+- [`CC_TAIL_FIXES_DESIGN_2026-09-11.md`](2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) — Every over-gate function decomposed (CC, cognitive, nesting, LOC), the frozen exemptions, and the measured end state
+
+---
+
+## 2026-09-11-rules-appendices
+
+[`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) has a reading budget (§18.4): an agent
+must be able to load all the rules in one pass. When a rule's worked examples outgrew that budget
+they moved here, and the rule keeps the norm plus a link.
+
+*1 doc.*
+
+- [`RULE1_VISUAL_CLICK_EXAMPLES.md`](2026-09-11-rules-appendices/RULE1_VISUAL_CLICK_EXAMPLES.md) — RULE 1's worked examples: what the shared visual runner does and why find-and-click goes through it
+
+---
+
+## 2026-09-11-db-undo-restore
+
+Ctrl+Z in the Full User Database window reported success while the person stayed deleted
+(`database is locked` inside a scheduled task), and the DB list never refreshed on its own.
+This folder holds the design for both fixes.
+
+*1 doc.*
+
+- [`DB_UNDO_RESTORE_DESIGN_2026-09-11.md`](2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) — One write gate per world file, an archive command that proves itself, DB-window auto-refresh, instant deletes and the session-sized trash
+
+---
+
+## 2026-09-12-db-undo-restore-port
+
+The write gate and the verified undo above were built on a branch whose history this one does not
+share, so the feature had to be ported by hand onto a tree that had independently been through the
+CC-tail round. This folder records what that port needed — not the feature's reasoning, which is
+the 2026-09-11 doc.
+
+*1 doc.*
+
+- [`PORT_NOTES_2026-09-12.md`](2026-09-12-db-undo-restore-port/PORT_NOTES_2026-09-12.md) — The hand port: four merge conflicts and how each was resolved, the `init()` bug that left a world holding its own write gate, and the re-measured RULE 16 / RULE 18 numbers

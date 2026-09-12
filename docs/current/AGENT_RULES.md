@@ -563,7 +563,7 @@ reference implementation of that count is the AST walker in
   including every `except` branch. Most new code should land here.
 * **Over 20** usually means a second responsibility is hiding inside the first.
   How to get back down — and in which order — is RULE 19.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1 — **57.7%** of 1 668 functions are in band (median 6 lines).
+* *Measured:* 2026-09-12, after the DB-undo-restore port — **63.6%** of 1 997 functions are in band (median 7 lines, mean 9.7, p90 21). The 2026-09-11 snapshot is `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1; today's reproduction is in the port notes.
 
 ### 18.2 Files — 150–300 lines
 
@@ -578,9 +578,9 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §2 — 141 files, median **130** lines, and the **9 files still
-  over 500** are listed there. They are known debt (§16.5 landmines): do not grow
-  them, extract from them when you next touch them.
+* *Measured:* 2026-09-12 — 154 files, median **142** lines, **10 files still over
+  500** (today's ten are listed in the port notes; the 2026-09-11 nine are in report
+  §2). Known debt (§16.5 landmines): do not grow them, extract when you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -591,9 +591,9 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §3 — `core/` 5, `bridge/` 12, `services/` 16 in band;
-  `stores/` 35, `backend/` 30, `actions/` 23 over it, each held together by prefix
-  families. When a family grows again, promote it to a sub-package.
+* *Measured:* 2026-09-12 — `core/` 6, `app/` 4, `bridge/` 14, `services/history/` 7,
+  `services/run/` 10 in band; `services/` 21, `stores/` 37, `backend/` 30, `actions/` 23
+  over it, held by prefix families (`history_*` 9, `label_*` 6, `undo_*` 4, `media_*` 4).
 
 ### 18.4 Context files — 60–200 lines
 

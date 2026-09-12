@@ -1,6 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════
    history-db.js — the Full User Database window
 
+   ideal-size: 414 lines reason=this is the ONE module behind the window's
+   DOM (list, sort headers, paging, live refresh, per-row actions and the
+   trash button); splitting it would put one window's behaviour in two files
+   and break the `HistoryDb.<method>` surface the Node harness loads.
+
    Every person the archive has ever seen, merged by nick (one row per
    person, never a duplicate), loaded lazily as the user scrolls, with a
    search over nicks and a live message-count. Clicking a row opens that
@@ -146,12 +151,14 @@ const HistoryDb = {
     });
   },
 
-  reload() {
+  reload(options) {
     this.rows = [];
     this.hasMore = true;
     this.loading = false;
-    // A new order (or a new query) makes the old scroll position meaningless.
-    if (this._els.list) this._els.list.scrollTop = 0;
+    // A live append must not throw the reader back to the top of the table;
+    // a new order or a new query makes the old position meaningless.
+    if (this._els.list && !(options && options.keepScroll))
+      this._els.list.scrollTop = 0;
     this._request(0);
     this._requestStats();
   },
@@ -207,7 +214,20 @@ const HistoryDb = {
   },
 
   onChanged() {
+    clearTimeout(this._liveTimer);       // a named change beats the batch
     this.reload();
+  },
+
+  /** A change heard through the bridge (someone was collected, a label was
+   *  edited): refresh, but not once per message — the collector writes in
+   *  chunks. The scroll position is kept so a live chat does not jump. */
+  liveChanged(reason) {
+    this._liveReason = reason || '';
+    clearTimeout(this._liveTimer);
+    this._liveTimer = setTimeout(() => {
+      this._liveReason = '';
+      if (this._els.body) this.reload({ keepScroll: true });
+    }, 400);
   },
 
   _onScroll() {
@@ -217,7 +237,11 @@ const HistoryDb = {
     if (remaining < 120) this._request(this.rows.length);
   },
 
-  /** Remove the person AND their whole history (one undoable step). */
+  /** Remove the person AND their whole history — one undoable step.
+   *
+   *  No confirmation (BUG fix 2026-09-11): Ctrl+Z restores both halves, and
+   *  the hidden rows are kept until this session ends, so the click can be
+   *  taken back without a dialog in the way. */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
     App.bridge.history_delete_person(nick, false);
