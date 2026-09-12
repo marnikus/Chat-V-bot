@@ -75,8 +75,9 @@ class TestFileSize(unittest.TestCase):
 
     def test_the_package_keeps_a_reasonable_file_count(self):
         # B2 splits must stay cohesive: 17 modules before, and a decomposition
-        # that quietly exploded into 40 tiny files is just as unreadable
-        self.assertLessEqual(len(py_files()), 36)
+        # that quietly exploded into 40 tiny files is just as unreadable.
+        # 37 = 36 + world_lock.py (the DB-undo-restore write gate, 2026-09-11).
+        self.assertLessEqual(len(py_files()), 37)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

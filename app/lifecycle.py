@@ -30,9 +30,22 @@ class ApplicationLifecycle:
             await self.bridge.sync_world_state()
         except Exception as exc:
             log.warning("world state sync failed: %s", exc)
+        await self._announce_world_ready()
         log.info("Backend ready")
         await asyncio.sleep(0.5)
         self.bridge.get_tabs()
+
+    async def _announce_world_ready(self) -> None:
+        """The world is open: tell the windows, so they load by themselves.
+
+        The page boots while this method is still opening the world, so its
+        first requests for the people list / the database window came back
+        empty and stayed empty until the user pressed refresh (2026-09-11).
+        """
+        try:
+            await self.bridge.announce_world_ready()
+        except Exception as exc:                        # noqa: BLE001
+            log.warning("world ready broadcast failed: %s", exc)
 
     async def shutdown(self) -> None:
         if self._shutdown_started:

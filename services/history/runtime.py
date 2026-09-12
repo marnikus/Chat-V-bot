@@ -8,9 +8,12 @@ mutates its attributes exactly where the old methods did:
                       _on_disconnected / _on_binding)
     CollectorRuntime  start / _stop_collector / _restart_collector
     WorldSwitcher     detach_db / switch_db (fail closed) + the state reload
-    HistoryMigration  migrate_install (queue merge, label import, recent
-                      prune, undo re-home)
+                      (which also sweeps a closed run's trash — trash.py)
     ChatExporter      export_chat (json / text / csv)
+
+HistoryMigration (the one-time install migration) moved to
+`services/history/migrate.py` when this file reached the RULE 18 300-line
+mark: one file, one responsibility.
 
 `HistoryExportService` keeps every method name as a one-line delegate to a
 lazily-created collaborator (memoised property) — no `__init__` change, so
@@ -25,6 +28,7 @@ import json
 import logging
 import os
 
+from services.history.trash import open_world
 from stores.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
@@ -119,17 +123,24 @@ class WorldSwitcher:
             log.warning("label flush failed: %s", exc)
 
     async def _load_world_state(self) -> None:
+        """Reload what follows the world file; a switched-in world sweeps first."""
         host = self._host
+        await open_world(host)
         await host.load_app_settings()
         host._apply_world_media_dir()
         await self._flush_labels()
-        if host._labels is not None:
-            try:
-                await host._labels.load_from_db(host.db)
-            except Exception as exc:                   # noqa: BLE001
-                log.warning("label load from %s failed: %s", host.db.path,
-                            exc)
+        await self.load_labels()
         await host.load_gaze()
+
+    async def load_labels(self) -> None:
+        """Load this world's labels; a broken store must not block the open."""
+        host = self._host
+        if host._labels is None:
+            return
+        try:
+            await host._labels.load_from_db(host.db)
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("label load from %s failed: %s", host.db.path, exc)
 
     async def detach_db(self) -> bool:
         host = self._host
@@ -226,80 +237,6 @@ class WorldSwitcher:
         log.info("Message archive switched to %s (world restart complete)",
                  target)
         return host.settings()
-
-
-class HistoryMigration:
-    """The one-time unified-DB install migration."""
-
-    def __init__(self, host):
-        self._host = host
-
-    async def run(self) -> dict:
-        """Merge a legacy queue / labels / prune ghosts / re-home undo."""
-        host = self._host
-        report = {"queue_merged": False, "labels_imported": False,
-                  "recent_pruned": False, "undo_rehomed": False}
-        if host.config is None:
-            return report
-        if await self._merge_queue(report):
-            report["queue_merged"] = True
-        await self._import_labels(report)
-        await self._prune_recent(report)
-        await self._rehome_undo(report)
-        if any(report.values()):
-            log.info("unified-DB migration: %s",
-                     ", ".join(k for k, v in report.items() if v))
-        return report
-
-    async def _merge_queue(self, report: dict) -> bool:
-        host = self._host
-        legacy = str(getattr(host.memory, "db_path", "") or "") \
-            if host.memory is not None else ""
-        if not (legacy and os.path.exists(legacy)
-                and os.path.abspath(legacy) != os.path.abspath(host.db.path)):
-            return False
-        try:
-            await host._merge_legacy_queue(legacy)
-            return True
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("queue merge from %s failed: %s", legacy, exc)
-            return False
-
-    async def _import_labels(self, report: dict) -> None:
-        host = self._host
-        if host._labels is None or \
-                await host.get_meta_flag("labels_migrated_from_config"):
-            return
-        try:
-            if await host._import_config_labels():
-                report["labels_imported"] = True
-                await host.set_meta_flag("labels_migrated_from_config")
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("label import from config failed: %s", exc)
-
-    async def _prune_recent(self, report: dict) -> None:
-        host = self._host
-        try:
-            raw = host.config.get_state("db_recent", [])
-            if isinstance(raw, list):
-                kept = [p for p in raw
-                        if isinstance(p, str) and p and os.path.exists(p)]
-                if len(kept) != len(raw):
-                    host.config.set_state(db_recent=kept[:12])
-                    report["recent_pruned"] = True
-        except Exception as exc:                       # noqa: BLE001
-            log.debug("db_recent prune failed: %s", exc)
-
-    async def _rehome_undo(self, report: dict) -> None:
-        host = self._host
-        if await host.get_meta_flag("undo_migrated_v6"):
-            return
-        try:
-            if await host._rehome_undo_entries():
-                report["undo_rehomed"] = True
-                await host.set_meta_flag("undo_migrated_v6")
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("undo re-home failed: %s", exc)
 
 
 class ChatExporter:

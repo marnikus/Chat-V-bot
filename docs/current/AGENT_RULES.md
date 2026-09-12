@@ -562,8 +562,12 @@ reference implementation of that count is the AST walker in
 * **4–20** is the band where a reader holds the whole body in mind at once,
   including every `except` branch. Most new code should land here.
 * **Over 20** usually means a second responsibility is hiding inside the first.
-  How to get back down — and in which order — is RULE 19.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1 — **57.7%** of 1 668 functions are in band (median 6 lines).
+* **Over 20** usually means a second responsibility is hiding inside the first. How to get back down — and in which order — is RULE 19.
+  Extract by responsibility, using names that already exist in the domain —
+  the extractions this repo actually made: `_gate_before_cycle`,
+  `_announce_stopped`, `_try_prepare_cycle_queue`, `choose_cycle_mode`,
+  `inspect_stack`.
+* *Measured (2026-09-12):* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1 — **64.2%** of 1 992 functions are in band (median 7 lines).
 
 ### 18.2 Files — 150–300 lines
 
@@ -578,7 +582,7 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §2 — 141 files, median **130** lines, and the **9 files still
+* *Measured (2026-09-12):* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §2 — 154 files, median **145** lines, and the **10 files still
   over 500** are listed there. They are known debt (§16.5 landmines): do not grow
   them, extract from them when you next touch them.
 
@@ -591,9 +595,9 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §3 — `core/` 5, `bridge/` 12, `services/` 16 in band;
-  `stores/` 35, `backend/` 30, `actions/` 23 over it, each held together by prefix
-  families. When a family grows again, promote it to a sub-package.
+* *Measured (2026-09-12):* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §3 — `core/` 6, `bridge/` 14 in band;
+  `stores/` 37, `backend/` 30, `actions/` 23, `services/` 21 over it, each held
+  together by prefix families. When a family grows again, promote it to a sub-package.
 
 ### 18.4 Context files — 60–200 lines
 

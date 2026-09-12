@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-10 (this checkout) |
-| Test suite | `2545 passed, 3 skipped, 1 deselected, 1 xfailed, 771 subtests passed` + 22 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **90.44%** · branch **84.38%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-11 (this checkout) |
+| Test suite | `2614 passed, 3 skipped, 1 deselected, 1 xfailed, 774 subtests passed` + 23 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **89.74%** · branch **85.06%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -51,10 +51,12 @@ collector** archives whatever private conversation is on screen.
 | **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
 | **Passive collector** | Heartbeat probe per tick; archives only when the conversation changed; never blocks the UI; throttled (not paused) during a run | `services/collector_service.py`, `services/collector_tick.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
-| **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person | `stores/history_*`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
+| **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person; every writer of the world file serializes on one gate | `stores/history_*`, `stores/world_lock.py`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
 | **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
 | **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/test_person_labels.py`, `tests/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
-| **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z` | `services/undo_service.py`, `services/undo_support.py`, `stores/undo_store.py` | `tests/test_people_undo.py`, `tests/test_archive_delete_undo.py`, `tests/integration/services/test_undo_support_contract.py` |
+| **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z`; an archive command is a task that reads the world back before it reports, and a refusal is an error, never a success | `services/undo_service.py`, `services/undo_archive.py`, `services/undo_timeline.py` (`TimelineCommit`), `services/undo_support.py`, `stores/undo_store.py` | `tests/test_people_undo.py`, `tests/test_archive_delete_undo.py`, `tests/test_world_write_gate.py`, `tests/integration/services/test_undo_support_contract.py` |
+| **Boot / world ready** | The page boots before the world is open, so the backend **announces the live world** once `startup` finished opening it — the People list, the Full User Database, the DB Connection window and the label pills load by themselves. No refresh button is ever needed, at boot or after a switch | `app/lifecycle.py` (`startup` → `_announce_world_ready`), `services/world_events.py`, `bridge/router.py` (`announce_world_ready`) | `tests/unit/app/test_app_lifecycle.py`, `tests/unit/services/test_world_events.py`, `tests/unit/bridge_safety/test_world_ready.py`, `tests/test_userdb_refresh.js` |
+| **Delete safety (DB window)** | Removing a person or a chat happens **at once — no dialog**; the delete is soft and Ctrl+Z restores both halves. The trash is **session-sized**: it is erased when the step leaves the undo history (cap / redo-branch truncation) or when a new app run opens the world | `ui/js/history-db.js`, `services/history/trash.py` (`begin_session`, `open_world`, `purge_tokens`), `services/undo_timeline.py` | `tests/test_userdb_refresh.js`, `tests/test_world_write_gate.py`, `tests/test_history_repo_lifecycle.py` |
 | **Grid layout** | Any window in any cell; sashes draggable; layout validated before it is stored | `services/layout_service.py`, `bridge/layout_bridge.py`, `ui/js/sash-*.js` | `tests/test_grid_persistence.py`, `tests/integration/services/test_services_layout.py`, `tests/test_sash_webengine.py` |
 | **Database worlds** | One `.db` file = one complete world; create / load / switch / clean / **permanent delete** | `services/db_service.py`, `services/db_lifecycle.py`, `services/db_deletion*.py` | `tests/test_db_manager*.py`, `tests/test_db_unified_world.py`, `tests/integration/safety_deletion/` |
 | **Logging** | UI log console + file log + JSONL run trace | `backend/logger.py`, `ui/js/log-console.js`, `services/service_log.py` | `tests/unit/backend/test_logger_setup.py` |
@@ -166,6 +168,10 @@ Each one is enforced in code and pinned by a test. Rule numbers refer to
 | **I-14** | Media bytes are filed under the conversation they belong to, never in a global pile | `stores/media_layout.py` (RULE 15) |
 | **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion_flow.py`, `services/db_lifecycle.py` |
 | **I-16** | No `os.unlink` happens before scan + plan + switch + detach + revalidate | `services/db_deletion_flow.py` |
+| **I-17** | One writer per world file: the People queue (`UserMemory`) and the archive (`HistoryDB`) take the SAME gate from their first write until the transaction ends, so no interleaving can fail with `database is locked`; reads never wait, and the wait is fail-open after 15 s rather than unbounded | `stores/world_lock.py` (`WorldGate` / `WriteTurn` / `world_write`), `stores/history_db.py`, `stores/user_memory.py` |
+| **I-18** | An archive undo/redo reports only what the database now shows: both halves (people list + rows) are applied, the result is read back, and a refusal logs an ERROR, restores the list half, keeps the timeline entry retryable and emits `userdb_changed(failed)` — “archive restored” can no longer appear over a still-deleted person | `services/undo_archive.py`, `services/undo_service.py`, `bridge/history_bridge.py` |
+| **I-19** | Deleted data lives exactly as long as the undo step that can restore it: a delete is soft and instant (no confirmation dialog anywhere), and the hidden rows are destroyed the moment the step leaves the timeline (cap / new edit after an undo) or the next app run opens the world (`begin_session` stamps the world with a per-run token; a different token means the trash belongs to a closed session) | `services/history/trash.py`, `services/undo_timeline.py` (`commit` → `purge_tokens`) |
+| **I-20** | An unopened world is never shown as the truth: the backend announces the live world once startup has opened it (and on every switch), and each world-bound window reloads on that announcement — a boot that raced the database can no longer leave an empty list behind a manual refresh | `services/world_events.py` (`announce_world_live`), `app/lifecycle.py`, `bridge/router.py` |
 
 ---
 
@@ -208,8 +214,8 @@ non-destructive).
 | Blocks | `actions/` (23) | The 16 action blocks + `BaseAction`, registry, cancellation |
 | Page-facing | `backend/` (30) | CDP client, DOM probes, chat parser + private gate, chat sync, scroll parser, visual click, media handler; **compatibility shims** for the pre-split names |
 | Wire | `bridge/` (12) | `bridge/router.py` — ONE QObject on the QWebChannel, assembled from nine domain bridges: cdp · stack · people · history · label · db · collector · undo · layout |
-| Orchestration | `services/` (31) | `run/` (engine), `history/`, collector, db lifecycle + deletion, layout, people, undo |
-| Persistence | `stores/` (35) | SQLite world store + schema/repair, JSON stores, labels, media, presets, undo |
+| Orchestration | `services/` (36) | `run/` (engine), `history/` (service + `trash.py` session-sized trash + `migrate.py` install migration), collector, db lifecycle + deletion, layout, people, undo + `undo_archive.py` (verified archive commands) + `undo_timeline.py` (timeline commit) + `world_events.py` (the live-world broadcast) |
+| Persistence | `stores/` (36) | SQLite world store + schema/repair, JSON stores, labels, media, presets, undo, `world_lock.py` (one write gate per world file) |
 | Shell | `app/` (4) + `main.py` | Bootstrap/DI, window, lifecycle |
 | UI | `ui/` (22 JS) | Grid, stack DnD, archive windows, collector panel, labels, db panel, composer, log |
 | Tooling | `tools/` | `tools/metrics/*` audits, `tools/build_stubs.py` (headless Qt stubs) |
@@ -223,11 +229,11 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2545 tests + 771 subtests)
+# Python (2614 tests + 774 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (22 Node harness files)
+# Front-end (23 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)
@@ -250,6 +256,8 @@ export LD_LIBRARY_PATH=/tmp/stublibs
 | `tests/integration/run_safety/` | Stop/pause contracts, cycle event order, cleanup |
 | `tests/integration/services/` | Service-layer contracts (run engine, history, db, collector, undo, layout, people) |
 | `tests/js_harness.js` + `tests/dom_stub.js` | Runs real probe/UI JS against a DOM stub (RULE 8) |
+| `tests/unit/bridge_safety/test_world_ready.py` | The boot broadcast: the real router hands the People window every user of the world and tells the DB window to reload — the regression for “after a restart I had to press refresh” |
+| `tests/test_world_write_gate.py` | The world write gate and the verified archive undo: cross-connection exclusion, fail-open, `world_transaction` commit/rollback, delete → undo → redo, a refused undo, the session-sized trash (a delete is reversible in-session, erased on the next run) |
 
 **Frozen contracts** you must not break casually: the AREA D public-API
 snapshot (`tests/unit/backend/test_backend_api_snapshot.py`), the QWebChannel
@@ -262,11 +270,11 @@ dict, and the collector status strings.
 
 | Metric | Fail line | Measured now |
 |---|---|---|
-| Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
-| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 10, mean CC 3.1, mean cognitive 2.17, max nesting 4, zero functions over gate (2026-09-11 CC round 3) |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **90.44% / 84.38%** |
+| Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.6 LOC (2026-09-12); legacy offenders tracked, not worsened |
+| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 10, mean CC 3.11, mean cognitive 2.16, max nesting 4, zero functions over gate (2026-09-12, post DB-undo-restore port) |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.42%** line (2026-09-12, production) · branch 84.38% (baseline) |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
-| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 6 lines (57.7% in band) · median file 130 lines — RULE 18, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
+| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (64.2% in band) · median file 145 lines — RULE 18, re-measured 2026-09-12 in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
 
 ---
@@ -275,6 +283,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-11 | [CC tail fixes — round 3](../archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) | How the 63-function CC queue went to zero over-gate functions |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |
 | 2026-09-10 | [`_delete_unlocked` decomposition](../archive/2026-09-10-safety-refactor/DELETE_FLOW_EXTRACTION_DESIGN_2026-09-10.md) · [CC tail extraction](../archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md) · [remaining tail](../archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md) | How the worst hotspots were split without changing behaviour |
@@ -297,6 +306,7 @@ dict, and the collector status strings.
 | Why is find-and-click centralised (RED/ORANGE)? | [Visual confirmation](../archive/2026-09-05-grid-scroll-undo/FIND_CLICK_VISUAL_CONFIRMATION_DESIGN_2026-09-05.md) |
 | Why does the collector look like a heartbeat? | [Passive collector](../archive/2026-09-06-collector-and-history/PASSIVE_CHAT_COLLECTOR_DESIGN_2026-09-06.md) + [history bugs it fixed](../archive/2026-09-07-labels-and-collector/MESSAGE_HISTORY_BUGS_DESIGN_2026-09-07.md) |
 | Why does Scroll & Parse work this way (seek mode, backlog guard)? | [Scroll & Parse redesign](../archive/2026-09-05-grid-scroll-undo/SCROLL_PARSE_REDESIGN_2026-09-05.md) + [scroll-only seek](../archive/2026-09-05-grid-scroll-undo/SCROLL_ONLY_SEEK_DESIGN_2026-09-05.md) |
+| Why can an undo no longer claim success it did not get, and why is the world file gated? | [DB undo-restore design](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) |
 | Why one undo timeline instead of per-panel? | [People-list undo history](../archive/2026-09-05-grid-scroll-undo/PEOPLE_LIST_UNDO_HISTORY_DESIGN_2026-09-05.md) + [undo/redo toggle](../archive/2026-09-05-grid-scroll-undo/FEATURE_UNDO_REDO_ENABLE_TOGGLE_DESIGN_2026-09-05.md) |
 | Why the grid behaves like this (autosave, controls, reset)? | [Sash layout](../archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-05.md) + [grid window controls](../archive/2026-09-07-labels-and-collector/GRID_WINDOW_CONTROLS_DESIGN_2026-09-07.md) |
 | Why did media recovery need a root-cause fix? | [Backfill media recovery](../archive/2026-09-07-labels-and-collector/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md) |
