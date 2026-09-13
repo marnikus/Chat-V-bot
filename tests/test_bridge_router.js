@@ -15,16 +15,16 @@ function test(name, fn) {
 }
 function assert(c, m) { if (!c) throw new Error(m || 'assert'); }
 
-function walk(dir, acc) {
+function walk(dir, ext, acc) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) walk(p, acc);
-    else if (ent.name.endsWith('.js')) acc.push(p);
+    if (ent.isDirectory()) walk(p, ext, acc);
+    else if (ent.name.endsWith(ext)) acc.push(p);
   }
   return acc;
 }
 
-const jsFiles = walk(path.join(root, 'ui/js'), []);
+const jsFiles = walk(path.join(root, 'ui/js'), '.js', []);
 const callRe = /\b(?:App\.bridge|bridge)\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 const used = new Set();
 for (const f of jsFiles) {
@@ -33,9 +33,12 @@ for (const f of jsFiles) {
   while ((m = callRe.exec(src))) used.add(m[1]);
 }
 
-const pyDir = path.join(root, 'bridge');
-const pyFiles = fs.readdirSync(pyDir).filter((n) => n.endsWith('.py'))
-  .map((n) => path.join(pyDir, n));
+// Walked, not listed: `bridge/history_bridge.py` and `bridge/stack_bridge.py`
+// became packages (god-class round, step 6), and a flat readdir of `bridge/`
+// silently lost every slot their leaves publish — this contract then reported
+// 30 phantom "UI calls missing on Python". Same walk as the JS side, so a
+// future split cannot hide a slot from it either.
+const pyFiles = walk(path.join(root, 'bridge'), '.py', []);
 const py = pyFiles.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 
 const defined = new Set();
