@@ -111,11 +111,8 @@ def _make_forwarder(bridge_cls: Type[QObject], method_name: str):
 BRIDGE_SPECS: dict[str, tuple] = {}
 
 
-def _build_router_class() -> Type[QObject]:
-    Meta = type(QObject)          # Shiboken.ObjectType
-    ns: dict = {}
-
-    # 1 — signals: one same-named Signal per bridge signal + log_message
+def _register_signals(ns: dict) -> None:
+    """1 — signals: one same-named Signal per bridge signal + log_message."""
     seen_signals: dict[str, list] = {}
     for cls in BRIDGE_CLASSES:
         signals, _slots = _meta_members(cls)
@@ -128,7 +125,9 @@ def _build_router_class() -> Type[QObject]:
             ns[name] = Signal(*types)
     ns["log_message"] = Signal(str, str)      # router-owned (LogMessage)
 
-    # 2 — forwarding slots with identical signatures
+
+def _register_slots(ns: dict) -> None:
+    """2 — forwarding slots with identical signatures."""
     seen_slots: dict[str, list] = {}
     for cls in BRIDGE_CLASSES:
         _signals, slots = _meta_members(cls)
@@ -140,7 +139,9 @@ def _build_router_class() -> Type[QObject]:
             deco = Slot(*types, result=ret) if ret else Slot(*types)
             ns[name] = deco(_make_forwarder(cls, name))
 
-    # 3 — class attributes re-exported for legacy callers (tests)
+
+def _register_legacy_attrs(ns: dict) -> None:
+    """3 — class attributes re-exported for legacy callers (tests)."""
     for attr in ("GRID_VERSION", "WINDOW_IDS", "V1_WINDOW_IDS",
                  "V2_WINDOW_IDS", "V3_WINDOW_IDS", "LEGACY_WINDOW_IDS",
                  "NEW_WINDOW_IDS", "MIN_GRID_SIZE", "_default_grid_tree",
@@ -159,6 +160,15 @@ def _build_router_class() -> Type[QObject]:
     ns["_history_entry"] = staticmethod(UndoService._history_entry)
     ns["_people_row"] = staticmethod(people_row)
 
+
+def _build_router_class() -> Type[QObject]:
+    """Assemble the Router class from the four registration phases (§19.5:
+    a long-and-flat synthesis — one phase, one concept, one function)."""
+    Meta = type(QObject)          # Shiboken.ObjectType
+    ns: dict = {}
+    _register_signals(ns)
+    _register_slots(ns)
+    _register_legacy_attrs(ns)
     # 4 — the hand-written Router surface
     ns.update(_ROUTER_METHODS)
     return Meta("Router", (QObject,), ns)
