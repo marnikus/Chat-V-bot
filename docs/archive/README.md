@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**83 documents in 16 groups.**
+**86 documents in 18 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -29,6 +29,8 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 1's worked visual-click examples. |
 | [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
 | [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 2 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, the `services/db_deletion.py` split that it does not block, and the decomposition of the two god classes the snapshot does not cover — `Collector` and `UndoService`. |
+| [`2026-09-13-round-f/`](#2026-09-13-round-f) | 1 | Round F's parameter-object step (F5): the abandoned `_v2` attempt it replaced, the in-place migration pattern, the 19 migrated signatures, and the seven `stores/` functions a frozen contract blocks. |
+| [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 1 | Round G: the complete post-Round-F tail inventory with fresh measurements, the prioritised G1–G7 step plan, and step G1 — the red suite at HEAD and the `WriteTurn` union fix that closes residual risk F3c. |
 
 ---
 
@@ -270,3 +272,36 @@ packages and counts only symbols a module owns.
 
 - [`ROUND_F_DESIGN_2026-09-12.md`](2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md) — The 500-line tail, the snapshot that freezes half of it, and the six-file split of `services/db_deletion.py` with its measured dependency DAG and rejected dishonest reductions. §8 records F1's executed outcome, including the lesson that a re-export shim is not `mock.patch`-transparent. §9 records step F6 (2026-09-13), the test-only one: the audit's 9 mutation survivors in `backend/history_query.py` reduced to 1 at 158/159 = 99.37%, and the three reasons they survived were not the same problem — four were killed all along by `tests/test_history_query_edges.py`, which the `[mutmut]` job does not select (widening it was measured at 910 reachable mutants instead of 159 and rejected), four sat on a `db.scalar` fallback and an SQL keyword case that no real database can distinguish, and one (`_my_nicks` 7) is provably equivalent and left alive rather than killed by a spy on `json.loads`. §9.3 is the finding worth more than the mutants: mutmut reads any non-zero pytest exit as a kill, so on a machine where `tests/conftest.py` cannot import PySide6 the job reports **159/159 killed, 0 survivors** — a false 100% that `pytest_add_cli_args = --noconftest` now makes impossible, with `mutants/` gitignored so the sandbox cannot be committed either. §9.7 records the reapplication to `arena/01a09227-chat-v-bot`, where the whole step was re-measured in a sandbox that *does* import PySide6 rather than trusted: the job reproduces 158/159 = 99.37% with `_my_nicks` 7 as the sole survivor and the full suite reaches 2788 passed with no caveat needed, and two of §9's own claims needed correcting — under pytest 9.1.1 a conftest failure exits **4** and mutmut 3.7.0 *raises* on 4 instead of scoring a silent kill, so the flag's value here is that the job runs at all (the silent path survives through exit **2**, a selected test module that fails to import), and §9.5's "39% → 40%" is 44% → 46% for the 125 → 121 missed lines it reports correctly
 - [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md) — Steps F2 and F3: decomposing the two §16.5 landmine god classes the AREA D snapshot does *not* freeze, `Collector` (526 class LOC / 40 methods / LCOM 0.92) and `UndoService` (418 / 28 / 0.92), into collaborator families following the convention `tests/unit/stores/test_stores_structure.py` already pins. §8 records F2's executed outcome against every target, the three targets it missed and why, two frozen contracts it touched (the clone baseline and the `stores/` import pin), and the RULE 16 / RULE 18 recheck. §8.9–§8.10 settle the intermittent world-switch undo failure as a *product* bug rather than test timing — concurrent saves desynchronised `WriteTurn.held` from the gate depth, fixed by coalescing saves, with the residual `WriteTurn` risk recorded as F3c. §8.11 records F3's executed outcome: 573 → 241 lines, `UndoService` 418 → 179 class LOC with all 28 names still on the facade, the five frozen contracts it had to respect (`push` and its monkeypatched module global chief among them), the degenerate LCOM\* the `owner` convention produces in a part, and the DB-connection undo seams the split exposed as having no test at all. §8.12 records F3d closing that gap to 100% (repo line coverage 91.69%, branch 86.84%), correcting §8.11.8's framing of it — the delete branch is legacy-entry-only, since `db_bridge` guards its only `dbconn` push with `if op != "delete"` — and naming two product decisions it found and deliberately left open: the D4 tension over whether a persisted legacy delete entry may restore a deleted world, and `dbconn` still announcing "database restored" from the intent, the exact bug I-18 fixed for `archive`. §8.13 records F3e resolving the second of those: `_log_command` now skips `dbconn` as it skips `archive`, and `undo_db._announce` writes the line from the DbManager's own result instead of from the intent (SYSTEM_OF_RECORD I-21), while failures stay silent because `emit_db_change` already warns and every `{"ok": False}` carries an `error`. The timeline still moves from the intent and the rewind asymmetry against `archive` is named rather than copied, since rewinding a *legacy delete* entry is decision 1's question. Its negative check found that I-18's archive suppression had never been pinned by any test in the repo, so a new test class now holds both kinds: 8/8 mutations caught by the gaps file's 28 tests (repo line coverage 91.69%, branch 86.82%, `undo_db.py` still 100% line and branch). The D4 tension remained open at that point. §8.14 records the boot-wait fix cherry-picked from the unrelated branch `arena/01a099fd-chat-v-bot` — 254 commits and no merge base, so cherry-pick rather than merge: `wait_for_world_open` / `run_when_world_open` answer a request that races the world open instead of letting it die unheard, and the JS side re-asks once its listeners exist. Three conflicts were resolved by keeping both sides' truths, and `HistoryBridge`'s ratchet was re-frozen at the 467/44 the fix actually produced instead of being left at 493/45, which also lowers F4's starting point. §8.15 is F3f, the people double line: `_log_command` became a whitelist (`labels` is the only command kind that applies synchronously), `people_service.apply` learned the direction so its single surviving line says ↩ or ↪ truthfully, and two unreachable blocks in `_apply_entry` were deleted rather than pinned — along with the correction of a false claim made mid-step about the archive flow being untested, which the suite disproved by breaking two doubles in `test_world_write_gate.py`. §8.16 records the owner's ruling on the D4 tension: the functionality stands as it works, a pre-guard world keeps its one undoable delete, and no migration is planned
+
+---
+
+## 2026-09-13-round-f
+
+Round F's wide-parameter step (F5), recorded on its own because the plan it replaced arrived from
+another branch describing work that was never wired: eight of nine dataclasses with exactly one
+reference (their own definition) and an `append_v2()` nobody called. This folder holds the corrected
+plan — migrate in place, update every call site in the same commit, measure the metric afterwards —
+and the record of the two passes that took the repo-wide count of >4-parameter functions from 70 to
+51, with the seven `stores/` survivors itemised against the frozen contract that blocks each.
+
+*1 doc.*
+
+- [`F5_PARAMETER_OBJECTS.md`](2026-09-13-round-f/F5_PARAMETER_OBJECTS.md) — The parameter-object step: the `_v2` pattern that produced 230 dead lines and why it was rejected, the in-place migration pattern this repo follows instead, the 19 migrated signatures across two passes, the three traps a naive pass-through walks into (`_touch_cursor`'s deliberate field overrides, `_same_conversation`'s narrower object, the four facade twins a contract test keeps alive), and the seven-function floor the AREA B / AREA D golden files impose
+
+---
+
+## 2026-09-13-round-g-write-gate
+
+Round F closed its eight steps; this folder inventories everything it left open — re-measured from
+the tree rather than quoted from reports — and starts the round that works the list. Two findings
+head it: the suite is **red at HEAD** (a config-split test that skips on a pristine clone meets the
+`config/blocks.json` the squash-merge tracked, in a shape it never handled), and residual risk
+**F3c** is the only open item that is a live product-bug class: `WriteTurn`'s single `held` flag
+desyncs from the world gate's depth the moment two write transactions overlap on one connection,
+after which every writer on that world waits 15 s and fails OPEN — the exact bug class the gate was
+added for. Step G1 fixes both; steps G2–G7 are planned, sized ≈ 8–16 h each, and deliberately not
+started, per the owner's "implement 1st step only".
+
+*1 doc.*
+
+- [`ROUND_G_DESIGN_2026-09-13.md`](2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md) — The full tail inventory with evidence per item (red baseline, F3c, the frozen five and the two contract-sanctioned split mechanisms the AREA D snapshot admits — base-class extraction and private-helper extraction — with an honest appraisal of what each can and cannot do for `chat_sync.py`, the unfrozen structural tail, the test-quality tail including the never-exercised `_migrated_entry`, and the hygiene/docs tail), the prioritisation that puts correctness before mass, the G1–G7 step plan with the F0 owner decision gating G2, and G1's executed design: the test redesigned around the production `BlockStore` and machine-independent invariants, and `WriteTurn` rebuilt as the union of a set of writer tasks — why a per-task *count* leaks (per-statement `begin`, per-commit `end`), why `drop()` still clears everything, and five tests of which the three that matter fail against the pre-fix flag version

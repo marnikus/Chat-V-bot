@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **78 archived ones**. That is
+This repository has **three current docs** and **86 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 82 archived docs
+    ├── README.md                    ← index of all 86 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -27,7 +27,10 @@ docs/
     ├── 2026-09-11-cc-tail/
     ├── 2026-09-11-db-undo-restore/   ← the write gate + verified undo
     ├── 2026-09-11-rules-appendices/
-    └── 2026-09-12-db-undo-restore-port/  ← porting it here (newest)
+    ├── 2026-09-12-db-undo-restore-port/  ← porting it here
+    ├── 2026-09-12-round-f-size-tail/ ← Round F: the size tail + the two god classes
+    ├── 2026-09-13-round-f/           ← Round F's F5 parameter-object step
+    └── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the WriteTurn union fix (newest)
 ```
 
 Also in the repo, not under `docs/`:

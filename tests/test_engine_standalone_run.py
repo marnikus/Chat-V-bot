@@ -185,33 +185,49 @@ class TestStandaloneRun(unittest.TestCase):
             self.assertNotIn(bid, USER_SCOPED_BLOCKS)
 
 
-class TestSavedTabMainConfig(unittest.TestCase):
-    def test_saved_tab_main_preset_is_user_independent(self):
-        """The exact block saved in the block store must now be runnable.
+class TestSavedCustomBlocks(unittest.TestCase):
+    """Saved custom blocks must stay runnable and user-independent.
 
-        Since the 2026-09-09 config split the custom blocks live in
-        config/blocks.json (runtime data, not tracked). The test keeps its
-        regression value on any machine that has run the app (or migrated
-        a legacy config.json) and skips on a pristine clone.
-        """
-        import json
+    Since the 2026-09-09 config split the custom blocks live in
+    config/blocks.json, in the ``{"custom_blocks": [...]}`` shape
+    ``stores.block_store.BlockStore`` writes. The file is runtime data
+    (gitignored — a clone that tracks a copy keeps it), so the data half
+    below skips when this clone has no saved blocks; the user-independence
+    half is a fact about the engine and always runs.
+    """
+
+    def test_custom_find_is_never_user_scoped(self):
+        """A custom block runs standalone — it never needs a queue user."""
+        self.assertNotIn("CUSTOM_FIND", USER_SCOPED_BLOCKS)
+
+    def test_every_saved_custom_block_is_runnable(self):
+        """Whatever the local store holds must load and round-trip (RULE 3)."""
+        from stores.block_store import BlockStore
 
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         blocks_path = os.path.join(root, "config", "blocks.json")
         if not os.path.exists(blocks_path):
             self.skipTest("config/blocks.json not present on this clone")
-        with open(blocks_path, encoding="utf-8") as fh:
-            stored = json.load(fh)
-        saved = next(c["block"] for c in stored
-                     if c.get("name") == "Tab Main")
-        self.assertEqual(saved["block_id"], "CUSTOM_FIND")
-        self.assertNotIn(saved["block_id"], USER_SCOPED_BLOCKS)
+        stored = BlockStore(blocks_path).custom_blocks()
+        if not stored:
+            self.skipTest("no custom blocks saved on this machine")
 
         from actions.custom_find import CustomFind
-        block = CustomFind(**{k: v for k, v in saved.items() if k != "block_id"})
-        self.assertEqual(block.display_name, "Tab Main")
-        self.assertTrue(block.highlight_enabled)
-        self.assertTrue(block.selector)
+        for entry in stored:
+            with self.subTest(name=entry.get("name")):
+                saved = entry.get("block")
+                self.assertIsInstance(
+                    saved, dict, "the store keeps {name, block, updated_at}")
+                self.assertEqual(saved.get("block_id"), "CUSTOM_FIND")
+                self.assertNotIn(saved["block_id"], USER_SCOPED_BLOCKS)
+                kwargs = {k: v for k, v in saved.items() if k != "block_id"}
+                block = CustomFind(**kwargs)
+                expected = (saved.get("custom_name") or "").strip() or block.name
+                self.assertEqual(block.display_name, expected)
+                for key, value in kwargs.items():
+                    self.assertEqual(
+                        block.to_dict().get(key), value,
+                        f"{key} must survive the RULE 3 round trip")
 
 
 ActionRegistry._classes.clear()
