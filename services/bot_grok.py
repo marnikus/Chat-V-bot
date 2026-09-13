@@ -54,19 +54,52 @@ class GrokSettings:
         except (TypeError, ValueError):
             return DEFAULT_TIMEOUT_S
 
+    def save(self, api_key: str, model: str = "") -> bool:
+        """Store the connection settings the Prompt Editor window collects.
+
+        Without this the key was reachable only by hand-editing
+        settings.json, which made the whole feature unusable out of the box.
+        A blank field leaves the stored value alone, so re-saving the model
+        does not wipe a key the password input never echoes back.
+        """
+        if self._config is None:
+            return False
+        if str(api_key or "").strip():
+            self._config.set("grok", "api_key", str(api_key).strip())
+        if str(model or "").strip():
+            self._config.set("grok", "model", str(model).strip())
+        self._config.save()
+        return True
+
+    def state(self) -> dict:
+        """What the editor shows: never the key itself, only whether it is set."""
+        return {"has_key": bool(self.api_key), "model": self.model,
+                "url": self.url}
+
+
+def first_choice(body: dict) -> Any:
+    """The first choice of a completions body, or None when there is none."""
+    choices = body.get("choices")
+    return choices[0] if isinstance(choices, list) and choices else None
+
+
 
 def reply_text(body: Any) -> Result[str]:
-    """The assistant text of a completions response, or a typed error."""
+    """The assistant text of a completions response, or a typed error.
+
+    Each failure keeps its own code because the window shows them to the
+    user: "the endpoint is not speaking JSON" and "the model had nothing to
+    say" are different problems with different fixes.
+    """
     if not isinstance(body, dict):
         return Err("grok_bad_body", "the API answered with a non-object")
-    choices = body.get("choices")
-    if not isinstance(choices, list) or not choices:
+    choice = first_choice(body)
+    if choice is None:
         return Err("grok_no_choices", str(body.get("error") or body)[:200])
-    message = (choices[0] or {}).get("message") or {}
-    text = str(message.get("content") or "").strip()
-    if not text:
-        return Err("grok_empty", "the model returned an empty message")
-    return Ok(text)
+    text = str(((choice or {}).get("message") or {}).get("content")
+               or "").strip()
+    return Ok(text) if text else Err("grok_empty",
+                                     "the model returned an empty message")
 
 
 class GrokClient:
@@ -106,7 +139,8 @@ class GrokClient:
             return Err("grok_no_prompt", "the prompt is empty")
         if not self.settings.api_key:
             return Err("grok_no_key",
-                       "no Grok API key — set it in the Prompt Editor window")
+                       "no Grok API key — set one in the Grok Prompt Editor "
+                       "window, under “Grok API key”")
         try:
             return await self._post(prompt)
         except Exception as exc:                            # noqa: BLE001

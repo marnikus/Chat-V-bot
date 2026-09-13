@@ -88,3 +88,25 @@
   background: var(--bg-input); border-radius: var(--radius-sm);
   padding: 6px; font-size: var(--font-size-xs); color: var(--text-secondary);
 }
+
+/* the Grok connection row in the Prompt Editor — the key is write-only */
+.bot-conn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #2a2f3a);
+}
+.bot-conn label { font-size: 11px; opacity: .75; }
+.bot-conn input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--input-bg, #11141b);
+  color: inherit;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 4px;
+}
+.bot-conn button { grid-column: 2; justify-self: start; }

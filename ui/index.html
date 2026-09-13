@@ -443,6 +443,17 @@
         <span id="botPromptStatus" class="bot-hint" aria-live="polite"></span>
       </div>
       <pre id="botPromptPreview" class="bot-prompt-preview hidden"></pre>
+      <div class="bot-conn">
+        <label for="botApiKeyInput">Grok API key</label>
+        <input id="botApiKeyInput" type="password" spellcheck="false"
+               autocomplete="off"
+               placeholder="xai-… — stored in settings.json on this machine">
+        <label for="botModelInput">Model</label>
+        <input id="botModelInput" type="text" spellcheck="false"
+               autocomplete="off" placeholder="grok-2-latest">
+        <button id="botConnSaveBtn" class="btn-small btn-primary" type="button"
+                title="Save the API key and model used for every Grok call">Save connection</button>
+      </div>
     </div>
 
   </main>

@@ -25,10 +25,13 @@ const BotPrompt = {
       preview: $('botPromptPreview'), previewBtn: $('botPromptPreviewBtn'),
       save: $('botPromptSaveBtn'), cancel: $('botPromptCancelBtn'),
       reset: $('botPromptResetBtn'),
+      apiKey: $('botApiKeyInput'), model: $('botModelInput'),
+      connSave: $('botConnSaveBtn'),
     };
     if (!this._els.text) return;
     this._wire();
     this.load();
+    this.loadConnection();
   },
 
   _wire() {
@@ -37,6 +40,7 @@ const BotPrompt = {
     on(this._els.cancel, () => this.cancel());
     on(this._els.reset, () => this.reset());
     on(this._els.previewBtn, () => this.preview());
+    on(this._els.connSave, () => this.saveConnection());
     if (this._els.tabs) {
       this._els.tabs.addEventListener('click', (event) => {
         const tab = event.target && event.target.closest
@@ -49,6 +53,36 @@ const BotPrompt = {
   load() {
     if (!App.bridge || !App.bridge.bot_get_prompts) return;
     App.bridge.bot_get_prompts((json) => this.setTemplates(json));
+  },
+
+  /* ── the Grok connection ──────────────────────────────────────
+     The key is write-only in the UI: the backend reports only whether one
+     is set, so a saved secret is never echoed back into the DOM. */
+
+  loadConnection() {
+    if (!App.bridge || !App.bridge.bot_connection) return;
+    App.bridge.bot_connection((json) => {
+      let state = null;
+      try { state = JSON.parse(json); } catch (e) { return; }
+      if (!state) return;
+      if (this._els.model) this._els.model.value = state.model || '';
+      if (this._els.apiKey)
+        this._els.apiKey.placeholder = state.has_key
+          ? 'a key is saved — type a new one to replace it'
+          : 'xai-… — stored in settings.json on this machine';
+    });
+  },
+
+  saveConnection() {
+    if (!App.bridge || !App.bridge.bot_save_connection) return;
+    const key = this._els.apiKey ? this._els.apiKey.value.trim() : '';
+    const model = this._els.model ? this._els.model.value.trim() : '';
+    if (!key && !model) { this.setStatus('⚠ Nothing to save.'); return; }
+    App.bridge.bot_save_connection(key, model, (ok) => {
+      if (this._els.apiKey) this._els.apiKey.value = '';
+      this.setStatus(ok ? '✅ Connection saved.' : '⚠ Could not save it.');
+      this.loadConnection();
+    });
   },
 
   setTemplates(json) {

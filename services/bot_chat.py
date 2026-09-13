@@ -51,6 +51,24 @@ def as_transcript(items: list) -> str:
     return "\n".join(lines)
 
 
+def empty_detail(nick: str, page: dict) -> str:
+    """Why the day is empty, in the words the window shows the user.
+
+    "Nothing today" has two very different causes and the user can only act
+    on one of them, so they must not share a message. The day is named
+    because the archive dates a message from the page's clock stamps
+    (`stores/history_repo_identity.resolve_days`), not from this process's
+    calendar: just after midnight a conversation minutes old can legitimately
+    still belong to the previous day, and a bare "no messages today" would
+    read as data loss.
+    """
+    if page.get("reason") == "archive_closed":
+        return "no database is open — open a world first"
+    return (f"no messages with {nick} archived under {page.get('day')} — "
+            f"collect the chat first, or it may still be dated the "
+            f"previous day")
+
+
 def last_inbound(items: list) -> dict:
     """The person's own last message of the day, or an empty dict."""
     for item in reversed(items):
@@ -59,19 +77,58 @@ def last_inbound(items: list) -> dict:
     return {}
 
 
-async def deliver(cdp, text: str) -> Result[str]:
-    """Type `text` into the open chat and press send, verified.
+async def open_partner(parser) -> str:
+    """The nick the page says the OPEN tab is talking to ("" when unknown)."""
+    if parser is None:
+        return ""
+    try:
+        state = await parser.state()
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("could not read the open chat: %s", exc)
+        return ""
+    return " ".join(str((state or {}).get("partner") or "").split()).strip()
+
+
+async def check_recipient(parser, nick: str) -> Result[str]:
+    """Refuse unless the chat open in the browser really belongs to `nick`.
+
+    Sending is the only irreversible act in this window, and the window's
+    person (picked in User Memory) and the browser's open tab drift apart the
+    moment anyone clicks another chat. `chat_sync` already refuses to *read* a
+    conversation whose partner does not match (`partner_mismatch`); writing to
+    the wrong person is worse, so the same comparison guards it here.
+
+    The gate fails CLOSED like RULE 15's: a page that cannot be read is not
+    permission to send.
+    """
+    from backend.chat_text import norm
+    partner = await open_partner(parser)
+    if not partner:
+        return Err("bot_unknown_chat",
+                   "cannot tell which chat is open — nothing was sent")
+    if norm(partner) != norm(nick):
+        return Err("bot_wrong_chat",
+                   f"the open chat is “{partner}”, not “{nick}” — "
+                   f"nothing was sent")
+    return Ok(partner)
+
+
+async def deliver(cdp, nick: str, text: str, parser=None) -> Result[str]:
+    """Type `text` into `nick`'s chat and press send, verified.
 
     A module function, not a method: it needs the CDP client and nothing
     from the service, and it is the same verified two-step
     (`type_message` → `click_send`) the TYPE_MESSAGE / CLICK_SEND blocks use,
     so a direct custom message and an approved AI message are delivered by
-    exactly one code path.
+    exactly one code path — and both pass the recipient gate first.
     """
     if not str(text or "").strip():
         return Err("bot_empty_message", "there is nothing to send")
     if cdp is None or not getattr(cdp, "is_connected", False):
         return Err("bot_not_connected", "not connected to a chat tab")
+    allowed = await check_recipient(parser, nick)
+    if allowed.is_err:
+        return allowed
     from backend.message_injector import click_send, type_message
     if not await type_message(cdp, text):
         return Err("bot_type_failed", "the page did not accept the text")
@@ -83,21 +140,33 @@ async def deliver(cdp, text: str) -> Result[str]:
 class BotChatService:
     """Today's conversation, the two Grok calls, and the confirmed write."""
 
-    def __init__(self, archive=None, config=None, grok=None) -> None:
+    def __init__(self, archive=None, config=None, grok=None,
+                 labels=None) -> None:
         self.archive = archive
         self.config = config
+        #: the LabelStore, passed IN by the bridge (`ctx.label_store()`).
+        #: Never read off `archive`: HistoryService keeps its store private as
+        #: `_labels`, so digging for a public `.labels` there silently yields
+        #: None in the running app and the labels half of the window dies.
+        self.label_store = labels
+        #: the one-undo-entry label transaction (`LabelBridge._labels_edit`),
+        #: attached by the bridge. An attribute rather than a fifth
+        #: constructor parameter: the bridge re-attaches it on every call
+        #: anyway (a world switch rebuilds the store), and RULE 16 caps a
+        #: signature at four.
+        self.edit = None
         self.prompts = PromptLibrary(config)
         self.grok = grok if grok is not None else GrokClient(config=config)
 
     @property
     def labels(self) -> ReactionLabels | None:
-        store = getattr(self.archive, "labels", None)
+        store = self.label_store
         return ReactionLabels(store) if store is not None else None
 
     async def today(self, nick: str) -> dict:
         """The current day's messages of one person (empty is not broken)."""
         db = getattr(self.archive, "db", None)
-        if db is None:
+        if db is None or not getattr(db, "is_open", False):
             return {"nick": nick, "items": [], "empty": True,
                     "day": today_key(), "reason": "archive_closed"}
         rows = await db.fetchdicts(
@@ -109,7 +178,8 @@ class BotChatService:
                   "text": row["text"], "time": row["ts_display"]}
                  for row in rows]
         return {"nick": nick, "items": items, "empty": not items,
-                "day": today_key()}
+                "day": today_key(),
+                "reason": "" if items else "no_messages_today"}
 
     async def preview(self, nick: str, template_id: str) -> dict:
         """Exactly what would be sent to Grok — the Prompt Editor shows it."""
@@ -124,8 +194,7 @@ class BotChatService:
         """A pending reply suggestion — approved and sent by the user only."""
         page = await self.today(nick)
         if page["empty"]:
-            return Err("bot_no_messages",
-                       f"no messages with {nick} today to work from")
+            return Err("bot_no_messages", empty_detail(nick, page))
         rendered = self.prompts.render("suggest_reply", {
             "nick": nick, "conversation": as_transcript(page["items"]),
             "last_message": last_inbound(page["items"]).get("text", "")})
@@ -139,8 +208,11 @@ class BotChatService:
         page = await self.today(nick)
         last = last_inbound(page["items"])
         if not last:
+            if page["empty"]:
+                return Err("bot_no_messages", empty_detail(nick, page))
             return Err("bot_no_answer",
-                       f"{nick} has not answered today — nothing to analyze")
+                       f"{nick} has not answered today ({page['day']}) — "
+                       f"nothing to analyze")
         rendered = self.prompts.render("analyze_reaction", {
             "nick": nick, "conversation": as_transcript(page["items"]),
             "last_message": last.get("text", "")})
@@ -160,11 +232,22 @@ class BotChatService:
         return labels.state_of(nick)
 
     def apply_reaction(self, nick: str, reaction: str) -> Result[dict]:
-        """The ONE write: a confirmed analysis or a manual label click."""
+        """The ONE write: a confirmed analysis or a manual label click.
+
+        The write runs through `self.edit` — the bridge passes
+        `LabelBridge._labels_edit` — so an AI-confirmed label is ONE entry on
+        the global undo timeline and refreshes the Label Manager and the
+        People count exactly like a label set by hand (RULE 12 / I-10).
+        Without an editor (headless service tests) it writes directly, rather
+        than growing a second copy of that transaction here.
+        """
         labels = self.labels
         if labels is None:
             return Err("bot_no_world", "no world is open — open a database")
-        changed = labels.apply(nick, reaction)
+        if self.edit is None:
+            changed = labels.apply(nick, reaction)
+        else:
+            changed = bool(self.edit(lambda _store: labels.apply(nick, reaction)))
         state = labels.state_of(nick)
         state["changed"] = changed
         return Ok(state)

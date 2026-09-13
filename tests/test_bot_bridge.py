@@ -31,6 +31,7 @@ from PySide6.QtCore import QObject  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from bridge.bot_bridge import BotBridge  # noqa: E402
+from bridge.bot_prompt_bridge import BotPromptBridge  # noqa: E402
 from bridge.context import BridgeContext  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
 from stores.history_db import HistoryDB  # noqa: E402
@@ -41,7 +42,7 @@ TODAY = date.today().isoformat()
 BOT_SLOTS = ["bot_load_today", "bot_suggest_reply", "bot_analyze_reaction",
              "bot_preview_prompt", "bot_send_message", "bot_reaction_state",
              "bot_apply_reaction", "bot_get_prompts", "bot_save_prompt",
-             "bot_reset_prompt"]
+             "bot_reset_prompt", "bot_connection", "bot_save_connection"]
 BOT_SIGNALS = ["bot_reply_ready", "bot_error", "bot_prompts_changed"]
 
 
@@ -60,9 +61,25 @@ class FakeGrok:
 
 
 class FakeArchive:
-    def __init__(self, db, labels):
+    """What the bridge may read off the archive: the db and the parser.
+
+    Deliberately NO `labels`: the real HistoryService has none, and the
+    bridge injects `ctx.label_store()` instead.
+    """
+
+    def __init__(self, db, parser=None):
         self.db = db
-        self.labels = labels
+        self.parser = parser or FakeParser()
+
+
+class FakeParser:
+    """Reports which chat the browser has open, for the recipient gate."""
+
+    def __init__(self, partner="Anna"):
+        self.partner = partner
+
+    async def state(self):
+        return {"partner": self.partner}
 
 
 async def make_db():
@@ -91,7 +108,9 @@ class BotBridgeCase(unittest.TestCase):
         self.labels = LabelStore(self.cfg)
         self.db = run(make_db())
         self.ctx = BridgeContext(config=self.cfg)
-        self.ctx.archive = FakeArchive(self.db, self.labels)
+        self.ctx.labels = self.labels          # what ctx.label_store() hands out
+        self.parser = FakeParser()
+        self.ctx.archive = FakeArchive(self.db, self.parser)
         self.bridge = BotBridge(self.ctx)
         self.grok = FakeGrok()
         self.bridge.service.grok = self.grok
@@ -183,23 +202,23 @@ class TestVerificationFlow(BotBridgeCase):
     def test_send_message_is_the_only_path_to_the_page(self):
         sent = []
         self.patch_deliver(sent)
-        self.bridge.bot_send_message("s2", "approved text")
+        self.bridge.bot_send_message("s2", "Anna", "approved text")
         self.drain()
-        self.assertEqual(sent, ["approved text"])
+        self.assertEqual(sent, [("Anna", "approved text")])
         self.assertEqual(self.answer("s2"), "approved text")
 
     def test_a_direct_message_uses_the_same_verified_path(self):
         sent = []
         self.patch_deliver(sent)
-        self.bridge.bot_send_message("s3", "my own words")
+        self.bridge.bot_send_message("s3", "Anna", "my own words")
         self.drain()
-        self.assertEqual(sent, ["my own words"])
+        self.assertEqual(sent, [("Anna", "my own words")])
 
     def patch_deliver(self, sink):
         import bridge.bot_bridge as module
 
-        async def fake(_cdp, text):
-            sink.append(text)
+        async def fake(_cdp, nick, text, parser=None):
+            sink.append((nick, text))
             return Ok(text)
 
         original = module.deliver
@@ -237,16 +256,32 @@ class TestReactionLabelsOverTheWire(BotBridgeCase):
         self.assertEqual(self.labels.ids_for("Anna"), [])
 
 
-class TestPromptEditorOverTheWire(BotBridgeCase):
+class PromptBridgeCase(BotBridgeCase):
+    """The Prompt Editor is its OWN window, so it is its own bridge.
+
+    It borrows the Bot Chat bridge for the shared template library and for
+    the two answer signals; with no router to ask, it builds one on the same
+    context, which is what `self.bridge` already is here — so the preview's
+    answer lands on a bridge this case is not listening to. `editor` therefore
+    points at the same context, and the preview test listens where the answer
+    really goes.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.editor = BotPromptBridge(self.ctx)
+
+
+class TestPromptEditorOverTheWire(PromptBridgeCase):
     def test_the_editor_lists_both_templates(self):
-        templates = json.loads(self.bridge.bot_get_prompts())
+        templates = json.loads(self.editor.bot_get_prompts())
         self.assertEqual([t["id"] for t in templates],
                          ["suggest_reply", "analyze_reaction"])
 
     def test_saving_announces_the_change_and_persists_it(self):
         announced = []
-        self.bridge.bot_prompts_changed.connect(announced.append)
-        self.assertTrue(self.bridge.bot_save_prompt("suggest_reply",
+        self.editor.bot_prompts_changed.connect(announced.append)
+        self.assertTrue(self.editor.bot_save_prompt("suggest_reply",
                                                     "Write to {nick}"))
         self.assertTrue(announced)
         reopened = ConfigManager(self.cfg._path)
@@ -255,27 +290,123 @@ class TestPromptEditorOverTheWire(BotBridgeCase):
 
     def test_an_unusable_template_is_refused_without_announcing(self):
         announced = []
-        self.bridge.bot_prompts_changed.connect(announced.append)
-        self.assertFalse(self.bridge.bot_save_prompt("suggest_reply", "{x}"))
+        self.editor.bot_prompts_changed.connect(announced.append)
+        self.assertFalse(self.editor.bot_save_prompt("suggest_reply", "{x}"))
         self.assertEqual(announced, [])
 
     def test_a_saved_template_is_what_gets_sent_to_grok(self):
-        self.bridge.bot_save_prompt("suggest_reply", "Reply to {nick} now")
+        """One library: what the editor saves is what the chat window sends."""
+        self.editor.bot_save_prompt("suggest_reply", "Reply to {nick} now")
         self.bridge.bot_suggest_reply("p1", "Anna")
         self.drain()
         self.assertEqual(self.grok.prompts[0], "Reply to Anna now")
 
     def test_preview_shows_the_rendered_prompt(self):
-        self.bridge.bot_preview_prompt("p2", "Anna", "analyze_reaction")
+        answers = []
+        chat = self.editor._chat_bridge()
+        chat.bot_reply_ready.connect(
+            lambda req, payload: answers.append((req, payload)))
+        self.editor.bot_preview_prompt("p2", "Anna", "analyze_reaction")
         self.drain()
-        self.assertIn("hello you", self.answer("p2")["prompt"])
+        self.assertEqual(answers[0][0], "p2")
+        self.assertIn("hello you", json.loads(answers[0][1])["prompt"])
 
     def test_reset_restores_the_shipped_template(self):
-        self.bridge.bot_save_prompt("suggest_reply", "Reply to {nick} now")
-        self.assertTrue(self.bridge.bot_reset_prompt("suggest_reply"))
-        self.assertFalse(self.bridge.bot_reset_prompt("suggest_reply"))
-        templates = json.loads(self.bridge.bot_get_prompts())
+        self.editor.bot_save_prompt("suggest_reply", "Reply to {nick} now")
+        self.assertTrue(self.editor.bot_reset_prompt("suggest_reply"))
+        self.assertFalse(self.editor.bot_reset_prompt("suggest_reply"))
+        templates = json.loads(self.editor.bot_get_prompts())
         self.assertFalse(templates[0]["edited"])
+
+
+class TestTheSendGateOverTheWire(BotBridgeCase):
+    """The slot really refuses the wrong chat — `deliver` is NOT patched out.
+
+    The other send tests replace `deliver` to observe the call; this one lets
+    the real gate run, because the value of the gate is precisely that the
+    slot cannot be talked into typing.
+    """
+
+    def typed(self):
+        """Every text the page was asked to accept (should stay empty)."""
+        from backend import message_injector
+        seen = []
+
+        async def typing(_cdp, text, *a, **k):
+            seen.append(text)
+            return True
+
+        async def clicking(*_a, **_k):
+            return True
+
+        original = (message_injector.type_message, message_injector.click_send)
+        message_injector.type_message = typing
+        message_injector.click_send = clicking
+        self.addCleanup(lambda: setattr(message_injector, "type_message",
+                                        original[0]))
+        self.addCleanup(lambda: setattr(message_injector, "click_send",
+                                        original[1]))
+        return seen
+
+    def test_a_message_for_another_person_is_refused_at_the_slot(self):
+        seen = self.typed()
+        self.ctx.cdp = type("Cdp", (), {"is_connected": True})()
+        self.parser.partner = "Boris"          # the browser moved on
+        self.bridge.bot_send_message("w1", "Anna", "see you tomorrow")
+        self.drain()
+        self.assertEqual(seen, [], "nothing may be typed into Boris's chat")
+        self.assertTrue(self.errors, "the window must be told why")
+        self.assertIn("Boris", self.errors[0][1])
+
+    def test_the_right_chat_still_goes_through(self):
+        seen = self.typed()
+        self.ctx.cdp = type("Cdp", (), {"is_connected": True})()
+        self.bridge.bot_send_message("w2", "Anna", "see you tomorrow")
+        self.drain()
+        self.assertEqual(seen, ["see you tomorrow"])
+
+
+class TestTheLabelWriteIsUndoable(BotBridgeCase):
+    """RULE 12: a label set here is one entry on the ONE global timeline."""
+
+    def test_the_service_is_wired_to_the_label_transaction(self):
+        self.assertIsNotNone(self.bridge.service.edit,
+                             "the bridge must hand the service the "
+                             "LabelBridge transaction, not let it write raw")
+
+    def test_applying_a_label_pushes_exactly_one_undo_entry(self):
+        pushed = []
+        self.ctx.undo.push = lambda kind, value: pushed.append(kind)
+        self.bridge.bot_apply_reaction("Anna", "positive")
+        self.assertEqual(pushed, ["labels"])
+
+    def test_an_unchanged_label_pushes_nothing(self):
+        self.bridge.bot_apply_reaction("Anna", "positive")
+        pushed = []
+        self.ctx.undo.push = lambda kind, value: pushed.append(kind)
+        self.bridge.bot_apply_reaction("Anna", "positive")
+        self.assertEqual(pushed, [])
+
+    def test_the_label_manager_window_is_told_to_refresh(self):
+        """Without this the pills in the other window go stale."""
+        from core.events import LabelsChanged, PeopleChanged
+        seen = []
+        self.ctx.bus.subscribe(LabelsChanged, lambda e: seen.append("labels"))
+        self.ctx.bus.subscribe(PeopleChanged, lambda e: seen.append("people"))
+        self.bridge.bot_apply_reaction("Anna", "negative")
+        self.assertIn("people", seen)
+
+
+class TestTheConnectionSettings(PromptBridgeCase):
+    def test_saving_a_key_makes_it_the_one_used(self):
+        self.assertTrue(self.editor.bot_save_connection("xai-9", "grok-x"))
+        state = json.loads(self.editor.bot_connection())
+        self.assertTrue(state["has_key"])
+        self.assertEqual(state["model"], "grok-x")
+
+    def test_the_key_never_travels_back_over_the_wire(self):
+        self.editor.bot_save_connection("xai-secret", "")
+        self.assertNotIn("xai-secret", self.editor.bot_connection())
 
 
 if __name__ == "__main__":

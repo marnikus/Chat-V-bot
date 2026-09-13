@@ -124,16 +124,15 @@ class TestReactionLabels(unittest.TestCase):
         self.assertEqual(colours["uncertain"], "#ffcc00")
 
 
-class FakeArchive:
-    def __init__(self, labels):
-        self.db = None
-        self.labels = labels
-
-
 class TestServiceApplication(unittest.TestCase):
     def setUp(self):
         self.store = store()
-        self.svc = BotChatService(archive=FakeArchive(self.store), config=None)
+        # The store is INJECTED, exactly as the bridge injects
+        # `ctx.label_store()`. It is deliberately not hung off an archive
+        # double: HistoryService keeps its label store private, so a double
+        # with a public `.labels` would test an interface nobody implements.
+        self.svc = BotChatService(archive=None, config=None,
+                                  labels=self.store)
 
     def test_apply_reaction_reports_the_new_state(self):
         result = self.svc.apply_reaction("Anna", "positive")
@@ -147,11 +146,82 @@ class TestServiceApplication(unittest.TestCase):
                          .value["changed"])
 
     def test_without_a_world_nothing_is_written_and_the_error_says_so(self):
-        svc = BotChatService(archive=None, config=None)
+        svc = BotChatService(archive=None, config=None, labels=None)
         result = svc.apply_reaction("Anna", "positive")
         self.assertTrue(result.is_err)
         self.assertEqual(result.code, "bot_no_world")
         self.assertEqual(svc.reaction_state("Anna")["available"], [])
+
+
+class TestRealArchiveInterface(unittest.TestCase):
+    """The regression that the doubles hid.
+
+    `BotChatService` used to dig the label store out of `archive.labels`.
+    `HistoryService` has no such attribute — it keeps the store private as
+    `_labels` — so in the running app the whole labelling half of the window
+    returned `bot_no_world` forever, while every test passed because the
+    archive DOUBLE had invented the attribute. These tests use the REAL
+    class, so the mistake cannot come back.
+    """
+
+    def test_the_real_archive_does_not_expose_a_label_store(self):
+        from services.history import HistoryService
+        archive = HistoryService(cdp=None)
+        self.assertFalse(hasattr(archive, "labels"),
+                         "if HistoryService ever grows a public `labels`, "
+                         "this test may be deleted — until then, reading one "
+                         "off the archive silently yields None")
+
+    def test_a_label_applies_with_the_real_archive_wired_in(self):
+        from services.history import HistoryService
+        svc = BotChatService(archive=HistoryService(cdp=None), config=None,
+                             labels=store())
+        result = svc.apply_reaction("Anna", "positive")
+        self.assertTrue(result.is_ok, getattr(result, "detail", ""))
+        self.assertEqual(result.value["active"], "positive")
+
+
+class TestTheWriteIsOneUndoableEdit(unittest.TestCase):
+    """RULE 12: an AI label is ONE entry on the global timeline.
+
+    `ReactionLabels.apply` writing straight to the store would leave the AI
+    path outside the undo history, with the Label Manager and the People
+    count stale. The service therefore runs the write through the injected
+    `edit` transaction — the bridge passes `LabelBridge._labels_edit`.
+    """
+
+    def setUp(self):
+        self.store = store()
+        self.svc = BotChatService(archive=None, config=None,
+                                  labels=self.store)
+        self.edits = []
+
+    def _record(self, mutate):
+        """Stands in for `_labels_edit`: one call per confirmed label."""
+        self.edits.append(mutate)
+        return mutate(self.store)
+
+    def test_the_label_write_goes_through_the_undo_transaction(self):
+        self.svc.edit = self._record
+        result = self.svc.apply_reaction("Anna", "positive")
+        self.assertTrue(result.value["changed"])
+        self.assertEqual(len(self.edits), 1,
+                         "exactly one reversible entry per applied label")
+        self.assertEqual(self.svc.labels.active("Anna"), "positive")
+
+    def test_a_no_op_still_reports_no_change_through_the_transaction(self):
+        self.svc.edit = self._record
+        self.svc.apply_reaction("Anna", "positive")
+        again = self.svc.apply_reaction("Anna", "positive")
+        self.assertFalse(again.value["changed"],
+                         "an unchanged label must not push an undo entry")
+
+    def test_without_a_transaction_the_write_still_happens(self):
+        """Headless use (no bridge) must not lose the write."""
+        self.assertIsNone(self.svc.edit)
+        self.assertTrue(self.svc.apply_reaction("Anna", "negative")
+                        .value["changed"])
+        self.assertEqual(self.svc.labels.active("Anna"), "negative")
 
 
 if __name__ == "__main__":

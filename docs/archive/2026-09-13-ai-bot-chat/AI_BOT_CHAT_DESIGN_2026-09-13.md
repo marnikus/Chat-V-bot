@@ -96,6 +96,10 @@ Invariants the tests pin:
 | `services/bot_chat.py` | 170 | `deliver` | 19 | 7 |
 | `bridge/bot_bridge.py` | 142 | `BotBridge.bot_apply_reaction` | 12 | 3 |
 
+> **Superseded 2026-09-13** by `BOT_CHAT_DEFECTS_2026-09-13.md`: the Prompt
+> Editor was split into its own bridge and the files grew. Current numbers are
+> in that document's §Outcome; re-measure rather than trusting either table.
+
 Every new function is ≤ 19 LOC, ≤ 3 parameters, CC ≤ 9, cognitive ≤ 8 and
 nesting ≤ 3; the largest new class is `BotChatService` at 88 LOC / 8 methods
 and the most methods are `BotBridge`'s 12 — all inside RULE 16's 150 / 15.
