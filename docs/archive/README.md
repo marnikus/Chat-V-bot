@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**88 documents in 18 groups.**
+**90 documents in 19 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -30,7 +30,8 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
 | [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 2 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, the `services/db_deletion.py` split that it does not block, and the decomposition of the two god classes the snapshot does not cover — `Collector` and `UndoService`. |
 | [`2026-09-13-round-f/`](#2026-09-13-round-f) | 1 | Round F's parameter-object step (F5): the abandoned `_v2` attempt it replaced, the in-place migration pattern, the 19 migrated signatures, and the seven `stores/` functions a frozen contract blocks. |
-| [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 3 | Round G: the complete post-Round-F tail inventory with fresh measurements, the prioritised G1–G7 step plan, and the executed steps G1–G3 — the red suite at HEAD and the `WriteTurn` union fix (F3c), the two worst-file family splits under the lifted freezes, and the flow/injector splits plus the ladder and constructor reductions. |
+| [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 4 | Round G: the complete post-Round-F tail inventory, executed G1–G3, and the approved-not-executed G4 parameter-object design. |
+| [`2026-09-13-round-h-size-tail/`](#2026-09-13-round-h-size-tail) | 1 | Round H: post-G re-measurement (four files still over 500), why `history_query.py` is now the biggest problem, and the H1–H8 step plan. **Plan only — not executed.** |
 
 ---
 
@@ -304,8 +305,24 @@ in the plan's §1c) and the round continued: G2 splits the two worst files, G3 t
 injector families plus two oversized constructors — each step with its own doc below. Steps
 G4–G7 stay planned, sized ≈ 8–16 h each.
 
-*3 docs.*
+*4 docs.* Successor plan: [`2026-09-13-round-h-size-tail/`](#2026-09-13-round-h-size-tail) (G4–G7 re-ranked).
 
 - [`ROUND_G_DESIGN_2026-09-13.md`](2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md) — The full tail inventory with evidence per item (red baseline, F3c, the frozen five and the two contract-sanctioned split mechanisms the AREA D snapshot admits — base-class extraction and private-helper extraction — with an honest appraisal of what each can and cannot do for `chat_sync.py`, the unfrozen structural tail, the test-quality tail including the never-exercised `_migrated_entry`, and the hygiene/docs tail), the prioritisation that puts correctness before mass, the G1–G7 step plan with the F0 owner decision gating G2, and G1's executed design: the test redesigned around the production `BlockStore` and machine-independent invariants, and `WriteTurn` rebuilt as the union of a set of writer tasks — why a per-task *count* leaks (per-statement `begin`, per-commit `end`), why `drop()` still clears everything, and five tests of which the three that matter fail against the pre-fix flag version
 - [`G2_CHAT_SYNC_SCROLL_PARSER_DESIGN_2026-09-13.md`](2026-09-13-round-g-write-gate/G2_CHAT_SYNC_SCROLL_PARSER_DESIGN_2026-09-13.md) — Step G2, executed: the two worst files in the tree became prefix families once ruling F0 lifted the AREA-B/D freezes — `backend/chat_sync.py` (807 LOC, MI 11.35) into a seam plus five siblings and `backend/scroll_parser.py` (706 LOC, the 532/39 `ScrollParser`) into a facade plus four, every function moved verbatim. The AREA-D golden was refreshed in-step with a conservation proof (10 ownership moves, 0 losses, identical payloads) and the blocks twin byte-identical; three forced test accommodations are enumerated with reasons — including the stores-import counter bump 40 → 42 that only the full suite's five-area walk can see — and the outcome table records 2808 passed with coverage at 90.94% line / 87.01% branch
 - [`G3_FLOW_LADDER_CTOR_DESIGN_2026-09-13.md`](2026-09-13-round-g-write-gate/G3_FLOW_LADDER_CTOR_DESIGN_2026-09-13.md) — Step G3: the §16.5 design doc for the `Collector` landmine and three further targets — `services/db_deletion_flow.py` (509) into a seam plus three siblings; `backend/message_injector.py` (484) into a seam plus three, its 70-line typing ladder redesigned per §19.5 into a context dataclass, one shared acceptance check and three per-rung attempts with byte-identical wording; `Collector.__init__`'s 26-assignment counter block moved to `collector_states.init_run_counters` (no new method on the 40-method class); and `ScrollParse.__init__` rebuilt as a `_KNOB_CASTS` table plus a `locals()` loop with the RULE 3 wire signature untouched — proven by a HEAD parity run and a byte-identical block golden. Records the clone-baseline maintenance (the `_rep` pair moved with the split, one deletion-family header pair added) and the rules/notes reconciliation it owes
+- [`G4_PARAM_OBJECTS_DESIGN_2026-09-13.md`](2026-09-13-round-g-write-gate/G4_PARAM_OBJECTS_DESIGN_2026-09-13.md) — Step G4, designed not executed: 11 documented constraints + 33 in-place parameter-object migrations. Absorbed into Round H as step H4.
+
+---
+
+## 2026-09-13-round-h-size-tail
+
+Round G closed G1–G3 and left G4 as a design. This folder is the successor
+plan: a fresh audit of the tree (complexity still closed, four files still
+over 500 lines, wide-param count still 51) and the H1–H8 step plan that
+starts with `history_query.py` — now the largest file — rather than with the
+already-designed parameter-object step. **Plan only; no production code
+changed to produce it.**
+
+*1 doc.*
+
+- [`ROUND_H_DESIGN_2026-09-13.md`](2026-09-13-round-h-size-tail/ROUND_H_DESIGN_2026-09-13.md) — Why the last four 500-line files are the biggest remaining problem, why H1 is `history_query.py` (601, `page` at CC 10) and not G4, the H1 split (facade + item/page/search/stats, `page`/`_search` extracted by concept), and H2–H8 sized at 8–16 h each. Metrics: [`reports/CODE_QUALITY_METRICS_2026-09-13.md`](../../reports/CODE_QUALITY_METRICS_2026-09-13.md)
