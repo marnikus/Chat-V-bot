@@ -53,6 +53,8 @@ class TestPublicApiSnapshot(unittest.TestCase):
         self.assertIn("backend.chat_parser", modules)
         self.assertIn("backend.scroll_parser.parser", modules)
         self.assertIn("backend.scroll_parser.result", modules)
+        self.assertIn("backend.history_query.query", modules)
+        self.assertIn("backend.history_query.request", modules)
         self.assertIn("actions.base", modules)
         self.assertGreaterEqual(len(modules), 45,
                                 "the snapshot must cover every module of "

@@ -50,7 +50,9 @@ LIMITS, OWNED, RATCHET, OVERRIDES = (gate.LIMITS, gate.OWNED, gate.RATCHET,
 # A real function in this repo that is over the limit (53 LOC at the time of
 # writing). Used to prove the measurement detects a breach, so a green gate
 # cannot simply be a gate that measures nothing.
-CANARY = ("backend/history_query.py", "HistoryQuery", "page")
+# (2026-09-12, god-class step 5: `page` moved from `HistoryQuery` to
+# `PagingMixin` when `backend/history_query.py` became a package.)
+CANARY = ("backend/history_query/paging.py", "PagingMixin", "page")
 
 
 class TestTheGateIsNotVacuous(unittest.TestCase):
@@ -132,7 +134,7 @@ class TestRequestObjectIsSmall(unittest.TestCase):
     """The new class must itself be inside the class limits."""
 
     def test_person_page_request_fits(self):
-        info = gate.classes("backend/history_query.py").get("PersonPageRequest")
+        info = gate.classes("backend/history_query/request.py").get("PersonPageRequest")
         self.assertIsNotNone(info, "PersonPageRequest does not exist")
         self.assertLessEqual(info["loc"], gate.CLASS_LIMITS["loc"],
                              f"PersonPageRequest is {info['loc']} LOC")
@@ -158,14 +160,16 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
 
     def test_the_owned_request_object_is_reported_and_clean(self):
         rows = {r["target"]: r for r in gate.run()["class_rows"]}
-        key = "backend/history_query.py::PersonPageRequest"
+        key = "backend/history_query/request.py::PersonPageRequest"
         self.assertIn(key, rows, "class enforcement did not scan the owned file")
         self.assertEqual(rows[key]["violations"], [])
 
     def test_enforcement_actually_fires_on_real_oversized_classes(self):
-        """The strongest check: with the ratchet lifted, the two genuinely
-        oversized legacy classes must be reported. Proves the loop is wired to
-        real measurement rather than passing because nothing was examined."""
+        """The strongest check: with the ratchet lifted, the genuinely
+        oversized legacy class must be reported. Proves the loop is wired to
+        real measurement rather than passing because nothing was examined.
+        (God-class step 5 split `HistoryQuery`, so only `HistoryBridge`
+        remains oversized.)"""
         saved = dict(gate.RATCHET)
         gate.RATCHET.clear()
         try:
@@ -173,12 +177,12 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
         finally:
             gate.RATCHET.update(saved)
         self.assertTrue(
-            any("HistoryQuery" in b and "loc" in b for b in breaches),
-            "with the ratchet lifted, HistoryQuery (340 LOC) must breach the "
+            any("HistoryBridge" in b and "loc" in b for b in breaches),
+            "with the ratchet lifted, HistoryBridge (493 LOC) must breach the "
             f"{gate.CLASS_LIMITS['loc']} cap; got: {breaches}")
         self.assertTrue(
-            any("HistoryBridge" in b for b in breaches),
-            f"HistoryBridge must breach too; got: {breaches}")
+            any("HistoryBridge" in b and "methods" in b for b in breaches),
+            f"HistoryBridge must breach the methods cap too; got: {breaches}")
 
 
 class TestPreExistingDebtDoesNotGrow(unittest.TestCase):

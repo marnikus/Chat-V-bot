@@ -34,25 +34,29 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
+# 2026-09-12 (god-class round, step 5): `backend/history_query.py` became the
+# `backend/history_query/` package; the owned functions relocated to their new
+# leaves (`request.py` / `userdb.py` / `person.py`).
 OWNED = [
-    ("backend/history_query.py", "PersonPageRequest", "needle"),
-    ("backend/history_query.py", "PersonPageRequest", "where"),
-    ("backend/history_query.py", "PersonPageRequest", "order"),
-    ("backend/history_query.py", "PersonPageRequest", "spec"),
-    ("backend/history_query.py", "PersonPageRequest", "columns"),
-    ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
-    ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
+    ("backend/history_query/request.py", "PersonPageRequest", "needle"),
+    ("backend/history_query/request.py", "PersonPageRequest", "where"),
+    ("backend/history_query/request.py", "PersonPageRequest", "order"),
+    ("backend/history_query/request.py", "PersonPageRequest", "spec"),
+    ("backend/history_query/request.py", "PersonPageRequest", "columns"),
+    ("backend/history_query/request.py", "PersonPageRequest", "resolved_dir"),
+    ("backend/history_query/userdb.py", "UserDbMixin", "list_persons"),
+    ("backend/history_query/person.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
 ]
 
-# Pre-existing oversized classes this feature cannot split — the AREA D API
-# snapshot forbids removing `HistoryQuery` methods and the QWebChannel wire
-# contract pins `HistoryBridge`'s slot set. Frozen at the 3820136 measurement:
-# they may shrink, they may not grow.
+# Pre-existing oversized classes this feature cannot split — the QWebChannel
+# wire contract pins `HistoryBridge`'s slot set. Frozen at the 3820136
+# measurement: it may shrink, it may not grow. (`HistoryQuery` left this dict
+# in god-class step 5: it was split into three mixins, so the 362/14 frozen
+# size no longer applies — the class is now a 29-LOC facade and no longer
+# needs an exemption.)
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
     ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 493, "methods": 45},
 }
 
@@ -64,7 +68,11 @@ RATCHET = {
 #     deleted, so the hatch cannot become a dumping ground.
 OVERRIDES: dict[tuple, str] = {}
 
-SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
+# 2026-09-12 (god-class round, step 5): `backend/history_query.py` became the
+# `backend/history_query/` package, so the smell scan points at the package
+# (vulture walks it recursively) — pointing at the old module path would make
+# vulture "could not be found" and silently pass on nothing.
+SMELL_FILES = ["backend/history_query/", "bridge/history_bridge.py"]
 
 # Exact-AST clone groups already in the tree at 53ba5fb, measured with
 # `python tools/metrics/clone_scan.py .`. The spec fails on *new* groups, not
@@ -338,8 +346,7 @@ def smells() -> tuple[list[str], list[str]]:
             if "R0801" not in line:
                 continue
             block = "\n".join(lines[i + 1:i + 4])
-            if any(f in block for f in ("history_query.py",
-                                        "history_bridge.py")):
+            if any(f in block for f in ("history_query", "history_bridge.py")):
                 findings.append(block)
 
     return findings, missing

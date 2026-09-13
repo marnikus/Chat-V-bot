@@ -68,7 +68,7 @@ Each step follows the same discipline (RULE 16 §16.5/§16.6):
 | **2** | Split `services/db_deletion.py` + `db_deletion_flow.py` → `services/db_deletion/` | 665+509 → ≤300 each |
 | **3** ✅ | Extract `ScrollParser` (probe / parse / settle) | class 507/37 → ≤150/≤15 |
 | **4** | Extract `Collector` (lifecycle / tick-sync / push) | class 518/39 → ≤150/≤15 |
-| **5** | Split `backend/history_query.py` beside the `history_repo*` family | file 606 → ≤300 |
+| **5** ✅ | Split `backend/history_query.py` beside the `history_repo*` family | file 606 → ≤300 |
 | **6** | Split the bridge facades (`HistoryBridge`, `StackBridge`) per surface | class 474/31 → ≤150/≤15 |
 | **7** | Extract `UndoService` (undo / redo / world-sync / archive) | class 409/27 → ≤150/≤15 |
 | **8** | Split the remaining 400–530 LOC backend modules | files > 500 → **0** |

@@ -452,7 +452,7 @@ current behaviour first.
 
 Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
 `Collector`, `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
-`stores/label_state.py`, `backend/history_query.py`, `services/db_lifecycle.py`,
+`stores/label_state.py`, `backend/history_query/`, `services/db_lifecycle.py`,
 `backend/tab_matcher.py`, `actions/wait_page.py`.
 
 ### 16.6 Agent workflow (implementation process)
@@ -706,7 +706,7 @@ not an `if/elif` over block ids. Lookup tables are data, not branches:
 table; `DB_GROUP_SUFFIXES`, `MIME_EXT`, `IMAGE_EXT` are tuples/dicts. Two
 interchangeable back-ends behind one call, not a branch at every call site:
 archive search is FTS5 when SQLite offers it and a `text_lc LIKE` scan when it
-does not (`backend/history_query.py`). Never delete a real decision to reach the
+does not (`backend/history_query/`). Never delete a real decision to reach the
 number — four independent binary outcomes cost CC 5 minimum (§16.2).
 
 **19.3 Step 3 — cognitive (> 15).** Name the compound: `if _is_self_chat(names)`
@@ -720,7 +720,7 @@ ideal. If not, extract **by concept** with a name that already exists in the
 domain (`_gate_before_cycle`, `_announce_stopped`, `inspect_stack`) — never
 `foo_part1`. A class over the ideal gets a single-responsibility split, the way
 `services/run/` and `stores/history_repo*` were split (§18.2). Too many params
-get a parameter object: `PersonPageRequest` in `backend/history_query.py` is the
+get a parameter object: `PersonPageRequest` in `backend/history_query/` is the
 model — `needle` / `where` / `order` / `spec` / `columns` as properties of one
 typed request instead of five arguments.
 

@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**86 documents in 15 groups.**
+**88 documents in 15 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -27,7 +27,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-cc-tail/`](#2026-09-11-cc-tail) | 1 | Round 3 of the CC tail: find ALL functions over the gate, prioritize, fix — how the project max CC fell to 10. |
 | [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | RULE 1’s worked examples (visual click runner), moved out of the rules file so it stays loadable in one read. |
-| [`2026-09-12-god-classes/`](#2026-09-12-god-classes) | 4 | The god-class & size-debt round (RULE 19 step 4): the plan, step 1 — splitting `backend/chat_sync.py`, step 2 — splitting the deletion family into `services/db_deletion/`, and step 3 — splitting `backend/scroll_parser.py`. |
+| [`2026-09-12-god-classes/`](#2026-09-12-god-classes) | 6 | The god-class & size-debt round (RULE 19 step 4): the plan, and steps 1–5 — splitting `chat_sync`, the deletion family, `scroll_parser`, `Collector` and `history_query`. |
 
 ---
 
@@ -242,9 +242,11 @@ The god-class & size-debt round (RULE 19 step 4): complexity (nesting → CC →
 cognitive) is green, so the work moves to size — splitting the oversized,
 low-cohesion modules the baseline flagged as known debt.
 
-*4 docs.*
+*6 docs.*
 
 - [`ROUND_PLAN_2026-09-12.md`](2026-09-12-god-classes/ROUND_PLAN_2026-09-12.md) — The prioritized problem list and the 8-step extraction plan
 - [`STEP1_CHAT_SYNC_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP1_CHAT_SYNC_DESIGN_2026-09-12.md) — Step 1: `backend/chat_sync.py` → `backend/chat_sync/` sub-package, with before/after numbers
 - [`STEP2_DB_DELETION_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP2_DB_DELETION_DESIGN_2026-09-12.md) — Step 2: the deletion family → `services/db_deletion/`, with the patch-target contract preserved
 - [`STEP3_SCROLL_PARSER_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP3_SCROLL_PARSER_DESIGN_2026-09-12.md) — Step 3: `backend/scroll_parser.py` → `backend/scroll_parser/`, one mixin per phase, with the `asyncio` patch seam preserved
+- [`STEP4_COLLECTOR_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP4_COLLECTOR_DESIGN_2026-09-12.md) — Step 4: `services/collector_service.py` → `services/collector/`, five mixins + a facade, with the `sync_conversation` patch seam preserved
+- [`STEP5_HISTORY_QUERY_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP5_HISTORY_QUERY_DESIGN_2026-09-12.md) — Step 5: `backend/history_query.py` → `backend/history_query/`, three mixins + value objects, with the frozen test seam preserved

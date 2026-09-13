@@ -2522,11 +2522,16 @@
    "functions": {},
    "values": {}
   },
-  "backend.history_query": {
+  "backend.history_query.constants": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.paging": {
    "classes": {
-    "HistoryQuery": {
+    "PagingMixin": {
      "ancestry": [
-      "HistoryQuery",
+      "PagingMixin",
       "object"
      ],
      "attrs": {},
@@ -2536,7 +2541,38 @@
      "fields": {},
      "inherited": {},
      "methods": {
-      "__init__": "(self, db: 'HistoryDB')",
+      "around": "(self, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
+      "gaps": "(self, person_id: 'int') -> 'list[dict]'",
+      "page": "(self, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.person": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.query": {
+   "classes": {
+    "HistoryQuery": {
+     "ancestry": [
+      "HistoryQuery",
+      "PagingMixin",
+      "SearchMixin",
+      "UserDbMixin",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "PagingMixin",
+      "SearchMixin",
+      "UserDbMixin"
+     ],
+     "fields": {},
+     "inherited": {
       "around": "(self, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
       "db_stats": "(self) -> 'dict'",
       "gaps": "(self, person_id: 'int') -> 'list[dict]'",
@@ -2545,8 +2581,17 @@
       "person_stats": "(self, nick: 'str') -> 'dict'",
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+     },
+     "methods": {
+      "__init__": "(self, db: 'HistoryDB')"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.request": {
+   "classes": {
     "PersonPageRequest": {
      "ancestry": [
       "PersonPageRequest",
@@ -2598,6 +2643,56 @@
       "resolved_dir": "(self) -> 'str'",
       "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
       "where": "(self) -> 'tuple[str, list]'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.search": {
+   "classes": {
+    "SearchMixin": {
+     "ancestry": [
+      "SearchMixin",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
+      "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.search_text": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.userdb": {
+   "classes": {
+    "UserDbMixin": {
+     "ancestry": [
+      "UserDbMixin",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "db_stats": "(self) -> 'dict'",
+      "list_persons": "(self, req: 'PersonPageRequest') -> 'dict'",
+      "person_stats": "(self, nick: 'str') -> 'dict'"
      }
     }
    },
