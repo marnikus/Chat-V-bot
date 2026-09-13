@@ -130,6 +130,24 @@ Two things the implementation found that the design had not:
   matched. `realEl()` now reads both off the markup — which is what makes the
   "it IS the Bookmarks panel" assertions meaningful rather than decorative.
 
+* **The popup was a child of `<main class="sash-grid">`, so the grid deleted
+  it.** Reported from the running app: the ⚙ opened nothing at all.
+  `SashGrid.render()` ends in `gridEl.replaceChildren(frag)`, which discards
+  every child of `<main>` and re-adds only the **registered window panels**
+  (`winBotChat`, `winBotPrompt`, …). The popup is not a grid window, so it was
+  destroyed during boot; `getElementById` then returned `null`, `init()` hit its
+  own `if (!this._els.backdrop) return` guard, and the button was never wired.
+  Nothing threw, and every other assertion in the suite still passed — the
+  element the tests asked for was fabricated by the stub, not read from a live
+  DOM. It now sits beside `#layoutMenu`, outside `<main>`, which is where the
+  Bookmarks popup it was modelled on had been all along. Pinned by
+  *the popup lives OUTSIDE the sash grid, or it is destroyed on boot*, verified
+  by reverting the move and watching it fail.
+
+  The general rule this encodes: **anything inside `<main>` that is not a
+  registered sash window is deleted on the first render.** Overlays belong
+  outside it.
+
 Also removed: `aria-modal="true"`. It was a lie once the dialog stopped trapping
 focus, and a screen reader would have announced a modal the user could click
 straight out of.
@@ -139,7 +157,7 @@ straight out of.
 * RULE 16 gate **clean**, 0 new clone groups, 0 stale baseline entries.
 * Full Python suite **3002 passed**, 1 known pre-existing failure
   (`test_engine_standalone_run`), unrelated.
-* JS: `test_bot_chat_js.js` 71 → **75**, new `test_dark_select_js.js` **17**.
+* JS: `test_bot_chat_js.js` 71 → **76**, new `test_dark_select_js.js` **17**.
 * Feature coverage **97.6%** (baseline 97%).
 * RULE 18: every new function inside 4–20 lines. Files: `dark-select.js` 193
   and `bot_connections.py` 231 are mid-band; `bot-prompt.js` **406 → 354** now
