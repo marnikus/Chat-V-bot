@@ -51,9 +51,15 @@ OWNED = [
 # snapshot forbids removing `HistoryQuery` methods and the QWebChannel wire
 # contract pins `HistoryBridge`'s slot set. Frozen at the 3820136 measurement:
 # they may shrink, they may not grow.
+#
+# `HistoryBridge` re-frozen at 467/44 (was 493/45) after the boot-wait fix
+# moved `_run_async`'s guard into `services.world_events.run_when_world_open`.
+# The method count drops by one because the gate counts nested defs through
+# `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
+# method of real shrink, locked here so it cannot be handed back.
 RATCHET = {
     ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 493, "methods": 45},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is
@@ -76,16 +82,94 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # __future__ / json / logging / os / PySide6.QtCore), present since the base
 # commit 3820136, i.e. it predates this feature. Verified with
 # `git log -L 8,15:bridge/history_bridge.py`.
+#
+# Maintenance 2026-09-11 (DB undo/restore): the AREA C sized split removed two
+# of these outright — ('app/lifecycle.py', 'services/history/export.py') and
+# ('services/history/mutate.py', 'services/undo_service.py') no longer share a
+# window (export.py gained one import, UndoService shed the commit/scheduling
+# code). One new group appeared and is the same kind of noise:
+# ('services/history/query.py', 'services/undo_service.py') is the plain
+# `from __future__ / copy / json / logging / os` header — undo_service no
+# longer imports asyncio (the task plumbing moved to undo_timeline.py), which
+# left those two files with the identical 6-line header. No logic is copied.
+#
+# Maintenance 2026-09-12 (Round F, step F1): splitting `services/db_deletion.py`
+# (665 lines) into the `db_deletion_*` family added one group of the same kind —
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py') share
+# the 6-line header `from __future__ / os / dataclasses(dataclass, field) /
+# from services import db_deletion_paths as _paths`. Both modules genuinely need
+# exactly those four imports, and the shared `_paths` alias is not incidental:
+# it is what keeps `canonical()` patchable at one place now that its callers
+# live in five files (see the note in tests/integration/safety_deletion/
+# test_deletion_defensive.py). No logic is copied.
+# Tried and rejected as fixes: a module constant between the imports and the
+# code does NOT dissolve the group, because the scanner hashes every
+# *consecutive* statement window and the four imports remain one; and dropping
+# the blank line between import groups would hide the group by shrinking its
+# span below MIN_SPAN, which is gaming the scanner (§18.5), not fixing it.
+#
+# Maintenance 2026-09-12 (Round F, step F2): decomposing `Collector`
+# (526 class LOC / 40 methods) into the `services/collector_*` family removed
+# one group and added one, so the count is unchanged at 12. Both halves are
+# recorded because they were verified separately, not assumed.
+#
+# REMOVED — ('bridge/stack_bridge.py', 'services/collector_service.py'). Same
+# header noise as the others: both opened
+# `from __future__ / asyncio / json / logging / datetime`. Moving the payload
+# shaping into services/collector_report.py left collector_service.py with no
+# `json` use at all, so the dead import was deleted and the header shrank to
+# four statements. The ratchet working as intended, not a scanner dodge: the
+# import genuinely went unused (pylint W0611 flagged it).
+#
+# ADDED — ('services/collector_partner.py', 'services/collector_report.py'),
+# span 6 at line 9 in both: `from __future__ import annotations` / `import
+# json` / `import logging` / `from typing import Optional`. This one only
+# appeared once the two modules were given PEP8-grouped imports (pylint C0411
+# failed on the alphabetical-by-text order the generator first emitted), which
+# is the honest order and the one every other module here uses. No logic is
+# copied. Each of the four names is genuinely used in BOTH files — `json.dumps`
+# for the emitted payloads, `log.debug` in the emit-failure handlers, `Optional`
+# in the `nick` parameter — and vulture at confidence 90 reports no dead code in
+# either module, so there is no unused import to delete that would dissolve the
+# window. Tried and rejected: reordering the imports back to dissolve the group
+# would reintroduce C0411 and is exactly the cosmetic span-shrinking §18.5
+# forbids. This is the same situation as the F1 pair
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py')
+# directly below.
+#
+# ── Round F step F3 (UndoService → the undo_* family) ────────────────
+#
+# DISSOLVED — ('services/history/query.py', 'services/undo_service.py').
+# undo_service.py went from 573 lines to 248 and its import header went with
+# the code that used it: `json`, `os` and `logging` all left for
+# undo_apply.py / undo_world.py, so the shared window no longer exists. The
+# gate reported it stale and it is deleted here — the ratchet working down
+# rather than rotting into fiction.
+#
+# ADDED — ('services/history/query.py', 'services/undo_world.py'), span 6 at
+# query.py:1 and undo_world.py:17: `from __future__ import annotations` /
+# `import copy` / `import json` / `import logging` / `import os`, with
+# `log = logging.getLogger("chatbot")` immediately below in both. No logic is
+# copied — it is the standard header of a leaf service module. Every name is
+# genuinely used in undo_world.py: `copy.deepcopy` in sync_world_state,
+# `json.dumps` in emit_db_change, `logging` for the module logger,
+# `os.path.abspath` / `os.path.basename` in restart_world, and `annotations`
+# for the `Result[None]` / `list[dict]` hints. vulture reports NOTHING in
+# undo_world.py at any confidence, so there is no unused import whose removal
+# would dissolve the window honestly. Tried and rejected: reordering or
+# splitting the imports to break the span is exactly the cosmetic
+# span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
+# situation as the F1 pair below and the two F2 pairs above.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("app/lifecycle.py", "services/history/export.py"),
     ("backend/media_handler.py", "backend/message_injector.py"),
     ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
-    ("bridge/stack_bridge.py", "services/collector_service.py"),
-    ("services/history/mutate.py", "services/undo_service.py"),
+    ("services/collector_partner.py", "services/collector_report.py"),
+    ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
+    ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),
     ("stores/atomic.py", "stores/jsonio.py"),

@@ -563,7 +563,7 @@ reference implementation of that count is the AST walker in
   including every `except` branch. Most new code should land here.
 * **Over 20** usually means a second responsibility is hiding inside the first.
   How to get back down — and in which order — is RULE 19.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1 — **57.7%** of 1 668 functions are in band (median 6 lines).
+* *Measured:* 2026-09-12, after the DB-undo-restore port — **63.6%** of 1 997 functions are in band (median 7 lines, mean 9.7, p90 21). The 2026-09-11 snapshot is `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §1; today's reproduction is in the port notes.
 
 ### 18.2 Files — 150–300 lines
 
@@ -578,9 +578,19 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §2 — 141 files, median **130** lines, and the **9 files still
-  over 500** are listed there. They are known debt (§16.5 landmines): do not grow
-  them, extract from them when you next touch them.
+* *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
+  files move. 2026-09-13: **171 files, median 136, 7 still over 500**. Five of the
+  seven are `backend/` files the frozen AREA D snapshot forbids splitting; the
+  reason, and the decision it needs, are in
+  [`ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
+  §2 and §7. Of the other two, `bridge/history_bridge.py` carries step F4's §18.5
+  note naming its Qt slot contract, and `services/db_deletion_flow.py` sits inside
+  the F1 family — recorded as its next candidate rather than given a note, because
+  §18.5 wants a constraint named and only scope applies; the same reasoning parks
+  `services/collector_tick.py` inside the F2 family. How steps F1–F3 produced the
+  three families, recorded against every number they aimed at:
+  [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
+  §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -591,9 +601,25 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured:* `reports/IDEAL_SIZE_BASELINE_2026-09-11.md` §3 — `core/` 5, `bridge/` 12, `services/` 16 in band;
-  `stores/` 35, `backend/` 30, `actions/` 23 over it, each held together by prefix
-  families. When a family grows again, promote it to a sub-package.
+* *Measured:* re-measure rather than trusting numbers written here — directories
+  move. 2026-09-13: in band `core/`, `app/`, `bridge/`, `services/history/`,
+  `services/run/`; past 15 files and held only by prefix families `services/`,
+  `stores/`, `backend/`, `actions/`. Cohesion is what earns the counting and it is
+  testable, not taste: `collector_*` share the `CollectorState` vocabulary and the
+  `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
+  protocol, and `stores/`'s eight single-domain stores each import the JSON write
+  layer while importing none of each other — eight modules, not one family.
+* `stores/` is therefore 37 files counting as **15** modules (`history_*`,
+  `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
+  aggregate/collaborator pairs, eight single-domain stores). Its sub-package remedy
+  is closed by contract rather than effort — AREA B's baseline keys are dotted
+  module paths, so moving `stores/history_*` into `stores/history/` breaks plan
+  §7.3 rule 1 — and merging is closed because it undoes the AREA B2 splits and
+  lands outside §18.2's band. So count families: `tools/metrics/stores_modules.py`
+  measures and ratchets that count against the import graph, and a new loose file
+  fails the gate until someone says where it belongs;
+  `test_stores_module_families.py` enforces it in the suite. Why, with the merge
+  arithmetic: ROUND_F_DESIGN_2026-09-12.md §11.5.
 
 ### 18.4 Context files — 60–200 lines
 

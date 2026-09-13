@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
 
 from core.events import EventBus, PeopleChanged, UsersDeleted
 from core.result import Err, Ok, Result
@@ -202,9 +201,15 @@ class PeopleService:
         self._bus.emit(PeopleChanged(reason="cleared"))
         return Ok(count)
 
-    async def apply(self, rows: list) -> Result[int]:
+    async def apply(self, rows: list, forward: bool = False) -> Result[int]:
         """Restore the people list to a snapshot (undo/redo of a people
-        entry, or an archive delete that carried the queue row)."""
+        entry, or an archive delete that carried the queue row).
+
+        This is the ONLY line a people undo writes: `undo_apply._log_command`
+        does not announce the intent for a kind that reports itself
+        (SYSTEM_OF_RECORD I-22), so the arrow here has to carry the direction —
+        `forward` is a redo re-applying the entry's "after" snapshot.
+        """
         rows = [dict(r) for r in (rows or [])]
         try:
             count = await self._memory.replace_all(rows)
@@ -215,6 +220,7 @@ class PeopleService:
         # skipped there) — report that, not the raw snapshot length
         count = int(count) if isinstance(count, int) else \
             sum(1 for r in rows if str(r.get("nick") or "").strip())
-        self._log(f"↩ People list restored — {count} person(s)", "info")
+        self._log(f"{'↪' if forward else '↩'} People list restored — "
+                  f"{count} person(s)", "info")
         self._bus.emit(PeopleChanged(reason="restored"))
         return Ok(count)

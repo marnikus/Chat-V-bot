@@ -42,6 +42,7 @@ from core.events import LogMessage
 from services.people_service import people_row
 from services.run import normalize_blocks
 from services.undo_service import UndoService
+from services.world_events import announce_world_live
 from stores.preset_store import PresetStore
 
 log = logging.getLogger("chatbot")
@@ -320,6 +321,20 @@ async def sync_world_state(self) -> None:
     """Rebuild the unified undo timeline after a world change."""
     ctx, _bridges = self._ensure_ctx()
     await ctx.undo.sync_world_state()
+
+
+@_router_method
+async def announce_world_ready(self) -> None:
+    """The world finished opening — every window may load it now.
+
+    Called once by `ApplicationLifecycle.startup`: the page is up long
+    before `memory.init()` / `history.init()` are done, so its first list
+    requests hit a closed world and the user had to press the refresh
+    buttons. The broadcast reloads the People list, the Full User
+    Database, the DB Connection window and the label pills instead.
+    """
+    ctx, _bridges = self._ensure_ctx()
+    announce_world_live(ctx.bus, ctx.label_store(), reason="startup")
 
 
 # ── legacy instance methods used by tests ──────────────────────────

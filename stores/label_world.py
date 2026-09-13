@@ -21,6 +21,47 @@ from stores.label_rules import DEFAULT_COLOR, FILTER_KEY
 log = logging.getLogger("chatbot")
 
 
+def _defs_from_rows(rows) -> list[dict]:
+    """Label defs straight from the labels table, in row order."""
+    return [{"id": str(r["id"]), "name": str(r["name"] or ""),
+             "color": str(r["color"] or DEFAULT_COLOR),
+             "created_at": str(r["created_at"] or "")} for r in rows]
+
+
+def _assign_from_pairs(pairs, known: set) -> dict:
+    """nick -> label ids from label_assigns, unknown ids dropped."""
+    assign: dict[str, list[str]] = {}
+    for nick, label_id in pairs:
+        if label_id in known:
+            assign.setdefault(str(nick), []).append(str(label_id))
+    return assign
+
+
+def _filter_from_raw(raw_filter) -> dict:
+    """The include/exclude filter from its stored JSON (corrupt -> empty)."""
+    filter_state = {"include": [], "exclude": []}
+    if not raw_filter:
+        return filter_state
+    try:
+        data = json.loads(str(raw_filter))
+    except (TypeError, ValueError):
+        return filter_state
+    if isinstance(data, dict):
+        filter_state = {"include": [str(i) for i in data.get("include") or []],
+                        "exclude": [str(i) for i in data.get("exclude") or []]}
+    return filter_state
+
+
+async def _next_id_from_db(db) -> int:
+    """labels_next_id from schema_meta; corrupt meta must not brick the load."""
+    try:
+        return int(await db.scalar(
+            "SELECT value FROM schema_meta WHERE key='labels_next_id'",
+            (), 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 class LabelWorldSync:
     """Writes the dirty payload through to whichever `HistoryDB` is bound.
 
@@ -40,35 +81,14 @@ class LabelWorldSync:
         self._owner._dirty = False
         rows = await db.fetchdicts("SELECT id, name, color, created_at "
                                    "FROM labels ORDER BY rowid")
-        defs = [{"id": str(r["id"]), "name": str(r["name"] or ""),
-                 "color": str(r["color"] or DEFAULT_COLOR),
-                 "created_at": str(r["created_at"] or "")} for r in rows]
-        assign: dict[str, list[str]] = {}
-        known = {d["id"] for d in defs}
+        defs = _defs_from_rows(rows)
         pairs = await db.fetchall("SELECT nick, label_id FROM label_assigns "
                                   "ORDER BY rowid")
-        for nick, label_id in pairs:
-            if label_id in known:
-                assign.setdefault(str(nick), []).append(str(label_id))
-        filter_state = {"include": [], "exclude": []}
+        assign = _assign_from_pairs(pairs, {d["id"] for d in defs})
         raw_filter = await db.scalar(
             "SELECT value FROM app_settings WHERE key=?", (FILTER_KEY,), "")
-        if raw_filter:
-            try:
-                data = json.loads(str(raw_filter))
-                if isinstance(data, dict):
-                    filter_state = {"include": [str(i) for i in
-                                                data.get("include") or []],
-                                    "exclude": [str(i) for i in
-                                                data.get("exclude") or []]}
-            except (TypeError, ValueError):
-                pass
-        try:
-            next_id = int(await db.scalar(
-                "SELECT value FROM schema_meta WHERE key='labels_next_id'",
-                (), 0))
-        except (TypeError, ValueError):
-            next_id = 0  # corrupt meta must not brick the world load
+        filter_state = _filter_from_raw(raw_filter)
+        next_id = await _next_id_from_db(db)
         self._owner._memory = {"defs": defs, "assign": assign,
                         "filter": filter_state, "next_id": next_id}
         return self._owner._normalized()

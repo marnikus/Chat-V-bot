@@ -1,6 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════
    history-db.js — the Full User Database window
 
+   ideal-size: 447 lines reason=this is the ONE module behind the window's
+   DOM (list, sort headers, paging, live refresh, per-row actions and the
+   trash button); splitting it would put one window's behaviour in two files
+   and break the `HistoryDb.<method>` surface the Node harness loads.
+
    Every person the archive has ever seen, merged by nick (one row per
    person, never a duplicate), loaded lazily as the user scrolls, with a
    search over nicks and a live message-count. Clicking a row opens that
@@ -29,6 +34,15 @@ const HistoryDb = {
   preloadRows: 40,
   _seq: 0,
   _els: {},
+  // ── failed-read retry ─────────────────────────────────────────
+  // When a page/stats request dies (the world was still opening, the boot
+  // answer was lost), the loader would stick at `loading === true` and the
+  // table stayed empty until the user pressed ↻ by hand. A bounded retry
+  // re-asks instead — a good answer resets the budget (see onPage).
+  RETRY_MAX: 5,
+  RETRY_MS: 1000,
+  _retries: 0,
+  _retryTimer: null,
 
   init() {
     const $ = (id) => document.getElementById(id);
@@ -146,12 +160,20 @@ const HistoryDb = {
     });
   },
 
-  reload() {
+  reload(options) {
+    options = options || {};
     this.rows = [];
     this.hasMore = true;
     this.loading = false;
-    // A new order (or a new query) makes the old scroll position meaningless.
-    if (this._els.list) this._els.list.scrollTop = 0;
+    // A fresh load supersedes a pending retry — except the retry's own
+    // reload, which keeps counting against the budget (see onError).
+    clearTimeout(this._retryTimer);
+    this._retryTimer = null;
+    if (!options._retry) this._retries = 0;
+    // A live append must not throw the reader back to the top of the table;
+    // a new order or a new query makes the old position meaningless.
+    if (this._els.list && !options.keepScroll)
+      this._els.list.scrollTop = 0;
     this._request(0);
     this._requestStats();
   },
@@ -174,11 +196,29 @@ const HistoryDb = {
     App.bridge.userdb_stats('s' + (++this._seq));
   },
 
+  /** A read failed on the backend (`history_error`): un-stick the loader and
+   *  re-ask on our own, so a lost boot answer heals without a manual ↻.
+   *  Only our own scopes retry; anything else is none of our business. */
+  onError(scope) {
+    if (scope !== 'userdb_page' && scope !== 'userdb_stats') return;
+    this.loading = false;
+    if (this._retries >= this.RETRY_MAX || this._retryTimer) return;
+    this._retries += 1;
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      this.reload({ keepScroll: true, _retry: true });
+    }, this.RETRY_MS);
+  },
+
   onPage(reqId, json) {
     let data = null;
     try { data = JSON.parse(json); } catch (e) { data = null; }
     if (!data) { this.loading = false; return; }
     this.loading = false;
+    // A good answer pays off the retry budget and cancels a pending retry.
+    clearTimeout(this._retryTimer);
+    this._retryTimer = null;
+    this._retries = 0;
     if (data.persons !== undefined && data.items === undefined) {
       this.onStats(data);
       return;
@@ -207,7 +247,20 @@ const HistoryDb = {
   },
 
   onChanged() {
+    clearTimeout(this._liveTimer);       // a named change beats the batch
     this.reload();
+  },
+
+  /** A change heard through the bridge (someone was collected, a label was
+   *  edited): refresh, but not once per message — the collector writes in
+   *  chunks. The scroll position is kept so a live chat does not jump. */
+  liveChanged(reason) {
+    this._liveReason = reason || '';
+    clearTimeout(this._liveTimer);
+    this._liveTimer = setTimeout(() => {
+      this._liveReason = '';
+      if (this._els.body) this.reload({ keepScroll: true });
+    }, 400);
   },
 
   _onScroll() {
@@ -217,7 +270,11 @@ const HistoryDb = {
     if (remaining < 120) this._request(this.rows.length);
   },
 
-  /** Remove the person AND their whole history (one undoable step). */
+  /** Remove the person AND their whole history — one undoable step.
+   *
+   *  No confirmation (BUG fix 2026-09-11): Ctrl+Z restores both halves, and
+   *  the hidden rows are kept until this session ends, so the click can be
+   *  taken back without a dialog in the way. */
   deletePerson(nick) {
     if (!App.bridge || !App.bridge.history_delete_person) return;
     App.bridge.history_delete_person(nick, false);

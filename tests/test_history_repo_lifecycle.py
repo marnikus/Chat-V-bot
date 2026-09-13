@@ -149,6 +149,30 @@ class TestPurgeAndPersonDelete(RepoCase):
         self.assertEqual(await self.repo.purge_deleted(), 4)
         self.assertEqual(await self.repo.deleted_count(), 0)
 
+    async def test_purge_without_a_nick_erases_tombstoned_people(self):
+        """“Empty trash” takes the whole tombstone, not just the messages."""
+        await self.seed("Nick", n=2)
+        await self.seed("Bea", n=2)
+        await self.repo.delete_person("Nick", hard=False,
+                                      token=self.repo.new_op_token())
+        self.assertEqual(await self.repo.purge_deleted(), 2)
+        self.assertIsNone(await self.repo.get_person("Nick"),
+                          "the tombstoned person must be gone, not just hidden")
+        self.assertIsNotNone(await self.repo.get_person("Bea"),
+                             "a living person must survive the sweep")
+        self.assertEqual(await self.visible_texts("Bea"), ["line 0", "line 1"])
+
+    async def test_purge_of_one_nick_leaves_the_other_tombstone(self):
+        await self.seed("Nick", n=2)
+        await self.seed("Bea", n=2)
+        await self.repo.delete_person("Bea", hard=False,
+                                      token=self.repo.new_op_token())
+        self.assertEqual(await self.repo.purge_deleted("Nick"), 0)
+        self.assertIsNotNone(await self.repo.get_person("Bea"),
+                             "purging one nick must not empty the whole trash")
+        self.assertEqual(await self.repo.purge_deleted("ghost"), 0,
+                         "a nick nobody has purges nothing")
+
     async def test_soft_person_delete_restores_person_and_rows(self):
         await self.seed("Nick", n=3)
         token = await self.repo.soft_delete_history("Nick")

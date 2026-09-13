@@ -82,6 +82,18 @@ class JsonFileStore:
             self._owned = AtomicJsonStore(self._path)
         return self._owned
 
+    # ── per-path identity (cached stores) ────────────────────────
+    @classmethod
+    def _instance_for(cls, key: str):
+        """The per-path cached instance, creating + registering a fresh one."""
+        cached = cls._by_path.get(key)
+        if cached is not None:
+            return cached
+        instance = super().__new__(cls)
+        instance._cache_key = key
+        cls._by_path[key] = instance
+        return instance
+
     # ── normalisation ────────────────────────────────────────────
     def _coerce(self, raw: Any) -> dict[str, Any]:
         """The payload as stored. A non-dict file is an empty one."""

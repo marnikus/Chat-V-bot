@@ -39,26 +39,15 @@ class LayoutService:
             else None
 
     @classmethod
-    def normalize_grid_tree(cls, node, depth: int = 0):
-        """Return a canonical `t` tree or an explanatory validation error."""
-        if depth > 12:
-            return None, "tree too deep"
-        if not isinstance(node, dict):
-            return None, "node must be an object"
-        node_type = cls.node_type(node)
-        if node_type == "leaf":
-            if not isinstance(node.get("id"), str) or not node.get("id"):
-                return None, "leaf without id"
-            return {"t": "leaf", "id": node["id"]}, None
-        if node_type != "split":
-            return None, "unknown node type"
-        if node.get("dir") not in ("row", "col"):
-            return None, "bad dir"
-        kids, sizes = node.get("children"), node.get("sizes")
-        if not isinstance(kids, list) or len(kids) < 2:
-            return None, "split needs >=2 children"
-        if not isinstance(sizes, list) or len(sizes) != len(kids):
-            return None, "sizes must match children"
+    def _clean_leaf(cls, node):
+        """Canonical leaf node, or the pinned error for a missing id."""
+        if not isinstance(node.get("id"), str) or not node.get("id"):
+            return None, "leaf without id"
+        return {"t": "leaf", "id": node["id"]}, None
+
+    @classmethod
+    def _clean_sizes(cls, sizes):
+        """Validated sizes list, or the pinned error string."""
         clean_sizes = []
         for size in sizes:
             if (isinstance(size, bool) or not isinstance(size, (int, float))
@@ -67,6 +56,19 @@ class LayoutService:
             clean_sizes.append(size)
         if not 99.5 <= sum(clean_sizes) <= 100.5:
             return None, "sizes must sum to 100"
+        return clean_sizes, None
+
+    @classmethod
+    def _clean_split(cls, node, depth):
+        """Canonical split node, or the first child validation error."""
+        kids, sizes = node.get("children"), node.get("sizes")
+        if not isinstance(kids, list) or len(kids) < 2:
+            return None, "split needs >=2 children"
+        if not isinstance(sizes, list) or len(sizes) != len(kids):
+            return None, "sizes must match children"
+        clean_sizes, err = cls._clean_sizes(sizes)
+        if err:
+            return None, err
         clean_kids = []
         for kid in kids:
             clean, err = cls.normalize_grid_tree(kid, depth + 1)
@@ -75,6 +77,22 @@ class LayoutService:
             clean_kids.append(clean)
         return {"t": "split", "dir": node["dir"],
                 "children": clean_kids, "sizes": clean_sizes}, None
+
+    @classmethod
+    def normalize_grid_tree(cls, node, depth: int = 0):
+        """Return a canonical `t` tree or an explanatory validation error."""
+        if depth > 12:
+            return None, "tree too deep"
+        if not isinstance(node, dict):
+            return None, "node must be an object"
+        node_type = cls.node_type(node)
+        if node_type == "leaf":
+            return cls._clean_leaf(node)
+        if node_type != "split":
+            return None, "unknown node type"
+        if node.get("dir") not in ("row", "col"):
+            return None, "bad dir"
+        return cls._clean_split(node, depth)
 
     @classmethod
     def validate_grid_tree(cls, node, depth: int = 0):
@@ -96,8 +114,8 @@ class LayoutService:
 
     # ── payload parsing ──────────────────────────────────────────
     @classmethod
-    def parse_grid_payload(cls, raw: str):
-        """Return (canonical tree, None) or (None, error)."""
+    def _decode_payload(cls, raw: str):
+        """(payload dict, None) or (None, the pinned parse/version error)."""
         try:
             data = json.loads(raw)
         except Exception as exc:                        # noqa: BLE001
@@ -108,9 +126,11 @@ class LayoutService:
         if not isinstance(version, int) or \
                 not 1 <= version <= cls.GRID_VERSION:
             return None, f"unsupported version {version!r}"
-        tree, err = cls.normalize_grid_tree(data.get("tree"))
-        if err:
-            return None, err
+        return data, None
+
+    @classmethod
+    def _window_set_ok(cls, tree, version):
+        """(tree, None) — possibly upgraded — or (None, mismatch error)."""
         got = sorted(i for i in cls.leaf_ids(tree) if i)
         known = {1: sorted(cls.V1_WINDOW_IDS), 2: sorted(cls.V2_WINDOW_IDS)}
         if version < cls.GRID_VERSION and got == known.get(version):
@@ -123,6 +143,17 @@ class LayoutService:
             return None, ("window set mismatch "
                           "(every window must appear once)")
         return tree, None
+
+    @classmethod
+    def parse_grid_payload(cls, raw: str):
+        """Return (canonical tree, None) or (None, error)."""
+        data, err = cls._decode_payload(raw)
+        if err:
+            return None, err
+        tree, err = cls.normalize_grid_tree(data.get("tree"))
+        if err:
+            return None, err
+        return cls._window_set_ok(tree, data.get("v"))
 
     @classmethod
     def migrate_grid_tree(cls, tree: dict) -> dict:

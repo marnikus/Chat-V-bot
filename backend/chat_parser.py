@@ -203,12 +203,45 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
     """
     state = state if isinstance(state, dict) else {}
     names = _GateNames.read(state, nick, my_nick)
+    # The guard ORDER is part of the contract: the run panel shows whichever
+    # reason fired first, so not_private → no_partner → title → self_chat →
+    # authors must stay in that sequence.
+    refusal = _tab_gate(state, names, require_private)
+    if refusal is not None:
+        return refusal
+    refusal = _partner_gate(names)
+    if refusal is not None:
+        return refusal
+    refusal = _title_gate(names)
+    if refusal is not None:
+        return refusal
+
+    # ── step 1: exactly two nicks ─────────────────────────────────
+    authors = _authors_of(state, items, names)
+    if authors is None:
+        return names.refuse("no_author_data",
+                            "this page cannot tell me who wrote what")
+    return _strangers_verdict(authors, names)
+
+
+def _tab_gate(state: dict, names, require_private: bool):
+    """The tab-is-private guard; None when the tab passes it."""
     if require_private and str(state.get("tab") or "") != "private":
         return names.refuse("not_private",
                             "the active tab is not a private chat")
+    return None
+
+
+def _partner_gate(names):
+    """The tab-names-a-person guard; None when a partner is present."""
     if not names.target or not names.partner:
         return names.refuse("no_partner",
                             "the active tab does not name a person")
+    return None
+
+
+def _title_gate(names):
+    """The tab-title guard and the self-chat guard, in their pinned order."""
     # ── step 2: the tab title ─────────────────────────────────────
     if not title_matches(names.title, names.target):
         return names.refuse(
@@ -217,12 +250,11 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
             f"not “{names.target}”")
     if _is_self_chat(names):
         return names.refuse("self_chat", "the partner is my own nick")
+    return None
 
-    # ── step 1: exactly two nicks ─────────────────────────────────
-    authors = _authors_of(state, items, names)
-    if authors is None:
-        return names.refuse("no_author_data",
-                            "this page cannot tell me who wrote what")
+
+def _strangers_verdict(authors, names) -> PrivateCheck:
+    """Who else writes here: ok when only the two of us do."""
     ins, outs = authors
     me, foreign = _foreign_authors(outs, names)
     strangers = _distinct([a for a in ins
@@ -331,25 +363,43 @@ class ChatParser:
         deadline = asyncio.get_event_loop().time() + max_wait_s
         state = first_state
         while stable < stable_polls:
-            state = await self.state()
-            state = state if isinstance(state, dict) else {}
-            scroll = state.get("scroll") or {}
-            count = int(state.get("count") or 0)
-            settled = bool(scroll.get("atTop")) and count >= floor
-            if settled and count == last_count:
-                stable += 1
-            else:
-                stable = 0
+            state, count, settled = await self._poll_snapshot(floor)
+            stable = stable + 1 if settled and count == last_count else 0
             last_count = count
             state["_settled"] = stable >= stable_polls
-            if stable >= stable_polls:
-                return state
-            if asyncio.get_event_loop().time() >= deadline:
-                state["_settled"] = False
-                return state
+            done = self._settle_exit(state, stable, stable_polls, deadline)
+            if done is not None:
+                return done
             await asyncio.sleep(wait_ms / 1000.0)
         state["_settled"] = True
         return state
+
+    async def _poll_snapshot(self, floor: int) -> tuple:
+        """One settle poll → (state, visible count, at-top-and-above-floor).
+
+        The count floor is what keeps a slow or virtualised page from being
+        mistaken for an empty chat while it re-renders older lines.
+        """
+        state = await self.state()
+        state = state if isinstance(state, dict) else {}
+        count = int(state.get("count") or 0)
+        scroll = state.get("scroll") or {}
+        return state, count, bool(scroll.get("atTop")) and count >= floor
+
+    @staticmethod
+    def _settle_exit(state: dict, stable: int, stable_polls: int,
+                     deadline: float) -> Optional[dict]:
+        """The loop's exit — the state to return — or None to poll again.
+
+        A timeout reports `_settled=False` so the caller knows the full scan
+        is incomplete and must be retried.
+        """
+        if stable >= stable_polls:
+            return state
+        if asyncio.get_event_loop().time() >= deadline:
+            state["_settled"] = False
+            return state
+        return None
 
     async def pause(self) -> None:
         if self.chunk_pause_ms:

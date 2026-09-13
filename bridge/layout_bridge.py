@@ -103,17 +103,34 @@ class LayoutBridge(QObject):
     @Slot(result=str)
     def get_window_states(self):
         raw = self.ctx.config.get_state("window_states", None)
-        if isinstance(raw, dict):
-            closed = raw.get("closed", [])
-            minimized = raw.get("minimized", [])
-            closed = [i for i in closed
-                      if isinstance(i, str) and i in self.WINDOW_IDS]
-            minimized = [i for i in minimized
-                         if isinstance(i, str)
-                         and i in self.WINDOW_IDS and i not in closed]
-            return json.dumps({"closed": closed, "minimized": minimized},
-                              ensure_ascii=False)
-        return ""
+        if not isinstance(raw, dict):
+            return ""
+        closed, minimized = self._window_state_pair(raw.get("closed", []),
+                                                    raw.get("minimized", []))
+        return json.dumps({"closed": closed, "minimized": minimized},
+                          ensure_ascii=False)
+
+    def _known_window_ids(self, values) -> list:
+        """The subset of `values` that are window ids this build knows.
+
+        Anything else — a non-list payload, a stale id from a removed window,
+        a non-string entry — is dropped rather than passed to the frontend.
+        """
+        if not isinstance(values, list):
+            return []
+        return [i for i in values
+                if isinstance(i, str) and i in self.WINDOW_IDS]
+
+    def _window_state_pair(self, closed, minimized) -> tuple:
+        """(closed, minimized) as known window ids, closed winning on overlap.
+
+        One rule, applied identically on the way out to JS and on the way in
+        from it: a window that is closed is not also reported as minimized.
+        """
+        closed = self._known_window_ids(closed)
+        minimized = [i for i in self._known_window_ids(minimized)
+                     if i not in closed]
+        return closed, minimized
 
     @Slot(str, result=bool)
     def save_window_states(self, states_json):
@@ -123,17 +140,8 @@ class LayoutBridge(QObject):
             return False
         if not isinstance(data, dict):
             return False
-        closed = data.get("closed", [])
-        minimized = data.get("minimized", [])
-        if not isinstance(closed, list):
-            closed = []
-        if not isinstance(minimized, list):
-            minimized = []
-        closed = [i for i in closed
-                  if isinstance(i, str) and i in self.WINDOW_IDS]
-        minimized = [i for i in minimized
-                     if isinstance(i, str)
-                     and i in self.WINDOW_IDS and i not in closed]
+        closed, minimized = self._window_state_pair(data.get("closed", []),
+                                                    data.get("minimized", []))
         self.ctx.config.set_state(window_states={"closed": closed,
                                                  "minimized": minimized})
         return True

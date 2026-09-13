@@ -42,26 +42,45 @@ class MediaCachePolicy:
         moved = 0
         root = os.path.abspath(self._owner.cache_dir)
         for row in rows:
-            old = row["cache_path"]
-            if not old or not os.path.exists(old):
-                continue
-            if os.path.dirname(os.path.abspath(old)) != root:
-                continue                       # already inside the tree
-            ext = os.path.splitext(old)[1] or _extension(row["url"], "")
-            day = self._owner._day(row.get("day") or row.get("created_at"))
-            try:
-                new = self._owner._target_path(row.get("owner") or "",
-                                        row.get("kind") or "image", day, ext)
-                os.replace(old, new)
-            except OSError as e:               # noqa: PERF203
-                log.warning("cannot move %s into the media tree: %s", old, e)
-                continue
-            await self._owner.db.execute(
-                "UPDATE media SET cache_path=? WHERE id=?", (new, row["id"]))
-            moved += 1
+            if not self._is_flat_cache_file(row, root):
+                continue                       # gone, or already in the tree
+            if await self._move_into_tree(row):
+                moved += 1
         if moved:
             await self._owner.db.commit()
         return moved
+
+    @staticmethod
+    def _is_flat_cache_file(row: dict, root: str) -> bool:
+        """Whether this cached row is one of the old flat cache files.
+
+        False covers both "the file is gone" and "it already lives in the
+        per-person tree" — neither is this migration's business.
+        """
+        old = row["cache_path"]
+        if not old or not os.path.exists(old):
+            return False
+        return os.path.dirname(os.path.abspath(old)) == root
+
+    async def _move_into_tree(self, row: dict) -> bool:
+        """Move one flat cache file into the person tree and re-point the row.
+
+        False when the move failed: the file stays where it is, the row keeps
+        its old path, and the rest of the migration continues.
+        """
+        old = row["cache_path"]
+        ext = os.path.splitext(old)[1] or _extension(row["url"], "")
+        day = self._owner._day(row.get("day") or row.get("created_at"))
+        try:
+            new = self._owner._target_path(row.get("owner") or "",
+                                    row.get("kind") or "image", day, ext)
+            os.replace(old, new)
+        except OSError as e:                   # noqa: PERF203
+            log.warning("cannot move %s into the media tree: %s", old, e)
+            return False
+        await self._owner.db.execute(
+            "UPDATE media SET cache_path=? WHERE id=?", (new, row["id"]))
+        return True
 
     async def cache_usage(self) -> dict:
         row = await self._owner.db.fetchone(

@@ -42,33 +42,46 @@ class UndoBridge(QObject):
     @Slot(str, str, result=bool)
     def push_global_history(self, kind, value_json):
         """Record a frontend edit in the one global timeline."""
-        if kind == "stack":
-            try:
-                value = json.loads(value_json or "[]")
-            except json.JSONDecodeError:
-                return False
-            if not isinstance(value, list):
-                return False
-        elif kind == "grid":
-            value, err = LayoutService.canonical_grid_payload(value_json
-                                                              or "")
-            if err:
-                return False
-        else:
+        accepted, value = self._global_payload(kind, value_json)
+        if not accepted:
             return False
         result = self.undo_service.push(kind, value)
         if result.is_err:
             return False
+        self._remember_global_edit(kind, value)
+        return True
+
+    @staticmethod
+    def _global_payload(kind: str, value_json: str) -> tuple:
+        """(accepted, value) for one frontend edit of the global timeline.
+
+        Only `stack` and `grid` are global-timeline kinds. Anything else is
+        refused rather than recorded: an unvalidated payload would make every
+        later undo step lie about what it restores.
+        """
+        if kind == "stack":
+            try:
+                value = json.loads(value_json or "[]")
+            except json.JSONDecodeError:
+                return False, None
+            return isinstance(value, list), value
+        if kind == "grid":
+            value, err = LayoutService.canonical_grid_payload(value_json or "")
+            return not err, value
+        return False, None
+
+    def _remember_global_edit(self, kind: str, value) -> None:
+        """Persist the edit the timeline has just accepted."""
         if kind == "grid":
             self.ctx.config.set_state(grid_layout=value)
-        elif kind == "stack":
-            self.ctx.config.set_state(last_stack=value,
-                                      last_stack_preset="")
-            # The stack determines the processing order (# column):
-            # re-rank the people list when a block is added/removed.
-            from core.events import PeopleChanged
-            self.ctx.bus.emit(PeopleChanged(reason="stack"))
-        return True
+            return
+        if kind != "stack":
+            return
+        self.ctx.config.set_state(last_stack=value, last_stack_preset="")
+        # The stack determines the processing order (# column):
+        # re-rank the people list when a block is added/removed.
+        from core.events import PeopleChanged
+        self.ctx.bus.emit(PeopleChanged(reason="stack"))
 
     @Slot(result=str)
     def undo(self):

@@ -15,6 +15,13 @@ The overlay is a separate ``div`` with ``pointer-events:none`` and a transparent
 background, so it can never intercept the click nor affect page layout.
 """
 
+# ideal-size: 527 lines reason=the frozen AREA D public-API snapshot
+# (tests/unit/backend/test_backend_api_snapshot.py, built by
+# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
+# only when this module owns it, so neither promoting this file to a package nor
+# thinning it into a re-export shim survives the contract. The size is a known,
+# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+
 import json
 from typing import Optional
 
@@ -460,21 +467,36 @@ def interpret_find(result, label: str = "element") -> tuple[str, str]:
                 + _candidate_lines(result)), "error"
     text = str(result.get("text", ""))[:60]
     idx = result.get("index", -1)
-    state = "visible" if result.get("visible") else "⚠ NOT visible (hidden/zero-size)"
+    msg = (f"✅ FIND success: {label} — matched node #{idx} “{text}” "
+           f"({_found_state(result)})" + _outline_suffix(result))
+    return msg, ("success" if result.get("visible") else "warn")
+
+
+def _found_state(result: dict) -> str:
+    """The visibility / disabled description of the matched node."""
+    state = ("visible" if result.get("visible")
+             else "⚠ NOT visible (hidden/zero-size)")
     if result.get("disabled"):
         state += ", ⚠ disabled (or pointer-events:none)"
-    msg = f"✅ FIND success: {label} — matched node #{idx} “{text}” ({state})"
+    return state
+
+
+def _outline_suffix(result: dict) -> str:
+    """The 🟥-outline / highlight-off tail of a FIND success message.
+
+    An invisible element is never reported as "highlight off": nothing was
+    drawn and the level already says warn.
+    """
     if result.get("highlighted"):
-        r = result.get("rect") or {}
-        size = ""
-        if r:
-            size = (f" at {int(r.get('x', 0))},{int(r.get('y', 0))} "
-                    f"{int(r.get('width', 0))}×{int(r.get('height', 0))}px")
-        msg += f" — 🟥 red outline drawn{size}"
-    elif result.get("visible"):
-        msg += " — (highlight off)"
-    level = "success" if result.get("visible") else "warn"
-    return msg, level
+        rect = result.get("rect") or {}
+        if not rect:
+            return " — 🟥 red outline drawn"
+        return (f" — 🟥 red outline drawn at {int(rect.get('x', 0))},"
+                f"{int(rect.get('y', 0))} {int(rect.get('width', 0))}"
+                f"×{int(rect.get('height', 0))}px")
+    if result.get("visible"):
+        return " — (highlight off)"
+    return ""
 
 
 def interpret_click(result, label: str = "element") -> tuple[str, str]:

@@ -16,6 +16,7 @@ from typing import Optional
 
 from stores.history_models import MessageRecord
 from stores.history_repo_identity import _as_record
+from stores.history_requests import MediaRecoveryRequest
 
 log = logging.getLogger("chatbot")
 
@@ -27,9 +28,7 @@ class MediaRecovery:
         """`owner` is the `HistoryRepo` this part borrows state from."""
         self._owner = owner
 
-    async def recover_media(self, person_id: int, records, media=None,
-                            nick: str = "", now=None,
-                            requeue_failed: bool = True) -> dict:
+    async def recover_media(self, req: MediaRecoveryRequest) -> dict:
         """Repair images/GIFs whose URL was missing or whose download failed.
 
         Called while a sync re-reads the DOM. It scans the saved archive for
@@ -53,17 +52,16 @@ class MediaRecovery:
 
         Returns ``{"repaired": n, "requeued": n, "scanned": n}``.
         """
-        if media is None or not person_id:
+        if req.media is None or not req.person_id:
             return {"repaired": 0, "requeued": 0, "scanned": 0}
-        stamp = (now or datetime.now()).isoformat(timespec="seconds")
+        stamp = (req.now or datetime.now()).isoformat(timespec="seconds")
         # Every recovery pass gets a unique marker: the chunked top pass and
         # the newest-window pass of one backfill can run inside the same
         # second, and a shared stamp would make the second pass believe the
         # rows the first pass scanned were its own work.
         self._owner._scan_seq += 1
         marker = f"{stamp}.{self._owner._scan_seq}"
-        ctx = _RecoveryPass(self, int(person_id), media, nick, stamp, marker,
-                            self._records_by_key(records), requeue_failed)
+        ctx = _RecoveryPass(self, req, stamp, marker)
         ctx.rows = await self._broken_rows(ctx)
         if not ctx.rows:
             return ctx.report()
@@ -263,16 +261,16 @@ class _RecoveryPass:
     of its own and the counters cannot be lost between steps.
     """
 
-    def __init__(self, recovery, person_id, media, nick, stamp, marker,
-                 by_key, requeue_failed):
+    def __init__(self, recovery, req: MediaRecoveryRequest, stamp: str,
+                 marker: str):
         self.recovery = recovery
-        self.person_id = person_id
-        self.media = media
-        self.nick = nick
+        self.person_id = int(req.person_id)
+        self.media = req.media
+        self.nick = req.nick
         self.stamp = stamp
         self.marker = marker
-        self.by_key = by_key
-        self.requeue_failed = requeue_failed
+        self.by_key = recovery._records_by_key(req.records)
+        self.requeue_failed = req.requeue_failed
         self.rows: list = []
         self.used: dict[str, int] = {}
         self.known_keys: Optional[set] = None

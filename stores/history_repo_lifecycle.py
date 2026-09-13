@@ -11,13 +11,57 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from datetime import datetime
-from typing import Optional
 
 from stores.history_models import dedupe_key
 from stores.history_repo_identity import TAIL_FP_LIMIT
+from stores.history_requests import WriteContext
 
 log = logging.getLogger("chatbot")
+
+
+def _hidden_row_key(row: dict) -> str:
+    """The identity a hidden row would have once it is visible again."""
+    return dedupe_key(row.get("direction") or "in",
+                      row.get("from_nick") or "",
+                      row.get("ts_display") or "",
+                      row.get("kind") or "text",
+                      row.get("media_url") or row.get("text") or "")
+
+
+def _sig_or(current: dict, key: str, value):
+    """`value` wins unless it is None, which means "leave the cursor as is"."""
+    return current.get(key, "") if value is None else value
+
+
+async def _delete_hidden(owner, nick: str, person) -> None:
+    """The row work of one purge: hidden messages, then tombstones."""
+    if not nick:
+        await owner.db.execute("DELETE FROM messages WHERE deleted_at<>''")
+        await _erase_tombstones(owner)
+        return
+    await owner.db.execute(
+        "DELETE FROM messages WHERE deleted_at<>'' AND person_id=?",
+        (int(person["id"]),))
+    if person.get("deleted_at"):
+        await _erase_person(owner, int(person["id"]))
+
+
+async def _erase_person(owner, pid: int) -> None:
+    """Erase every row that belongs to one person, then the person."""
+    for table in ("messages", "cursors", "gaps"):
+        await owner.db.execute(f"DELETE FROM {table} WHERE person_id=?", (pid,))
+    await owner.db.execute("DELETE FROM persons WHERE id=?", (pid,))
+
+
+async def _erase_tombstones(owner) -> None:
+    """Erase every row of every tombstoned person, then the persons."""
+    for table in ("messages", "cursors", "gaps"):
+        await owner.db.execute(
+            f"DELETE FROM {table} WHERE person_id IN "
+            "(SELECT id FROM persons WHERE deleted_at<>'')")
+    await owner.db.execute("DELETE FROM persons WHERE deleted_at<>''")
 
 
 class PersonLifecycle:
@@ -165,26 +209,33 @@ class PersonLifecycle:
             "deleted_at='' AND dup_key<>''", (person_id,))}
         restored = 0
         for row in rows:
-            key = dedupe_key(row.get("direction") or "in",
-                             row.get("from_nick") or "",
-                             row.get("ts_display") or "",
-                             row.get("kind") or "text",
-                             row.get("media_url") or row.get("text") or "")
-            if key and key in alive:
-                # re-collected while hidden: the visible copy is the message
-                # now; the stale tombstone must not resurrect as a double
-                await self._owner.db.execute(
-                    "DELETE FROM messages WHERE id=? AND deleted_at=?",
-                    (int(row["id"]), token))
-                continue
-            await self._owner.db.execute(
-                "UPDATE messages SET deleted_at='', dup_key=? WHERE id=?",
-                (key, int(row["id"])))
-            if key:
-                alive.add(key)
-            restored += 1
+            if await self._restore_one_row(row, token, alive):
+                restored += 1
         await self._owner.db.commit()
         return restored
+
+    async def _restore_one_row(self, row, token: str, alive: set) -> bool:
+        """Resurrect one hidden row, recomputing its identity.
+
+        False means the row was purged instead: the same message was
+        re-collected while it sat hidden, so the tombstone must not come
+        back as a double. `alive` is the caller's set of visible identities
+        and grows with every row this restores.
+        """
+        key = _hidden_row_key(row)
+        if key and key in alive:
+            # re-collected while hidden: the visible copy is the message
+            # now; the stale tombstone must not resurrect as a double
+            await self._owner.db.execute(
+                "DELETE FROM messages WHERE id=? AND deleted_at=?",
+                (int(row["id"]), token))
+            return False
+        await self._owner.db.execute(
+            "UPDATE messages SET deleted_at='', dup_key=? WHERE id=?",
+            (key, int(row["id"])))
+        if key:
+            alive.add(key)
+        return True
 
     async def deleted_count(self, nick: str = "") -> int:
         if nick:
@@ -198,18 +249,20 @@ class PersonLifecycle:
             "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0))
 
     async def purge_deleted(self, nick: str = "") -> int:
-        """Erase hidden rows for good — the ONLY path that removes bytes."""
-        params: tuple = ()
-        sql = "DELETE FROM messages WHERE deleted_at<>''"
+        """Erase hidden rows — and a removed person — for good.
+
+        With no nick this is the whole trash: hidden messages AND tombstoned
+        persons go. With a nick it is that person's hidden messages, plus
+        their tombstone when they are a removed person (a nick never keeps a
+        row pointing at nothing).
+        """
         person = None
         if nick:
             person = await self._owner.get_person(nick)
             if not person:
                 return 0
-            sql += " AND person_id=?"
-            params = (int(person["id"]),)
         before = await self.deleted_count(nick)
-        await self._owner.db.execute(sql, params)
+        await _delete_hidden(self._owner, nick, person)
         await self._owner.db.commit()
         if person:
             await self._owner._recount(int(person["id"]))
@@ -231,10 +284,7 @@ class PersonLifecycle:
             return False
         pid = int(person["id"])
         if hard:
-            await self._owner.db.execute("DELETE FROM messages WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM cursors WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM gaps WHERE person_id=?", (pid,))
-            await self._owner.db.execute("DELETE FROM persons WHERE id=?", (pid,))
+            await _erase_person(self._owner, pid)
         else:
             stamp = token or self._owner.new_op_token()
             await self._owner.db.execute(
@@ -308,19 +358,17 @@ class PersonLifecycle:
                                   (index, int(row[0])))
         await self._owner.db.commit()
 
-    async def _after_write(self, person_id: int, my_nick: str, dom_count: int,
-                           head_sig: Optional[str], tail_sig: Optional[str],
-                           bootstrapped: Optional[bool],
-                           head_any: Optional[str] = None,
-                           tail_any: Optional[str] = None) -> None:
+    async def _after_write(self, ctx: WriteContext) -> None:
         """Refresh counters and the resume cursor.
 
-        `head_sig` / `tail_sig` (and their author-agnostic twins) of None
-        mean "leave as is"; an empty string deliberately CLEARS the
+        `ctx.head_sig` / `ctx.tail_sig` (and their author-agnostic twins) of
+        None mean "leave as is"; an empty string deliberately CLEARS the
         signature, which is how an interrupted read tells the next pass that
-        it may not trust the shortcut.
+        it may not trust the shortcut. The eight values travel as one object
+        because every caller already holds all eight (RULE 19 §19.4).
         """
-        await self._recount(person_id, my_nick)
+        person_id = ctx.person_id
+        await self._recount(person_id, ctx.my_nick)
         tail = [r for r in await self._owner.db.fetchall(
             "SELECT fp, dup_key FROM (SELECT fp, dup_key, ord FROM messages "
             "WHERE person_id=? ORDER BY ord DESC LIMIT ?) ORDER BY ord",
@@ -328,7 +376,8 @@ class PersonLifecycle:
         tail_fps = [r[0] for r in tail]
         tail_keys = [r[1] for r in tail]
         current = await self._owner.get_cursor(person_id)
-        flag = current["bootstrapped"] if bootstrapped is None else bootstrapped
+        flag = (current["bootstrapped"] if ctx.bootstrapped is None
+                else ctx.bootstrapped)
         await self._owner.db.execute(
             "INSERT INTO cursors(person_id, last_ord, dom_count, head_sig, "
             "tail_sig, head_any, tail_any, tail_fps, tail_keys, "
@@ -341,11 +390,11 @@ class PersonLifecycle:
             "tail_keys=excluded.tail_keys, "
             "bootstrapped=excluded.bootstrapped, updated_at=excluded.updated_at",
             (person_id, await self._owner._last_ord(person_id),
-             dom_count or current.get("dom_count") or 0,
-             current.get("head_sig", "") if head_sig is None else head_sig,
-             current.get("tail_sig", "") if tail_sig is None else tail_sig,
-             current.get("head_any", "") if head_any is None else head_any,
-             current.get("tail_any", "") if tail_any is None else tail_any,
+             ctx.dom_count or current.get("dom_count") or 0,
+             _sig_or(current, "head_sig", ctx.head_sig),
+             _sig_or(current, "tail_sig", ctx.tail_sig),
+             _sig_or(current, "head_any", ctx.head_any),
+             _sig_or(current, "tail_any", ctx.tail_any),
              json.dumps(tail_fps), json.dumps(tail_keys), 1 if flag else 0,
              datetime.now().isoformat(timespec="seconds")))
         await self._owner.db.commit()
@@ -378,13 +427,15 @@ class PersonLifecycle:
              row["first_ts"], row["last_ts"], person_id))
         await self._owner.db.commit()
 
-    async def _touch_cursor(self, person_id: int, dom_count: int,
-                            head_sig: Optional[str],
-                            tail_sig: Optional[str],
-                            head_any: Optional[str] = None,
-                            tail_any: Optional[str] = None) -> None:
-        if not dom_count and head_sig is None and tail_sig is None:
+    async def _touch_cursor(self, ctx: WriteContext) -> None:
+        """Move the resume cursor, and nothing else.
+
+        `my_nick` and `bootstrapped` are forced to their inert values on the way
+        into `_after_write`, so no caller can change either by accident: a
+        cursor touch must not add a nick to the person's `my_nicks` list (that
+        is what `_recount` does with a non-empty nick), and must not claim the
+        person was bootstrapped — it keeps whatever the cursor already says.
+        """
+        if not ctx.dom_count and ctx.head_sig is None and ctx.tail_sig is None:
             return
-        await self._after_write(person_id, "", dom_count, head_sig, tail_sig,
-                                bootstrapped=None, head_any=head_any,
-                                tail_any=tail_any)
+        await self._after_write(replace(ctx, my_nick="", bootstrapped=None))

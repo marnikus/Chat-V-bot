@@ -19,6 +19,18 @@ from services.undo_service import emit_db_change, restart_world
 log = logging.getLogger("chatbot")
 
 
+def _db_world_switched(result: dict) -> bool:
+    """Whether the action really moved the live world and may be reported.
+
+    `unchanged` (the world was already this one) and `offline` (the switch
+    was recorded but nothing is connected) are both "no success log, no undo
+    entry" — they are not failures either, so the caller takes the same
+    branch and lets `world_changed` decide whether a rebuild is owed.
+    """
+    return bool(result.get("ok") and not result.get("unchanged")
+                and not result.get("offline"))
+
+
 class DbBridge(QObject):
     db_changed = Signal(str)                # JSON {action, path, ok, ...}
     db_info_ready = Signal(str, str)        # req_id, JSON db size info
@@ -72,48 +84,54 @@ class DbBridge(QObject):
             result = await runner(manager)
             result = dict(result or {})
             result["op"] = result.get("op", op)
-            if result.get("ok") and not result.get("unchanged") \
-                    and not result.get("offline"):
-                if op in ("create", "load", "delete"):
-                    # REBUILD the timeline before recording this step
-                    # (the in-memory copy still holds the world being LEFT)
-                    await restart_world(self.ctx.memory, self.ctx.archive,
-                                        self.ctx.label_store(),
-                                        self.ctx.undo, self.ctx.bus, op)
-                if op != "delete":
-                    self.ctx.undo.push("dbconn", {
-                        "op": result["op"],
-                        "path": result.get("path", ""),
-                        "before_path": result.get("before_path", ""),
-                        "backup": result.get("backup", ""),
-                    })
-                self.ctx.bus.emit(LogMessage(message=success.format(**{
-                    "path": result.get("path", ""),
-                    "name": os.path.basename(result.get("path", "")),
-                }), level="success"))
+            if _db_world_switched(result):
+                await self._db_switched(result, op, success)
             else:
-                # Even on failure, rebuild when the live world actually moved
-                # (switch-only change / partial after switch). No success log,
-                # no undo push (and never a delete push).
-                if op in ("create", "load", "delete") and \
-                        result.get("world_changed"):
-                    try:
-                        await restart_world(
-                            self.ctx.memory, self.ctx.archive,
-                            self.ctx.label_store(),
-                            self.ctx.undo, self.ctx.bus, op)
-                    except Exception as exc:             # noqa: BLE001
-                        log.warning("world refresh after %s failed: %s",
-                                    op, exc)
-                    # Tell JS to drop cached world data (emit_db_change only
-                    # adds `switched` on ok; our pre-set value survives).
-                    result["switched"] = True
-                if result.get("error"):
-                    self.ctx.bus.emit(LogMessage(
-                        message="⚠ " + str(result["error"]), level="warn"))
+                await self._db_not_switched(result, op)
             emit_db_change(self.ctx.bus, op, result)
         self._run_async("db_" + op, work())
         return True
+
+    async def _db_switched(self, result: dict, op: str, success: str) -> None:
+        """The success half: rebuild the world, record the undo, log it."""
+        if op in ("create", "load", "delete"):
+            # REBUILD the timeline before recording this step
+            # (the in-memory copy still holds the world being LEFT)
+            await restart_world(self.ctx.memory, self.ctx.archive,
+                                self.ctx.label_store(),
+                                self.ctx.undo, self.ctx.bus, op)
+        if op != "delete":
+            self.ctx.undo.push("dbconn", {
+                "op": result["op"],
+                "path": result.get("path", ""),
+                "before_path": result.get("before_path", ""),
+                "backup": result.get("backup", ""),
+            })
+        self.ctx.bus.emit(LogMessage(message=success.format(**{
+            "path": result.get("path", ""),
+            "name": os.path.basename(result.get("path", "")),
+        }), level="success"))
+
+    async def _db_not_switched(self, result: dict, op: str) -> None:
+        """The failure half: refresh only what really moved, never log success.
+
+        Even on failure, rebuild when the live world actually moved
+        (switch-only change / partial after switch). No success log, no undo
+        push (and never a delete push).
+        """
+        if op in ("create", "load", "delete") and result.get("world_changed"):
+            try:
+                await restart_world(self.ctx.memory, self.ctx.archive,
+                                    self.ctx.label_store(),
+                                    self.ctx.undo, self.ctx.bus, op)
+            except Exception as exc:                     # noqa: BLE001
+                log.warning("world refresh after %s failed: %s", op, exc)
+            # Tell JS to drop cached world data (emit_db_change only
+            # adds `switched` on ok; our pre-set value survives).
+            result["switched"] = True
+        if result.get("error"):
+            self.ctx.bus.emit(LogMessage(
+                message="⚠ " + str(result["error"]), level="warn"))
 
     @Slot(str, result=bool)
     def db_create(self, name):

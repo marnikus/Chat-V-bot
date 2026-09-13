@@ -8,6 +8,24 @@ app-level entries (stack/grid) persist in config/undo.json; world-bound
 entries (people/labels/archive/dbconn) persist in the active world's
 ``undo_history`` table and die with the world.
 
+Round F step F3 split the 418-LOC class into a facade plus four
+collaborators, following the convention ``tests/unit/stores/
+test_stores_structure.py`` pins for ``stores/``: a part takes ``owner`` and
+nothing else, and every attribute stays on the aggregate.
+
+    services/undo_history.py  HistoryProjection  the timeline and its projections
+    services/undo_apply.py    ApplyCommand       undo / redo / apply one entry
+    services/undo_db.py       DbCommands         reversing a DB-connection entry
+    services/undo_world.py    WorldSync          rebuilding after a world change
+
+This file keeps what must stay here: ``push`` (its only consumer of
+``MAX_STACK_HISTORY``, which ``tests/test_world_write_gate.py`` monkeypatches
+as ``undo_service.MAX_STACK_HISTORY``), the normalization helpers, and the
+re-exports ``bridge/db_bridge.py``, ``bridge/router.py`` and the tests import
+from this module — ``emit_db_change``, ``restart_world`` and ``_values_equal``.
+Every other name is still on the class as a one-line delegator, so no caller
+and no instance-level patch is affected.
+
 Qt-free: services and bridges react to UndoHistoryChanged /
 UserDbChanged / DbChanged / LabelsChanged / StackLoaded /
 GridLayoutChanged / LogMessage events on the EventBus.
@@ -15,106 +33,31 @@ GridLayoutChanged / LogMessage events on the EventBus.
 
 from __future__ import annotations
 
-import asyncio
 import copy
-import json
-import logging
-import os
-from typing import Any, Optional
+from typing import Optional
 
 from backend.config_manager import MAX_STACK_HISTORY
-from core.events import (EventBus, ArchiveUndoApplied, DbChanged,
-                         GridLayoutChanged, LabelsChanged, LogMessage,
-                         PeopleChanged, StackLoaded, UndoHistoryChanged,
-                         UserDbChanged)
+from core.events import EventBus, UndoHistoryChanged
 from core.result import Err, Ok, Result
 from services.layout_service import LayoutService  # noqa: F401  API parity
 from services.run import normalize_blocks
 from services.service_log import emit_log
+# `_same_entry` is used by push below; `_values_equal` is re-exported because
+# bridge/router.py imports it from here (a boundary smell recorded as F3b).
+from services.undo_apply import (ApplyCommand, _same_entry, _values_equal)
+from services.undo_archive import ArchiveCommands
+from services.undo_db import DbCommands
+from services.undo_history import HistoryProjection
 from services.undo_support import UndoProjection, UndoWorldStore
+from services.undo_timeline import TimelineCommit
+# WorldSync is used in __init__; emit_db_change and restart_world moved to
+# services/undo_world.py and are re-exported for bridge/db_bridge.py,
+# tests/unit/services/test_world_events.py and test_bridge_results.py, which
+# patch `restart_world` on the db_bridge module namespace.
+from services.undo_world import WorldSync, emit_db_change, restart_world
 
-log = logging.getLogger("chatbot")
-
-
-def _values_equal(a, b) -> bool:
-    try:
-        return json.dumps(a, sort_keys=True, ensure_ascii=False) == \
-               json.dumps(b, sort_keys=True, ensure_ascii=False)
-    except Exception:                                   # noqa: BLE001
-        return a == b
-
-
-def _same_entry(a: dict, b: dict) -> bool:
-    """Two timeline entries carry the same edit (kind + value).
-
-    ``seq``/timestamps are bookkeeping, not part of the edit identity:
-    comparing them made an identical re-push look different (the fresh entry
-    has no seq yet) and grew the timeline with duplicates.
-    """
-    return (isinstance(a, dict) and isinstance(b, dict)
-            and a.get("kind") == b.get("kind")
-            and _values_equal(a.get("value"), b.get("value")))
-
-
-def emit_db_change(bus: EventBus, action: str, result) -> None:
-    """Format a DbManager result as the db_changed wire payload."""
-    payload = dict(result or {})
-    payload["action"] = action
-    if action in ("create", "load", "delete") and payload.get("ok") \
-            and not payload.get("unchanged") and not payload.get("offline"):
-        # a different world is live now — every JS window that caches
-        # world data must drop it
-        payload["switched"] = True
-    bus.emit(DbChanged(action=action,
-                       payload=json.dumps(payload, ensure_ascii=False)))
-    bus.emit(UserDbChanged(payload=json.dumps(
-        {"action": "db_" + action, "ok": bool(payload.get("ok"))},
-        ensure_ascii=False)))
-    if payload.get("error"):
-        bus.emit(LogMessage(message="⚠ " + str(payload["error"]),
-                            level="warn"))
-
-
-async def restart_world(memory, archive, labels, undo, bus: EventBus,
-                        op: str) -> None:
-    """After a world create/load/delete: rebuild every world-bound surface.
-
-    The service already tore the old world down and rebuilt the database
-    side (queue connection, labels, radar state, per-world settings);
-    here the rest of the app follows via bus events: undo timeline,
-    People list, Full User Database, labels and the my-nick readout.
-    """
-    if archive is None:
-        return
-    if memory is not None:
-        try:
-            if os.path.abspath(memory.db_path) != \
-                    os.path.abspath(archive.db.path):
-                await memory.switch_db(archive.db.path)
-        except Exception as exc:                        # noqa: BLE001
-            log.warning("queue did not follow the world switch: %s", exc)
-    if undo is not None:
-        try:
-            await undo.sync_world_state()
-        except Exception as exc:                        # noqa: BLE001
-            log.warning("world undo sync failed: %s", exc)
-    bus.emit(PeopleChanged(reason="db_switch"))
-    bus.emit(UserDbChanged(payload=json.dumps(
-        {"action": "db_switch", "ok": True}, ensure_ascii=False)))
-    if labels is not None:
-        try:
-            bus.emit(LabelsChanged(
-                payload=json.dumps(labels.state(), ensure_ascii=False)))
-        except Exception:                               # noqa: BLE001
-            pass
-    try:
-        bus.emit(LogMessage(message="👤 my nick follows the world", level="debug"))
-        from core.events import MyNickChanged
-        bus.emit(MyNickChanged(nick=archive.my_nick))
-    except Exception:                                   # noqa: BLE001
-        pass
-    log.info("world %s is live — all world state rebuilt (%s)",
-             os.path.basename(archive.db.path), op)
+__all__ = ["UndoService", "emit_db_change", "restart_world", "_values_equal",
+           "LayoutService"]
 
 
 class UndoService:
@@ -149,6 +92,13 @@ class UndoService:
         self._undo_pendings: list = []
         self._projection = UndoProjection(self._history_entry)
         self._world_store = UndoWorldStore(self)
+        self._archive_commands = ArchiveCommands(self)
+        self._timeline_commit = TimelineCommit(self)
+        # Built last: nothing above calls a delegated method.
+        self._history = HistoryProjection(self)
+        self._apply = ApplyCommand(self)
+        self._db_commands = DbCommands(self)
+        self._world = WorldSync(self)
 
     # ── wiring (main.py / attach_history) ────────────────────────
     def attach(self, archive=None, people=None, labels=None, dbs=None,
@@ -188,111 +138,6 @@ class UndoService:
     def _history_entry(kind, value):
         return {"kind": kind, "value": copy.deepcopy(value)}
 
-    def _migrated_entry(self, source: dict, kind: str, value) -> dict:
-        """Rebuild a stored timeline entry, PRESERVING its seq.
-
-        seq is the identity used to merge the app-level config half with the
-        active world's ``undo_history`` table on startup. Dropping it (as a
-        plain rebuild did) pushed every app entry ahead of the world entries
-        in the merged timeline and could issue duplicate seqs — the global
-        undo order was wrong after a restart.
-        """
-        entry = self._history_entry(kind, value)
-        seq = source.get("seq")
-        if isinstance(seq, int) and seq > 0:
-            entry["seq"] = seq
-        return entry
-
-    # ── seq ──────────────────────────────────────────────────────
-    def _next_seq(self) -> int:
-        next_seq = self._seq_next
-        self._seq_next = next_seq + 1
-        return next_seq
-
-    # ── legacy migration ─────────────────────────────────────────
-    def migrate_global_history(self) -> tuple[list, int]:
-        """Build the global timeline from pre-global-history config once."""
-        raw = self._config.get_state("undo_history", None)
-        if isinstance(raw, list) and raw:
-            return self._projection.from_raw_history(self._config, raw)
-        history, index, canonical = self._projection.from_legacy_config(
-            self._config)
-        if canonical is not None:
-            self._config.set_state(grid_layout=canonical)
-        self._config.set_state(undo_history=copy.deepcopy(history),
-                               undo_history_index=index)
-        return history, index
-
-    # ── timeline access ──────────────────────────────────────────
-    def history(self) -> tuple[list, int]:
-        """The timeline (stack snapshots cleaned) and its pointer."""
-        timeline = self._timeline
-        if timeline is None:
-            history, index = self.migrate_global_history()
-            history = copy.deepcopy(history)
-        else:
-            history, index = copy.deepcopy(timeline), self._h_index
-        return self._projection.clean(history), index
-
-    def set_history(self, history: list, index: int) -> None:
-        self._commit_timeline(list(history), index)
-
-    def _commit_timeline(self, history: list, index: int) -> None:
-        """Persist the ONE timeline split by ownership (app vs world)."""
-        for entry in history:
-            if isinstance(entry, dict) and \
-                    (not isinstance(entry.get("seq"), int)
-                     or entry["seq"] <= 0):
-                entry["seq"] = self._next_seq()
-        self._timeline = history
-        self._h_index = index
-        self._seq_next = max([e["seq"] for e in history
-                              if isinstance(e, dict)
-                              and isinstance(e.get("seq"), int)],
-                             default=0) + 1
-        service = self._archive
-        if service is None or not getattr(service.db, "is_open", False):
-            self._config.set_state(
-                undo_history=copy.deepcopy(history),
-                undo_history_index=index)
-            return
-        app_entries, world_entries = self._world_store.split(history)
-        self._config.set_state(undo_history=copy.deepcopy(app_entries),
-                               undo_history_index=index)
-        self._world_store.schedule_save(world_entries)
-
-    def _schedule_world_undo_save(self, entries: list) -> None:
-        """Persist the world half, tracking the task for a later
-        `sync_world_state` can wait for it."""
-        self._world_store.schedule_save(entries)
-
-    async def sync_world_state(self) -> Result[None]:
-        """Rebuild the unified timeline from both stores after a world
-        change (startup or switch): config's app-level half + the active
-        world's `undo_history` table, merged by `seq`."""
-        await self._world_store.settle()
-        world_entries: list[dict] = await self._world_store.load()
-        service = self._archive
-        app_entries: list[dict] = []
-        raw = self._config.get_state("undo_history", None)
-        if isinstance(raw, list):
-            for entry in raw:
-                if not (isinstance(entry, dict)
-                        and isinstance(entry.get("kind"), str)):
-                    continue
-                if service is not None and \
-                        entry.get("kind") in self.WORLD_UNDO_KINDS:
-                    continue             # the world table is the truth
-                app_entries.append(copy.deepcopy(entry))
-        merged = app_entries + world_entries
-        merged.sort(key=lambda e: (isinstance(e.get("seq"), int)
-                                   and e["seq"] > 0,
-                                   e.get("seq") if isinstance(e.get("seq"),
-                                                              int) else 0))
-        self._commit_timeline(merged, len(merged) - 1)
-        self._bus.emit(UndoHistoryChanged())
-        return Ok(None)
-
     # ── push ─────────────────────────────────────────────────────
     def push(self, kind: str, value) -> Result[tuple]:
         """Append one entry; returns (history, index) on success.
@@ -325,239 +170,72 @@ class UndoService:
         self._bus.emit(UndoHistoryChanged())
         return Ok((history, index))
 
-    # ── compat projections (older integrations and tests) ────────
+    # ── delegators: services/undo_history.py ─────────────────────
+    def history(self) -> tuple[list, int]:
+        return self._history.history()
+
+    def set_history(self, history: list, index: int) -> None:
+        return self._history.set_history(history, index)
+
+    def migrate_global_history(self) -> tuple[list, int]:
+        return self._history.migrate_global_history()
+
+    def _migrated_entry(self, source: dict, kind: str, value) -> dict:
+        return self._history._migrated_entry(source, kind, value)
+
+    def _next_seq(self) -> int:
+        return self._history._next_seq()
+
     def stack_projection(self) -> tuple[list, int]:
-        """Compatibility projection of stack entries."""
-        history, global_index = self.history()
-        return self._projection.stack_projection(history, global_index)
+        return self._history.stack_projection()
 
     def set_stack_projection(self, history: list, index: int,
                              save: bool = True) -> None:
-        entries = [self._history_entry("stack", self._clean_blocks(value))
-                   for value in history if isinstance(value, list)]
-        self.set_history(entries,
-                         max(-1, min(index, len(entries) - 1)))
+        return self._history.set_stack_projection(history, index, save)
 
     def kind_projection(self, kind: str) -> tuple[list, int]:
-        history, global_index = self.history()
-        return self._projection.kind_projection(history, global_index, kind)
+        return self._history.kind_projection(kind)
 
     def push_stack(self, blocks: list) -> tuple[list, int]:
-        """Backward-compatible: append the stack to global history."""
-        if isinstance(blocks, list):
-            self.push("stack", self._clean_blocks(blocks))
-        return self.stack_projection()
+        return self._history.push_stack(blocks)
 
-    # ── command application (undo/redo of COMMAND kinds) ─────────
+    # ── delegators: services/undo_apply.py ───────────────────────
     def apply_command(self, entry, forward: bool) -> bool:
-        """Apply one command entry forward (redo) or backward (undo)."""
-        kind = entry.get("kind")
-        value = entry.get("value")
-        if not isinstance(value, dict):
-            return False
-        if kind == "people":
-            rows = value.get("after" if forward else "before")
-            if rows is None or self._people is None:
-                return False
-            self._schedule(self._people.apply(rows))
-            return True
-        if kind == "labels":
-            snapshot = value.get("after" if forward else "before")
-            if not isinstance(snapshot, dict) or self._labels is None:
-                return False
-            self._labels.restore(snapshot)
-            self._bus.emit(LabelsChanged(
-                payload=json.dumps(self._labels.state(),
-                                   ensure_ascii=False)))
-            # labels can hide people from the queue: the # column changes
-            self._bus.emit(PeopleChanged(reason="labels"))
-            return True
-        if kind == "archive":
-            return self._apply_archive_command(value, forward)
-        if kind == "dbconn":
-            return self._apply_db_command(value, forward)
-        return False
+        return self._apply.apply_command(entry, forward)
 
-    @staticmethod
-    def _schedule(coro) -> bool:
-        try:
-            asyncio.ensure_future(coro)
-            return True
-        except RuntimeError:
-            coro.close()
-            return False
+    def _apply_archive_command(self, value: dict, forward: bool,
+                               entry: Optional[dict] = None) -> bool:
+        return self._apply._apply_archive_command(value, forward, entry)
 
-    def _apply_archive_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a message, chat or person deletion (soft)."""
-        archive = self._archive
-        op = str(value.get("op") or "")
-        nick = str(value.get("nick") or "")
-        token = str(value.get("token") or "")
-        people = value.get("people") if isinstance(value.get("people"),
-                                                   dict) else None
-        if people is not None and self._people is not None:
-            rows = people.get("after" if forward else "before")
-            if isinstance(rows, list):
-                self._schedule(self._people.apply(rows))
-        if archive is None:
-            return people is not None
-
-        async def work():
-            repo = archive.repo
-            if forward:
-                if op == "delete_message":
-                    await repo.soft_delete_message(
-                        nick, int(value.get("message_id") or 0), token=token)
-                elif op == "clear_history":
-                    await repo.soft_delete_history(nick, token=token)
-                elif op == "delete_person":
-                    await repo.delete_person(nick, hard=False, token=token)
-            else:
-                if op == "delete_person":
-                    await repo.restore_person(nick, token=token)
-                else:
-                    await repo.restore_deleted(nick, token)
-            self._bus.emit(UserDbChanged(payload=json.dumps(
-                {"action": "undo" if not forward else "redo", "op": op,
-                 "nick": nick}, ensure_ascii=False)))
-            self._bus.emit(ArchiveUndoApplied(forward=forward, op=op,
-                                              nick=nick))
-        self._schedule(work())
-        return True
-
-    def _apply_db_command(self, value: dict, forward: bool) -> bool:
-        """Re-apply / reverse a DB Connection action (legacy entries)."""
-        op = str(value.get("op") or "")
-        path = str(value.get("path") or "")
-        before_path = str(value.get("before_path") or "")
-        backup = str(value.get("backup") or "")
-        manager = self._dbs
-
-        async def work():
-            if op == "delete":
-                if forward:
-                    if os.path.exists(path):
-                        result = await manager.delete(path)
-                    else:
-                        self._log("⚠ Nothing to re-delete — the file is "
-                                  "already gone", "warn")
-                        return
-                else:
-                    if os.path.exists(backup):
-                        result = await manager.restore_backup(backup, path)
-                    else:
-                        self._log("⚠ Database deletions are permanent — "
-                                  "no backup exists to restore", "warn")
-                        return
-                if result.get("ok"):
-                    await restart_world(self._memory, self._archive,
-                                        self._labels, self, self._bus,
-                                        "delete")
-                emit_db_change(self._bus, "delete", result)
-                return
-            if forward:
-                if op in ("create", "load"):
-                    result = await manager.load(path, create=(op == "create"))
-                elif op == "clean":
-                    result = await manager.clean()
-                else:
-                    return
-            else:
-                if op in ("create", "load"):
-                    result = await manager.load(before_path)
-                elif op == "clean":
-                    result = await manager.restore_backup(backup, path)
-                else:
-                    return
-            if op in ("create", "load") and result.get("ok") \
-                    and not result.get("unchanged"):
-                await restart_world(self._memory, self._archive,
-                                    self._labels, self, self._bus, op)
-            emit_db_change(self._bus, op, result)
-        self._schedule(work())
-        return True
-
-    # ── apply one entry's state (walk onto a snapshot entry) ──────
     def _apply_entry(self, entry) -> None:
-        """Apply the state a history entry represents."""
-        kind = entry.get("kind")
-        if kind in ("labels", "archive", "dbconn"):
-            self.apply_command(entry, forward=True)
-            return
-        if kind == "grid":
-            self._config.set_state(grid_layout=entry["value"])
-            self._bus.emit(GridLayoutChanged(payload=entry["value"]))
-        elif kind == "people":
-            value = entry.get("value")
-            rows = value.get("after") if isinstance(value, dict) else None
-            if rows is not None and self._people is not None:
-                self._schedule(self._people.apply(rows))
-        else:
-            blocks = self._clean_blocks(entry["value"])
-            self._config.set_state(last_stack=blocks, last_stack_preset="")
-            engine = self._engine
-            if engine is not None:
-                engine.load_stack(blocks)
-            self._bus.emit(StackLoaded(
-                name="", payload=json.dumps(blocks, ensure_ascii=False)))
-            # Undo/redo of a stack edit can change the enabled Scroll &
-            # Parse presence — re-rank the people list's # column.
-            self._bus.emit(PeopleChanged(reason="stack"))
+        return self._apply._apply_entry(entry)
 
-    # ── undo / redo ──────────────────────────────────────────────
+    def rewind_after_failure(self, entry: Optional[dict],
+                             forward: bool) -> None:
+        return self._apply.rewind_after_failure(entry, forward)
+
     def undo(self) -> Result[Optional[dict]]:
-        """Undo one step; Ok(entry payload) | Err('nothing_to_undo')."""
-        history, index = self.history()
-        if not history or index < 0 or index >= len(history):
-            return Err("nothing_to_undo", "the timeline is at its start")
-        entry = history[index]
-        if entry.get("kind") in self.COMMAND_KINDS:
-            if not self.apply_command(entry, forward=False):
-                return Err("nothing_to_undo",
-                           f"cannot reverse {entry.get('kind')}")
-            index -= 1
-            self.set_history(history, index)
-            self._bus.emit(UndoHistoryChanged())
-            kind = entry["kind"]
-            self._log("↩ Undo — " + self.UNDO_LABELS.get(
-                kind, kind + " restored"), "info")
-            value = entry.get("value") or {}
-            payload = (value.get("before")
-                       if kind in ("people", "labels") else value)
-            return Ok({"kind": kind, "value": payload, "index": index})
-        if index <= 0:
-            return Err("nothing_to_undo", "nothing before the first entry")
-        index -= 1
-        self.set_history(history, index)
-        self._bus.emit(UndoHistoryChanged())
-        entry = history[index]
-        self._apply_entry(entry)
-        self._log("↩ Undo — restored " + entry["kind"], "info")
-        return Ok({"kind": entry["kind"], "value": entry["value"],
-                   "index": index})
+        return self._apply.undo()
 
     def redo(self) -> Result[Optional[dict]]:
-        history, index = self.history()
-        if not history or index >= len(history) - 1:
-            return Err("nothing_to_redo", "the timeline is at its tip")
-        index += 1
-        entry = history[index]
-        if entry.get("kind") in self.COMMAND_KINDS:
-            if not self.apply_command(entry, forward=True):
-                return Err("nothing_to_redo",
-                           f"cannot re-apply {entry.get('kind')}")
-            self.set_history(history, index)
-            self._bus.emit(UndoHistoryChanged())
-            kind = entry["kind"]
-            self._log("↪ Redo — " + self.UNDO_LABELS.get(
-                kind, kind + " restored"), "info")
-            value = entry.get("value") or {}
-            payload = (value.get("after")
-                       if kind in ("people", "labels") else value)
-            return Ok({"kind": kind, "value": payload, "index": index})
-        self.set_history(history, index)
-        self._bus.emit(UndoHistoryChanged())
-        self._apply_entry(entry)
-        self._log("↪ Redo — restored " + entry["kind"], "info")
-        return Ok({"kind": entry["kind"], "value": entry["value"],
-                   "index": index})
+        return self._apply.redo()
+
+    # ── delegators: services/undo_db.py ──────────────────────────
+    async def _db_delete_op(self, value: dict, forward: bool) -> dict | None:
+        return await self._db_commands._db_delete_op(value, forward)
+
+    async def _db_op_forward(self, op: str, path: str) -> dict | None:
+        return await self._db_commands._db_op_forward(op, path)
+
+    async def _db_switch_op(self, value: dict, forward: bool) -> dict | None:
+        return await self._db_commands._db_switch_op(value, forward)
+
+    def _apply_db_command(self, value: dict, forward: bool) -> bool:
+        return self._db_commands._apply_db_command(value, forward)
+
+    # ── delegators: services/undo_world.py ───────────────────────
+    def _schedule_world_undo_save(self, entries: list) -> None:
+        return self._world._schedule_world_undo_save(entries)
+
+    async def sync_world_state(self) -> Result[None]:
+        return await self._world.sync_world_state()

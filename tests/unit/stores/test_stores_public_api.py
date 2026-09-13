@@ -252,9 +252,23 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # zero. The invariant this pins is "the stores refactor must not
         # force another area to edit an import" — bump this number only when
         # another area legitimately grows the surface.
-        self.assertEqual(count, 37,
+        #
+        # 37 -> 38 (2026-09-11, CC-tail round E, Phase 0): the portable
+        # window-preset feature grew the surface by one legitimate re-export —
+        # the `backend/preset_store.py` compatibility shim's
+        # `from stores.preset_store import PresetStore`. RULE 16 §16.0 waives
+        # compatibility facades, so this is the sanctioned "another area
+        # legitimately grows the surface" case, recorded here rather than
+        # silently.
+        # 38 -> 40 (2026-09-11, DB-undo-restore port): the new leaf module
+        # stores/world_lock.py is imported by services/undo_archive.py (the
+        # archive command retries a locked world) and by
+        # services/history/mutate.py (the timeline save does the same). Both
+        # are the sanctioned case again — a new leaf store, imported by the
+        # two services that must survive a locked world file.
+        self.assertEqual(count, 40,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 37)")
+                         "import in another area (integrated baseline: 40)")
 
 
 if __name__ == "__main__":

@@ -31,6 +31,11 @@ from stores.media_layout import _extension, _now, infer_kind
 log = logging.getLogger("chatbot")
 
 
+def _response_mime(response: dict) -> str:
+    # mimeType first; a CDN redirect sometimes only carries Content-Type.
+    return response.get("mimeType") or (response.get("headers") or {}).get("Content-Type", "")
+
+
 class _NetworkWatch:
     """The CDP network events of the one request an `<img>` triggers.
 
@@ -84,16 +89,15 @@ class _NetworkWatch:
     def on_response(self, params) -> None:
         if self.fut.done():
             return
-        response = (params or {}).get("response") or {}
-        rid = (params or {}).get("requestId")
+        params = params or {}
+        response = params.get("response") or {}
+        rid = params.get("requestId")
         if self.matches(response.get("url")):
             self.info["request_id"] = rid or self.info["request_id"]
         # a CORS/CDN redirect can change the visible URL; keep the bytes
         # and the real MIME for any response on the request we started.
         if rid and rid == self.info["request_id"]:
-            self.info["mime"] = (response.get("mimeType")
-                                 or (response.get("headers") or {})
-                                 .get("Content-Type", ""))
+            self.info["mime"] = _response_mime(response)
 
     def on_finished(self, params) -> None:
         if self.fut.done():
@@ -108,6 +112,48 @@ class _NetworkWatch:
             self.fut.set_result({"ok": False,
                                  "error": (params or {}).get("errorText")
                                  or "network load failed"})
+
+
+async def _session_cookies(cdp, url: str) -> str:
+    """The browser's cookies for `url` (empty when they cannot be read)."""
+    try:
+        return await cdp.get_cookies(url)
+    except Exception:                                  # noqa: BLE001
+        return ""
+
+
+#: The Referer has to look like the site's own origin or the CDN answers 403;
+#: with no parseable netloc this pinned production origin is used instead.
+_FALLBACK_REFERER = "https://ru.virt-chat.com/"
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+
+def _download_headers(url: str, cookies: str) -> dict:
+    """Browser-like headers for the CORS-free Python download."""
+    parsed = urlparse(str(url or ""))
+    referer = f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc else _FALLBACK_REFERER
+    headers = {"User-Agent": _USER_AGENT, "Referer": referer,
+               "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+               "Accept-Language": "en-US,en;q=0.9,ru;q=0.8"}
+    if cookies:
+        headers["Cookie"] = cookies
+    return headers
+
+
+async def _read_download(resp, cap: int) -> dict:
+    """One HTTP response as a download payload (an error dict when unusable)."""
+    if resp.status != 200:
+        return {"ok": False, "error": f"HTTP {resp.status}"}
+    data = await resp.read()
+    if len(data) > cap:
+        return {"ok": False, "error": "too large (%d bytes, cap %d)" % (len(data), cap)}
+    return {"ok": True, "b64": base64.b64encode(data).decode(), "mime": resp.headers.get("Content-Type", ""), "bytes": len(data)}
+
+
+def _download_errors(payload: dict, errors: list) -> list:
+    """The errors worth telling the user about a failed download."""
+    useful = [e for e in errors if e and e != "no downloadable media"]
+    return useful or [payload.get("error") or "no downloadable media"]
 
 
 class MediaFetcher:
@@ -209,9 +255,7 @@ class MediaFetcher:
                 errors.append(payload.get("error") or "")
         if payload.get("ok"):
             return payload, []
-        useful = [e for e in errors if e and e != "no downloadable media"]
-        return payload, useful or [payload.get("error")
-                                   or "no downloadable media"]
+        return payload, _download_errors(payload, errors)
 
     async def _file_bytes(self, row: dict, url: str, data: bytes,
                           payload: dict) -> bool:
@@ -263,41 +307,16 @@ class MediaFetcher:
             return await self._owner._http_fetcher(url)
         if self._owner.cdp is None or not hasattr(self._owner.cdp, "get_cookies"):
             return {"ok": False, "error": "no authenticated download available"}
-        try:
-            cookies = await self._owner.cdp.get_cookies(url)
-        except Exception:                               # noqa: BLE001
-            cookies = ""
-        parsed = urlparse(str(url or ""))
-        referer = f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc \
-            else "https://ru.virt-chat.com/"
-        headers = {
-            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/131.0.0.0 Safari/537.36"),
-            "Referer": referer,
-            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
-        }
-        if cookies:
-            headers["Cookie"] = cookies
+        cookies = await _session_cookies(self._owner.cdp, url)
         try:
             timeout = aiohttp.ClientTimeout(total=30)
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers,
+                async with session.get(url,
+                                       headers=_download_headers(url, cookies),
                                        timeout=timeout,
                                        allow_redirects=True) as resp:
-                    if resp.status != 200:
-                        return {"ok": False,
-                                "error": f"HTTP {resp.status}"}
-                    data = await resp.read()
-                    if len(data) > self._owner.max_file_bytes:
-                        return {"ok": False,
-                                "error": "too large (%d bytes, cap %d)"
-                                         % (len(data), self._owner.max_file_bytes)}
-                    return {"ok": True,
-                            "b64": base64.b64encode(data).decode(),
-                            "mime": resp.headers.get("Content-Type", ""),
-                            "bytes": len(data)}
+                    return await _read_download(resp,
+                                                self._owner.max_file_bytes)
         except Exception as e:                        # noqa: BLE001
             return {"ok": False, "error": str(e)}
 

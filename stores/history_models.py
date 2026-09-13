@@ -70,6 +70,29 @@ def dedupe_key(direction: str, from_nick: str, ts_display: str, kind: str,
     return fingerprint(direction, from_nick, ts_display, kind, payload, 0)
 
 
+def _media_payload(data: dict) -> dict:
+    """The record's media block, degrading a garbage one to no-media."""
+    media = data.get("media")
+    if not isinstance(media, dict):
+        return {}
+    return media
+
+
+def _first(data: dict, *keys: str, default: str = "") -> str:
+    """The first non-empty value among ``keys``, stringified.
+
+    The agent's JSON carries the same field under two spellings (`dir` /
+    `direction`, `from` / `from_nick`, `time` / `ts_display`), so "first
+    truthy wins" is the documented coercion — a falsy 0 falls through to
+    the next spelling exactly as the chained `or` it replaces did.
+    """
+    for key in keys:
+        value = data.get(key)
+        if value:
+            return str(value)
+    return default
+
+
 @dataclass
 class MessageRecord:
     """One parsed chat line, as it leaves the parser and enters the archive."""
@@ -109,18 +132,19 @@ class MessageRecord:
     def from_dict(cls, data: dict) -> "MessageRecord":
         """Build a record from the JSON the in-page agent produces."""
         data = data or {}
-        media = data.get("media")
-        if not isinstance(media, dict):
-            media = {}          # a garbage `media` degrades to no-media
+        media = _media_payload(data)
         rec = cls(
+            # `fp` keeps str(data.get("fp", "")) verbatim: an explicit null
+            # becomes "None", which is what ensure_fp() then replaces, and
+            # _first() would silently turn into "" instead.
             fp=str(data.get("fp", "")),
-            direction=str(data.get("dir") or data.get("direction") or "in"),
-            from_nick=str(data.get("from") or data.get("from_nick") or ""),
-            kind=str(data.get("kind") or "text"),
-            text=str(data.get("text") or ""),
+            direction=_first(data, "dir", "direction", default="in"),
+            from_nick=_first(data, "from", "from_nick"),
+            kind=_first(data, "kind", default="text"),
+            text=_first(data, "text"),
             media_url=str(media.get("url") or data.get("media_url") or ""),
             media_kind=str(media.get("kind") or data.get("media_kind") or ""),
-            ts_display=str(data.get("time") or data.get("ts_display") or ""),
+            ts_display=_first(data, "time", "ts_display"),
             occ=_int_or(data.get("occ"), 0),
             idx=_int_or(data.get("idx"), 0),
         )

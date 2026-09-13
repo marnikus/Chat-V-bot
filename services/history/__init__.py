@@ -10,6 +10,7 @@ from stores.history_db import HistoryDB
 from stores.history_repo import HistoryRepo
 from stores.media_store import MediaStore
 
+from . import trash
 from .export import HistoryExportService
 from .mutate import HistoryMutateService
 from .query import (HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT, OLD_MAX_FILE_MB,
@@ -39,6 +40,19 @@ class HistoryService(HistoryQueryService, HistoryMutateService, HistoryExportSer
         self._task: Optional[asyncio.Task] = None
         self._binding = False
         self._detached_running = None
+
+    # ── session-sized trash (services/history/trash.py) ──────────
+    async def begin_session(self) -> dict:
+        return await trash.begin_session(self)
+
+    async def forget_old_trash(self) -> dict:
+        return await trash.forget_old_trash(self)
+
+    async def purge_trash(self, nick: str = "") -> dict:
+        return await trash.purge_trash(self, nick)
+
+    async def purge_tokens(self, tokens: list) -> dict:
+        return await trash.purge_tokens(self, tokens)
 
 
 __all__ = [

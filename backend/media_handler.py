@@ -133,18 +133,26 @@ def parse_patterns(file_pattern: str) -> list[str]:
     """
     tokens = [t.strip() for t in re.split(r"[,\s;]+", file_pattern or "")
               if t.strip()]
-    patterns = []
-    for token in tokens:
-        low = token.lower()
-        if low.startswith("*."):
-            patterns.append(low)
-        elif low.startswith("."):
-            patterns.append("*" + low)
-        elif "*" in low or "?" in low:
-            patterns.append(low)
-        else:
-            patterns.append("*." + low.lstrip("."))
+    patterns = [_glob_for(token) for token in tokens]
     return patterns or [p.strip() for p in DEFAULT_FILE_PATTERN.split(",")]
+
+
+def _glob_for(token: str) -> str:
+    """One pattern token as a usable lowercase glob.
+
+    The four shapes a user types: already a glob (``*.jpg``), a bare
+    extension (``.png``), a token carrying its own wildcard (``img?``), or a
+    plain format name (``gif``). Only the last needs the ``*.`` prefix, and
+    it also sheds a stray leading dot so ``".gif"`` and ``"gif"`` agree.
+    """
+    low = token.lower()
+    if low.startswith("*."):
+        return low
+    if low.startswith("."):
+        return "*" + low
+    if "*" in low or "?" in low:
+        return low
+    return "*." + low.lstrip(".")
 
 
 def list_image_files(folder: str, file_pattern: str) -> list[str]:
@@ -353,13 +361,13 @@ async def _open_dialog(cdp: CDPClient, state: _AttachState) -> None:
                      "hidden file input directly", "warn")
 
 
-async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
-    """Step 5: wait for the hidden input, write the file, read it back."""
+async def _probe_file_input(cdp: CDPClient, state: _AttachState) -> dict:
+    """Step 5a: find the hidden file input (refuses when it is not there)."""
     report = state.options.report
     try:
         raw = await cdp.evaluate(build_probe(selector=state.input_sel))
         res = json.loads(raw) if raw else None
-    except Exception as exc:
+    except Exception as exc:                       # noqa: BLE001
         _refuse(report, f"❌ Probe error while searching file input: {exc}")
     if not (res and res.get("found")):
         total = int((res or {}).get("total", 0) or 0)
@@ -367,21 +375,32 @@ async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
                         f"'{state.input_sel}' (matched {total} node(s))")
     msg, level = interpret_wait(res, f"file input '{state.input_sel}'")
     _rep(report, msg, level)
+    return res
 
+
+async def _readback_count(cdp: CDPClient, state: _AttachState) -> int:
+    """How many files the input actually holds (-1 when that is unreadable)."""
+    try:
+        raw = await cdp.evaluate(_readback_js(state.input_sel))
+    except Exception:                              # noqa: BLE001
+        return -1
+    return int(str(raw).strip()) if str(raw).strip().isdigit() else -1
+
+
+async def _inject_file(cdp: CDPClient, state: _AttachState) -> None:
+    """Step 5: wait for the hidden input, write the file, read it back."""
+    report = state.options.report
+    await _probe_file_input(cdp, state)
     state.baseline = await _message_count(cdp, state.shell_css)
     try:
         await cdp.set_file_input_files(state.input_sel,
                                        [os.path.abspath(state.path)])
-    except Exception as exc:
+    except Exception as exc:                       # noqa: BLE001
         _refuse(report, f"❌ File injection failed: {exc}")
 
     # Read back: DOM.setFileInputFiles can silently no-op (node id 0) —
     # never trust it without proof the file actually landed.
-    try:
-        raw = await cdp.evaluate(_readback_js(state.input_sel))
-        got = int(str(raw).strip()) if str(raw).strip().isdigit() else -1
-    except Exception:
-        got = -1
+    got = await _readback_count(cdp, state)
     if got != 1:
         _refuse(report, f"❌ File injection did not stick (input.files.length "
                         f"= {got}) — nothing was sent")

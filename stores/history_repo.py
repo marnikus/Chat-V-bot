@@ -34,6 +34,9 @@ from stores.history_repo_identity import (                        # noqa: F401
 from stores.history_repo_identity import ConversationIdentity
 from stores.history_repo_lifecycle import PersonLifecycle
 from stores.history_repo_media import MediaRecovery
+from stores.history_requests import (MediaRecoveryRequest, PaneSignature,
+                                     PlacedRecord, PrependRequest, SlotSearch,
+                                     WriteContext)
 
 log = logging.getLogger("chatbot")
 
@@ -95,8 +98,9 @@ class HistoryRepo:
         return await self.identity.possible_duplicates()
 
     async def rename_if_same_conversation(self, old_nick: str, new_nick: str, head_sig: str, tail_sig: str, head_any: str='', tail_any: str='', dom_count: int=-1, pane_same: bool=False) -> bool:
-        """See `PersonLifecycle.rename_if_same_conversation` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.identity.rename_if_same_conversation(old_nick, new_nick, head_sig, tail_sig, head_any, tail_any, dom_count, pane_same)
+        """See `ConversationIdentity.rename_if_same_conversation` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3). The signature is part of the frozen AREA B surface, so the facade keeps all eight parameters and packs the five pane values into the `PaneSignature` the collaborator takes."""
+        pane = PaneSignature(head_sig, tail_sig, head_any, tail_any, dom_count)
+        return await self.identity.rename_if_same_conversation(old_nick, new_nick, pane, pane_same)
 
     # ── cursor ───────────────────────────────────────────────────
     async def get_cursor(self, person_id: int) -> dict:
@@ -120,9 +124,9 @@ class HistoryRepo:
         """See `AppendPlanner.append` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
         return await self.planner.append(nick, records, my_nick, align, expect_idx, dom_count, head_sig, tail_sig, now, session_id, head_any, tail_any, prepend)
 
-    async def _prepend(self, person_id: int, recs, my_nick: str, now: datetime, dom_count: int, head_sig: Optional[str], tail_sig: Optional[str], session_id: str, nick: str='', head_any: Optional[str]=None, tail_any: Optional[str]=None) -> AppendResult:
-        """See `AppendPlanner._prepend` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.planner._prepend(person_id, recs, my_nick, now, dom_count, head_sig, tail_sig, session_id, nick, head_any, tail_any)
+    async def _prepend(self, req: PrependRequest) -> AppendResult:
+        """See `AppendPlanner._prepend` — the name stays on the facade because `TestPrivatesStayReachable` requires it, though the planner is what calls its own today (design §2.3)."""
+        return await self.planner._prepend(req)
 
     async def record_gap(self, nick_or_id, after_ord: int, reason: str, detail: str='') -> None:
         """See `AppendPlanner.record_gap` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
@@ -162,9 +166,9 @@ class HistoryRepo:
                 " ".join(str(row.get("ts_display") or "").split()).strip(),
                 str(row.get("day") or "")[:10])
 
-    async def _take_empty_slot(self, person_id: int, rec: MessageRecord, used: dict, day: str='', rows: Optional[list]=None) -> Optional[int]:
-        """See `AppendPlanner._take_empty_slot` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.planner._take_empty_slot(person_id, rec, used, day, rows)
+    async def _take_empty_slot(self, rec: MessageRecord, day: str, search: SlotSearch) -> Optional[int]:
+        """See `AppendPlanner._take_empty_slot` — the name stays on the facade because `TestPrivatesStayReachable` requires it, though the planner is what calls its own today (design §2.3)."""
+        return await self.planner._take_empty_slot(rec, day, search)
 
     async def _fill_slot(self, slot_id: int, rec: MessageRecord, media_id: Optional[int]) -> None:
         """See `AppendPlanner._fill_slot` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
@@ -179,9 +183,9 @@ class HistoryRepo:
         """See `ConversationIdentity._media_id` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
         return await self.identity._media_id(rec, nick, day)
 
-    async def _ui_record(self, rec: MessageRecord, ord_value: int, day: str, my_nick: str, media_id) -> dict:
-        """See `ConversationIdentity._ui_record` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.identity._ui_record(rec, ord_value, day, my_nick, media_id)
+    async def _ui_record(self, placed: PlacedRecord) -> dict:
+        """See `ConversationIdentity._ui_record` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3); `AppendPlanner._collect` reaches it through `self._owner`."""
+        return await self.identity._ui_record(placed)
 
     async def _record_gap(self, person_id: int, after_ord: int, reason: str, detail: str='') -> None:
         """See `AppendPlanner._record_gap` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
@@ -198,7 +202,9 @@ class HistoryRepo:
 
     async def recover_media(self, person_id: int, records, media=None, nick: str='', now=None, requeue_failed: bool=True) -> dict:
         """See `MediaRecovery.recover_media` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.media_recovery.recover_media(person_id, records, media, nick, now, requeue_failed)
+        return await self.media_recovery.recover_media(
+            MediaRecoveryRequest(person_id, records or [], media, nick, now,
+                                 requeue_failed))
 
     async def _all_person_keys(self, person_id: int) -> set:
         """See `MediaRecovery._all_person_keys` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
@@ -209,13 +215,13 @@ class HistoryRepo:
         return await self.media_recovery.has_repairable_media(person_id, include_failed, rescan_after_s)
 
 
-    async def _touch_cursor(self, person_id: int, dom_count: int, head_sig: Optional[str], tail_sig: Optional[str], head_any: Optional[str]=None, tail_any: Optional[str]=None) -> None:
-        """See `AppendPlanner._touch_cursor` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        await self.lifecycle._touch_cursor(person_id, dom_count, head_sig, tail_sig, head_any, tail_any)
+    async def _touch_cursor(self, ctx: WriteContext) -> None:
+        """See `PersonLifecycle._touch_cursor` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3); `AppendPlanner._report_unchanged` reaches it through `self._owner`."""
+        await self.lifecycle._touch_cursor(ctx)
 
-    async def _after_write(self, person_id: int, my_nick: str, dom_count: int, head_sig: Optional[str], tail_sig: Optional[str], bootstrapped: Optional[bool], head_any: Optional[str]=None, tail_any: Optional[str]=None) -> None:
-        """See `AppendPlanner._after_write` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        await self.lifecycle._after_write(person_id, my_nick, dom_count, head_sig, tail_sig, bootstrapped, head_any, tail_any)
+    async def _after_write(self, ctx: WriteContext) -> None:
+        """See `PersonLifecycle._after_write` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
+        await self.lifecycle._after_write(ctx)
 
     async def _recount(self, person_id: int, my_nick: str='') -> None:
         """See `AppendPlanner._recount` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""

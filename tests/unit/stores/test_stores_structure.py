@@ -75,8 +75,26 @@ class TestFileSize(unittest.TestCase):
 
     def test_the_package_keeps_a_reasonable_file_count(self):
         # B2 splits must stay cohesive: 17 modules before, and a decomposition
-        # that quietly exploded into 40 tiny files is just as unreadable
-        self.assertLessEqual(len(py_files()), 36)
+        # that quietly exploded into 40 tiny files is just as unreadable.
+        #
+        # 36 -> 37 (2026-09-12, DB-undo-restore port): stores/world_lock.py —
+        # the ONE write gate every connection to a world file shares. It is a
+        # leaf (no Qt, no `backend/` or `services/` import) and it belongs
+        # beside the two stores it serializes (`history_db`, `user_memory`),
+        # so this is a new cohesive file, not a decomposition fragment.
+        # RULE 18.3 counts the prefix families as the real modules here:
+        # `history_*` 9, `label_*` 6, `media_*` 4.
+        #
+        # 37 -> 38 (2026-09-13, Round F step F5): stores/history_requests.py —
+        # the parameter object `_after_write` takes, per RULE 19 §19.4 and
+        # modelled on `PersonPageRequest`. A leaf (no Qt, no `backend/` or
+        # `services/` import) that joins the `history_*` family, so §18.3's
+        # real module count for that family goes 9 -> 10, not 37 -> 38 modules.
+        # It holds only objects a live signature consumes: the eight speculative
+        # dataclasses F5's first attempt added alongside an uncalled
+        # `append_v2()` were dropped as dead code, so this file is not a
+        # fragment parking unused types.
+        self.assertLessEqual(len(py_files()), 38)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

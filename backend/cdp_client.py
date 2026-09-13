@@ -94,6 +94,33 @@ class CdpLease:
         self._locked = False
 
 
+def _domain_matches(host: str, domain: str) -> bool:
+    """Whether a cookie's domain covers the requested host.
+
+    A leading dot is already stripped by the caller, so `example.com` covers
+    both itself and every subdomain of it.
+    """
+    return domain == host or host.endswith("." + domain)
+
+
+def _cookie_pairs(cookies: list, host: str) -> list[str]:
+    """`name=value` for every cookie that applies to `host`.
+
+    With no host (or a cookie with no domain) there is nothing to match
+    against, so the cookie is kept — the caller asked for "the cookies".
+    """
+    pairs = []
+    for cookie in cookies:
+        name, value = cookie.get("name"), cookie.get("value")
+        if not name:
+            continue
+        domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
+        if host and domain and not _domain_matches(host, domain):
+            continue
+        pairs.append(f"{name}={value or ''}")
+    return pairs
+
+
 class CDPClient(QObject):
     connected = Signal()
     disconnected = Signal()
@@ -184,19 +211,22 @@ class CDPClient(QObject):
     def base_url(self) -> str:
         return f"http://{self._host}:{self._port}"
 
+    async def _fetch_tab_list(self) -> list:
+        """The raw `/json/list` payload (empty when the endpoint is unhappy)."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self.base_url}/json/list",
+                                   timeout=aiohttp.ClientTimeout(total=5)) as r:
+                return await r.json() if r.status == 200 else []
+
     async def fetch_tabs(self) -> list[TabInfo]:
-        tabs: list[TabInfo] = []
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(f"{self.base_url}/json/list",
-                                 timeout=aiohttp.ClientTimeout(total=5)) as r:
-                    for item in (await r.json() if r.status == 200 else []):
-                        if item.get("type") == "page":
-                            tabs.append(TabInfo(item.get("id",""), item.get("title",""),
-                                                item.get("url",""), item.get("webSocketDebuggerUrl","")))
-        except Exception as e:
+            items = await self._fetch_tab_list()
+        except Exception as e:                     # noqa: BLE001
             log.warning("Tab discovery failed: %s", e)
-        return tabs
+            return []
+        return [TabInfo(item.get("id", ""), item.get("title", ""),
+                        item.get("url", ""), item.get("webSocketDebuggerUrl", ""))
+                for item in items if item.get("type") == "page"]
 
     async def connect(self, ws_url: str) -> bool:
         await self.disconnect()
@@ -258,17 +288,7 @@ class CDPClient(QObject):
             return ""
         cookies = result.get("result", {}).get("cookies", []) or []
         host = str(urlparse(str(url or "")).hostname or "").lower()
-        pairs = []
-        for cookie in cookies:
-            name, value = cookie.get("name"), cookie.get("value")
-            if not name:
-                continue
-            domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
-            if host and domain:
-                if not (domain == host or host.endswith("." + domain)):
-                    continue
-            pairs.append(f"{name}={value or ''}")
-        return "; ".join(pairs)
+        return "; ".join(_cookie_pairs(cookies, host))
 
     async def click_at(self, x: float, y: float) -> None:
         for t in ("mousePressed", "mouseReleased"):
