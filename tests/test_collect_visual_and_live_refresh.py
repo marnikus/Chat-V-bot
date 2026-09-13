@@ -137,8 +137,11 @@ class TestCollectPauseAndOrder(unittest.TestCase):
                 order.append(("sleep", round(delay, 3)))
             await real_sleep(0)
 
-        import backend.scroll_parser as sp
-        sp.asyncio.sleep = spy
+        # Round G step G2 moved the sleeps into the scroll_parser_* family.
+        # The old `sp.asyncio.sleep` patch went through the module's `asyncio`
+        # attribute — which IS this stdlib module object — so patching it
+        # directly is the same process-wide spy, with the same restore.
+        asyncio.sleep = spy
         try:
             parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
                                   load_timeout_ms=20,
@@ -148,7 +151,7 @@ class TestCollectPauseAndOrder(unittest.TestCase):
                                       ("added", r.nick)))
             run(parser.collect())
         finally:
-            sp.asyncio.sleep = real_sleep
+            asyncio.sleep = real_sleep
         # a 250 ms hold must precede each "added" event
         self.assertEqual(order[0], ("sleep", 0.25))
         self.assertEqual(order[1], ("added", "Anna"))

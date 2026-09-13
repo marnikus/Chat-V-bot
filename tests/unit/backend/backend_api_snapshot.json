@@ -1031,6 +1031,7 @@
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
+      "click_runner": "(self)",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
@@ -1077,6 +1078,32 @@
    "functions": {},
    "values": {}
   },
+  "actions.cancellation": {
+   "classes": {
+    "RunStopped": {
+     "ancestry": [
+      "RunStopped",
+      "Exception",
+      "BaseException",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {}
+    }
+   },
+   "functions": {
+    "await_with_stop": "(awaitable_factory: 'Callable[[], Awaitable[Any]]', engine, *, slice_s: 'float' = 0.05, deadline_monotonic: 'float | None' = None) -> 'Any'",
+    "check_stopped": "(engine) -> 'None'",
+    "is_stop_requested": "(engine) -> 'bool'",
+    "sleep_with_stop": "(delay_s: 'float', engine, *, slice_s: 'float' = 0.02) -> 'None'"
+   },
+   "values": {}
+  },
   "actions.click_back": {
    "classes": {
     "ClickBack": {
@@ -1102,6 +1129,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1145,6 +1173,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1187,6 +1216,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1416,6 +1446,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1608,8 +1639,8 @@
       "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollParser",
       "config_schema": "(self) -> dict",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str",
-      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None, panel_criteria=None, known_messaged: set | None = None, on_collect=None, on_reject=None, should_stop=None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
-      "to_scroll_options": "(self, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollOptions"
+      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None, panel_criteria=None, known_messaged: set | None = None, on_collect=None, on_reject=None, should_stop=None, seek_nicks: set | None = None) -> backend.scroll_parser_model.CollectResult",
+      "to_scroll_options": "(self, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser_model.ScrollOptions"
      }
     }
    },
@@ -1952,95 +1983,14 @@
    "values": {}
   },
   "backend.chat_sync": {
+   "classes": {},
+   "functions": {
+    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync_options": {
    "classes": {
-    "ChunkReader": {
-     "ancestry": [
-      "ChunkReader",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, session: \"'SyncSession'\")",
-      "read": "(self) -> 'None'"
-     }
-    },
-    "DeltaAligner": {
-     "ancestry": [
-      "DeltaAligner",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "apply": "(self, session: \"'SyncSession'\") -> 'None'",
-      "split": "(collected, cursor: 'dict') -> 'list'"
-     }
-    },
-    "ReadPlan": {
-     "ancestry": [
-      "ReadPlan",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {
-      "count": {
-       "default": "0",
-       "type": "int"
-      },
-      "gap": {
-       "default": "False",
-       "type": "bool"
-      },
-      "head_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "head_sig": {
-       "default": "''",
-       "type": "str"
-      },
-      "mode": {
-       "default": "'full'",
-       "type": "str"
-      },
-      "start": {
-       "default": "0",
-       "type": "int"
-      },
-      "streaming": {
-       "default": "True",
-       "type": "bool"
-      },
-      "tail_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "tail_sig": {
-       "default": "''",
-       "type": "str"
-      }
-     },
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
-      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
-      "delta": "<property>",
-      "is_empty": "<property>",
-      "signatures": "<property>"
-     }
-    },
     "SyncOptions": {
      "ancestry": [
       "SyncOptions",
@@ -2106,7 +2056,13 @@
       "progress": "(self, done: 'int', total: 'int') -> 'None'",
       "stopping": "(self) -> 'bool'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_persist": {
+   "classes": {
     "SyncPersister": {
      "ancestry": [
       "SyncPersister",
@@ -2131,6 +2087,70 @@
       "write_backfill": "(self, records) -> 'None'",
       "write_batch": "(self, records) -> 'None'"
      }
+    }
+   },
+   "functions": {
+    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync_plan": {
+   "classes": {
+    "ReadPlan": {
+     "ancestry": [
+      "ReadPlan",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "count": {
+       "default": "0",
+       "type": "int"
+      },
+      "gap": {
+       "default": "False",
+       "type": "bool"
+      },
+      "head_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "head_sig": {
+       "default": "''",
+       "type": "str"
+      },
+      "mode": {
+       "default": "'full'",
+       "type": "str"
+      },
+      "start": {
+       "default": "0",
+       "type": "int"
+      },
+      "streaming": {
+       "default": "True",
+       "type": "bool"
+      },
+      "tail_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "tail_sig": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
+      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
+      "delta": "<property>",
+      "is_empty": "<property>",
+      "signatures": "<property>"
+     }
     },
     "SyncPlanner": {
      "ancestry": [
@@ -2150,7 +2170,51 @@
       "signature": "(value) -> 'str'",
       "signatures": "(state: 'dict') -> 'dict'"
      }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_read": {
+   "classes": {
+    "ChunkReader": {
+     "ancestry": [
+      "ChunkReader",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "read": "(self) -> 'None'"
+     }
     },
+    "DeltaAligner": {
+     "ancestry": [
+      "DeltaAligner",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "apply": "(self, session: \"'SyncSession'\") -> 'None'",
+      "split": "(collected, cursor: 'dict') -> 'list'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_session": {
+   "classes": {
     "SyncSession": {
      "ancestry": [
       "SyncSession",
@@ -2281,12 +2345,31 @@
       "restore_if_needed": "(self) -> 'None'",
       "restore_viewport": "(self, position: 'Optional[int]' = None) -> 'int'"
      }
+    },
+    "SyncViewport": {
+     "ancestry": [
+      "SyncViewport",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "fetch_settled_state": "(self) -> 'None'",
+      "prepare_backfill": "(self) -> 'None'",
+      "recover_emptied_pane": "(self) -> 'None'",
+      "restore": "(self, position: 'Optional[int]' = None) -> 'int'",
+      "settle_at_top": "(self) -> 'None'",
+      "settled_ok": "(self) -> 'bool'",
+      "window_end": "(self, position: 'Optional[int]') -> 'int'"
+     }
     }
    },
-   "functions": {
-    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'",
-    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
-   },
+   "functions": {},
    "values": {}
   },
   "backend.chat_text": {
@@ -2469,6 +2552,59 @@
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
      }
+    },
+    "PersonPageRequest": {
+     "ancestry": [
+      "PersonPageRequest",
+      "object"
+     ],
+     "attrs": {
+      "dir": "''",
+      "include_deleted": "False",
+      "limit": "50",
+      "offset": "0",
+      "q": "''",
+      "sort": "'recent'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "dir": {
+       "default": "''",
+       "type": "str"
+      },
+      "include_deleted": {
+       "default": "False",
+       "type": "bool"
+      },
+      "limit": {
+       "default": "50",
+       "type": "int"
+      },
+      "offset": {
+       "default": "0",
+       "type": "int"
+      },
+      "q": {
+       "default": "''",
+       "type": "str"
+      },
+      "sort": {
+       "default": "'recent'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> None",
+      "columns": "(self) -> 'str'",
+      "needle": "(self) -> 'str'",
+      "order": "(self) -> 'tuple[str, list]'",
+      "resolved_dir": "(self) -> 'str'",
+      "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
+      "where": "(self) -> 'tuple[str, list]'"
+     }
     }
    },
    "functions": {},
@@ -2638,6 +2774,118 @@
   },
   "backend.scroll_parser": {
    "classes": {
+    "ScrollParser": {
+     "ancestry": [
+      "ScrollParser",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, cdp: 'CDPClient', criteria=None, viewport_sel: 'str' = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: 'int' = 300, pause_ms: 'int' = 800, stall_threshold: 'int' = 3, max_scrolls: 'int' = 50, load_timeout_ms: 'int' = 2500, poll_ms: 'int' = 150, person_filter: 'PersonFilter | None' = None, person_selector: 'str' = 'user-item', nick_selector: 'str' = '.primary-text', highlight_enabled: 'bool' = True, highlight_ms: 'int' = 900, confirm_pause_ms: 'int' = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
+      "collect": "(self, progress_cb=None, min_new_users: 'int' = 0, known_messaged: 'set | None' = None, seek_nicks: 'set | None' = None) -> 'CollectResult'",
+      "from_options": "(cls, cdp: 'CDPClient', options: 'ScrollOptions', criteria=None) -> \"'ScrollParser'\"",
+      "max_scrolls": "<property>",
+      "parse": "(self, progress_cb=None) -> 'tuple[list, list]'",
+      "set_log_cb": "(self, cb) -> 'None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_dom": {
+   "classes": {
+    "ScrollDom": {
+     "ancestry": [
+      "ScrollDom",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "confirm_person": "(self, nick: 'str') -> 'bool'",
+      "do_scroll": "(self) -> 'bool'",
+      "new_people": "(self, snap: 'dict', seen_before: 'set', waited: 'int') -> 'bool'",
+      "scroll_stopped": "(snap: 'dict', prev_top: 'float') -> 'tuple[bool, float]'",
+      "settle": "(self, seen_before: 'set', prev_top: 'float') -> 'dict | None'",
+      "settle_poll": "(self, snap: 'dict', prev_top: 'float', stable: 'int') -> 'tuple[int, float, bool]'",
+      "snapshot": "(self) -> 'dict | None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_judge": {
+   "classes": {
+    "PersonJudge": {
+     "ancestry": [
+      "PersonJudge",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "collect_one": "(self, record, nick: 'str', reason: 'str', run: 'PassState') -> 'None'",
+      "consume_batch": "(self, run: 'PassState') -> 'None'",
+      "hold_confirmation": "(self, shown: 'bool') -> 'None'",
+      "judge": "(self, nick: 'str', item: 'dict', run: 'PassState') -> 'None'",
+      "notify_collected": "(self, record, result) -> 'None'",
+      "notify_rejected": "(self, record, reason: 'str', result) -> 'None'",
+      "reject_one": "(self, record, reason: 'str', run: 'PassState') -> 'None'",
+      "seek_hit": "(self, nick: 'str', item: 'dict', run: 'PassState') -> 'bool'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_loop": {
+   "classes": {
+    "ScrollLoop": {
+     "ancestry": [
+      "ScrollLoop",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "advance": "(self, run: 'PassState', scroll_i: 'int') -> 'bool'",
+      "finish": "(self, run: 'PassState') -> 'CollectResult'",
+      "first_snapshot": "(self, run: 'PassState') -> 'bool'",
+      "list_is_over": "(self, run: 'PassState') -> 'bool'",
+      "open_pass": "(self, *, known_messaged, seek_nicks, min_new_users, progress_cb) -> 'PassState'",
+      "scroll_and_settle": "(self, run: 'PassState') -> 'bool'",
+      "scroll_loop": "(self, run: 'PassState') -> 'None'",
+      "target_reached": "(self, run: 'PassState') -> 'bool'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_model": {
+   "classes": {
     "CollectResult": {
      "ancestry": [
       "CollectResult",
@@ -2704,6 +2952,76 @@
      "methods": {
       "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
       "new_unmessaged": "<property>"
+     }
+    },
+    "PassState": {
+     "ancestry": [
+      "PassState",
+      "object"
+     ],
+     "attrs": {
+      "min_new_users": "0",
+      "new_this_scroll": "0",
+      "no_new_count": "0",
+      "progress_cb": "None",
+      "seeking": "False"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "collected_nicks": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "known_messaged": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "min_new_users": {
+       "default": "0",
+       "type": "int"
+      },
+      "new_this_scroll": {
+       "default": "0",
+       "type": "int"
+      },
+      "no_new_count": {
+       "default": "0",
+       "type": "int"
+      },
+      "options": {
+       "default": "<_MISSING_TYPE>",
+       "type": "ScrollOptions"
+      },
+      "person_filter": {
+       "default": "<_MISSING_TYPE>",
+       "type": "PersonFilter"
+      },
+      "progress_cb": {
+       "default": "None",
+       "type": "object"
+      },
+      "result": {
+       "default": "<_MISSING_TYPE>",
+       "type": "CollectResult"
+      },
+      "seek_nicks": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "seeking": {
+       "default": "False",
+       "type": "bool"
+      },
+      "snap": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, result: backend.scroll_parser_model.CollectResult, person_filter: backend.person_filter.PersonFilter, options: backend.scroll_parser_model.ScrollOptions, seeking: bool = False, seek_nicks: set = <factory>, known_messaged: set = <factory>, min_new_users: int = 0, progress_cb: object = None, collected_nicks: set = <factory>, snap: dict = <factory>, new_this_scroll: int = 0, no_new_count: int = 0) -> None"
      }
     },
     "ScrollOptions": {
@@ -2790,26 +3108,6 @@
       "__init__": "(self, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect: object = None, on_reject: object = None, should_stop: object = None, log_cb: object = None) -> None",
       "__post_init__": "(self)",
       "seconds": "(self, ms_attr: str) -> float"
-     }
-    },
-    "ScrollParser": {
-     "ancestry": [
-      "ScrollParser",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, cdp: backend.cdp_client.CDPClient, criteria=None, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
-      "collect": "(self, progress_cb=None, min_new_users: int = 0, known_messaged: set | None = None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
-      "from_options": "(cls, cdp: backend.cdp_client.CDPClient, options: backend.scroll_parser.ScrollOptions, criteria=None) -> 'ScrollParser'",
-      "max_scrolls": "<property>",
-      "parse": "(self, progress_cb=None) -> tuple[list, list]",
-      "set_log_cb": "(self, cb) -> None"
      }
     }
    },

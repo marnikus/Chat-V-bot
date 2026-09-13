@@ -266,9 +266,19 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # services/history/mutate.py (the timeline save does the same). Both
         # are the sanctioned case again — a new leaf store, imported by the
         # two services that must survive a locked world file.
-        self.assertEqual(count, 40,
+        # 40 -> 42 (2026-09-13, Round G2 RULE 18 split): the backend
+        # chat_sync monolith became a seam + family; the *same* stores names
+        # now sit in the files that use them — seam (SyncResult, the pinned
+        # run_sync annotation), chat_sync_persist (MAX_LIVE_ITEMS,
+        # SyncResult), chat_sync_read (align_batch), chat_sync_session
+        # (SyncResult) — two more import lines than the monolith's two. The
+        # scroll_parser family is net-zero (UserRecord moved facade ->
+        # scroll_parser_dom). The stores/ surface itself is unchanged; the
+        # invariant (a stores refactor never forces another area to edit an
+        # import) still holds.
+        self.assertEqual(count, 42,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 40)")
+                         "import in another area (integrated baseline: 42)")
 
 
 if __name__ == "__main__":
