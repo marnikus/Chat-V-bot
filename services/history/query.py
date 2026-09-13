@@ -1,3 +1,31 @@
+"""services/history/query — the effective history settings for the open world.
+
+Owns the answer to "what settings is history actually running with right now",
+which is never one source. Three layers are merged, later winning over earlier:
+
+    HISTORY_DEFAULTS  ->  the app config file  ->  the world's own DB rows
+
+The last layer is the reason this module exists: history settings are per-WORLD
+data (a media cap belongs to the database it limits), so opening a different
+DB must produce different effective settings without touching the config file.
+`SETTING_KEYS` is the set of keys a world may override.
+
+Imports point one way: `services/history/` imports this; this imports only the
+standard library. `_merge` is a deep merge — a world that overrides one preview
+key must not drop the rest of the section.
+
+Failure policy, which is the subtle part: a single unparsable stored value must
+not fail the whole world open. The per-setting helpers convert without guarding
+and the caller's `except` decides, so one bad row costs its own setting and
+nothing else. `_db_stem` similarly never fails — it sanitises any path into a
+usable identifier and falls back to "world".
+
+`_migrate_media_cap` is a live data migration, not a default: databases written
+before 2026-09-07 carry a 2 MB cap that silently skipped ordinary chat GIFs, so
+any cap at or below the old value is read as "never configured" and lifted to
+25 MB.
+"""
+
 from __future__ import annotations
 
 import copy

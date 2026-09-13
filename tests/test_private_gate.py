@@ -28,8 +28,9 @@ from backend.chat_agent_js import AGENT_VERSION  # noqa: E402
 from backend.chat_parser import (  # noqa: E402
     ChatParser,
     sync_conversation,
-    verify_private,
 )
+# H5 moved the gate to its own module; import it from the module that owns it.
+from backend.private_gate import verify_private  # noqa: E402
 from backend.collector import Collector, CollectorState  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402

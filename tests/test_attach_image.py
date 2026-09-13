@@ -33,6 +33,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # run before backend.visual_click is touched from anywhere else.
 import actions.attach_image  # noqa: E402,F401
 import backend.media_handler as media  # noqa: E402
+# H5 split the CDP attach pipeline out of media_handler into its own module;
+# `attach` is that module. The file-listing names (parse_patterns,
+# list_image_files, the selectors) stayed in media_handler.
+import backend.attach_image as attach  # noqa: E402
 from actions.attach_image import AttachImage  # noqa: E402
 
 PROBE_FOUND = ('{"phase":"probe","found":true,"total":1,"visible":true,'
@@ -132,7 +136,7 @@ class TestActiveChatScoping(unittest.TestCase):
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(ctx=dict(SECOND_CHAT_CTX), counts=[2, 3])
             messages = []
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=True, verify_timeout_ms=200,
                 verify_poll_ms=20,
                 report=lambda m, lvl="info": messages.append(m))
@@ -156,7 +160,7 @@ class TestActiveChatScoping(unittest.TestCase):
         async def go():
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(counts=[2, 3])       # default ctx = single panel
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=False, verify_timeout_ms=200,
                 verify_poll_ms=20)
             self.assertTrue(ok)
@@ -172,7 +176,7 @@ class TestActiveChatScoping(unittest.TestCase):
                                "input_css": "", "button_css": "",
                                "shell_css": ""}, counts=[1, 2])
             messages = []
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=True, verify_timeout_ms=200,
                 verify_poll_ms=20,
                 report=lambda m, lvl="info": messages.append(m))
@@ -190,7 +194,7 @@ class TestAttachPipeline(unittest.TestCase):
         async def go():
             d = tmp_folder(["1.gif", "2.jpg"])
             cdp = FakeCDP(counts=[3, 4])      # message count grows → sent
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=False, verify_timeout_ms=300,
                 verify_poll_ms=20)
             self.assertTrue(ok)
@@ -210,7 +214,7 @@ class TestAttachPipeline(unittest.TestCase):
         async def go():
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(readback="0", counts=[5, 6])
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=False, verify_timeout_ms=200,
                 verify_poll_ms=20)
             self.assertFalse(ok, "files.length=0 must fail the block")
@@ -223,7 +227,7 @@ class TestAttachPipeline(unittest.TestCase):
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(counts=[3, 3, 3, 3])   # never grows
             messages = []
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=False, verify_timeout_ms=120,
                 verify_poll_ms=20,
                 report=lambda m, lvl="info": messages.append(m))
@@ -240,7 +244,7 @@ class TestAttachPipeline(unittest.TestCase):
         async def go():
             d = tmp_folder(["a.jpg"])
             cdp = FakeCDP(counts=[])
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 cdp, d, simulate_dialog=False, verify_timeout_ms=0)
             self.assertTrue(ok)
             self.assertTrue(cdp.sets)
@@ -250,7 +254,7 @@ class TestAttachPipeline(unittest.TestCase):
 
     def test_missing_folder_fails(self):
         async def go():
-            ok = await media.attach_image(FakeCDP(), "/no/such/folder")
+            ok = await attach.attach_image(FakeCDP(), "/no/such/folder")
             return ok
         self.assertFalse(run(go()))
 
@@ -258,7 +262,7 @@ class TestAttachPipeline(unittest.TestCase):
         async def go():
             d = tmp_folder(["readme.txt"])
             messages = []
-            ok = await media.attach_image(
+            ok = await attach.attach_image(
                 FakeCDP(), d, file_pattern="*.png",
                 report=lambda m, lvl="info": messages.append(m))
             self.assertFalse(ok)
@@ -273,7 +277,7 @@ class TestAttachPipeline(unittest.TestCase):
             cdp = FakeCDP(probe='{"phase":"probe","found":false,"total":0,'
                                 '"visible":false,"disabled":false,'
                                 '"clickable":false,"error":null}')
-            ok = await media.attach_image(cdp, d, simulate_dialog=False)
+            ok = await attach.attach_image(cdp, d, simulate_dialog=False)
             return d, ok
         d, ok = run(go())
         self.assertFalse(ok)
@@ -288,7 +292,7 @@ class TestDialogSimulation(unittest.TestCase):
             cdp = FakeCDP(counts=[2, 3])
             click = mock.AsyncMock(return_value="ok")
             with mock.patch("backend.visual_click.find_and_click", click):
-                ok = await media.attach_image(
+                ok = await attach.attach_image(
                     cdp, d, simulate_dialog=True, verify_timeout_ms=200,
                     verify_poll_ms=20)
             self.assertTrue(ok)
@@ -312,7 +316,7 @@ class TestDialogSimulation(unittest.TestCase):
             cdp = FakeCDP(ctx=dict(SECOND_CHAT_CTX), counts=[2, 3])
             click = mock.AsyncMock(return_value="ok")
             with mock.patch("backend.visual_click.find_and_click", click):
-                ok = await media.attach_image(
+                ok = await attach.attach_image(
                     cdp, d, simulate_dialog=True, verify_timeout_ms=200,
                     verify_poll_ms=20)
             self.assertTrue(ok)
@@ -332,7 +336,7 @@ class TestDialogSimulation(unittest.TestCase):
             messages = []
             click = mock.AsyncMock(return_value="fail")
             with mock.patch("backend.visual_click.find_and_click", click):
-                ok = await media.attach_image(
+                ok = await attach.attach_image(
                     cdp, d, simulate_dialog=True, verify_timeout_ms=200,
                     verify_poll_ms=20,
                     report=lambda m, lvl="info": messages.append(m))

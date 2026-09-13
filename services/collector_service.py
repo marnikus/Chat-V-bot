@@ -26,8 +26,8 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal
 
 from backend import chat_agent_js
-from backend.chat_parser import (ChatParser, _signature, sync_conversation,
-                                 verify_private)
+from backend.chat_parser import ChatParser, _signature, sync_conversation
+from backend.private_gate import verify_private
 from services.collector_loop import RunLoop
 from services.collector_pacing import Pacing
 from services.collector_partner import PartnerMemory

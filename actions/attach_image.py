@@ -21,7 +21,8 @@ import logging
 from typing import Optional
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
-from backend.media_handler import attach_image, DEFAULT_FILE_PATTERN
+from backend.attach_image import attach_image
+from backend.media_handler import DEFAULT_FILE_PATTERN
 
 log = logging.getLogger("chatbot")
 

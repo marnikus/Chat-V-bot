@@ -57,17 +57,28 @@ async def _apply(archive, value: dict, forward: bool):
     op = str(value.get("op") or "")
     nick = str(value.get("nick") or "")
     token = str(value.get("token") or "")
-    if op == "delete_person":
-        if forward:
-            return await repo.delete_person(nick, hard=False, token=token)
-        return await repo.restore_person(nick, token=token)
-    if op == "clear_history":
-        if forward:
-            return await repo.soft_delete_history(nick, token=token)
-        return await repo.restore_deleted(nick, token)
-    message_id = int(value.get("message_id") or 0)
     if forward:
-        return await repo.soft_delete_message(nick, message_id, token=token)
+        return await _do(repo, op, nick, token, value)
+    return await _undo(repo, op, nick, token)
+
+
+async def _do(repo, op: str, nick: str, token: str, value: dict):
+    """Perform the command. Anything that is not a person- or history-wide
+    delete is a single-message delete — the default, not a fallthrough."""
+    if op == "delete_person":
+        return await repo.delete_person(nick, hard=False, token=token)
+    if op == "clear_history":
+        return await repo.soft_delete_history(nick, token=token)
+    message_id = int(value.get("message_id") or 0)
+    return await repo.soft_delete_message(nick, message_id, token=token)
+
+
+async def _undo(repo, op: str, nick: str, token: str):
+    """Reverse it. Two of the three ops undo through the SAME token-scoped
+    restore — the token is what records which rows this command touched, so
+    restoring a message and restoring a cleared history are one operation."""
+    if op == "delete_person":
+        return await repo.restore_person(nick, token=token)
     return await repo.restore_deleted(nick, token)
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.chat_parser import verify_private
+from backend.private_gate import verify_private
 from services.collector_states import CollectorState
 
 log = logging.getLogger("chatbot")

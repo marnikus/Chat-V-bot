@@ -104,10 +104,15 @@ class TestCollectorDecomposition(unittest.TestCase):
                         "state stays on the aggregate")
 
     def test_the_tick_host_protocol_stays_reachable_on_the_facade(self):
-        """Every `host.<name>` collector_tick.py uses must still resolve.
+        """Every `host.<name>` the tick state machine uses must still resolve.
 
-        Read straight out of collector_tick.py, so the gate follows the
-        protocol instead of freezing a copy of it. The protocol mixes two kinds
+        Read straight out of the state machine's sources, so the gate follows
+        the protocol instead of freezing a copy of it. Round H (H3) split that
+        machine across three modules -- the probe half, the archive half and
+        the orchestrator -- so all three are scanned. Reading only
+        collector_tick.py would have quietly reduced this gate to the two
+        names the orchestrator happens to use, which is how a widened file
+        set turns a real check into a vacuous one. The protocol mixes two kinds
         of name and each is checked the way it can actually exist:
 
           * methods and properties (`host._log`, `host.configure`,
@@ -117,15 +122,17 @@ class TestCollectorDecomposition(unittest.TestCase):
             the class — which is exactly why F2 left all of it on the
             aggregate instead of moving it into the collaborators.
         """
-        path = os.path.join(ROOT, "services", "collector_tick.py")
-        with open(path, encoding="utf-8") as fh:
-            tick = ast.parse(fh.read())
         wanted = set()
-        for node in ast.walk(tick):
-            if (isinstance(node, ast.Attribute)
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id == "host"):
-                wanted.add(node.attr)
+        for name in ("collector_tick.py", "collector_tick_probe.py",
+                     "collector_tick_archive.py"):
+            path = os.path.join(ROOT, "services", name)
+            with open(path, encoding="utf-8") as fh:
+                tick = ast.parse(fh.read())
+            for node in ast.walk(tick):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "host"):
+                    wanted.add(node.attr)
         self.assertGreater(len(wanted), 25,
                            "expected the tick state machine to use the host "
                            f"protocol, found only {sorted(wanted)}")

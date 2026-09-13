@@ -6,16 +6,18 @@ passes a `req_id` and Python answers on a signal carrying the same id
 The archive service (services/history_service.py) owns the database.
 """
 
-# ideal-size: 544 lines reason=QWebChannel wire contract pins every @Slot
-# signature the frontend expects; HistoryBridge is ratcheted at 467 LOC / 44
-# methods in tools/metrics/rule16_gate.py (lowered from 493/45 by the boot-wait
-# fix) and may shrink but may not grow. ROUND_F_DESIGN_2026-09-12.md §6, F4.
+# Round H (H1) ended the §18.5 exemption this file used to carry. The claim was
+# that the QWebChannel wire contract pinned the size -- it pins the SLOT NAMES,
+# which is a different thing. The delete and media slots moved to mixins in
+# bridge/history_delete.py and bridge/history_media.py; HistoryBridge still
+# inherits them, so all 28 slots and signals remain on the one QObject and the
+# frontend sees no change (proved by comparing staticMetaObject before and
+# after). 563 lines / MI 25.8 -> 278 lines / MI 50.4.
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -23,6 +25,8 @@ from core.events import LogMessage, UserDbChanged
 from backend.history_query import (
     DEFAULT_LIMIT, DEFAULT_SORT, PersonPageRequest,
 )
+from bridge.history_delete import HistoryDeleteMixin
+from bridge.history_media import HistoryMediaMixin
 from services.world_events import run_when_world_open
 
 log = logging.getLogger("chatbot")
@@ -46,36 +50,20 @@ def _person_request(opts: dict) -> PersonPageRequest:
         include_deleted=bool(opts.get("include_deleted")))
 
 
-def _qt_clipboard():
-    """The running Qt application's clipboard, or None when there is neither.
+def _attach_labels(people, payload: dict) -> None:
+    """Decorate each person row in `payload` with its labels, in place.
 
-    Module-level because `HistoryBridge` is ratcheted at its frozen method
-    count (tools/metrics/rule16_gate.py) and this needs nothing from it.
+    Looked up in ONE batched call for the whole page rather than per row:
+    the user database lists hundreds of people and a query each would make
+    the panel's first paint visibly slow.
     """
-    from PySide6.QtGui import QGuiApplication
-    app = QGuiApplication.instance()
-    if app is None:
-        return None
-    return app.clipboard()
+    nicks = [item.get("nick") for item in payload.get("items") or []]
+    labels = people.labels_for_nicks(nicks)
+    for item in payload.get("items") or []:
+        item["labels"] = labels.get(item.get("nick"), [])
 
 
-def _copy_file_to(clipboard, mode: str, path: str) -> bool:
-    """Carry the FILE itself, the path as text, and — for still images —
-    the pixels as well."""
-    from PySide6.QtCore import QMimeData, QUrl
-    from PySide6.QtGui import QImage
-    mime = QMimeData()
-    mime.setUrls([QUrl.fromLocalFile(path)])
-    mime.setText(path)
-    if mode == "image":
-        image = QImage(path)
-        if not image.isNull():
-            mime.setImageData(image)
-    clipboard.setMimeData(mime)
-    return True
-
-
-class HistoryBridge(QObject):
+class HistoryBridge(HistoryDeleteMixin, HistoryMediaMixin, QObject):
     history_page_ready = Signal(str, str)    # req_id, JSON page
     history_search_ready = Signal(str, str)  # req_id, JSON results
     history_stats_ready = Signal(str, str)   # req_id, JSON stats
@@ -116,12 +104,41 @@ class HistoryBridge(QObject):
             return dict(default or {})
         return data if isinstance(data, dict) else dict(default or {})
 
+    def _reply(self, signal, req_id: str, payload: dict, **extra) -> None:
+        """Answer one request: stamp the id, add `extra`, emit as JSON.
+
+        Every read slot ends this way. The req_id is stamped INSIDE the
+        payload as well as passed alongside it because the UI correlates
+        replies by reading the body -- a signal argument alone is lost once
+        the JSON reaches JavaScript. ensure_ascii is off throughout: nicks
+        are routinely non-Latin and escaping them would change what the
+        history window displays.
+        """
+        payload["req_id"] = req_id
+        payload.update(extra)
+        signal.emit(req_id, json.dumps(payload, ensure_ascii=False))
+
     def _need_archive(self, scope: str, req_id: str = "") -> bool:
         if self.ctx.archive is None:
             self.history_error.emit(scope, "the message archive is not "
                                             "running")
             return False
         return True
+
+    def _nick_for(self, scope: str, nick) -> str:
+        """A whitespace-normalised nick, or "" when the call cannot proceed.
+
+        Folds the two preconditions every person-scoped slot shares: the nick
+        must survive normalisation, and the archive must be running. The
+        archive failure is REPORTED on history_error and the blank nick is
+        not -- an empty argument is the UI asking for nothing, while a
+        missing archive is a state the user needs to be told about. Returning
+        "" for both lets the caller write one falsy check.
+        """
+        clean = " ".join(str(nick or "").split()).strip()
+        if not clean:
+            return ""
+        return clean if self._need_archive(scope, "") else ""
 
     # ── person history ───────────────────────────────────────────
     @Slot(str, str, str)
@@ -158,10 +175,8 @@ class HistoryBridge(QObject):
                 after_ord=(int(opts["after_ord"])
                            if opts.get("after_ord") is not None else None),
                 limit=limit)
-        payload["req_id"] = req_id
-        payload["preview"] = service.preview_settings()
-        self.history_page_ready.emit(req_id, json.dumps(payload,
-                                                        ensure_ascii=False))
+        self._reply(self.history_page_ready, req_id, payload,
+                    preview=service.preview_settings())
 
     @Slot(str, str)
     def history_search(self, req_id, query_json):
@@ -182,9 +197,7 @@ class HistoryBridge(QObject):
         else:
             payload = await service.query.search_global(query, limit=limit)
             payload["scope"] = "global"
-        payload["req_id"] = req_id
-        self.history_search_ready.emit(req_id, json.dumps(payload,
-                                                          ensure_ascii=False))
+        self._reply(self.history_search_ready, req_id, payload)
 
     @Slot(str, str)
     def history_stats(self, req_id, nick):
@@ -193,9 +206,7 @@ class HistoryBridge(QObject):
 
         async def work():
             payload = await self.ctx.archive.query.person_stats(nick)
-            payload["req_id"] = req_id
-            self.history_stats_ready.emit(req_id, json.dumps(
-                payload, ensure_ascii=False))
+            self._reply(self.history_stats_ready, req_id, payload)
         self._run_async("history_stats", work())
 
     # ── the all-time user database ───────────────────────────────
@@ -208,14 +219,9 @@ class HistoryBridge(QObject):
 
         async def work():
             payload = await self.ctx.archive.query.list_persons(req)
-            payload["req_id"] = req_id
-            payload["my_nick"] = self.ctx.archive.my_nick
-            labels = self.ctx.people.labels_for_nicks(
-                [item.get("nick") for item in payload.get("items") or []])
-            for item in payload.get("items") or []:
-                item["labels"] = labels.get(item.get("nick"), [])
-            self.userdb_page_ready.emit(req_id, json.dumps(
-                payload, ensure_ascii=False))
+            _attach_labels(self.ctx.people, payload)
+            self._reply(self.userdb_page_ready, req_id, payload,
+                        my_nick=self.ctx.archive.my_nick)
         self._run_async("userdb_page", work())
 
     @Slot(str)
@@ -225,288 +231,18 @@ class HistoryBridge(QObject):
 
         async def work():
             payload = await self.ctx.archive.query.db_stats()
-            payload["req_id"] = req_id
-            payload.update(await self.ctx.archive.media.cache_usage())
-            self.userdb_page_ready.emit(req_id, json.dumps(
-                payload, ensure_ascii=False))
+            self._reply(self.userdb_page_ready, req_id, payload,
+                        **await self.ctx.archive.media.cache_usage())
         self._run_async("userdb_stats", work())
 
     # ── deleting from the archive (all reversible, RULE 12) ──────
-    @Slot(str, bool, result=bool)
-    def history_delete_person(self, nick, hard=False):
-        clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self.ctx.archive is None:
-            self.history_error.emit("history_delete_person",
-                                    "the message archive is not running")
-            return False
 
-        async def work():
-            archive = self.ctx.archive
-            repo = archive.repo
-            token = repo.new_op_token()
-            people_before = await self._people_snapshot()
-            ok = await repo.delete_person(clean, hard=bool(hard),
-                                          token=token)
-            if people_before is not None:
-                try:
-                    await self.ctx.memory.delete_user(clean)
-                except Exception as exc:                  # noqa: BLE001
-                    log.debug("people row for %s not removed: %s",
-                              clean, exc)
-            people_after = await self._people_snapshot()
-            if ok and not hard:
-                entry = {"op": "delete_person", "nick": clean,
-                         "token": token}
-                if people_before is not None and people_after is not None:
-                    entry["people"] = {"before": people_before,
-                                       "after": people_after}
-                self.ctx.undo.push("archive", entry)
-                self.ctx.bus.emit(LogMessage(
-                    message=f"🗑 “{clean}” and their history removed — "
-                            "Ctrl+Z restores both", level="warn"))
-            elif ok and hard:
-                self.ctx.label_store.forget(clean)
-                self.ctx.bus.emit(LogMessage(
-                    message=f"🔥 “{clean}” erased permanently "
-                            "(not undoable)", level="warn"))
-            self.userdb_changed.emit(json.dumps(
-                {"action": "deleted", "nick": clean, "hard": bool(hard),
-                 "ok": ok}, ensure_ascii=False))
-            self._refresh_people()
-        self._run_async("history_delete_person", work())
-        return True
-
-    @Slot(str, result=bool)
-    def history_clear_person(self, nick):
-        clean = " ".join(str(nick or "").split()).strip()
-        if not clean:
-            return False
-        if self.ctx.archive is None:
-            self.history_error.emit("history_clear_person",
-                                    "the message archive is not running")
-            return False
-
-        async def work():
-            archive = self.ctx.archive
-            repo = archive.repo
-            token = await repo.soft_delete_history(clean)
-            if not token:
-                if await repo.get_person(clean):
-                    await repo.reset_cursor(clean)
-                self.ctx.bus.emit(LogMessage(
-                    message=f"ℹ “{clean}” has no messages to clear",
-                    level="info"))
-            else:
-                self.ctx.undo.push("archive", {
-                    "op": "clear_history", "nick": clean, "token": token})
-                self.ctx.bus.emit(LogMessage(
-                    message=f"🧹 History of “{clean}” cleared — the person "
-                            "stays in the database and the chat is "
-                            "re-collected from scratch (Ctrl+Z restores "
-                            "the messages)", level="warn"))
-            collector = getattr(archive, "collector", None)
-            if collector is not None:
-                try:
-                    collector.person_cleared(clean)
-                except Exception:                      # noqa: BLE001
-                    pass
-            self.userdb_changed.emit(json.dumps(
-                {"action": "cleared", "nick": clean, "ok": bool(token)},
-                ensure_ascii=False))
-        self._run_async("history_clear_person", work())
-        return True
-
-    @Slot(str, str, result=bool)
-    def history_delete_message(self, nick, message_id):
-        clean = " ".join(str(nick or "").split()).strip()
-        try:
-            mid = int(str(message_id or "0").strip() or 0)
-        except (TypeError, ValueError):
-            mid = 0
-        if not clean or mid <= 0:
-            return False
-        if self.ctx.archive is None:
-            self.history_error.emit("history_delete_message",
-                                    "the message archive is not running")
-            return False
-
-        async def work():
-            token = await self.ctx.archive.repo.soft_delete_message(clean,
-                                                                    mid)
-            if not token:
-                self.ctx.bus.emit(LogMessage(
-                    message="⚠ That message is already gone", level="warn"))
-                return
-            self.ctx.undo.push("archive", {
-                "op": "delete_message", "nick": clean, "token": token,
-                "message_id": mid})
-            self.ctx.bus.emit(LogMessage(
-                message=f"🗑 One message removed from “{clean}” "
-                        "(Ctrl+Z restores it)", level="info"))
-            self.userdb_changed.emit(json.dumps(
-                {"action": "message_deleted", "nick": clean, "id": mid},
-                ensure_ascii=False))
-        self._run_async("history_delete_message", work())
-        return True
-
-    @Slot(str, result=bool)
-    def history_purge_deleted(self, nick):
-        if self.ctx.archive is None:
-            return False
-
-        async def work():
-            gone = await self.ctx.archive.repo.purge_deleted(
-                " ".join(str(nick or "").split()).strip())
-            self.ctx.bus.emit(LogMessage(
-                message=f"🔥 {gone} hidden message(s) erased permanently",
-                level="warn"))
-            self.userdb_changed.emit(json.dumps(
-                {"action": "purged", "nick": nick, "count": gone},
-                ensure_ascii=False))
-        self._run_async("history_purge_deleted", work())
-        return True
-
-    @Slot(str, result=bool)
-    def history_restore_person(self, nick):
-        if self.ctx.archive is None:
-            return False
-
-        async def work():
-            ok = await self.ctx.archive.repo.restore_person(nick)
-            self.userdb_changed.emit(json.dumps(
-                {"action": "restored", "nick": nick, "ok": ok},
-                ensure_ascii=False))
-            self._refresh_people()
-        self._run_async("history_restore_person", work())
-        return True
-
-    @Slot(str, str, result=bool)
-    def history_merge(self, from_nick, into_nick):
-        if self.ctx.archive is None:
-            return False
-
-        async def work():
-            moved = await self.ctx.archive.repo.merge_persons(from_nick,
-                                                              into_nick)
-            self.userdb_changed.emit(json.dumps(
-                {"action": "merged", "nick": into_nick, "from": from_nick,
-                 "moved": moved}, ensure_ascii=False))
-        self._run_async("history_merge", work())
-        return True
 
     # ── helpers ──────────────────────────────────────────────────
-    async def _people_snapshot(self):
-        if self.ctx.memory is None:
-            return None
-        try:
-            return await self.ctx.people.rows()
-        except Exception as exc:                         # noqa: BLE001
-            log.debug("people snapshot unavailable: %s", exc)
-            return None
 
-    def _refresh_people(self) -> None:
-        from core.events import PeopleChanged
-        self.ctx.bus.emit(PeopleChanged(reason="archive"))
 
     # ── media + clipboard ────────────────────────────────────────
-    @Slot(str, str)
-    def media_path(self, req_id, media_ref):
-        if not self._need_archive("media_path", req_id):
-            return
 
-        async def work():
-            payload = await self.ctx.archive.media.path_for(media_ref)
-            payload["req_id"] = req_id
-            payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
-        self._run_async("media_path", work())
-
-    @Slot(str, str)
-    def media_restore(self, req_id, media_ref):
-        if not self._need_archive("media_restore", req_id):
-            return
-
-        async def work():
-            payload = await self.ctx.archive.media.download_one(media_ref)
-            payload["req_id"] = req_id
-            payload["id"] = media_ref
-            self.media_ready.emit(req_id, json.dumps(payload,
-                                                     ensure_ascii=False))
-        self._run_async("media_restore", work())
-
-    @Slot(str, result=str)
-    def media_folder(self, nick):
-        if self.ctx.archive is None:
-            return ""
-        try:
-            return self.ctx.archive.media.folder_for(str(nick or ""))
-        except Exception as exc:                         # noqa: BLE001
-            log.debug("media folder unavailable: %s", exc)
-            return ""
-
-    @Slot(str, result=bool)
-    def open_media_folder(self, nick):
-        folder = self.media_folder(nick)
-        if not folder:
-            return False
-        try:
-            os.makedirs(folder, exist_ok=True)
-            from PySide6.QtCore import QUrl
-            from PySide6.QtGui import QDesktopServices
-            ok = bool(QDesktopServices.openUrl(QUrl.fromLocalFile(folder)))
-        except Exception as exc:                         # noqa: BLE001
-            self.ctx.bus.emit(LogMessage(
-                message=f"⚠ Cannot open {folder}: {exc}", level="warn"))
-            return False
-        self.ctx.bus.emit(LogMessage(message=f"📂 {folder}", level="info"))
-        return ok
-
-    @Slot(str)
-    def copy_media(self, media_ref):
-        if self.ctx.archive is None:
-            return
-
-        async def work():
-            payload = await self.ctx.archive.media.clipboard_payload(
-                media_ref)
-            if payload.get("ok"):
-                placed = self._to_clipboard(payload)
-                payload["copied"] = placed
-                if placed:
-                    self.ctx.bus.emit(LogMessage(
-                        message="📋 Copied " + (payload.get("path") or
-                                                payload.get("text") or
-                                                "media"), level="success"))
-            self.media_ready.emit(str(media_ref), json.dumps(
-                payload, ensure_ascii=False))
-        self._run_async("copy_media", work())
-
-    @Slot(str, result=bool)
-    def copy_text(self, text):
-        """Copy selected history text through Qt (works without a browser)."""
-        return self._to_clipboard({"mode": "text", "text": str(text or "")})
-
-    @staticmethod
-    def _to_clipboard(payload: dict) -> bool:
-        """Put text, a path or a whole file on the system clipboard."""
-        try:
-            clipboard = _qt_clipboard()
-            if clipboard is None:
-                return False
-            path = payload.get("path") or ""
-            if path and os.path.exists(path):
-                return _copy_file_to(clipboard, payload.get("mode"), path)
-            if path:
-                clipboard.setText(path)
-                return True
-            clipboard.setText(str(payload.get("text") or ""))
-            return True
-        except Exception as exc:                         # noqa: BLE001
-            log.debug("clipboard unavailable: %s", exc)
-            return False
 
     # ── archive settings ─────────────────────────────────────────
     @Slot(result=str)

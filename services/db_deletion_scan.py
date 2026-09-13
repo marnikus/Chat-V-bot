@@ -17,12 +17,8 @@ import logging
 import os
 
 from services import db_deletion
-from services.db_deletion_flow import (
-    _Fail,
-    _DeleteState,
-    abspath_or_none,
-    raise_refusal,
-    same_canonical,
+from services.db_deletion_state import (
+    _DeleteState, _Fail, abspath_or_none, raise_refusal, same_canonical,
 )
 from services.db_media_scan import scan_world_media
 
@@ -193,7 +189,7 @@ def _build_plan(st: _DeleteState, inventory) -> None:
     revalidation before any unlink."""
     discovered = _discover_media_files(st)
     try:
-        plan = db_deletion.plan_deletion(
+        plan = db_deletion.plan_deletion(db_deletion.ScanFindings(
             victim_abs=st.target_abs,
             victim_folder_abs=st.victim_folder_abs,
             media_base_abs=st.base_abs,
@@ -202,7 +198,7 @@ def _build_plan(st: _DeleteState, inventory) -> None:
             keep=st.keep,
             folder_exclusive=st.folder_exclusive,
             other_world_folders=st.other_folders,
-            inventory=inventory)
+            inventory=inventory))
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001

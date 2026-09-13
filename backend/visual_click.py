@@ -150,14 +150,9 @@ async def find_phase(cdp: CDPClient, request: ClickRequest,
 async def click_phase(cdp: CDPClient, request: ClickRequest, found: dict,
                       engine: Optional[object] = None) -> str:
     """Phase 2: ORANGE outline on the click target, then the click itself."""
-    if not request.click_enabled:
-        _report(engine, "ℹ Click disabled for this block — find-only mode",
-                "info")
-        return ActionResult.OK if found.get("found") else ActionResult.FAIL
-    if not found.get("visible"):
-        _report(engine, f"❌ CLICK skipped: {request.label} was found but is "
-                        "not visible", "error")
-        return ActionResult.FAIL
+    refusal = _refuse_click(request, found, engine)
+    if refusal is not None:
+        return refusal
 
     target = request.click_target_description(found)
     _report(engine, f"🖱 CLICK phase: target = {target}", "info")
@@ -176,6 +171,24 @@ async def click_phase(cdp: CDPClient, request: ClickRequest, found: dict,
         return ActionResult.OK
     log.warning("CLICK failed: %s", request.label)
     return ActionResult.FAIL
+
+
+def _refuse_click(request, found: dict, engine) -> Optional[str]:
+    """The result to return WITHOUT clicking, or None to go ahead.
+
+    Find-only mode is not a failure — it reports whatever the FIND phase
+    concluded. An invisible element is, because the block asked for a click
+    that cannot happen.
+    """
+    if not request.click_enabled:
+        _report(engine, "ℹ Click disabled for this block — find-only mode",
+                "info")
+        return ActionResult.OK if found.get("found") else ActionResult.FAIL
+    if not found.get("visible"):
+        _report(engine, f"❌ CLICK skipped: {request.label} was found but is "
+                        "not visible", "error")
+        return ActionResult.FAIL
+    return None
 
 
 async def _stage(cdp, request, engine) -> Optional[dict]:

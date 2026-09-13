@@ -68,7 +68,17 @@ class TestIdentityFields(unittest.TestCase):
                               ts_display="10:01", kind="text", text="hi",
                               occ=5)
         self.assertEqual(rec_a.dup_key, rec_b.dup_key)
+        # … while the full fingerprint DOES separate them
         self.assertNotEqual(rec_a.ensure_fp(), rec_b.ensure_fp())
+
+    def test_dedupe_key_pins_occ_to_exactly_zero(self):
+        """G5: `dedupe_key` hardcodes occ=0, and mutating that constant to 1
+        (or dropping it) survived every test. It must not: the dedupe key is
+        compared against keys computed on EARLIER runs, so changing the
+        constant makes the archive stop recognising its own stored rows and
+        re-append the whole conversation."""
+        self.assertEqual(dk(), fp(occ=0))
+        self.assertNotEqual(dk(), fp(occ=1))
 
 
 class TestIntOr(unittest.TestCase):
@@ -103,6 +113,37 @@ class TestFromDict(unittest.TestCase):
         self.assertEqual(rec.from_nick, "5")
         self.assertEqual(rec.media_url, "")
         self.assertTrue(rec.fp)
+
+    def test_a_valid_media_block_is_actually_read(self):
+        """G5 gap: no test ever supplied a WELL-FORMED media block, so reading
+        the wrong key entirely survived mutation. That failure mode is every
+        image in a conversation silently becoming a text line with no URL."""
+        rec = MessageRecord.from_dict({
+            "from": "Ann", "media": {"url": "https://x/a.png", "kind": "image"}})
+        self.assertEqual(rec.media_url, "https://x/a.png")
+        self.assertEqual(rec.media_kind, "image")
+
+    def test_the_nested_media_block_wins_over_the_flat_spelling(self):
+        """Both spellings arrive from different agent versions; the nested one
+        is the current shape and must take precedence."""
+        rec = MessageRecord.from_dict({
+            "media": {"url": "https://new/a.png", "kind": "image"},
+            "media_url": "https://old/b.png", "media_kind": "gif"})
+        self.assertEqual(rec.media_url, "https://new/a.png")
+        self.assertEqual(rec.media_kind, "image")
+
+    def test_the_flat_spelling_is_used_when_there_is_no_block(self):
+        rec = MessageRecord.from_dict({"media_url": "https://old/b.png",
+                                       "media_kind": "gif"})
+        self.assertEqual(rec.media_url, "https://old/b.png")
+        self.assertEqual(rec.media_kind, "gif")
+
+    def test_a_garbage_media_block_falls_back_instead_of_discarding(self):
+        """A non-dict `media` degrades to no-block — but must not also throw
+        away a usable flat URL sitting next to it."""
+        rec = MessageRecord.from_dict({"media": "garbage",
+                                       "media_url": "https://x/c.png"})
+        self.assertEqual(rec.media_url, "https://x/c.png")
 
     def test_unknown_keys_are_dropped(self):  # MDL-06
         rec = MessageRecord.from_dict({"text": "hi", "zzz": 1,
@@ -145,6 +186,86 @@ class TestResultObjects(unittest.TestCase):
         self.assertGreater(MAX_LIVE_ITEMS, 0)
         res = AppendResult(records=list(range(MAX_LIVE_ITEMS + 5)))
         self.assertEqual(len(res.to_dict()["records"]), MAX_LIVE_ITEMS + 5)
+
+    # ── G5: gaps mutation testing found in `fingerprint` ──────────
+    def test_every_field_changes_the_fingerprint(self):
+        """Each component must actually reach the hash. A field dropped from
+        the join makes two DIFFERENT lines collide, and a collision in this
+        function means a real message is silently discarded as a duplicate."""
+        base = dict(direction="in", from_nick="Ann", ts_display="10:02",
+                    kind="text", payload="hello", occ=0)
+        baseline = fingerprint(**base)
+        for field, other in (("direction", "out"), ("from_nick", "Bob"),
+                             ("ts_display", "10:03"), ("kind", "image"),
+                             ("payload", "goodbye"), ("occ", 1)):
+            changed = dict(base, **{field: other})
+            self.assertNotEqual(fingerprint(**changed), baseline,
+                                f"{field} does not affect the fingerprint")
+
+    def test_occ_defaults_to_zero(self):
+        """The default is part of the contract: callers that omit `occ` must
+        agree with callers that pass 0, or the same line hashes two ways."""
+        self.assertEqual(fingerprint("in", "Ann", "10:02", "text", "hi"),
+                         fingerprint("in", "Ann", "10:02", "text", "hi", 0))
+
+    def test_falsy_fields_normalise_rather_than_crash(self):
+        """None and "" are the same absence, and `kind` falls back to text."""
+        self.assertEqual(fingerprint(None, None, None, None, None),
+                         fingerprint("", "", "", "text", ""))
+
+    def test_fields_cannot_bleed_across_the_separator(self):
+        """Without a separator, ("ab","c") and ("a","bc") would hash alike —
+        that is a duplicate-detection bug, not a cosmetic one."""
+        self.assertNotEqual(
+            fingerprint("in", "ab", "c", "text", "x"),
+            fingerprint("in", "a", "bc", "text", "x"))
+
+    def test_the_fingerprint_is_stable_and_well_formed(self):
+        first = fingerprint("in", "Ann", "10:02", "text", "hi")
+        self.assertEqual(first, fingerprint("in", "Ann", "10:02", "text", "hi"))
+        self.assertEqual(len(first), 16)
+        int(first, 16)          # must be hex; raises otherwise
+        # LOWERCASE hex, specifically. Fingerprints are stored in the database
+        # and compared as strings, so switching the format to %08X would make
+        # every previously-archived line fail to match itself — the archive
+        # would re-append its entire history as "new".
+        self.assertEqual(first, first.lower())
+
+    def test_the_hash_reads_utf16_code_units_little_endian(self):
+        """G5: the byte-pairing arithmetic in `_utf16_units` was unpinned —
+        `<< 8` could become `>> 8` or `<< 9` and every ASCII test still passed,
+        because ASCII's high byte is zero. Only non-ASCII text notices.
+
+        This matters because the fingerprint is stored: if the hash changes,
+        every archived Cyrillic or emoji line stops matching itself.
+        """
+        # Characters that differ ONLY in the high byte of their code unit.
+        # A broken shift collapses them to the same hash.
+        self.assertNotEqual(fp(payload="\u0100"), fp(payload="\u0000"))
+        self.assertNotEqual(fp(payload="Ā"), fp(payload="ā"))
+        # Byte order: "\u0102" and "\u0201" are the same two bytes swapped.
+        self.assertNotEqual(fp(payload="\u0102"), fp(payload="\u0201"))
+        # A GOLDEN value. Everything above proves the hash distinguishes
+        # things; only a fixed expected output proves it has not shifted
+        # wholesale — which is what a changed seed, mask, shift width or
+        # index offset does. These strings are on disk in every user's
+        # archive, so this constant is a compatibility pin, not a snapshot.
+        self.assertEqual(
+            fingerprint("in", "Аня", "10:01", "text", "привет 🎉"),
+            "49cf6d3fa70a1604")
+        self.assertEqual(fingerprint("in", "Ann", "10:01", "text", "hi"),
+                         "679b985cbe677f65")
+
+    def test_lone_surrogates_do_not_crash_the_fingerprint(self):
+        """Chat payloads arrive from JS, where a split emoji can leave a lone
+        surrogate. Encoding without "surrogatepass" raises on it, which would
+        take down the archive write rather than store an odd string."""
+        broken = "hi \ud83d there"
+        self.assertEqual(len(fingerprint("in", "Ann", "1", "text", broken)),
+                         16)
+        self.assertNotEqual(
+            fingerprint("in", "Ann", "1", "text", broken),
+            fingerprint("in", "Ann", "1", "text", "hi  there"))
 
     def test_ensure_fp_computes_once(self):  # MDL-10
         rec = MessageRecord(text="x")

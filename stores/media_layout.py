@@ -193,3 +193,27 @@ class MediaLayout:
         if len(text) == 10 and text[4] == "-" and text[7] == "-":
             return text
         return self._owner.now().strftime("%Y-%m-%d")
+
+
+def _cached_file_exists(row: dict) -> bool:
+    """Is this row's cached file actually on disk right now?
+
+    The `cached` state alone is not enough -- a user can delete the cache
+    folder under a running app -- so the row is only usable when the state,
+    the recorded path and the file itself all agree. Both the store (to
+    decide what to report) and the fetcher (to decide what to re-queue) ask
+    this same question, so it lives in the module they share.
+    """
+    path = row.get("cache_path") or ""
+    return bool(row.get("state") == "cached" and path
+                and os.path.exists(path))
+
+
+def _downloads_unavailable(owner) -> bool:
+    """Can `owner` reach the network at all?
+
+    Disabled, paused and "no CDP attached" are three different reasons with
+    one consequence -- do not queue anything -- and the caller then falls
+    back to reporting whatever is already on disk.
+    """
+    return bool(not owner.enabled or owner.paused or owner.cdp is None)

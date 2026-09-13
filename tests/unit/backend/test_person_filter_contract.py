@@ -51,6 +51,24 @@ class TestNormalize(unittest.TestCase):
 
 class TestCheck(unittest.TestCase):
 
+    def test_a_rejecting_verdict_is_falsy_but_is_still_a_verdict(self):
+        """G6 pin on a trap this refactor walked straight into.
+
+        FilterVerdict.__bool__ is `passed`, so a rejection is FALSY. Any
+        `first_reject(p) or fallback` style chain therefore discards every
+        rejection and passes everyone — a total filter bypass that reads as
+        correct. `check` must distinguish "no verdict" (None) from "a verdict
+        that says no".
+        """
+        reject = PersonFilter(female=YES, registered=ANY, guest=ANY,
+                              anonymous=ANY).check({"female": False})
+        self.assertFalse(bool(reject), "a rejection must stay falsy")
+        self.assertIsNotNone(reject)
+        self.assertFalse(reject.passed)
+        self.assertNotEqual(reject.reason, "matches all criteria",
+                            "the rejection reason was overwritten by the "
+                            "pass-through fallback")
+
     def test_required_rule_rejects_a_missing_key(self):
         f = PersonFilter(female=YES, registered=NO, guest=ANY, anonymous=ANY)
         verdict = f.check({"nick": "Ghost"})          # no 'female' key
@@ -90,6 +108,72 @@ class TestCheck(unittest.TestCase):
         f = PersonFilter(panel_criteria=Broken(), **anyf)
         self.assertTrue(f.check(base),
                         "a broken criteria engine must not kill the filter")
+
+    def test_panel_criteria_actually_reject(self):
+        """G5 gap. The suite only ever asserted the PASSING panel path, so
+        mutation testing showed 17 survivors in `_panel_reject` — including
+        inverting its `is None` guard, which disables panel criteria entirely.
+        Every one of those is a filter that silently stops filtering.
+        """
+        seen = []
+
+        class Rejects:
+            def evaluate_user(self, p):
+                seen.append(p)
+                return False
+
+        anyf = dict(female=ANY, registered=ANY, guest=ANY, anonymous=ANY)
+        person = {"nick": "Ann", "female": True}
+        verdict = PersonFilter(panel_criteria=Rejects(), **anyf).check(person)
+
+        self.assertFalse(verdict.passed)
+        self.assertEqual(verdict.reason, "rejected by Filter panel criteria")
+        self.assertEqual(seen, [person],
+                         "the panel must be asked about THIS person")
+
+    def test_no_panel_criteria_means_no_panel_verdict(self):
+        anyf = dict(female=ANY, registered=ANY, guest=ANY, anonymous=ANY)
+        f = PersonFilter(panel_criteria=None, **anyf)
+        self.assertIsNone(f._panel_reject({"nick": "Ann"}))
+        self.assertTrue(f.check({"nick": "Ann"}))
+
+    def test_a_tristate_rejection_short_circuits_before_the_panel(self):
+        """Order matters: the cheap local rules run first, so a person already
+        rejected on an attribute never reaches the panel engine."""
+        asked = []
+
+        class Spy:
+            def evaluate_user(self, p):
+                asked.append(p)
+                return True
+
+        f = PersonFilter(female=YES, registered=ANY, guest=ANY,
+                         anonymous=ANY, panel_criteria=Spy())
+        self.assertFalse(f.check({"female": False}).passed)
+        self.assertEqual(asked, [], "the panel was consulted needlessly")
+
+    def test_describe_names_the_panel_only_when_one_is_attached(self):
+        anyf = dict(female=ANY, registered=ANY, guest=ANY, anonymous=ANY)
+
+        class Ok:
+            def evaluate_user(self, p):
+                return True
+
+        self.assertIn("Filter panel criteria",
+                      PersonFilter(panel_criteria=Ok(), **anyf).describe())
+        self.assertNotIn("Filter panel criteria",
+                         PersonFilter(**anyf).describe())
+
+    def test_a_panel_makes_the_filter_non_empty(self):
+        anyf = dict(female=ANY, registered=ANY, guest=ANY, anonymous=ANY)
+
+        class Ok:
+            def evaluate_user(self, p):
+                return True
+
+        self.assertTrue(PersonFilter(**anyf).is_empty)
+        self.assertFalse(PersonFilter(panel_criteria=Ok(), **anyf).is_empty,
+                         "a filter with panel criteria filters something")
 
 
 class TestEmptyFilter(unittest.TestCase):
@@ -131,6 +215,50 @@ class TestSortPeople(unittest.TestCase):
         self.assertEqual(sort_people([]), [])
         self.assertEqual([p["nick"] for p in sort_people(
             [{"nick": "solo"}])], ["solo"])
+
+    def test_a_missing_messaged_key_counts_as_not_messaged(self):
+        """G5 gap: the default in `p.get("messaged", False)` was never pinned.
+        Flipping it to True reorders the whole queue — people who have never
+        been contacted would sink below people who have."""
+        order = [p["nick"] for p in sort_people(
+            [{"nick": "b", "messaged": True}, {"nick": "a"}])]
+        self.assertEqual(order, ["a", "b"])
+
+    def test_a_missing_nick_sorts_first_and_does_not_raise(self):
+        order = [p.get("nick", "") for p in sort_people(
+            [{"nick": "a"}, {"messaged": False}])]
+        self.assertEqual(order, ["", "a"])
+
+    def test_objects_and_dicts_sort_together_by_the_same_key(self):
+        """Both shapes reach this function from different callers; a key that
+        read only one of them would silently group all of the other first."""
+        class P:
+            def __init__(self, nick, messaged=False):
+                self.nick, self.messaged = nick, messaged
+
+        people = [P("d", True), {"nick": "c", "messaged": True},
+                  P("b"), {"nick": "a"}]
+        names = [p["nick"] if isinstance(p, dict) else p.nick
+                 for p in sort_people(people)]
+        self.assertEqual(names, ["a", "b", "c", "d"])
+
+    def test_messaged_beats_alphabetical(self):
+        """The two key components are ordered, not independent: a messaged
+        'anna' still sorts below an un-messaged 'zoe'."""
+        order = [p["nick"] for p in sort_people(
+            [{"nick": "anna", "messaged": True},
+             {"nick": "zoe", "messaged": False}])]
+        self.assertEqual(order, ["zoe", "anna"])
+
+    def test_a_truthy_non_bool_messaged_counts_as_messaged(self):
+        order = [p["nick"] for p in sort_people(
+            [{"nick": "a", "messaged": 1}, {"nick": "z", "messaged": 0}])]
+        self.assertEqual(order, ["z", "a"])
+
+    def test_the_input_list_is_not_mutated(self):
+        people = [{"nick": "b"}, {"nick": "a"}]
+        sort_people(people)
+        self.assertEqual([p["nick"] for p in people], ["b", "a"])
 
     def test_casefold_handles_cyrillic(self):
         order = [p["nick"] for p in sort_people(

@@ -32,6 +32,7 @@ import pkgutil
 import re
 import sys
 import types
+from typing import Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
@@ -42,14 +43,38 @@ BLOCKS = os.path.join(ROOT, "tests", "unit", "actions",
                       "block_wire_snapshot.json")
 
 
+#: Packages whose internal file layout is their own business. An annotation
+#: rendered as `backend.scroll_parser.parser.ScrollParser` names the same class
+#: as `backend.scroll_parser.ScrollParser` — the symbol is re-exported from the
+#: package front door and every caller still imports it from there. Collapsing
+#: the submodule segment keeps the snapshot a statement about the PUBLIC name,
+#: which is what callers depend on, instead of about which file the class
+#: happens to live in today (Round G, step G2).
+_AREA_PACKAGES = ("backend", "actions")
+
+
+def _collapse_submodules(text: str) -> str:
+    """`backend.scroll_parser.parser.X` → `backend.scroll_parser.X`.
+
+    Only collapses inside the AREA D packages, and only the segments BETWEEN
+    the area package and the final symbol, so a genuine move to a different
+    area still shows up as drift.
+    """
+    pattern = (r"\b(" + "|".join(_AREA_PACKAGES) +
+               r")\.([A-Za-z_][A-Za-z0-9_]*)(?:\.[a-z_][A-Za-z0-9_]*)+"
+               r"\.([A-Z][A-Za-z0-9_]*)")
+    return re.sub(pattern, r"\1.\2.\3", text)
+
+
 def _sig(obj) -> str:
     """Signature string with object reprs stabilised (``0x7f…`` addresses
-    differ per process, which would make the golden file flap)."""
+    differ per process, which would make the golden file flap) and package
+    submodule segments collapsed (see :func:`_collapse_submodules`)."""
     try:
         text = str(inspect.signature(obj))
     except (TypeError, ValueError):
         return "<builtin>"
-    return re.sub(r"0x[0-9a-fA-F]+", "0xADDR", text)
+    return _collapse_submodules(re.sub(r"0x[0-9a-fA-F]+", "0xADDR", text))
 
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]{5,}")
@@ -69,11 +94,53 @@ def _default_repr(value) -> str:
 
 
 def module_names(package: str):
+    """Every module AREA D owns, packages included.
+
+    `iter_modules` used to skip `ispkg` entries outright, which made the
+    snapshot forbid something it was never meant to police: splitting an
+    oversized module into a package of the same name. `backend/chat_sync.py`
+    → `backend/chat_sync/` deleted the qualname `backend.chat_sync` from the
+    dump, and `test_no_module_disappeared_or_failed_to_import` read that as a
+    lost module (Round G step G0).
+
+    Walking into packages instead keeps the guarantee — a genuinely removed
+    module still disappears — and drops the accidental ban on splitting. The
+    package qualname itself is still yielded, so `backend.chat_sync` stays in
+    the snapshot and is checked against the package's `__init__`; `owns()`
+    below is what lets that `__init__` answer for the symbols its submodules
+    define.
+    """
     pkg = __import__(package, fromlist=["__path__"])
-    for info in pkgutil.iter_modules(pkg.__path__):
-        if info.ispkg:
+    yield from _walk(package, pkg.__path__)
+
+
+def _walk(package: str, paths):
+    for info in pkgutil.iter_modules(paths):
+        qualname = f"{package}.{info.name}"
+        yield qualname
+        if not info.ispkg:
             continue
-        yield f"{package}.{info.name}"
+        sub = __import__(qualname, fromlist=["__path__"])
+        yield from _walk(qualname, sub.__path__)
+
+
+def owns(owner: Optional[str], qualname: str) -> bool:
+    """Does `qualname` own a symbol whose `__module__` is `owner`?
+
+    Exact match, or `owner` is a submodule of the package `qualname`. The
+    second half is the point: a package that re-exports `SyncSession` from
+    `backend.chat_sync.session` still *owns* it, because the symbol did not
+    leave the area — it moved one file down inside it. Without this, every
+    package split reads as a mass removal, which is why the prefix-family
+    recipe was unavailable in `backend/` and `actions/` before Round G.
+
+    A re-export from a *different* area (`from services.x import Y`) is still
+    correctly disowned, so the snapshot keeps failing on the drift it exists
+    to catch.
+    """
+    if owner is None:
+        return False
+    return owner == qualname or owner.startswith(f"{qualname}.")
 
 
 def dump_module(qualname: str) -> dict:
@@ -86,11 +153,11 @@ def dump_module(qualname: str) -> dict:
         if name.startswith("_"):
             continue
         owner = getattr(obj, "__module__", None)
-        if inspect.isfunction(obj) and owner == qualname:
+        if inspect.isfunction(obj) and owns(owner, qualname):
             out["functions"][name] = _sig(obj)
-        elif inspect.isclass(obj) and owner == qualname:
+        elif inspect.isclass(obj) and owns(owner, qualname):
             out["classes"][name] = dump_class(obj)
-        elif owner == qualname and not isinstance(obj, types.ModuleType):
+        elif owns(owner, qualname) and not isinstance(obj, types.ModuleType):
             if isinstance(obj, (list, tuple)):
                 out["values"][name] = _default_repr(obj)
             elif isinstance(obj, (str, int, float, bool, type(None))):
@@ -168,7 +235,7 @@ def _shipped_blocks() -> dict:
             if not isinstance(obj, type) or not issubclass(obj, BaseAction):
                 continue
             block_id = getattr(obj, "block_id", "")
-            if not block_id or obj.__module__ != module.__name__:
+            if not block_id or not owns(obj.__module__, module.__name__):
                 continue
             out[block_id] = obj
     return out

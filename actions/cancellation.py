@@ -91,18 +91,10 @@ async def sleep_with_stop(
     """
     if is_stop_requested(engine):
         raise RunStopped
-    try:
-        remaining = max(0.0, float(delay_s))
-    except (TypeError, ValueError):
-        remaining = 0.0
+    remaining = _coerce_delay(delay_s)
     if remaining <= 0:
         return
-    try:
-        step = float(slice_s)
-    except (TypeError, ValueError):
-        step = 0.02
-    if step <= 0:
-        step = 0.02
+    step = _coerce_step(slice_s, default=0.02)
     deadline = time.monotonic() + remaining
     while True:
         if is_stop_requested(engine):
@@ -116,15 +108,28 @@ async def sleep_with_stop(
         raise RunStopped
 
 
-def _coerce_step(slice_s: float) -> float:
-    """Poll slice in seconds; garbage and non-positive mean the default."""
+def _coerce_step(slice_s: float, default: float = 0.05) -> float:
+    """Poll slice in seconds; garbage and non-positive mean the default.
+
+    The default differs by caller and that is deliberate: `sleep_with_stop`
+    polls at 0.02 s so a stop during a long pre-delay feels instant, while the
+    await-wrappers poll at 0.05 s because they also have a real awaitable to
+    wake them. Passing it in keeps one coercion rule with two tunings, rather
+    than two copies of the rule.
+    """
     try:
         step = float(slice_s)
     except (TypeError, ValueError):
-        step = 0.05
-    if step <= 0:
-        step = 0.05
-    return step
+        return default
+    return step if step > 0 else default
+
+
+def _coerce_delay(delay_s: float) -> float:
+    """Non-negative seconds; garbage means zero (i.e. a stop check only)."""
+    try:
+        return max(0.0, float(delay_s))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _as_task(awaitable):

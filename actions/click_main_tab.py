@@ -7,7 +7,7 @@ shared two-phase runner, not by this file.
 """
 
 from actions.find_click_runner import find_and_click  # noqa: F401  (RULE 1: the shared runner)
-from actions.base import BlockField, FindClickBlock, ms_floor
+from actions.base import FindClickBlock, tab_fields
 
 
 class ClickMainTab(FindClickBlock):
@@ -18,19 +18,7 @@ class ClickMainTab(FindClickBlock):
     label_template = "tab “{tab_name}”"
     find_defaults = {"click_enabled": True}
 
-    FIELDS = (
-        BlockField("selector", "text", "Tab element selector",
-                   request="selector"),
-        BlockField("child_selector", "text", "Child text selector",
-                   request="label_selector"),
-        BlockField("tab_name", "text",
-                   "Tab name (text match) — {{nick}} = selected user",
-                   request="match_text"),
-        BlockField("highlight_enabled", "checkbox", "Draw confirmation outlines",
-                   clean=bool, request="highlight_enabled"),
-        BlockField("confirm_pause_ms", "number", "Pause after found (ms)",
-                   clean=ms_floor, request="confirm_pause_ms"),
-    )
+    FIELDS = tab_fields()
 
     def __init__(self, selector: str = "div[role='tab'].tab-item",
                  child_selector: str = "p.chat-title",

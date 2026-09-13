@@ -1,3 +1,32 @@
+"""app/window — the QMainWindow that hosts the whole UI in one web view.
+
+Owns three things and nothing else: the window itself, the geometry it
+remembers between runs, and the *close protocol*. Everything the user sees
+inside it belongs to `ui/`, and every backend call goes through the bridge
+object handed to `create_window`.
+
+Imports point one way: this module imports Qt and the bridge's signal by name.
+Nothing in `app/` imports back into it.
+
+The close protocol is the part worth reading, because a window that closes
+before the grid layout is saved silently loses the user's arrangement. Closing
+is not one event, it is a handshake with four possible endings:
+
+    1. closeEvent fires -> geometry is saved, the close is REFUSED, and the
+       page is asked to flush its layout;
+    2. the page answers "I will persist" -> the bridge's
+       `grid_layout_persisted` signal ends the wait;
+    3. the page answers anything else (no grid, JS error, dead page) -> the
+       dispatch callback ends the wait immediately;
+    4. the page never answers at all -> a 1 s timer ends the wait.
+
+Whichever arrives first calls `_finish_close`, which is idempotent because
+several of them can arrive. The second closeEvent then accepts, emits
+`closing`, and starts a 3 s watchdog that force-exits the process if some
+background task refuses to unwind. The refuse-then-accept dance is why
+`closeEvent` is read twice for one user click.
+"""
+
 from __future__ import annotations
 
 import logging

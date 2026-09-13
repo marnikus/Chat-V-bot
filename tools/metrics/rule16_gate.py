@@ -35,14 +35,14 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
 OWNED = [
-    ("backend/history_query.py", "PersonPageRequest", "needle"),
-    ("backend/history_query.py", "PersonPageRequest", "where"),
-    ("backend/history_query.py", "PersonPageRequest", "order"),
-    ("backend/history_query.py", "PersonPageRequest", "spec"),
-    ("backend/history_query.py", "PersonPageRequest", "columns"),
-    ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
-    ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
+    ("backend/history_query/request.py", "PersonPageRequest", "needle"),
+    ("backend/history_query/request.py", "PersonPageRequest", "where"),
+    ("backend/history_query/request.py", "PersonPageRequest", "order"),
+    ("backend/history_query/request.py", "PersonPageRequest", "spec"),
+    ("backend/history_query/request.py", "PersonPageRequest", "columns"),
+    ("backend/history_query/request.py", "PersonPageRequest", "resolved_dir"),
+    ("backend/history_query/query.py", "HistoryQuery", "list_persons"),
+    ("backend/history_query/rows.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
 ]
@@ -58,8 +58,15 @@ OWNED = [
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    # 362 -> 313 LOC (2026-09-13, Round G step G3): the module became the
+    # package backend/history_query/ and everything that does NOT touch the
+    # database moved out (constants, SQL text escaping, PersonPageRequest, row
+    # shaping). The class kept all 14 methods — its LCOM 0.74 is real cohesion,
+    # every method reads self.db — so this is shrink by relocation, re-frozen
+    # at the lower number as the ratchet requires. It may shrink again; it may
+    # not grow back.
+    ("backend/history_query/query.py", "HistoryQuery"): {"loc": 313, "methods": 14},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 215, "methods": 22},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is
@@ -70,7 +77,7 @@ RATCHET = {
 #     deleted, so the hatch cannot become a dumping ground.
 OVERRIDES: dict[tuple, str] = {}
 
-SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
+SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py"]
 
 # Exact-AST clone groups already in the tree at 53ba5fb, measured with
 # `python tools/metrics/clone_scan.py .`. The spec fails on *new* groups, not
@@ -161,17 +168,32 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
 # situation as the F1 pair below and the two F2 pairs above.
 CLONE_BASELINE = frozenset({
-    ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("backend/media_handler.py", "backend/message_injector.py"),
+    # G7 removed the two REAL clones that used to sit here:
+    #   actions/click_back.py | actions/click_main_tab.py  (span 15) ->
+    #     actions.base.tab_fields()
+    #   backend/media_handler.py | backend/message_injector.py (span 7) ->
+    #     backend.logger.report_and_log()
+    # They are deleted rather than re-baselined: a baseline entry is a promise
+    # that a group is understood and accepted, not a way to silence one.
     ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
-    ("bridge/collector_bridge.py", "bridge/label_bridge.py",
-     "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
-    ("bridge/db_bridge.py", "bridge/history_bridge.py"),
+    # H3 dropped a dead `import os` from history_bridge.py (stranded by the
+    # H1 split), which made its import header identical to the other four
+    # bridges'. The two baselined groups below therefore MERGED into one —
+    # this is one fewer distinct clone, not a new one.
+    ("bridge/collector_bridge.py", "bridge/history_bridge.py",
+     "bridge/label_bridge.py", "bridge/layout_bridge.py",
+     "bridge/undo_bridge.py"),
+    # H5 split the send-button half out of message_injector.py; the two halves
+    # necessarily open with the same CDP + logger import header.
+    ("backend/message_injector.py", "backend/send_button.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
+    # H2 split the deletion pipeline at its irreversible boundary; the two
+    # halves necessarily open with the same stdlib + db_deletion header.
+    ("services/db_deletion_remove.py", "services/db_deletion_scan.py"),
     ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
-    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("services/run/coordinator.py", "services/run/queue.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),
@@ -403,7 +425,10 @@ def smells() -> tuple[list[str], list[str]]:
             if "R0801" not in line:
                 continue
             block = "\n".join(lines[i + 1:i + 4])
-            if any(f in block for f in ("history_query.py",
+            # "history_query/" (not ".py"): step G3 made it a package, and a
+            # substring that no longer matches would silently stop reporting
+            # duplication in the very files this gate is scoped to.
+            if any(f in block for f in ("history_query/",
                                         "history_bridge.py")):
                 findings.append(block)
 

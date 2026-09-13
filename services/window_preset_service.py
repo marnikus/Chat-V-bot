@@ -9,7 +9,30 @@ F7 names this file because its MI (16.08 before this note) is low WITHOUT the
 file being large, which a line-count sort never surfaces. The measured cause is
 volume: worst CC is 9 (_grid), and _grid (24 LOC) and validate_document (22) are
 the two past RULE 18 §18.1's ideal — so §6 asks for their decomposition, not a
-split, and that decomposition is still owed.
+split.
+
+Round G step G8 paid that debt: `_grid` handed its tree-canonicalisation half to
+`_grid_tree`, and `validate_document`'s six hand-unrolled `if error: return`
+blocks became one ordered table of (key, validator). Both are now inside §18.1,
+worst CC in the file is 8, and MI went 16.08 -> 28.7 -> 33.7 across F7 and G8.
+
+It is still short of the MI 45 G8 aimed at, and that is recorded rather than
+chased. What remains is not complexity — it is VOLUME: 23 small validators,
+none over CC 8, each a `(value, error)` pair. MI penalises a file for having
+many functions no matter how simple each one is, and the three ways to move the
+number from here all make the code worse: splitting the DAG across files
+scatters a pipeline that is read in order, merging validators re-inflates
+per-function complexity, and padding comments is metric gaming. The DAG is the
+design. Accept the number.
+
+Reading order, which is also the validation order:
+
+    _decode -> _header -> _grid -> _states -> _windows -> _screen
+                                      |          ^
+                                  _grid_tree     +-- reads validated states
+
+Every validator returns `(value, error)` and the FIRST error wins, so the user
+is told the earliest thing that is wrong instead of a cascade of consequences.
 """
 
 from __future__ import annotations
@@ -92,22 +115,35 @@ def _header(doc: dict, name: str | None) -> tuple[dict | None, str | None]:
             "updated_at": _timestamp(doc.get("updated_at"), now)}, None
 
 
-def _grid(doc: dict) -> tuple[dict | None, str | None]:
-    grid = doc.get("grid")
-    if not isinstance(grid, dict) or grid.get("type") != GRID_TYPE:
-        return None, "grid.type must be 'sash-tree'"
+def _grid_tree(grid: dict) -> tuple[Any, str | None]:
+    """The canonical tree inside `grid`, or why it is not one.
+
+    Round-tripping through `canonical_grid_payload` is what normalises an
+    older document's tree to the current GRID_VERSION — the version the
+    document *claims* is only used to build the payload, never trusted.
+    """
     version = grid.get("version")
-    tree = grid.get("tree")
     if isinstance(version, bool) or not isinstance(version, int):
         return None, "grid.version must be an integer"
     try:
-        raw = json.dumps({"v": version, "tree": tree}, ensure_ascii=False)
+        raw = json.dumps({"v": version, "tree": grid.get("tree")},
+                         ensure_ascii=False)
     except (TypeError, ValueError):
         return None, "grid.tree must be JSON data"
     canonical, error = LayoutService.canonical_grid_payload(raw)
     if error:
         return None, f"invalid grid tree: {error}"
-    tree = json.loads(canonical)["tree"]
+    return json.loads(canonical)["tree"], None
+
+
+def _grid(doc: dict) -> tuple[dict | None, str | None]:
+    """The document's grid section, normalised to the current version."""
+    grid = doc.get("grid")
+    if not isinstance(grid, dict) or grid.get("type") != GRID_TYPE:
+        return None, "grid.type must be 'sash-tree'"
+    tree, error = _grid_tree(grid)
+    if error:
+        return None, error
     expected = len(LayoutService.WINDOW_IDS)
     if grid.get("window_count") != expected:
         return None, f"window_count must be {expected}"
@@ -247,26 +283,33 @@ def _screen(doc: dict) -> tuple[dict | None, str | None]:
 
 
 def validate_document(raw: Any, name: str | None = None) -> tuple[dict | None, str | None]:
+    """Validate a whole preset document: `(document, None)` or `(None, why)`.
+
+    The section validators run in a fixed order and the FIRST error wins, so
+    the user is told the earliest thing that is wrong rather than a cascade of
+    consequences. `_windows` depends on `_states` having been validated first —
+    that ordering is the reason this is a sequence and not a loop over a set.
+    """
     doc, error = _decode(raw)
     if error:
         return None, error
     header, error = _header(doc, name)
     if error:
         return None, error
-    grid, error = _grid(doc)
-    if error:
-        return None, error
-    states, error = _states(doc)
-    if error:
-        return None, error
-    windows, error = _windows(doc, states)
-    if error:
-        return None, error
-    screen, error = _screen(doc)
-    if error:
-        return None, error
-    header.update({"grid": grid, "windows": windows,
-                   "window_states": states, "screen": screen})
+
+    sections: dict[str, Any] = {}
+    #: (key, validator) — `_windows` reads the already-validated window_states
+    steps = (("grid", lambda: _grid(doc)),
+             ("window_states", lambda: _states(doc)),
+             ("windows", lambda: _windows(doc, sections["window_states"])),
+             ("screen", lambda: _screen(doc)))
+    for key, validate in steps:
+        value, error = validate()
+        if error:
+            return None, error
+        sections[key] = value
+
+    header.update(sections)
     return header, None
 
 

@@ -266,9 +266,32 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # services/history/mutate.py (the timeline save does the same). Both
         # are the sanctioned case again — a new leaf store, imported by the
         # two services that must survive a locked world file.
-        self.assertEqual(count, 40,
+        # 40 -> 42 (2026-09-13, Round G step G1): `backend/chat_sync.py` became
+        # the package `backend/chat_sync/`. The same three stores symbols it
+        # always imported (SyncResult, MAX_LIVE_ITEMS, align_batch) are now
+        # imported by the modules that actually use them instead of once at the
+        # top of an 807-line file, so the line COUNT grew by 2 while the
+        # imported SURFACE did not change at all — `stores` symbols used by
+        # backend/ are the same set before and after, which
+        # `test_stores_public_surface_is_unchanged` above still pins.
+        #
+        # This is the counting limitation of a grep-based invariant, recorded
+        # rather than dodged: the metric is "lines mentioning stores", and
+        # splitting one importer into four files raises it without any area
+        # depending on anything new. The invariant that matters — no other area
+        # had to EDIT an import to accommodate a refactor — still holds: not one
+        # pre-existing import line was changed, they were relocated verbatim.
+        # 42 -> 43 (2026-09-13, Round H step H4): the five private section
+        # owners moved from backend/config_manager.py to the new
+        # backend/config_owners.py, and `SETTINGS_DEFAULTS` — which only the
+        # settings owner reads — moved with them. Same grep-counting
+        # limitation as G1 above: one import line was RELOCATED, so the count
+        # rose by one while the imported surface is identical (config_manager
+        # still imports SETTINGS_DEFAULTS for its own DEFAULTS table). No
+        # pre-existing import in another area was edited.
+        self.assertEqual(count, 43,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 40)")
+                         "import in another area (integrated baseline: 43)")
 
 
 if __name__ == "__main__":

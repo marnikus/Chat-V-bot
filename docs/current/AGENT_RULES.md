@@ -357,6 +357,9 @@ modules and context files — are RULE 18.
 **16.1.5 Embedded-JS exception (explicit)**
 
 `backend/dom_probe.py` `build_probe` is 122 LOC because it embeds a JS probe.
+Measured 2026-09-13: its cognitive complexity is **8**, not the 17 recorded in
+earlier reports — the length is the literal, not the logic. The exemption is
+about LOC only; it never covered complexity and does not now.
 **Do not refactor that builder to meet 30 LOC.** New probe builders may exceed
 30 LOC **only** when the excess is a single JS/HTML string literal. The Python
 control flow around that literal must still be CC ≤ 10 and nesting ≤ 4.
@@ -579,18 +582,26 @@ reference implementation of that count is the AST walker in
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13: **171 files, median 136, 7 still over 500**. Five of the
-  seven are `backend/` files the frozen AREA D snapshot forbids splitting; the
-  reason, and the decision it needs, are in
-  [`ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
-  §2 and §7. Of the other two, `bridge/history_bridge.py` carries step F4's §18.5
-  note naming its Qt slot contract, and `services/db_deletion_flow.py` sits inside
-  the F1 family — recorded as its next candidate rather than given a note, because
-  §18.5 wants a constraint named and only scope applies; the same reasoning parks
-  `services/collector_tick.py` inside the F2 family. How steps F1–F3 produced the
-  three families, recorded against every number they aimed at:
-  [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
-  §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
+  files move. 2026-09-13 after Round G: **190 files, median 126, 4 still over
+  500** (was 171 / 136 / 7).
+  **`backend/` is no longer frozen.** Round G step G0 taught the AREA D snapshot
+  to walk into packages and to count a symbol defined in a submodule as owned by
+  its package, so the package remedy now works there too — proven by a
+  byte-identical dump of the unchanged tree and by three splits
+  (`chat_sync` 807, `scroll_parser` 706, `history_query` 603) that pass
+  `test_backend_api_snapshot.py` **unrefreshed**. Worst MI is now 24.9, mean
+  68.08. Rules, proof and the remaining candidates:
+  [`AREA_D_DECISION_2026-09-13.md`](../archive/2026-09-13-round-g/AREA_D_DECISION_2026-09-13.md).
+  Two constraints on that freedom, both non-negotiable: the package `__init__`
+  must re-export the previous public surface **verbatim** (`owns()` does not
+  make an un-exported symbol appear); and **when size and LCOM disagree, LCOM
+  wins** — G3 split the module around `HistoryQuery` (LCOM 0.74) and left the
+  class whole, because splitting a cohesive class by line count raises coupling
+  to lower a number. Of the four files still over 500,
+  `bridge/history_bridge.py` carries step F4's §18.5 note naming its
+  QWebChannel slot contract; the other three are now *unblocked* debt rather
+  than exemptions. Known debt (§16.5 landmines): do not grow them, extract when
+  you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -603,12 +614,13 @@ reference implementation of that count is the AST walker in
   the directory separator; treat it as one when counting.
 * *Measured:* re-measure rather than trusting numbers written here — directories
   move. 2026-09-13: in band `core/`, `app/`, `bridge/`, `services/history/`,
-  `services/run/`; past 15 files and held only by prefix families `services/`,
-  `stores/`, `backend/`, `actions/`. Cohesion is what earns the counting and it is
-  testable, not taste: `collector_*` share the `CollectorState` vocabulary and the
-  `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
-  protocol, and `stores/`'s eight single-domain stores each import the JSON write
-  layer while importing none of each other — eight modules, not one family.
+  `services/run/`, and now `backend/chat_sync/`, `backend/scroll_parser/`,
+  `backend/history_query/`; past 15 files and held only by prefix families
+  `services/`, `stores/`, `backend/`, `actions/`. Cohesion is what earns the
+  counting and it is testable, not taste — `collector_*` share the
+  `CollectorState` vocabulary and the `host.` protocol, `undo_*` the
+  timeline-entry vocabulary, and `stores/`'s eight single-domain stores import
+  the JSON write layer but none of each other.
 * `stores/` is therefore 37 files counting as **15** modules (`history_*`,
   `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
   aggregate/collaborator pairs, eight single-domain stores). Its sub-package remedy
@@ -641,13 +653,19 @@ all of it and still have room for the code it must change?"**
   detail into `docs/archive/` instead of adding lines.
 * `AGENT_RULES.md` is measured against a different budget: an agent must be able
   to load *all* the rules in one read, so splitting them would defeat the
-  purpose. **Budget: ~730 lines.** It is at that budget now — adding RULE 19
+  purpose. **Budget: ~730 lines; measured 772 (2026-09-13).** Adding RULE 19
   (2026-09-11) pushed it past the ~700 set when RULE 18 was written, and the
   difference was paid by moving detail out, not by cutting norms: RULE 1's worked
   code went to a linked appendix, the measurement dumps went to
   `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, and the remediation prose that
-  RULE 18 and RULE 19 both carried now lives once, in RULE 19. The next rule
-  added here must do the same — extract first, then add.
+  RULE 18 and RULE 19 both carried now lives once, in RULE 19.
+  **It is over budget by ~42 lines and that is recorded, not hidden.** Round G
+  rewrote §18.2's frozen-`backend/` paragraph (the claim became false when G0
+  unblocked it) and compressed §18.3 to pay part of the cost; the rest is the
+  new constraint every future split needs — re-export verbatim, and LCOM beats
+  line count. The next edit here **extracts before it adds**: §18.2's per-file
+  history is the next candidate to move into the Round G archive, leaving the
+  norm and one link.
 
 ### 18.5 When you exceed an ideal
 

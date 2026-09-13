@@ -72,6 +72,25 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 }
 
 _UNSET = object()
+#: `_walk` hit a non-dict *before* running out of keys — e.g. the overlay holds
+#: `{"ui": "dark"}` and the caller asked for `("ui", "theme")`. Distinct from
+#: `_UNSET` (key simply absent) because the two get different answers: a missing
+#: key falls back to `SETTINGS_DEFAULTS`, a blocked path does not. Preserving
+#: that difference is the whole reason this is two sentinels and not one.
+_BLOCKED = object()
+
+
+def _walk(tree: Any, keys: tuple[str, ...]) -> Any:
+    """Follow `keys` down `tree`; `_UNSET` if absent, `_BLOCKED` if a non-dict
+    sits in the way. Pure — no store state, so it is testable on its own."""
+    node = tree
+    for key in keys:
+        if not isinstance(node, dict):
+            return _BLOCKED
+        if key not in node:
+            return _UNSET
+        node = node[key]
+    return node
 
 
 class SettingsStore(JsonFileStore):
@@ -87,22 +106,20 @@ class SettingsStore(JsonFileStore):
 
     # ── reads ────────────────────────────────────────────────────
     def get(self, *keys: str, default: Any = None) -> Any:
-        node: Any = self._data
-        for key in keys:
-            if isinstance(node, dict):
-                node = node.get(key, _UNSET)
-            else:
-                return default
-            if node is _UNSET:
-                # fall back to the defaults tree (same walk)
-                node = SETTINGS_DEFAULTS
-                for k in keys:
-                    node = (node.get(k, default)
-                            if isinstance(node, dict) else default)
-                    if node is default:
-                        return default
-                return node
-        return node
+        """Overlay first, then `SETTINGS_DEFAULTS`, then `default`.
+
+        The fallback is deliberately *only* for a key the overlay does not
+        have. If the overlay does have the path but something non-dict blocks
+        it, the answer is `default` and the defaults tree is not consulted —
+        the user wrote that value and a stale default must not override it.
+        """
+        found = _walk(self._data, keys)
+        if found is not _UNSET:
+            return default if found is _BLOCKED else found
+        fallback = _walk(SETTINGS_DEFAULTS, keys)
+        if fallback is _UNSET or fallback is _BLOCKED:
+            return default
+        return fallback
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:
         return copy.deepcopy(self.get(*keys, default=default))

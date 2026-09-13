@@ -34,7 +34,11 @@ SLOC_CEILING = 400
 #: B2 moved it with the downloader, so `media_fetch.py` owns the JS expression
 #: now and `stores/media_store.py` no longer imports `backend` at all — still
 #: exactly ONE inversion, just one file deeper (design §2.2, §3.5).
-ALLOWED_UPWARD_EDGES = {"media_fetch.py": "backend.chat_agent_js"}
+# Round H (H3) moved the in-page download strategy — the only caller of
+# chat_agent_js.fetch_media_expression — into media_download.py, so the single
+# allowed upward edge moved with the code. media_fetch.py keeps NO edge: this
+# is the same one edge, relocated, not a second one.
+ALLOWED_UPWARD_EDGES = {"media_download.py": "backend.chat_agent_js"}
 
 
 def py_files():
@@ -94,7 +98,23 @@ class TestFileSize(unittest.TestCase):
         # dataclasses F5's first attempt added alongside an uncalled
         # `append_v2()` were dropped as dead code, so this file is not a
         # fragment parking unused types.
-        self.assertLessEqual(len(py_files()), 38)
+        #
+        # 38 -> 39 (2026-09-13, Round H step H3): stores/media_download.py —
+        # media_fetch.py was 462 lines and mixed two concerns: managing the
+        # download QUEUE, and the three fallback strategies for actually
+        # obtaining bytes (in-page fetch, Python HTTP, CDP network capture).
+        # The strategies left as a mixin, so the `media_*` family goes 4 -> 5
+        # while the MediaFetcher class identity and public API are unchanged.
+        # A split along an existing internal seam, not a new fragment.
+        #
+        # 39 -> 40 (2026-09-13, Round H step H5): stores/history_repo_restore.py
+        # — the restore/merge/purge half of PersonLifecycle. That class scores
+        # LCOM4 = 1 and so looked cohesive, but every method holds `self._owner`
+        # (the delegation handle back to the repo facade) and a handle everyone
+        # holds links everyone; discounting it gives EIGHT components. This is a
+        # mixin, so PersonLifecycle keeps its class identity for the facade —
+        # only the file split, and the `history_*` family goes 10 -> 11.
+        self.assertLessEqual(len(py_files()), 40)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

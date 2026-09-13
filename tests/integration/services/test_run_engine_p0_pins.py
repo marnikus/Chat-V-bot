@@ -145,22 +145,29 @@ class TestLoadStackPins(RegistryCase):
         self.assertEqual([s["id"] for s in engine.get_stack()], ["b", "c"])
 
 
-# ── P0-2: UserRecord at runtime in services.run.progress ─────────
+# ── P0-2: UserRecord at runtime where the run CONSTRUCTS one ─────
+#
+# G8 moved RunQueueMixin (and with it the only runtime construction site,
+# in _run_single_target_cycle) from services.run.progress to
+# services.run.queue. The pin follows the construction site rather than the
+# old file name: what it has always guarded is that the name is bound at
+# RUNTIME and is the real stores dataclass, not a TYPE_CHECKING-only import
+# that would raise the moment a single-target cycle builds a record.
 
 class TestProgressUserRecordPin(unittest.TestCase):
-    def test_userrecord_importable_from_progress_at_runtime(self):
-        import services.run.progress as progress
+    def test_userrecord_importable_from_queue_at_runtime(self):
+        import services.run.queue as queue
 
-        self.assertTrue(hasattr(progress, "UserRecord"),
+        self.assertTrue(hasattr(queue, "UserRecord"),
                         "UserRecord must be bound at runtime, not only under "
                         "TYPE_CHECKING")
-        self.assertIs(progress.UserRecord, UserRecord)
+        self.assertIs(queue.UserRecord, UserRecord)
 
     def test_single_target_cycle_constructs_real_userrecord(self):
         """The runtime construction site must receive the real dataclass:
-        building one through the progress module must behave like the
+        building one through the queue module must behave like the
         stores dataclass (fields + identity)."""
-        from services.run.progress import UserRecord as ProgressRecord
+        from services.run.queue import UserRecord as ProgressRecord
 
         rec = ProgressRecord(nick="Zoe")
         self.assertEqual(rec.nick, "Zoe")

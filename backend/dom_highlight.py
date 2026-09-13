@@ -15,135 +15,28 @@ The overlay is a separate ``div`` with ``pointer-events:none`` and a transparent
 background, so it can never intercept the click nor affect page layout.
 """
 
-# ideal-size: 527 lines reason=the frozen AREA D public-API snapshot
-# (tests/unit/backend/test_backend_api_snapshot.py, built by
-# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
-# only when this module owns it, so neither promoting this file to a package nor
-# thinning it into a re-export shim survives the contract. The size is a known,
-# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+# Round H (H5) RETIRED the `# ideal-size: 527` exemption that stood here — the
+# same text H4 retired from config_manager.py, and wrong for the same reason.
+# It argued from two shapes only (a package, or a re-export shim) and concluded
+# the file could not shrink. The actual content said otherwise: 219 of the 590
+# lines were JavaScript SOURCE held in Python strings, touched by 4 of the 16
+# definitions and owned by no public symbol at all. Those moved to
+# backend/dom_highlight_js.py; the AREA D snapshot did not move.
 
 import json
+from dataclasses import dataclass
 from typing import Optional
 
+# The marker constants live in the JS module because the JS is what defines
+# them as a wire format (it stamps the attribute and stashes the styles); they
+# stay importable from HERE because backend/scroll_parser/viewport.py and the
+# contract tests already import them from this module.
+from backend.dom_highlight_js import (COLOR_CLICK, COLOR_COLLECT, COLOR_FIND,
+                                      HIGHLIGHT_ATTR, STASH_KEY, _base_out_js,
+                                      _CLICK_BODY,
+                                      _FIND_BODY, _HELPERS_JS, _HIGHLIGHT_BODY,
+                                      _PROBE_JS)
 from backend.dom_probe import MATCH_CONTAINS, MATCH_EXACT, _js_str  # noqa: F401
-
-#: Outline colour used for the FIND phase.
-COLOR_FIND = "#ff2d2d"      # red
-#: Outline colour used for the CLICK phase.
-COLOR_CLICK = "#ff9500"     # orange
-#: Outline colour used when a person matches the filter and is collected.
-COLOR_COLLECT = "#00c853"   # green
-
-#: Attribute marking every overlay node so they can be bulk-removed.
-HIGHLIGHT_ATTR = "data-cf-highlight"
-
-#: Key on ``window`` where the matched element is stashed between phases.
-STASH_KEY = "__cfStash"
-
-
-# ── shared JS helpers, injected at the top of every probe ────────────────
-_HELPERS_JS = """
-  function probeVisible(el) {
-    var st = null;
-    try { st = window.getComputedStyle(el); } catch(e) {}
-    if (st && (st.display === 'none' || st.visibility === 'hidden')) {
-      return {visible: false,
-              disabled: !!el.disabled || st.pointerEvents === 'none'};
-    }
-    var metrics = !!(el.offsetWidth || el.offsetHeight ||
-                     (el.getClientRects && el.getClientRects().length));
-    return {visible: metrics,
-            disabled: !!el.disabled || (st && st.pointerEvents === 'none')};
-  }
-  function describe(el) {
-    if (!el || !el.tagName) return null;
-    var cls = '';
-    try {
-      cls = el.className && String(el.className).trim()
-          ? '.' + String(el.className).trim().split(/\\s+/).join('.') : '';
-    } catch(e) {}
-    return el.tagName.toLowerCase() + cls;
-  }
-  function clearHighlights() {
-    try {
-      var old = document.querySelectorAll('[__ATTR__]');
-      for (var k = 0; k < old.length; k++) {
-        if (old[k].parentNode) old[k].parentNode.removeChild(old[k]);
-      }
-    } catch(e) {}
-  }
-  function highlight(el, color, ms, caption) {
-    try {
-      if (!el || !el.getBoundingClientRect) return null;
-      var r = el.getBoundingClientRect();
-      if (!r || (!r.width && !r.height)) return null;
-      var box = document.createElement('div');
-      box.setAttribute('__ATTR__', '1');
-      box.style.cssText = [
-        'position:fixed',
-        'left:' + Math.max(0, r.left) + 'px',
-        'top:' + Math.max(0, r.top) + 'px',
-        'width:' + Math.max(0, r.width) + 'px',
-        'height:' + Math.max(0, r.height) + 'px',
-        'outline:2px solid ' + color,
-        'outline-offset:-1px',
-        'background:transparent',
-        'pointer-events:none',
-        'z-index:2147483647'
-      ].join(';');
-      if (caption) {
-        var tag = document.createElement('div');
-        tag.textContent = caption;
-        tag.style.cssText = [
-          'position:absolute', 'left:0', 'top:-16px',
-          'font:700 10px/14px sans-serif', 'letter-spacing:.5px',
-          'padding:0 4px', 'color:#fff', 'white-space:nowrap',
-          'background:' + color, 'pointer-events:none'
-        ].join(';');
-        box.appendChild(tag);
-      }
-      (document.body || document.documentElement).appendChild(box);
-      var life = ms > 0 ? ms : 1200;
-      setTimeout(function(){
-        if (box.parentNode) box.parentNode.removeChild(box);
-      }, life);
-      return {x: r.left, y: r.top, width: r.width, height: r.height};
-    } catch(e) { return null; }
-  }
-""".replace("__ATTR__", HIGHLIGHT_ATTR)
-
-
-def _base_out_js() -> str:
-    """The empty diagnostic object shared by both phases."""
-    return """
-  var out = {
-    phase: null, query: null, total: 0, found: false, index: -1, text: '',
-    visible: false, disabled: false, clickable: false, clicked: false,
-    clicked_target: null, target_desc: null, highlighted: false,
-    rect: null, candidates: [], note: null, error: null
-  };
-"""
-
-
-#: The wrapper every probe shares: the diagnostic object, the helper
-#: functions, one try/catch that turns a thrown JS error into ``out.error``
-#: (so a broken page can never raise across CDP), and the JSON reply.
-#:
-#: ``build_clear_probe()`` is the one probe that deliberately skips the
-#: chassis: it answers ``{cleared: n}`` and must do so even on a page with no
-#: overlay, no helper and no diagnostic object at all.
-_PROBE_JS = """
-(function(){
-%(out)s
-%(helpers)s
-  try {
-%(body)s
-  } catch (err) {
-    out.error = String(err && err.message || err);
-  }
-  return JSON.stringify(out);
-})()
-"""
 
 
 def _probe(body: str, **fields) -> str:
@@ -161,178 +54,56 @@ def _probe(body: str, **fields) -> str:
                         "body": script.strip("\n")}
 
 
-def _splice(body: str, **fragments) -> str:
-    """Put the shared JS fragments back into a body's ``__MARKER__`` lines.
+@dataclass(frozen=True, slots=True)
+class ElementMatch:
+    """WHICH element a probe is looking for.
 
-    A fragment loses its own blank margins on the way in, so a body made of
-    pieces reads exactly like one written out in full — which is what keeps
-    the script the page runs byte-identical to the hand-written one.
+    One CSS selector finds candidate nodes; `label_selector` optionally points
+    at a child holding the visible text, and `match_text` is compared against
+    it. This is the half of a probe that says *what*, as opposed to `Overlay`
+    which says *how it looks*. Both find-style builders take exactly these
+    four, which is why they are one value and not eight parameters.
     """
-    for name, fragment in fragments.items():
-        body = body.replace(f"__{name.upper()}__", fragment.strip("\n"))
-    return body
 
+    selector: str
+    label_selector: Optional[str] = None
+    match_text: Optional[str] = None
+    match_mode: str = MATCH_CONTAINS
 
-# ── JS fragments more than one probe needs ──────────────────────────────
-#: How the FIND and HIGHLIGHT probes read their arguments. In one place on
-#: purpose: a new argument used to mean editing two bodies, and missing one
-#: left the two probes matching against different text.
-_QUERY_VARS = """
-    var sel = %(selector)s;
-    var childSel = %(label_selector)s;
-    var matchText = %(match_text)s;
-    var exact = %(exact)s;
-"""
-
-#: The label of one candidate node: the root's own text, or the inner element
-#: the caller named with ``label_selector``.
-_LABEL_JS = """
-      var node = nodes[i];
-      var el = node;
-      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
-      if (childSel) {
-        var c = node.querySelector(childSel);
-        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
-      }"""
-
-#: The exact/contains filter. "Anna must never match Annabelle" is one rule
-#: the two matching probes may not implement twice.
-_MATCH_JS = """
-      if (matchText !== null && matchText !== undefined && matchText !== '') {
-        if (exact) { if (label !== matchText) { continue; } }
-        else { if (label.indexOf(matchText) < 0) { continue; } }
-      }
-"""
-
-#: Phase 1: locate the node, report what was found, draw the RED outline,
-#: and stash the element for the click phase.
-_FIND_BODY = _splice("""
-    out.phase = 'find';
-__QUERY__
-    var doHighlight = %(highlight)s;
-    out.query = sel;
-    clearHighlights();
-    try { window.%(stash)s = null; } catch(e) {}
-    var nodes = Array.prototype.slice.call(document.querySelectorAll(sel));
-    out.total = nodes.length;
-    var cands = [];
-    for (var i = 0; i < nodes.length; i++) {
-__LABEL__
-      if (label.length > 120) label = label.slice(0, 120) + '\\u2026';
-__MATCH__
-      /* Visibility/clickability must describe the node we will actually
-         highlight and click (the root), not the inner label element: a label
-         inside a display:none parent still reports its own style as visible. */
-      var vi = probeVisible(node);
-      if (!out.found) {
-        out.found = true; out.index = i; out.text = label;
-        out.visible = vi.visible; out.disabled = vi.disabled;
-        out.clickable = vi.visible && !vi.disabled;
-        out.target_desc = describe(node);
-        try { window.%(stash)s = node; } catch(e) {}
-        if (doHighlight) {
-          var rect = highlight(node, %(color)s, %(hms)s, %(caption)s);
-          out.rect = rect;
-          out.highlighted = !!rect;
+    def as_js(self) -> dict:
+        """The four values as JS literals, ready for a probe template."""
+        return {
+            "selector": _js_str(self.selector),
+            "label_selector": (_js_str(self.label_selector)
+                               if self.label_selector else "null"),
+            "match_text": (_js_str(self.match_text)
+                           if self.match_text else "null"),
+            "exact": "true" if self.match_mode == MATCH_EXACT else "false",
         }
-      }
-      cands.push({index: i, text: label, visible: vi.visible,
-                  clickable: vi.visible && !vi.disabled});
-    }
-    out.candidates = cands.slice(0, %(maxcand)s);
-""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
 
-#: Visual confirmation only: highlight the first match. Never clicks, never
-#: scrolls, never touches the click stash — the scroll parser marks every
-#: person who matched the filter with this probe, one row at a time.
-_HIGHLIGHT_BODY = _splice("""
-    out.phase = 'highlight';
-__QUERY__
-    out.query = sel;
-    if (%(clear)s) clearHighlights();
-    var nodes = Array.prototype.slice.call(document.querySelectorAll(sel));
-    out.total = nodes.length;
-    for (var i = 0; i < nodes.length; i++) {
-__LABEL__
-__MATCH__
-      var vi = probeVisible(node);
-      out.found = true; out.index = i; out.text = label;
-      out.visible = vi.visible; out.disabled = vi.disabled;
-      out.clickable = vi.visible && !vi.disabled;
-      out.target_desc = describe(node);
-      var rect = highlight(node, %(color)s, %(hms)s, %(caption)s);
-      out.rect = rect;
-      out.highlighted = !!rect;
-      break;
-    }
-""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
 
-#: Phase 2: re-check the stashed element, draw the ORANGE outline on the
-#: click target, then click it. It works from ``window.__cfStash`` rather
-#: than a query, so it shares none of the fragments above.
-_CLICK_BODY = """
-    out.phase = 'click';
-    var doHighlight = %(highlight)s;
-    var doClick = %(do_click)s;
-    var clickSel = %(click_selector)s;
-    var root = null;
-    try { root = window.%(stash)s; } catch(e) {}
-    if (!root) {
-      out.error = 'no element stashed from the find phase';
-      return JSON.stringify(out);
-    }
-    if (!root.isConnected) {
-      out.error = 'the found element is no longer attached to the page';
-      return JSON.stringify(out);
-    }
-    var target = root;
-    if (clickSel) {
-      /* A CSS selector only matches DESCENDANTS of root. Users routinely set
-         the click selector to the SAME selector they used to find the element
-         (e.g. the saved "Tab Main" block), which finds nothing and used to
-         make the block silently do nothing. Fall back to the root itself when
-         the root is what the selector describes. */
-      var inner = root.querySelector(clickSel);
-      if (!inner) {
-        var selfMatch = false;
-        try {
-          selfMatch = !!(root.matches && root.matches(clickSel));
-        } catch (e) { selfMatch = false; }
-        if (selfMatch) {
-          inner = root;
-          out.note = 'click selector matches the found element itself';
+@dataclass(frozen=True, slots=True)
+class Overlay:
+    """HOW the outline drawn on a matched element looks.
+
+    Colour and caption are what the user reads to tell the two phases apart
+    (RULE 1: red FOUND, orange CLICK), and `ms` is how long it stays. Each
+    builder supplies its own defaults for these — they are the phase's
+    identity, not a caller's choice.
+    """
+
+    color: str
+    caption: str
+    ms: int = 1200
+    enabled: bool = True
+
+    def as_js(self) -> dict:
+        return {
+            "color": _js_str(self.color),
+            "caption": _js_str(self.caption),
+            "hms": int(self.ms),
+            "highlight": "true" if self.enabled else "false",
         }
-      }
-      if (!inner) {
-        out.error = 'click target ' + clickSel + ' not found inside the element';
-        return JSON.stringify(out);
-      }
-      target = inner;
-    }
-    out.found = true;
-    out.text = (target.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120);
-    out.target_desc = describe(target);
-    out.clicked_target = out.target_desc;
-    var vi = probeVisible(target);
-    out.visible = vi.visible;
-    out.disabled = vi.disabled;
-    out.clickable = vi.visible && !vi.disabled;
-    if (doHighlight) {
-      var rect = highlight(target, %(color)s, %(hms)s, %(caption)s);
-      out.rect = rect;
-      out.highlighted = !!rect;
-    }
-    if (doClick && out.clickable) {
-      try {
-        if (target.scrollIntoView) {
-          target.scrollIntoView({block: 'center', inline: 'center'});
-        }
-      } catch(e) {}
-      try { target.click(); out.clicked = true; }
-      catch(err) { out.error = String(err && err.message || err); }
-    }
-"""
-
 
 
 def build_find_probe(
@@ -350,19 +121,16 @@ def build_find_probe(
 
     The matched node is stashed on ``window.__cfStash`` so the click phase can
     act on the exact same element instead of re-querying the DOM.
+
+    The keyword signature stays — `backend/visual_click.py` and the probe
+    contract tests call it by name — but the body now builds the two domain
+    values, so a new probe style composes them instead of copying nine
+    parameters again.
     """
-    return _probe(_FIND_BODY,
-                  selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  highlight="true" if highlight else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms),
-                  stash=STASH_KEY,
-                  maxcand=int(max_candidates))
+    match = ElementMatch(selector, label_selector, match_text, match_mode)
+    overlay = Overlay(color, caption, highlight_ms, highlight)
+    return _probe(_FIND_BODY, **match.as_js(), **overlay.as_js(),
+                  stash=STASH_KEY, maxcand=int(max_candidates))
 
 
 def build_click_probe(
@@ -406,16 +174,12 @@ def build_highlight_probe(
     ``scrollIntoView``: moving the viewport mid-scroll would corrupt the
     parser's position tracking.
     """
-    return _probe(_HIGHLIGHT_BODY,
-                  selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  clear="true" if clear_first else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms))
+    match = ElementMatch(selector, label_selector, match_text, match_mode)
+    overlay = Overlay(color, caption, highlight_ms)
+    js = {**match.as_js(), **overlay.as_js()}
+    js.pop("highlight")        # this probe ONLY highlights; there is no toggle
+    return _probe(_HIGHLIGHT_BODY, **js,
+                  clear="true" if clear_first else "false")
 
 
 def build_clear_probe() -> str:
@@ -499,6 +263,21 @@ def _outline_suffix(result: dict) -> str:
     return ""
 
 
+def _unclickable_reason(result) -> str:
+    """Why the probe refused to click, in the user's words.
+
+    Both causes can hold at once and both are reported — "not visible" alone
+    would send someone hunting for a CSS issue when the control is also
+    disabled.
+    """
+    why = []
+    if not result.get("visible"):
+        why.append("not visible (hidden/zero-size)")
+    if result.get("disabled"):
+        why.append("disabled or pointer-events:none")
+    return ", ".join(why) or "not interactive"
+
+
 def interpret_click(result, label: str = "element") -> tuple[str, str]:
     """Turn a CLICK-phase result into a (message, level) pair."""
     if not result:
@@ -507,13 +286,8 @@ def interpret_click(result, label: str = "element") -> tuple[str, str]:
         return f"❌ CLICK failed: {label} — {result['error']}", "error"
     target = result.get("target_desc") or "the found element"
     if not result.get("clickable"):
-        why = []
-        if not result.get("visible"):
-            why.append("not visible (hidden/zero-size)")
-        if result.get("disabled"):
-            why.append("disabled or pointer-events:none")
-        reason = ", ".join(why) or "not interactive"
-        return (f"❌ CLICK failed: {target} is NOT clickable — {reason}", "error")
+        return (f"❌ CLICK failed: {target} is NOT clickable "
+                f"— {_unclickable_reason(result)}", "error")
     if result.get("clicked"):
         return (f"✅ CLICK success: clicked {target} “"
                 f"{str(result.get('text', ''))[:40]}”", "success")

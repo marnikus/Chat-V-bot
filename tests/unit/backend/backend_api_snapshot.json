@@ -1031,6 +1031,7 @@
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
+      "click_runner": "(self)",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
@@ -1068,13 +1069,40 @@
     }
    },
    "functions": {
-    "ms_floor": "(value: 'Any') -> 'int'"
+    "ms_floor": "(value: 'Any') -> 'int'",
+    "tab_fields": "() -> 'tuple'"
    },
    "values": {}
   },
   "actions.base_action": {
    "classes": {},
    "functions": {},
+   "values": {}
+  },
+  "actions.cancellation": {
+   "classes": {
+    "RunStopped": {
+     "ancestry": [
+      "RunStopped",
+      "Exception",
+      "BaseException",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {}
+    }
+   },
+   "functions": {
+    "await_with_stop": "(awaitable_factory: 'Callable[[], Awaitable[Any]]', engine, *, slice_s: 'float' = 0.05, deadline_monotonic: 'float | None' = None) -> 'Any'",
+    "check_stopped": "(engine) -> 'None'",
+    "is_stop_requested": "(engine) -> 'bool'",
+    "sleep_with_stop": "(delay_s: 'float', engine, *, slice_s: 'float' = 0.02) -> 'None'"
+   },
    "values": {}
   },
   "actions.click_back": {
@@ -1102,6 +1130,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1145,6 +1174,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1187,6 +1217,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1416,6 +1447,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1755,6 +1787,69 @@
    "functions": {},
    "values": {}
   },
+  "backend.attach_image": {
+   "classes": {
+    "AttachOptions": {
+     "ancestry": [
+      "AttachOptions",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "confirm_pause_ms": {
+       "default": "700",
+       "type": "int"
+      },
+      "file_pattern": {
+       "default": "'*.jpg, *.jpeg, *.png, *.gif'",
+       "type": "str"
+      },
+      "folder_path": {
+       "default": "''",
+       "type": "str"
+      },
+      "highlight_enabled": {
+       "default": "True",
+       "type": "bool"
+      },
+      "mode": {
+       "default": "'sequential'",
+       "type": "str"
+      },
+      "report": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "simulate_dialog": {
+       "default": "True",
+       "type": "bool"
+      },
+      "verify_poll_ms": {
+       "default": "200",
+       "type": "int"
+      },
+      "verify_timeout_ms": {
+       "default": "8000",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, folder_path: str = '', file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, verify_poll_ms: int = 200, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None) -> None",
+      "from_kwargs": "(cls, **kwargs) -> 'AttachOptions'",
+      "verifies": "<property>"
+     }
+    }
+   },
+   "functions": {
+    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str, file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None, verify_poll_ms: int = 200) -> bool",
+    "attach_with_options": "(cdp: backend.cdp_client.CDPClient, options: backend.attach_image.AttachOptions) -> bool"
+   },
+   "values": {}
+  },
   "backend.bridge": {
    "classes": {},
    "functions": {},
@@ -1893,61 +1988,12 @@
       "slice": "(self, start: 'int', end: 'int') -> 'list[MessageRecord]'",
       "state": "(self) -> 'dict'"
      }
-    },
-    "PrivateCheck": {
-     "ancestry": [
-      "PrivateCheck",
-      "object"
-     ],
-     "attrs": {
-      "detail": "''",
-      "me": "''",
-      "ok": "True",
-      "partner": "''",
-      "reason": "'ok'"
-     },
-     "bases": [
-      "object"
-     ],
-     "fields": {
-      "detail": {
-       "default": "''",
-       "type": "str"
-      },
-      "me": {
-       "default": "''",
-       "type": "str"
-      },
-      "ok": {
-       "default": "True",
-       "type": "bool"
-      },
-      "partner": {
-       "default": "''",
-       "type": "str"
-      },
-      "reason": {
-       "default": "'ok'",
-       "type": "str"
-      },
-      "strangers": {
-       "default": "<_MISSING_TYPE>",
-       "type": "list"
-      }
-     },
-     "inherited": {},
-     "methods": {
-      "__bool__": "(self) -> 'bool'",
-      "__init__": "(self, ok: 'bool' = True, reason: 'str' = 'ok', detail: 'str' = '', me: 'str' = '', partner: 'str' = '', strangers: 'list' = <factory>) -> None"
-     }
     }
    },
    "functions": {
     "align": "(dom_fps, tail_fps) -> 'Alignment'",
     "parse_records": "(raw: 'Iterable') -> 'list[MessageRecord]'",
-    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media=None) -> 'SyncResult'",
-    "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
-    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', items=None, require_private: 'bool' = True) -> 'PrivateCheck'"
+    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media=None) -> 'SyncResult'"
    },
    "values": {}
   },
@@ -2289,6 +2335,379 @@
    },
    "values": {}
   },
+  "backend.chat_sync.modes": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.options": {
+   "classes": {
+    "ReadPlan": {
+     "ancestry": [
+      "ReadPlan",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "count": {
+       "default": "0",
+       "type": "int"
+      },
+      "gap": {
+       "default": "False",
+       "type": "bool"
+      },
+      "head_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "head_sig": {
+       "default": "''",
+       "type": "str"
+      },
+      "mode": {
+       "default": "'full'",
+       "type": "str"
+      },
+      "start": {
+       "default": "0",
+       "type": "int"
+      },
+      "streaming": {
+       "default": "True",
+       "type": "bool"
+      },
+      "tail_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "tail_sig": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
+      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
+      "delta": "<property>",
+      "is_empty": "<property>",
+      "signatures": "<property>"
+     }
+    },
+    "SyncOptions": {
+     "ancestry": [
+      "SyncOptions",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "backfill_older": {
+       "default": "False",
+       "type": "bool"
+      },
+      "backfill_wait_s": {
+       "default": "2.0",
+       "type": "float"
+      },
+      "chunk_pause_ms": {
+       "default": "None",
+       "type": "Optional[int]"
+      },
+      "max_messages": {
+       "default": "None",
+       "type": "Optional[int]"
+      },
+      "media": {
+       "default": "None",
+       "type": "Any"
+      },
+      "my_nick": {
+       "default": "''",
+       "type": "str"
+      },
+      "now": {
+       "default": "None",
+       "type": "Optional[datetime]"
+      },
+      "on_progress": {
+       "default": "None",
+       "type": "Optional[Callable[[int, int], None]]"
+      },
+      "require_private": {
+       "default": "False",
+       "type": "bool"
+      },
+      "should_stop": {
+       "default": "None",
+       "type": "Optional[Callable[[], bool]]"
+      },
+      "verify_partner": {
+       "default": "False",
+       "type": "bool"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media: 'Any' = None) -> None",
+      "cursor_time": "(self) -> 'Optional[datetime]'",
+      "for_parser": "(self, parser=None, now: 'Optional[datetime]' = None) -> \"'SyncOptions'\"",
+      "from_kwargs": "(cls, **kwargs) -> \"'SyncOptions'\"",
+      "pause_seconds": "(self, parser=None) -> 'float'",
+      "progress": "(self, done: 'int', total: 'int') -> 'None'",
+      "stopping": "(self) -> 'bool'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.persist": {
+   "classes": {
+    "SyncPersister": {
+     "ancestry": [
+      "SyncPersister",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "cursor_kwargs": "(signatures, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
+      "empty": "(self) -> 'None'",
+      "mark_backfilled": "(self, *, why: 'str') -> 'None'",
+      "record_cap_gap": "(self) -> 'None'",
+      "recover": "(self, records, *, requeue_failed: 'bool') -> 'None'",
+      "repair_tail": "(self) -> 'None'",
+      "stream_chunk": "(self, records, position: 'int', *, first: 'bool') -> 'None'",
+      "touch": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'None'",
+      "write_backfill": "(self, records) -> 'None'",
+      "write_batch": "(self, records) -> 'None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.planner": {
+   "classes": {
+    "SyncPlanner": {
+     "ancestry": [
+      "SyncPlanner",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "is_delta": "(count: 'int', head_sig: 'str', cursor: 'dict') -> 'bool'",
+      "nothing_moved": "(count: 'int', head_sig: 'str', tail_sig: 'str', cursor: 'dict') -> 'bool'",
+      "plan": "(state: 'dict', cursor: 'dict', options: 'Optional[SyncOptions]' = None, *, count: 'Optional[int]' = None) -> 'ReadPlan'",
+      "signature": "(value) -> 'str'",
+      "signatures": "(state: 'dict') -> 'dict'"
+     }
+    }
+   },
+   "functions": {
+    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync.read": {
+   "classes": {
+    "ChunkReader": {
+     "ancestry": [
+      "ChunkReader",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "read": "(self) -> 'None'"
+     }
+    },
+    "DeltaAligner": {
+     "ancestry": [
+      "DeltaAligner",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "apply": "(self, session: \"'SyncSession'\") -> 'None'",
+      "split": "(collected, cursor: 'dict') -> 'list'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync.run": {
+   "classes": {},
+   "functions": {
+    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync.session": {
+   "classes": {
+    "SyncSession": {
+     "ancestry": [
+      "SyncSession",
+      "object"
+     ],
+     "attrs": {
+      "before_count": "0",
+      "complete": "False",
+      "count": "0",
+      "head_any": "''",
+      "head_sig": "''",
+      "live_baseline": "0",
+      "old_top": "0",
+      "person_id": "0",
+      "plan": "None",
+      "position": "0",
+      "restored_top": "None",
+      "result": "None",
+      "scanned": "0",
+      "tail_any": "''",
+      "tail_sig": "''"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "before_count": {
+       "default": "0",
+       "type": "int"
+      },
+      "collected": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "complete": {
+       "default": "False",
+       "type": "bool"
+      },
+      "count": {
+       "default": "0",
+       "type": "int"
+      },
+      "cursor": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      },
+      "head_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "head_sig": {
+       "default": "''",
+       "type": "str"
+      },
+      "live_baseline": {
+       "default": "0",
+       "type": "int"
+      },
+      "nick": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "old_top": {
+       "default": "0",
+       "type": "int"
+      },
+      "options": {
+       "default": "<_MISSING_TYPE>",
+       "type": "SyncOptions"
+      },
+      "parser": {
+       "default": "<_MISSING_TYPE>",
+       "type": "Any"
+      },
+      "person_id": {
+       "default": "0",
+       "type": "int"
+      },
+      "plan": {
+       "default": "None",
+       "type": "Optional[ReadPlan]"
+      },
+      "position": {
+       "default": "0",
+       "type": "int"
+      },
+      "repo": {
+       "default": "<_MISSING_TYPE>",
+       "type": "Any"
+      },
+      "restored_top": {
+       "default": "None",
+       "type": "Optional[int]"
+      },
+      "result": {
+       "default": "None",
+       "type": "SyncResult"
+      },
+      "scanned": {
+       "default": "0",
+       "type": "int"
+      },
+      "state": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      },
+      "tail_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "tail_sig": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser: 'Any', repo: 'Any', nick: 'str', options: 'SyncOptions' = <factory>, result: 'SyncResult' = None, state: 'dict' = <factory>, plan: 'Optional[ReadPlan]' = None, cursor: 'dict' = <factory>, person_id: 'int' = 0, live_baseline: 'int' = 0, before_count: 'int' = 0, old_top: 'int' = 0, restored_top: 'Optional[int]' = None, count: 'int' = 0, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '', scanned: 'int' = 0, position: 'int' = 0, collected: 'list' = <factory>, complete: 'bool' = False) -> None",
+      "__post_init__": "(self)",
+      "absorb": "(self, appended) -> 'None'",
+      "delta": "<property>",
+      "finish": "(self) -> 'None'",
+      "finish_empty": "(self) -> 'None'",
+      "persister": "<property>",
+      "person_total": "(self) -> 'int'",
+      "prepare": "(self) -> 'bool'",
+      "record_cap_gap": "(self) -> 'None'",
+      "restore_if_needed": "(self) -> 'None'",
+      "restore_viewport": "(self, position: 'Optional[int]' = None) -> 'int'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "backend.chat_text": {
    "classes": {},
    "functions": {
@@ -2343,6 +2762,11 @@
    "functions": {
     "json_dumps": "(data: 'Any') -> 'str'"
    },
+   "values": {}
+  },
+  "backend.config_owners": {
+   "classes": {},
+   "functions": {},
    "values": {}
   },
   "backend.criteria_engine": {
@@ -2414,7 +2838,74 @@
    "values": {}
   },
   "backend.dom_highlight": {
-   "classes": {},
+   "classes": {
+    "ElementMatch": {
+     "ancestry": [
+      "ElementMatch",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "label_selector": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "match_mode": {
+       "default": "'contains'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "selector": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains') -> None",
+      "as_js": "(self) -> dict"
+     }
+    },
+    "Overlay": {
+     "ancestry": [
+      "Overlay",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "color": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "enabled": {
+       "default": "True",
+       "type": "bool"
+      },
+      "ms": {
+       "default": "1200",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, color: str, caption: str, ms: int = 1200, enabled: bool = True) -> None",
+      "as_js": "(self) -> dict"
+     }
+    }
+   },
    "functions": {
     "build_clear_probe": "() -> str",
     "build_click_probe": "(click_selector: Optional[str] = None, highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff9500', caption: str = 'CLICK', do_click: bool = True) -> str",
@@ -2424,6 +2915,11 @@
     "interpret_click_target": "(result) -> tuple[str, str]",
     "interpret_find": "(result, label: str = 'element') -> tuple[str, str]"
    },
+   "values": {}
+  },
+  "backend.dom_highlight_js": {
+   "classes": {},
+   "functions": {},
    "values": {}
   },
   "backend.dom_probe": {
@@ -2469,8 +2965,164 @@
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
      }
+    },
+    "PersonPageRequest": {
+     "ancestry": [
+      "PersonPageRequest",
+      "object"
+     ],
+     "attrs": {
+      "dir": "''",
+      "include_deleted": "False",
+      "limit": "50",
+      "offset": "0",
+      "q": "''",
+      "sort": "'recent'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "dir": {
+       "default": "''",
+       "type": "str"
+      },
+      "include_deleted": {
+       "default": "False",
+       "type": "bool"
+      },
+      "limit": {
+       "default": "50",
+       "type": "int"
+      },
+      "offset": {
+       "default": "0",
+       "type": "int"
+      },
+      "q": {
+       "default": "''",
+       "type": "str"
+      },
+      "sort": {
+       "default": "'recent'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> None",
+      "columns": "(self) -> 'str'",
+      "needle": "(self) -> 'str'",
+      "order": "(self) -> 'tuple[str, list]'",
+      "resolved_dir": "(self) -> 'str'",
+      "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
+      "where": "(self) -> 'tuple[str, list]'"
+     }
     }
    },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.query": {
+   "classes": {
+    "HistoryQuery": {
+     "ancestry": [
+      "HistoryQuery",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, db: 'HistoryDB')",
+      "around": "(self, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
+      "db_stats": "(self) -> 'dict'",
+      "gaps": "(self, person_id: 'int') -> 'list[dict]'",
+      "list_persons": "(self, req: 'PersonPageRequest') -> 'dict'",
+      "page": "(self, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'",
+      "person_stats": "(self, nick: 'str') -> 'dict'",
+      "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
+      "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.request": {
+   "classes": {
+    "PersonPageRequest": {
+     "ancestry": [
+      "PersonPageRequest",
+      "object"
+     ],
+     "attrs": {
+      "dir": "''",
+      "include_deleted": "False",
+      "limit": "50",
+      "offset": "0",
+      "q": "''",
+      "sort": "'recent'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "dir": {
+       "default": "''",
+       "type": "str"
+      },
+      "include_deleted": {
+       "default": "False",
+       "type": "bool"
+      },
+      "limit": {
+       "default": "50",
+       "type": "int"
+      },
+      "offset": {
+       "default": "0",
+       "type": "int"
+      },
+      "q": {
+       "default": "''",
+       "type": "str"
+      },
+      "sort": {
+       "default": "'recent'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> None",
+      "columns": "(self) -> 'str'",
+      "needle": "(self) -> 'str'",
+      "order": "(self) -> 'tuple[str, list]'",
+      "resolved_dir": "(self) -> 'str'",
+      "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
+      "where": "(self) -> 'tuple[str, list]'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.rows": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.sorting": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query.sqltext": {
+   "classes": {},
    "functions": {},
    "values": {}
   },
@@ -2492,70 +3144,14 @@
   "backend.logger": {
    "classes": {},
    "functions": {
+    "report_and_log": "(report: 'Callable | None', message: str, level: str = 'info') -> None",
     "setup_logger": "(log_dir: str = 'logs', level: int = 20) -> logging.Logger"
    },
    "values": {}
   },
   "backend.media_handler": {
-   "classes": {
-    "AttachOptions": {
-     "ancestry": [
-      "AttachOptions",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {
-      "confirm_pause_ms": {
-       "default": "700",
-       "type": "int"
-      },
-      "file_pattern": {
-       "default": "'*.jpg, *.jpeg, *.png, *.gif'",
-       "type": "str"
-      },
-      "folder_path": {
-       "default": "''",
-       "type": "str"
-      },
-      "highlight_enabled": {
-       "default": "True",
-       "type": "bool"
-      },
-      "mode": {
-       "default": "'sequential'",
-       "type": "str"
-      },
-      "report": {
-       "default": "None",
-       "type": "Optional"
-      },
-      "simulate_dialog": {
-       "default": "True",
-       "type": "bool"
-      },
-      "verify_poll_ms": {
-       "default": "200",
-       "type": "int"
-      },
-      "verify_timeout_ms": {
-       "default": "8000",
-       "type": "int"
-      }
-     },
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, folder_path: str = '', file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, verify_poll_ms: int = 200, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None) -> None",
-      "from_kwargs": "(cls, **kwargs) -> 'AttachOptions'",
-      "verifies": "<property>"
-     }
-    }
-   },
+   "classes": {},
    "functions": {
-    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str, file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None, verify_poll_ms: int = 200) -> bool",
-    "attach_with_options": "(cdp: backend.cdp_client.CDPClient, options: backend.media_handler.AttachOptions) -> bool",
     "list_image_files": "(folder: str, file_pattern: str) -> list[str]",
     "parse_patterns": "(file_pattern: str) -> list[str]"
    },
@@ -2569,7 +3165,6 @@
   "backend.message_injector": {
    "classes": {},
    "functions": {
-    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool",
     "type_message": "(cdp: backend.cdp_client.CDPClient, text: str, typing_speed_ms: int = 30, report: Optional[Callable] = None) -> bool",
     "type_search": "(cdp: backend.cdp_client.CDPClient, text: str, report: Optional[Callable] = None) -> bool"
    },
@@ -2634,6 +3229,62 @@
   "backend.preset_store": {
    "classes": {},
    "functions": {},
+   "values": {}
+  },
+  "backend.private_gate": {
+   "classes": {
+    "PrivateCheck": {
+     "ancestry": [
+      "PrivateCheck",
+      "object"
+     ],
+     "attrs": {
+      "detail": "''",
+      "me": "''",
+      "ok": "True",
+      "partner": "''",
+      "reason": "'ok'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "detail": {
+       "default": "''",
+       "type": "str"
+      },
+      "me": {
+       "default": "''",
+       "type": "str"
+      },
+      "ok": {
+       "default": "True",
+       "type": "bool"
+      },
+      "partner": {
+       "default": "''",
+       "type": "str"
+      },
+      "reason": {
+       "default": "'ok'",
+       "type": "str"
+      },
+      "strangers": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__bool__": "(self) -> 'bool'",
+      "__init__": "(self, ok: 'bool' = True, reason: 'str' = 'ok', detail: 'str' = '', me: 'str' = '', partner: 'str' = '', strangers: 'list' = <factory>) -> None"
+     }
+    }
+   },
+   "functions": {
+    "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
+    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', items=None, require_private: 'bool' = True) -> 'PrivateCheck'"
+   },
    "values": {}
   },
   "backend.scroll_parser": {
@@ -2704,6 +3355,38 @@
      "methods": {
       "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
       "new_unmessaged": "<property>"
+     }
+    },
+    "Judge": {
+     "ancestry": [
+      "Judge",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "consume_batch": "(self, run) -> None"
+     }
+    },
+    "ScrollLoop": {
+     "ancestry": [
+      "ScrollLoop",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "run": "(self, run) -> None"
      }
     },
     "ScrollOptions": {
@@ -2811,9 +3494,305 @@
       "parse": "(self, progress_cb=None) -> tuple[list, list]",
       "set_log_cb": "(self, cb) -> None"
      }
+    },
+    "Viewport": {
+     "ancestry": [
+      "Viewport",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "confirm_person": "(self, nick: str) -> bool",
+      "do_scroll": "(self) -> bool",
+      "settle": "(self, seen_before: set, prev_top: float) -> dict | None",
+      "snapshot": "(self) -> dict | None"
+     }
     }
    },
    "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.judge": {
+   "classes": {
+    "Judge": {
+     "ancestry": [
+      "Judge",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "consume_batch": "(self, run) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.loop": {
+   "classes": {
+    "ScrollLoop": {
+     "ancestry": [
+      "ScrollLoop",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "run": "(self, run) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.options": {
+   "classes": {
+    "ScrollOptions": {
+     "ancestry": [
+      "ScrollOptions",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "confirm_pause_ms": {
+       "default": "500",
+       "type": "int"
+      },
+      "highlight_enabled": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight_ms": {
+       "default": "900",
+       "type": "int"
+      },
+      "load_timeout_ms": {
+       "default": "2500",
+       "type": "int"
+      },
+      "log_cb": {
+       "default": "None",
+       "type": "object"
+      },
+      "max_scrolls": {
+       "default": "50",
+       "type": "int"
+      },
+      "nick_selector": {
+       "default": "'.primary-text'",
+       "type": "str"
+      },
+      "on_collect": {
+       "default": "None",
+       "type": "object"
+      },
+      "on_reject": {
+       "default": "None",
+       "type": "object"
+      },
+      "pause_ms": {
+       "default": "800",
+       "type": "int"
+      },
+      "person_filter": {
+       "default": "None",
+       "type": "backend.person_filter.PersonFilter | None"
+      },
+      "person_selector": {
+       "default": "'user-item'",
+       "type": "str"
+      },
+      "poll_ms": {
+       "default": "150",
+       "type": "int"
+      },
+      "scroll_dy": {
+       "default": "300",
+       "type": "int"
+      },
+      "should_stop": {
+       "default": "None",
+       "type": "object"
+      },
+      "stall_threshold": {
+       "default": "3",
+       "type": "int"
+      },
+      "viewport_sel": {
+       "default": "'cdk-virtual-scroll-viewport.users-list-viewport'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect: object = None, on_reject: object = None, should_stop: object = None, log_cb: object = None) -> None",
+      "__post_init__": "(self)",
+      "seconds": "(self, ms_attr: str) -> float"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.parser": {
+   "classes": {
+    "ScrollParser": {
+     "ancestry": [
+      "ScrollParser",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, cdp: backend.cdp_client.CDPClient, criteria=None, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
+      "collect": "(self, progress_cb=None, min_new_users: int = 0, known_messaged: set | None = None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
+      "from_options": "(cls, cdp: backend.cdp_client.CDPClient, options: backend.scroll_parser.ScrollOptions, criteria=None) -> 'ScrollParser'",
+      "max_scrolls": "<property>",
+      "parse": "(self, progress_cb=None) -> tuple[list, list]",
+      "set_log_cb": "(self, cb) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.probe": {
+   "classes": {},
+   "functions": {
+    "parse_snapshot": "(raw) -> dict | None",
+    "to_dict": "(item: dict) -> dict",
+    "to_record": "(item: dict) -> stores.user_memory.UserRecord"
+   },
+   "values": {}
+  },
+  "backend.scroll_parser.results": {
+   "classes": {
+    "CollectResult": {
+     "ancestry": [
+      "CollectResult",
+      "object"
+     ],
+     "attrs": {
+      "found": "None",
+      "reached_end": "False",
+      "scrolls": "0",
+      "seeking": "False",
+      "stopped": "False",
+      "stopped_early": "False"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "all_people": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "collected": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "found": {
+       "default": "None",
+       "type": "object"
+      },
+      "purged": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "reached_end": {
+       "default": "False",
+       "type": "bool"
+      },
+      "rejected": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      },
+      "rejected_people": {
+       "default": "<_MISSING_TYPE>",
+       "type": "list"
+      },
+      "scrolls": {
+       "default": "0",
+       "type": "int"
+      },
+      "seeking": {
+       "default": "False",
+       "type": "bool"
+      },
+      "stopped": {
+       "default": "False",
+       "type": "bool"
+      },
+      "stopped_early": {
+       "default": "False",
+       "type": "bool"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
+      "new_unmessaged": "<property>"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser.viewport": {
+   "classes": {
+    "Viewport": {
+     "ancestry": [
+      "Viewport",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, host)",
+      "confirm_person": "(self, nick: str) -> bool",
+      "do_scroll": "(self) -> bool",
+      "settle": "(self, seen_before: set, prev_top: float) -> dict | None",
+      "snapshot": "(self) -> dict | None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.send_button": {
+   "classes": {},
+   "functions": {
+    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool"
+   },
    "values": {}
   },
   "backend.tab_matcher": {

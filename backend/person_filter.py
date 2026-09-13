@@ -92,8 +92,13 @@ class PersonFilter:
         return not self.rules() and self.panel_criteria is None
 
     # ── evaluation ───────────────────────────────────────────────
-    def check(self, person: dict) -> FilterVerdict:
-        """Evaluate one person dict (female/registered/guest/anonymous keys)."""
+    def _tristate_reject(self, person: dict) -> Optional[FilterVerdict]:
+        """First tri-state rule this person fails, or None if all pass.
+
+        The rejection *reason* is the opposite name on purpose: a person who
+        fails `female == YES` is reported as "not female", because the reason
+        names what the person IS, not what the rule wanted.
+        """
         for attr, (yes_name, no_name) in _ATTRS.items():
             mode = getattr(self, attr)
             if mode == ANY:
@@ -103,12 +108,35 @@ class PersonFilter:
                 return FilterVerdict(False, no_name)
             if mode == NO and has:
                 return FilterVerdict(False, yes_name)
-        if self.panel_criteria is not None:
-            try:
-                if not self.panel_criteria.evaluate_user(person):
-                    return FilterVerdict(False, "rejected by Filter panel criteria")
-            except Exception as exc:      # never let a bad rule kill the run
-                log.warning("Panel criteria evaluation failed: %s", exc)
+        return None
+
+    def _panel_reject(self, person: dict) -> Optional[FilterVerdict]:
+        """Panel-criteria verdict, or None if it passes or cannot be asked.
+
+        A rule that raises is logged and treated as *passing*: a broken rule
+        must never silently drop everyone mid-run.
+        """
+        if self.panel_criteria is None:
+            return None
+        try:
+            if not self.panel_criteria.evaluate_user(person):
+                return FilterVerdict(False,
+                                     "rejected by Filter panel criteria")
+        except Exception as exc:      # never let a bad rule kill the run
+            log.warning("Panel criteria evaluation failed: %s", exc)
+        return None
+
+    def check(self, person: dict) -> FilterVerdict:
+        """Evaluate one person dict (female/registered/guest/anonymous keys).
+
+        Note the explicit `is not None`: a rejecting FilterVerdict is *falsy*
+        (`__bool__` is `passed`), so an `or` chain here would skip every
+        rejection and pass everyone. The suite caught exactly that.
+        """
+        for reject in (self._tristate_reject, self._panel_reject):
+            verdict = reject(person)
+            if verdict is not None:
+                return verdict
         return FilterVerdict(True, "matches all criteria")
 
     def __call__(self, person: dict) -> bool:

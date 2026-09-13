@@ -217,42 +217,63 @@ class DbLifecycle:
         if self._service is None:
             return {"ok": False, "error": "the message archive is not running"}
         backup = self._copy_to_trash(path, tag="clean")
-        db = self._service.db
-        removed = {}
         try:
-            for table in ("messages", "media", "cursors", "gaps", "persons",
-                          "users"):
-                removed[table] = int(await db.scalar(
-                    f"SELECT COUNT(*) FROM {table}", (), 0))
-                await db.execute(f"DELETE FROM {table}")
-            await db.execute("DELETE FROM sqlite_sequence")
-            if db.fts_enabled:
-                try:
-                    await db.execute(
-                        "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
-                except Exception:                      # noqa: BLE001
-                    pass
-            await db.commit()
-            await db.execute("VACUUM")
-            await db.commit()
+            removed = await self._truncate_all(self._service.db)
         except Exception as exc:                       # noqa: BLE001
             log.warning("clean failed: %s", exc)
             return {"ok": False, "error": str(exc), "backup": backup}
-        media_moved = ""
-        world_folder = os.path.abspath(self._registry.media_dir(path))
-        base = os.path.abspath(self._registry.media_base_dir())
-        if world_folder.startswith(base + os.sep) and world_folder != base \
-                and os.path.isdir(world_folder):
-            try:
-                media_moved = os.path.join(
-                    self._registry.trash_dir(),
-                    self._stamp("clean_media", db_stem(path)))
-                shutil.move(world_folder, media_moved)
-            except OSError as exc:
-                log.warning("cannot move world media to trash: %s", exc)
         return {"ok": True, "op": "clean", "path": path, "backup": backup,
                 "removed": removed, "before_path": path,
-                "media_moved": media_moved}
+                "media_moved": self._move_world_media_to_trash(path)}
+
+    async def _truncate_all(self, db) -> dict:
+        """Empty every table, returning the row count each one held.
+
+        The counts are read BEFORE the delete because they are what the undo
+        entry and the log line report; afterwards there is nothing to count.
+        Raising is the contract -- the caller owns the failure message, since
+        only it knows a backup was already taken.
+        """
+        removed = {}
+        for table in ("messages", "media", "cursors", "gaps", "persons",
+                      "users"):
+            removed[table] = int(await db.scalar(
+                f"SELECT COUNT(*) FROM {table}", (), 0))
+            await db.execute(f"DELETE FROM {table}")
+        await db.execute("DELETE FROM sqlite_sequence")
+        if db.fts_enabled:
+            try:
+                await db.execute(
+                    "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+            except Exception:                          # noqa: BLE001
+                pass
+        await db.commit()
+        await db.execute("VACUUM")
+        await db.commit()
+        return removed
+
+    def _move_world_media_to_trash(self, path: str) -> str:
+        """Move this world's media folder to the trash; '' if there is none.
+
+        The containment check is a safety guard, not a tidiness one: a world
+        whose media_dir resolves to the shared base (or outside it) would
+        take every world's images with it, so anything not strictly below
+        the base is left alone.
+        """
+        world_folder = os.path.abspath(self._registry.media_dir(path))
+        base = os.path.abspath(self._registry.media_base_dir())
+        if not world_folder.startswith(base + os.sep) \
+                or world_folder == base \
+                or not os.path.isdir(world_folder):
+            return ""
+        target = os.path.join(self._registry.trash_dir(),
+                              self._stamp("clean_media", db_stem(path)))
+        try:
+            shutil.move(world_folder, target)
+        except OSError as exc:
+            log.warning("cannot move world media to trash: %s", exc)
+            return ""
+        return target
 
     async def _restore_unlocked(self, backup: str, target: str = "") -> dict:
         """Put a trashed/backed-up file back (the undo half of clean)."""

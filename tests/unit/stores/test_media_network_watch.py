@@ -21,7 +21,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
 
-from stores.media_fetch import _NetworkWatch                       # noqa: E402
+# Round H (H3) moved the CDP download strategies out of the queue module.
+# _NetworkWatch is strategy 3's event subscription, so it went with them;
+# the test imports from the module that OWNS it rather than a re-export.
+from stores.media_download import _NetworkWatch                    # noqa: E402
 from stores.media_store import MediaStore                          # noqa: E402
 
 

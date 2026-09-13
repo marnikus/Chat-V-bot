@@ -13,6 +13,26 @@ and the tests that swap `db._repair_tables` on the instance — keep working
 through the facade.
 """
 
+# ideal-size: 440 lines reason=append-only migration ledger, re-derived by
+# measurement in Round H step H5.
+#
+# Every method is one historical schema repair, kept because a database
+# written by an older build may still need it. The list only ever grows, and
+# an entry may not be edited once shipped — a migration that changes meaning
+# corrupts the databases it already ran against.
+#
+# H5 tested the split rather than assuming it. `PersonLifecycle` in this same
+# package LOOKED cohesive (LCOM4 = 1) only because a delegation handle every
+# method holds links them all; discounting it revealed eight components and
+# the file was split. The same analysis run on `SchemaMigrator`, discounting
+# its `db` handle, still returns ONE component: the repairs genuinely share
+# the table-shape helpers (`_table_columns`, `_realign_table`, `_count_rows`)
+# and each other. Per AGENT_RULES.md (~line 597), when size and LCOM disagree,
+# LCOM wins — so this file stays whole.
+#
+# Per-unit budgets all pass: max cyclomatic 9, mean 3.8, longest method 38
+# lines.
+
 from __future__ import annotations
 
 import logging

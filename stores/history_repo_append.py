@@ -330,6 +330,15 @@ class AppendPlanner:
         if search.rows is None:
             search.rows = await self._empty_slot_rows(search.person_id)
         want = self._owner._slot_key(rec) + ((day or "")[:10],)
+        return self._claim_row(want, search)
+
+    def _claim_row(self, want: tuple, search: SlotSearch) -> Optional[int]:
+        """First unclaimed row whose key equals `want`, marked as taken.
+
+        `search.used` is what makes a batch safe: two records with the same
+        direction, author, clock and day must fill two DIFFERENT slots, so a
+        row is consumed the moment it is handed out.
+        """
         for row in search.rows:
             rid = int(row.get("id") or 0)
             if rid in search.used:
