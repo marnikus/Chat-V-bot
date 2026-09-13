@@ -161,40 +161,52 @@
 
 /* one button, three semantic colours
    ----------------------------------
+   Every rule here is scoped to `.bot-settings`, and that is load-bearing
+   rather than tidiness. The popup reuses `.layout-menu` for its panel
+   chrome, which brings `.layout-menu button { display:block; width:100% }`
+   with it. That selector is (0,1,1); a bare `.ui-btn` is (0,1,0) and
+   LOSES, so every button in the popup was silently forced full-width and
+   stacked. Reusing another component's panel class means inheriting its
+   element selectors.
    Every control in this popup is the same component: identical height,
    radius, padding, font and focus ring, so a row of buttons reads as one
    family and only COLOUR carries meaning (primary = commits, ghost =
    reversible, danger = destroys). The older .btn-* classes elsewhere in the
    app are deliberately left alone — restyling the whole app was not asked
    for. */
-.ui-btn {
+.bot-settings .ui-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px;
+  gap: 6px; width: auto; height: 28px; padding: 0 12px; border-radius: 6px;
   font-size: var(--font-size-sm); font-weight: 500; line-height: 1;
-  border: 1px solid transparent; cursor: pointer;
+  text-align: center; border: 1px solid transparent; cursor: pointer;
   background: transparent; color: var(--text-primary);
   transition: background .12s ease, border-color .12s ease, opacity .12s ease;
 }
-.ui-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ui-btn:disabled { opacity: .45; cursor: not-allowed; }
-.ui-btn-ico { font-size: 14px; line-height: 1; }
+.bot-settings .ui-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.bot-settings .ui-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bot-settings .ui-btn-ico { font-size: 14px; line-height: 1; }
 
-.ui-btn--primary {
+.bot-settings .ui-btn--primary {
   background: var(--accent); color: var(--text-on-accent);
   border-color: var(--accent);
 }
-.ui-btn--primary:hover:not(:disabled) { filter: brightness(1.1); }
-.ui-btn--ghost {
-  background: var(--bg-card);
-  border-color: var(--border);
+.bot-settings .ui-btn--primary:hover:not(:disabled) { filter: brightness(1.1); }
+.bot-settings .ui-btn--ghost {
+  background: var(--bg-card); border-color: var(--border);
 }
-.ui-btn--ghost:hover:not(:disabled) { background: var(--bg-card-hover); }
-.ui-btn--danger { background: transparent; color: var(--red); }
-.ui-btn--danger:hover:not(:disabled) {
+.bot-settings .ui-btn--ghost:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+.bot-settings .ui-btn--danger { background: transparent; color: var(--red); }
+.bot-settings .ui-btn--danger:hover:not(:disabled) {
   background: var(--red-dim); border-color: var(--red);
 }
-.ui-btn--icon { width: 28px; height: 28px; padding: 0; font-size: 13px; }
-.ui-btn--block { width: 100%; }
+.bot-settings .ui-btn--icon {
+  width: 28px; height: 28px; padding: 0; font-size: 13px;
+}
+.bot-settings .ui-btn--block { width: 100%; }
 
 /* header
    The close button is pinned to the right by making the HEADINGS take all
@@ -242,24 +254,24 @@
   display: flex; flex-direction: column; gap: 4px;
   flex: 1 1 auto; min-height: 0;
 }
-.bot-provider {
+.bot-settings .bot-provider {
   display: flex; flex-direction: column; gap: 2px; padding: 7px 9px;
   cursor: pointer; text-align: left; font: inherit; color: inherit;
   border: 1px solid transparent; border-radius: 6px;
   background: var(--bg-card);
 }
-.bot-provider:hover { background: var(--bg-card-hover); }
+.bot-settings .bot-provider:hover { background: var(--bg-card-hover); }
 /* "viewed" is the row the form is showing — NOT a commitment. It gets the
    strong blue-violet fill and a visible border; "active" (the connection
    prompts really run on) is marked by its tag instead, so the two states
    can never be mistaken for one another. */
-.bot-provider.viewed {
+.bot-settings .bot-provider.viewed {
   background: var(--accent); border-color: var(--accent-hover);
   color: var(--text-on-accent);
 }
 .bot-provider.viewed .bot-provider-tag { color: rgba(255, 255, 255, .85); }
 .bot-provider.error:not(.viewed) { border-color: var(--red); }
-.bot-provider:disabled { opacity: .45; cursor: not-allowed; }
+.bot-settings .bot-provider:disabled { opacity: .45; cursor: not-allowed; }
 .bot-provider-name {
   display: flex; align-items: center; gap: 5px; font-weight: 600;
 }
@@ -304,15 +316,15 @@
   color: var(--text-muted);
 }
 .bot-preset-options { display: flex; flex-wrap: wrap; gap: 5px; }
-.bot-preset-opt {
+.bot-settings .bot-preset-opt {
   padding: 4px 10px; border-radius: 999px; cursor: pointer; font: inherit;
   font-size: var(--font-size-xs);
   border: 1px solid var(--border);
   background: var(--bg-card); color: var(--text-primary);
 }
-.bot-preset-opt:hover { background: var(--bg-card-hover); }
-.bot-preset-opt.chosen { border-color: var(--accent); color: var(--accent); }
-.bot-preset-opt.applied { background: var(--accent); color: var(--text-on-accent); }
+.bot-settings .bot-preset-opt:hover { background: var(--bg-card-hover); }
+.bot-settings .bot-preset-opt.chosen { border-color: var(--accent); color: var(--accent); }
+.bot-settings .bot-preset-opt.applied { background: var(--accent); color: var(--text-on-accent); }
 .bot-preset-desc { margin: 0; font-size: var(--font-size-xs); color: var(--text-muted); }
 .bot-preset-card .bot-hint { margin: 0; }
 

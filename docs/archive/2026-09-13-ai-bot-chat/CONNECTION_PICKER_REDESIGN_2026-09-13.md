@@ -247,3 +247,40 @@ ellipsizes inside its own box instead of shoving the button off the edge.
 `.ui-btn--icon` now states `height: 28px` so it is square and matches the
 shared button height in every context. The key-reveal button, the popup's
 other icon button, gets the same pin.
+
+
+### 6.6 The real cause: inheriting `.layout-menu`'s element selectors
+
+§6.5 fixed the header's flex arithmetic and the cross was still broken,
+because the flex arithmetic was never the cause.
+
+The popup sets `class="bot-settings-backdrop layout-menu"` to reuse the
+Bookmarks panel chrome — position, border, radius, shadow. That also drags
+in, from `sash-layout.css`:
+
+```css
+.layout-menu button { display: block; width: 100%; text-align: left; }
+```
+
+`.layout-menu button` is specificity (0,1,1). A bare `.ui-btn` is (0,1,0)
+and **loses**. So every one of the popup's nine buttons was silently forced
+to `display:block; width:100%`: the ✕ stretched across the whole header,
+leaving the headings a few pixels wide — the title disappeared and the
+subtitle wrapped one word per line, exactly as reported. The footer was
+stacking vertically for the same reason.
+
+The `.ui-btn` component, the connection rows and the preset chips are now
+all scoped under `.bot-settings` (0,2,0), which outranks the inherited rule,
+and the component explicitly restates `width:auto` and
+`display:inline-flex` to undo what it inherits.
+
+**The general lesson, worth more than the fix:** reusing another
+component's class for its *panel* styling also inherits its *element*
+selectors. `.layout-menu` was chosen so this popup would match Bookmarks by
+construction, and the same decision quietly imposed Bookmarks' idea of what
+a button is. A new component nested inside a borrowed one must either scope
+its own rules above the host's element selectors, or not borrow the class.
+
+A test now computes specificity directly and fails if any `.ui-btn`,
+`.bot-provider` or `.bot-preset-opt` rule scores at or below
+`.layout-menu button`.
