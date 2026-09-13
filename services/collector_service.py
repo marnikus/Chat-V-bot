@@ -18,7 +18,6 @@ it, so the archive stays complete while runs keep priority on the socket.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -34,7 +33,8 @@ from services.collector_partner import PartnerMemory
 from services.collector_push import PushPath
 from services.collector_report import Reporter
 from services.collector_settings import TuningKnobs
-from services.collector_states import CollectorState, DEFAULTS
+from services.collector_states import (CollectorState, DEFAULTS,
+                                       init_run_counters)
 from stores.history_repo import HistoryRepo
 
 log = logging.getLogger("chatbot")
@@ -73,32 +73,9 @@ class Collector(QObject):
         self.configure(**(settings or {}))
         self.now = datetime.now
 
-        self._state = CollectorState.DISCONNECTED
-        self._text = ""
-        self._nick = ""
-        self._verified = False      # the two-step gate passed for _nick
-        self._added = 0
-        self._total = 0
-        self._error = ""
-        self._warning = ""
-        self._agent = 0
-        self._self_heals = 0
-        self._throttled = False
-        self._paused = False
-        self._running = True
-        self._probe_penalty = 1.0
-        self._last_emitted: tuple = ()
-        self._stop_event: Optional[asyncio.Event] = None
-        self._busy = False
-        self._force_backfill = False
-        self._backfill_pending = False
-        self._last_probe: dict = {}
-        self._last_sync_reason = ""
-        self._last_sync_added = 0
-        self._last_sync_count = 0
-        self._last_media_repaired = 0
-        self._last_media_requeued = 0
-        self._detected_my_nick = ""
+        # Per-run counters: the states module owns the fresh-value recipe
+        # (RULE 16 §16.5: this class must not grow another method).
+        init_run_counters(self)
 
     @property
     def my_nick(self) -> str:

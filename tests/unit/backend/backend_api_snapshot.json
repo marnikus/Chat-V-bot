@@ -2705,10 +2705,26 @@
   "backend.message_injector": {
    "classes": {},
    "functions": {
-    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool",
     "type_message": "(cdp: backend.cdp_client.CDPClient, text: str, typing_speed_ms: int = 30, report: Optional[Callable] = None) -> bool",
     "type_search": "(cdp: backend.cdp_client.CDPClient, text: str, report: Optional[Callable] = None) -> bool"
    },
+   "values": {}
+  },
+  "backend.message_injector_field": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.message_injector_send": {
+   "classes": {},
+   "functions": {
+    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool"
+   },
+   "values": {}
+  },
+  "backend.message_injector_type": {
+   "classes": {},
+   "functions": {},
    "values": {}
   },
   "backend.person_filter": {

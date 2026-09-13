@@ -160,14 +160,45 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # splitting the imports to break the span is exactly the cosmetic
 # span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
 # situation as the F1 pair below and the two F2 pairs above.
+#
+# ── Round G step G3 (flow family split, injector family split) ──────
+#
+# MOVED — ('backend/media_handler.py', 'backend/message_injector.py') is
+# now ('backend/media_handler.py', 'backend/message_injector_field.py'),
+# span 7 at media_handler.py:118 and message_injector_field.py:68. The
+# cloned content is the byte-identical `_rep` reporter helper (the
+# report-callback with the logging fallback), which the injector split
+# moved into the field module verbatim. The debt is unchanged in kind and
+# count — media_handler still carries its own copy — so the baseline key
+# follows the move instead of pretending the debt dissolved. Deduping
+# `_rep` into one shared reporter module is a real refactor beyond this
+# structural step; recorded as Round G backlog (plan §4, G7).
+#
+# ADDED — ('services/db_deletion_flow_remove.py',
+# 'services/db_deletion_scan.py'), span 7 at flow_remove.py:10 and
+# scan.py:13: the deletion family's standard header (`from __future__` /
+# asyncio / logging / os / `from services import db_deletion` /
+# db_media_scan / the module `log`). No logic is copied. Every name is
+# genuinely used in flow_remove.py: asyncio for the three CancelledError
+# re-raises, logging for the three log.debug failure lines, os throughout
+# the unlink/prune phases, db_deletion for canonical /
+# build_deletion_inventory / prune_empty_dirs / is_within,
+# DB_GROUP_SUFFIXES in _remove_database_group, scan_world_media in
+# _rescan_keep. vulture at confidence 90 reports nothing in the file, so
+# there is no unused import whose removal would dissolve the window
+# honestly. Tried and rejected: reordering or splitting the imports to
+# break the span is the cosmetic span-shrinking §18.5 forbids and would
+# reintroduce C0411. Same situation as the F1 pair
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py').
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("backend/media_handler.py", "backend/message_injector.py"),
+    ("backend/media_handler.py", "backend/message_injector_field.py"),
     ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
+    ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),

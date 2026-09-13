@@ -113,9 +113,11 @@ class TestCollectorDecomposition(unittest.TestCase):
           * methods and properties (`host._log`, `host.configure`,
             `host.my_nick`) live on the class;
           * plain state (`host._nick`, `host.repo`, `host._settings`) is
-            assigned in `__init__`, so it exists on the INSTANCE and never on
-            the class — which is exactly why F2 left all of it on the
-            aggregate instead of moving it into the collaborators.
+            assigned in `__init__` — directly or, since Round G3, through
+            the `init_run_counters` helper `__init__` calls — so it exists
+            on the INSTANCE and never on the class, which is exactly why F2
+            left all of it on the aggregate instead of moving it into the
+            collaborators.
         """
         path = os.path.join(ROOT, "services", "collector_tick.py")
         with open(path, encoding="utf-8") as fh:
@@ -147,6 +149,38 @@ class TestCollectorDecomposition(unittest.TestCase):
                     and node.value.id == "self" and isinstance(node.ctx,
                                                               ast.Store)):
                 assigned.add(node.attr)
+
+        # Round G3 accommodation: the constructor's 26-assignment counter
+        # block now lives in collector_states.init_run_counters(host), which
+        # __init__ calls with self (RULE 16 §16.5 — the 40-method class must
+        # not grow, the constructor must fit the LOC budget). Follow that
+        # ONE delegation: only when the class actually calls the helper with
+        # self do the attributes it stores on its parameter count as
+        # assigned. Remove the call and the tripwire fires again — the
+        # invariant (every host.<name> collector_tick.py uses must resolve
+        # at runtime) is unchanged.
+        calls_helper = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "init_run_counters"
+            and any(isinstance(a, ast.Name) and a.id == "self"
+                    for a in node.args)
+            for node in ast.walk(klass))
+        if calls_helper:
+            spath = os.path.join(ROOT, "services", "collector_states.py")
+            with open(spath, encoding="utf-8") as fh:
+                stree = ast.parse(fh.read())
+            helper = next((n for n in stree.body
+                           if isinstance(n, ast.FunctionDef)
+                           and n.name == "init_run_counters"), None)
+            if helper is not None and helper.args.args:
+                param = helper.args.args[0].arg
+                for node in ast.walk(helper):
+                    if (isinstance(node, ast.Attribute)
+                            and isinstance(node.value, ast.Name)
+                            and node.value.id == param
+                            and isinstance(node.ctx, ast.Store)):
+                        assigned.add(node.attr)
 
         for name in sorted(wanted):
             with self.subTest(host=name):

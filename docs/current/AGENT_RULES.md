@@ -450,10 +450,10 @@ params or method count of a legacy offender, and must not add methods to a class
 already over 15 without netting down. Touch a hotspot only with tests that lock
 current behaviour first.
 
-Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
-`Collector`, `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
+Landmines (need a design doc before "quickly fixing CC"): `Collector` (216/40,
+over both axes), `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
 `stores/label_state.py`, `backend/history_query.py`, `services/db_lifecycle.py`,
-`backend/tab_matcher.py`, `actions/wait_page.py`.
+`backend/tab_matcher.py`, `actions/wait_page.py` — `ScrollParser` came off in G2.
 
 ### 16.6 Agent workflow (implementation process)
 
@@ -579,17 +579,16 @@ reference implementation of that count is the AST walker in
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13: **171 files, median 136, 7 still over 500**. Five of the
-  seven are `backend/` files the frozen AREA D snapshot forbids splitting; the
-  reason, and the decision it needs, are in
-  [`ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
-  §2 and §7. Of the other two, `bridge/history_bridge.py` carries step F4's §18.5
-  note naming its Qt slot contract, and `services/db_deletion_flow.py` sits inside
-  the F1 family — recorded as its next candidate rather than given a note, because
-  §18.5 wants a constraint named and only scope applies; the same reasoning parks
-  `services/collector_tick.py` inside the F2 family. How steps F1–F3 produced the
-  three families, recorded against every number they aimed at:
-  [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
+  files move. 2026-09-13, after Rounds G2/G3: **186 files, median 134, 4 still
+  over 500**: `backend/history_query.py` (603), `bridge/history_bridge.py` (544,
+  whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
+  (534), `backend/config_manager.py` (509) — all four scheduled backlog (plan
+  §4, step G7). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
+  AREA-D freeze protecting three of the old seven; G2/G3 then split the two
+  worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
+  facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →
+  seam + 3): [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
+  F1–F3 family history: [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
   §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
@@ -611,11 +610,12 @@ reference implementation of that count is the AST walker in
   layer while importing none of each other — eight modules, not one family.
 * `stores/` is therefore 37 files counting as **15** modules (`history_*`,
   `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
-  aggregate/collaborator pairs, eight single-domain stores). Its sub-package remedy
-  is closed by contract rather than effort — AREA B's baseline keys are dotted
-  module paths, so moving `stores/history_*` into `stores/history/` breaks plan
-  §7.3 rule 1 — and merging is closed because it undoes the AREA B2 splits and
-  lands outside §18.2's band. So count families: `tools/metrics/stores_modules.py`
+  aggregate/collaborator pairs, eight single-domain stores). The family layout
+  stands on its own merits, not on a freeze: the AREA-B dotted-key contract that
+  once forbade the sub-package remedy was lifted by the owner ruling of
+  2026-09-13 (Round G design §1c), and moving or merging anyway would rewrite
+  37 import paths for no cohesion gain, outside §18.2's band. So count
+  families: `tools/metrics/stores_modules.py`
   measures and ratchets that count against the import graph, and a new loose file
   fails the gate until someone says where it belongs;
   `test_stores_module_families.py` enforces it in the suite. Why, with the merge

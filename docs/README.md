@@ -30,7 +30,7 @@ docs/
     ├── 2026-09-12-db-undo-restore-port/  ← porting it here
     ├── 2026-09-12-round-f-size-tail/ ← Round F: the size tail + the two god classes
     ├── 2026-09-13-round-f/           ← Round F's F5 parameter-object step
-    └── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the WriteTurn union fix (newest)
+    └── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the executed steps G1–G3 (newest)
 ```
 
 Also in the repo, not under `docs/`:

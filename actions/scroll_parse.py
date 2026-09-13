@@ -32,12 +32,87 @@ from backend.scroll_parser import CollectResult, ScrollOptions, ScrollParser
 log = logging.getLogger("chatbot")
 
 
+def _max0(value) -> int:
+    """Clamp a stored knob to a non-negative int."""
+    return max(0, int(value))
+
+
+def _tri(fallback: str):
+    """Caster for the tri-state filter rules ("any" | "yes" | "no")."""
+    return lambda value: normalize(value, fallback)
+
+
+#: The 18 knob parameters of ScrollParse.__init__ are consumed BY NAME
+#: through its locals() snapshot, which pylint cannot see — hence the
+#: targeted unused-argument disable on the def line. The signature itself
+#: is the RULE 3 wire format (old presets call it by keyword) and must not
+#: change; the byte-identical block golden and the preset round-trip tests
+#: pin that the table cannot silently drop or reorder a knob.
+#: Every knob __init__ stores, name → caster, in the ORIGINAL assignment
+#: order — the insertion order is wire-visible (to_dict/preset round-trip,
+#: pinned byte-for-byte by tests/unit/actions/block_wire_snapshot.json).
+#: A None caster assigns the parameter unchanged: the three selector
+#: strings were never cast, and casting them would rewrite a preset's
+#: null into "None".
+_KNOB_CASTS = (
+    ("max_scrolls", int),
+    ("scroll_pause_ms", int),
+    ("scroll_delta_y", int),
+    ("viewport_selector", None),
+    ("load_timeout_ms", int),
+    ("stall_threshold", int),
+    ("min_new_users", _max0),
+    ("person_selector", None),
+    ("nick_selector", None),
+    ("highlight_enabled", bool),
+    ("highlight_ms", _max0),
+    ("confirm_pause_ms", _max0),
+    # Destroy stored records for people confirmed NOT to pass the filter,
+    # so a re-run can never resurrect them.
+    ("purge_rejected", bool),
+    # Scroll-only / seek mode: never add new people; instead scroll the
+    # page hunting for someone already in the list who is not yet
+    # messaged. Falls back to normal collection when nobody is waiting.
+    ("scroll_only", bool),
+    # Tri-state filter rules ("any" | "yes" | "no") — stored as plain
+    # block params so they round-trip through the preset machinery.
+    ("filter_female", _tri(YES)),
+    ("filter_registered", _tri(NO)),
+    ("filter_guest", _tri(YES)),
+    ("filter_anonymous", _tri(NO)),
+)
+
+#: Retired settings. Accepted so old presets still load, then dropped so
+#: they stop being written back by to_dict().
+_RETIRED_KNOBS = ("use_panel_filters", "skip_if_backlog", "backlog_threshold")
+
+
 class ScrollParse(BaseAction):
     block_id = "SCROLL_PARSE"
     name = "Scroll & Parse Users"
     icon = "📜"
 
-    def __init__(self, max_scrolls: int = 50, scroll_pause_ms: int = 800,
+    # Static analysis only — __init__ assigns all 18 via the _KNOB_CASTS loop.
+    max_scrolls: int
+    scroll_pause_ms: int
+    scroll_delta_y: int
+    viewport_selector: str
+    load_timeout_ms: int
+    stall_threshold: int
+    min_new_users: int
+    person_selector: str
+    nick_selector: str
+    highlight_enabled: bool
+    highlight_ms: int
+    confirm_pause_ms: int
+    purge_rejected: bool
+    scroll_only: bool
+    filter_female: str
+    filter_registered: str
+    filter_guest: str
+    filter_anonymous: str
+
+    def __init__(self, max_scrolls: int = 50, scroll_pause_ms: int = 800,  # pylint: disable=unused-argument
                  scroll_delta_y: int = 300,
                  viewport_selector: str =
                  "cdk-virtual-scroll-viewport.users-list-viewport",
@@ -53,37 +128,17 @@ class ScrollParse(BaseAction):
                  filter_female: str = YES, filter_registered: str = NO,
                  filter_guest: str = YES, filter_anonymous: str = NO,
                  pre_delay_ms: int = 300, **kw):
-        # Retired settings. Accepted so old presets still load, then dropped
-        # so they stop being written back by to_dict().
-        for dead in ("use_panel_filters", "skip_if_backlog",
-                     "backlog_threshold"):
+        for dead in _RETIRED_KNOBS:
             kw.pop(dead, None)
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)
-        self.max_scrolls = int(max_scrolls)
-        self.scroll_pause_ms = int(scroll_pause_ms)
-        self.scroll_delta_y = int(scroll_delta_y)
-        self.viewport_selector = viewport_selector
-        self.load_timeout_ms = int(load_timeout_ms)
-        self.stall_threshold = int(stall_threshold)
-        self.min_new_users = max(0, int(min_new_users))
-        self.person_selector = person_selector
-        self.nick_selector = nick_selector
-        self.highlight_enabled = bool(highlight_enabled)
-        self.highlight_ms = max(0, int(highlight_ms))
-        self.confirm_pause_ms = max(0, int(confirm_pause_ms))
-        # Destroy stored records for people confirmed NOT to pass the filter,
-        # so a re-run can never resurrect them.
-        self.purge_rejected = bool(purge_rejected)
-        # Scroll-only / seek mode: never add new people; instead scroll the
-        # page hunting for someone already in the list who is not yet
-        # messaged. Falls back to normal collection when nobody is waiting.
-        self.scroll_only = bool(scroll_only)
-        # Tri-state filter rules ("any" | "yes" | "no") — stored as plain block
-        # params so they round-trip through the preset machinery.
-        self.filter_female = normalize(filter_female, YES)
-        self.filter_registered = normalize(filter_registered, NO)
-        self.filter_guest = normalize(filter_guest, YES)
-        self.filter_anonymous = normalize(filter_anonymous, NO)
+        # One locals() snapshot, then the table: the same names, the same
+        # casts and the same attribute-insertion order as the 18 literal
+        # assignments this replaces (each knob's "why" comment lives on its
+        # table row now).
+        values = locals()
+        for name, cast in _KNOB_CASTS:
+            value = values[name]
+            setattr(self, name, value if cast is None else cast(value))
         #: last pipeline result, read by the engine to build its queue
         self.last_result: Optional[CollectResult] = None
 
