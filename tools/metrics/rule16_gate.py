@@ -66,7 +66,7 @@ RATCHET = {
     # at the lower number as the ratchet requires. It may shrink again; it may
     # not grow back.
     ("backend/history_query/query.py", "HistoryQuery"): {"loc": 313, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 215, "methods": 22},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is
