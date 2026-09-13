@@ -28,12 +28,14 @@ carried in ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md §8.11.8:
   nothing writes such an entry. A *legacy* entry — one persisted in a world's
   `undo_history` table before `db_bridge` grew its `if op != "delete"` guard —
   does the opposite and restores the file from its backup. Both are true today.
-* **Success announced from the intent.** `_apply_db_command` returns `True` and
-  spawns the work, so "database restored" is logged before the op runs and even
-  when it then discovers there is nothing to restore. `_log_command` suppresses
-  exactly that line for `archive` because announcing the intent is what let a
-  locked database keep a person deleted while the log said "archive restored"
-  (bug 2026-09-11, SYSTEM_OF_RECORD I-18). `dbconn` never got the same fix.
+* **Success announced from the outcome, not the intent.** `_apply_db_command`
+  still returns `True` and spawns the work — the timeline moves at once — but
+  the "database restored" line now comes from `services.undo_db._announce`,
+  built from the DbManager's own result, and `undo_apply._log_command` skips
+  `dbconn` exactly as it already skipped `archive`. Announcing the intent is
+  what let a locked database keep a person deleted while the log said "archive
+  restored" (bug 2026-09-11, SYSTEM_OF_RECORD I-18); dbconn had the same shape,
+  and these tests lock the corrected ordering.
 
 Run with:  python3 tests/integration/services/test_services_undo_gaps.py
 """
@@ -50,6 +52,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
 
+import services.undo_apply as undo_apply                  # noqa: E402
 import services.undo_db as undo_db                        # noqa: E402
 from backend.config_manager import ConfigManager          # noqa: E402
 from core.events import (DbChanged, EventBus, LogMessage,  # noqa: E402
@@ -416,36 +419,151 @@ class TestHowADeleteEntryCanExist(DbConnCase):
         self.assertEqual(self.dbs.calls, [("delete", path)])
         self.assertEqual(self.restarts, ["delete"])
 
-    async def test_success_is_announced_before_the_work_runs(self):
-        """The archive bug's shape, still present for dbconn — locked, not fixed.
+# ═════════════════════════════════════════════════════════════════
+# the outcome announcement — SYSTEM_OF_RECORD I-21
+# ═════════════════════════════════════════════════════════════════
+class TestTheOutcomeAnnouncement(DbConnCase):
+    """`dbconn` reports what the DbManager returned, never what was intended.
 
-        `_apply_db_command` answers from the INTENT (`return True` after
-        spawning), so `_log_command` writes "↩ Undo — database restored"
-        synchronously and the op runs afterwards. `_log_command` suppresses
-        exactly that line for `archive` — "archive ones report themselves
-        later, with the database state they actually produced" — because
-        announcing the intent is what let a locked database keep a person
-        deleted while the log said "archive restored" (bug 2026-09-11,
-        SYSTEM_OF_RECORD I-18). `dbconn` never got the same fix.
+    These are the tests that changed when the intent-announcement was fixed
+    (§8.13): the line used to be written by `undo_apply._log_command` the moment
+    the task was spawned, which is the archive bug of 2026-09-11 (I-18) wearing
+    a different entry kind.
+    """
 
-        Worst case, locked here: an entry with no backup announces a restore and
-        then admits there is nothing to restore.
+    async def test_success_is_announced_only_after_the_op_succeeded(self):
+        """The archive fix, now applied to dbconn too.
+
+        `_apply_db_command` still answers from the INTENT (`return True` after
+        spawning) — the timeline moves at once — but the "↩ Undo — database
+        restored" line now comes from `services.undo_db._announce` inside the
+        task, built from the DbManager's own result, the way `archive` reports
+        itself from the rows it read back. `_log_command` skips both kinds,
+        because announcing the intent is what let a locked database keep a
+        person deleted while the log said "archive restored" (bug 2026-09-11,
+        SYSTEM_OF_RECORD I-18).
+        """
+        backup = self.real("work.db.bak")
+        self.undo.set_history([self.entry(op="delete",
+                                          path=self.absent("work.db"),
+                                          backup=backup)], 0)
+        self.assertEqual(self.infos(), [], "nothing is logged before undo()")
+        result = self.undo.undo()
+        self.assertTrue(result.is_ok, "the timeline moved; the op has not run")
+        self.assertEqual(self.infos(), [],
+                         "and nothing is announced before there is a result")
+        await wait_for(self.db_changed)
+        self.assertTrue(any("↩ Undo — database restored" in m
+                            for m in self.infos()),
+                        f"the verified outcome is what gets announced: "
+                        f"{self.infos()}")
+        self.assertEqual(self.dbs.calls,
+                         [("restore_backup", backup, self.absent("work.db"))])
+
+    async def test_a_delete_with_no_backup_never_claims_a_restore(self):
+        """The worst thing the old ordering could say, now unsayable.
+
+        A legacy delete whose backup is gone warns that deletions are permanent
+        and touches nothing — and no line tells the user a database was
+        restored, which is exactly what the intent-announcement used to do.
         """
         self.undo.set_history([self.entry(op="delete",
                                           path=self.absent("work.db"),
                                           backup="")], 0)
         result = self.undo.undo()
-        self.assertTrue(result.is_ok, "the timeline moved; the op has not run")
-        self.assertTrue(any("database restored" in m for m in self.infos()),
-                        f"the intent is announced before the op runs: "
-                        f"{self.infos()}")
-        self.assertEqual(self.warnings(), [],
-                         "no await yet, so the spawned op cannot have run")
+        self.assertTrue(result.is_ok, "the timeline still moves")
         await wait_for(self.warnings())
         self.assertIn("permanent", self.warnings()[0])
+        self.assertEqual([m for m in self.infos() if "restored" in m], [],
+                         "a permanent delete must not announce a restore")
         self.assertEqual(self.dbs.calls, [], "nothing was restored")
         self.assertEqual(self.db_changed, [],
                          "and nothing was announced on the db channel either")
+
+    async def test_a_failed_op_reports_the_error_once_and_no_success(self):
+        """`emit_db_change` already turns `result["error"]` into a warning, and
+        every `{"ok": False}` the DbManager returns carries one (12 of 12 in
+        `services/db_lifecycle.py`) — so `_announce` stays quiet instead of
+        saying the same thing twice."""
+        self.dbs.result = {"ok": False, "error": "the file is in use"}
+        self.undo._apply_db_command({"op": "delete",
+                                     "path": self.real("work.db")}, True)
+        await wait_for(self.db_changed)
+        self.assertEqual([m for m in self.infos()
+                          if "restored" in m or "re-deleted" in m], [],
+                         "no success line for a refusal")
+        self.assertTrue(any("the file is in use" in m for m in self.warnings()),
+                        f"the error is reported exactly once: {self.warnings()}")
+
+    async def test_redo_of_a_delete_announces_the_re_delete_too(self):
+        """The forward direction gets the same treatment: the line is built
+        from the result, and reads "↪ Redo" because that is what happened."""
+        target = self.real("work.db")
+        self.dbs.result = {"ok": True, "path": target}
+        self.undo._apply_db_command({"op": "delete", "path": target}, True)
+        await wait_for(self.db_changed)
+        self.assertTrue(any(m.startswith("↪ Redo — database restored")
+                            for m in self.infos()),
+                        f"the redo says redo: {self.infos()}")
+
+    async def test_a_switch_op_announces_from_its_result_too(self):
+        """The create/load/clean branch of `_apply_db_command` gets the same
+        treatment: the line comes after the DbManager answered, and the world
+        really did move."""
+        old = self.real("old.db")
+        self.undo._apply_db_command({"op": "load", "path": self.absent("new.db"),
+                                     "before_path": old}, False)
+        await wait_for(self.db_changed)
+        self.assertTrue(any("↩ Undo — database restored" in m
+                            for m in self.infos()),
+                        f"the switch branch announces as well: {self.infos()}")
+        self.assertEqual(self.dbs.calls, [("load", old, False)],
+                         "it went back to the world that was left")
+        self.assertEqual(self.restarts, ["load"], "and the world restarted")
+
+
+# ═════════════════════════════════════════════════════════════════
+# _log_command — which kinds are left to announce themselves
+# ═════════════════════════════════════════════════════════════════
+class TestLogCommandSkipsTheSelfReportingKinds(DbConnCase):
+    """The suppression half of I-21 — and the half of I-18 nothing had pinned.
+
+    `_log_command` announces every command kind EXCEPT the two that report
+    themselves from their own outcome. Dropping either name silently restores
+    the 2026-09-11 bug for that kind, and the negative check for this step
+    found that removing `archive` from the tuple failed no test at all.
+    """
+
+    def test_archive_and_dbconn_say_nothing_here(self):
+        """Neither self-reporting kind may be announced from the intent.
+
+        Removing `archive` from the tuple is what the 2026-09-11 bug was, and
+        until this step no test in the repo failed when it was removed.
+        """
+        for kind in ("archive", "dbconn"):
+            self.logs.clear()
+            undo_apply._log_command(self.undo, {"kind": kind}, False)
+            self.assertEqual(self.logs, [],
+                             f"{kind} reports itself, from its outcome")
+
+    def test_every_other_command_kind_is_announced_from_its_label(self):
+        """Skipping two kinds must not have silenced the announcement itself.
+
+        `labels` is applied synchronously — `_apply_labels_command` restores the
+        snapshot, emits and returns — so for it the intent *is* the outcome.
+        `people` is not: its branch spawns `people_service.apply`, which logs
+        its own verified line ("↩ People list restored — N person(s)") or an
+        error, so the intent line written here is a second, earlier claim. That
+        is the dbconn shape again, recorded as open in §8.13.3 rather than fixed
+        in this step; these assertions pin today's wording, which is exactly
+        what such a fix would have to change on purpose.
+        """
+        undo_apply._log_command(self.undo, {"kind": "labels"}, False)
+        undo_apply._log_command(self.undo, {"kind": "people"}, True)
+        self.assertEqual(self.infos(), ["↩ Undo — labels restored",
+                                        "↪ Redo — people list restored"],
+                         "the label table still drives the wording, and the "
+                         "arrow still follows the direction")
 
 
 if __name__ == "__main__":

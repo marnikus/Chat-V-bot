@@ -1163,7 +1163,9 @@ without someone reading the reason.
    is permanent. The fix is small — suppress `dbconn` in `_log_command` and let
    `emit_db_change` report the outcome, as archive does — but it changes
    user-visible log text, so it is named here instead of being slipped into a
-   test commit.
+   test commit. **RESOLVED — the owner chose it as the next step; see §8.13.**
+   The line is suppressed for `dbconn` and re-said from the DbManager's result,
+   which also retired the test that pinned the wrong behaviour.
 
 #### 8.12.5 RULE 16 / RULE 18 notes for the step
 
@@ -1198,3 +1200,203 @@ without someone reading the reason.
     `rewind_after_failure`'s non-dict early return (149), `_apply_entry`'s
     command-kind branch (164-165) and people branch (170-173), and `redo`'s
     "cannot re-apply" `Err` (226).
+
+---
+
+## §8.13 F3e — the `dbconn` intent log: I-18's missing half (2026-09-13)
+
+§8.12.4 named two things needing the owner. The owner chose the second, so this
+step is that fix and nothing else: no product logic moved, no signature changed,
+and no entry kind gained or lost a behaviour other than *when its log line is
+written*.
+
+### 8.13.1 What was wrong
+
+`undo()` and `redo()` both call `_log_command(entry, forward)` and only then
+apply the entry. Applying a `dbconn` entry means spawning a task and returning
+`True`, so the line was written from the **intent** and survived every outcome:
+
+| what the op actually did | what the user read |
+|---|---|
+| restored the world | `↩ Undo — database restored` — correct, by luck |
+| refused (`ok: False`) | `↩ Undo — database restored` **and** `⚠ <error>` |
+| delete, backup gone | `↩ Undo — database restored` **and** `⚠ Database deletions are permanent` |
+
+The last row is the archive bug of 2026-09-11 wearing a different entry kind: a
+line promising the opposite of what happened, written before anything happened.
+I-18 fixed it for `archive` by making `_log_command` skip that kind and letting
+the task report what it read back. `dbconn` kept the old ordering.
+
+### 8.13.2 The fix
+
+1. **`services/undo_apply.py::_log_command`** — `if kind == "archive"` becomes
+   `if kind in ("archive", "dbconn")`, and the docstring now names both halves
+   and says where each reports itself.
+2. **`services/undo_db.py::_announce(host, forward, result)`** — a new
+   module-level function, called from both of `_apply_db_command`'s branches
+   immediately before `emit_db_change`:
+
+   ```python
+   if not result.get("ok"):
+       return
+   host._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
+             + host.UNDO_LABELS.get("dbconn", "database restored"), "info")
+   ```
+
+   Same words, same label table, same level, same arrow logic as the line it
+   replaces, so no user-visible vocabulary changed — only *whether and when* the
+   line appears. `UNDO_LABELS` stays on the facade, which matters because
+   `bridge/router.py:151` copies it by attribute name.
+
+Two decisions worth recording, both reached by reading rather than assuming:
+
+* **Not folded into `emit_db_change`.** That helper is shared with
+  `bridge/db_bridge.py`'s live-action path, which logs its own success line
+  naming the world; announcing inside it would double-log every
+  create/load/clean the user does by hand.
+* **Failures stay silent here.** `emit_db_change` already emits
+  `LogMessage("⚠ " + error, "warn")`, and every `{"ok": False}` the DbManager
+  returns carries an `"error"` key — **12 of 12** in `services/db_lifecycle.py`,
+  counted with grep rather than trusted, because §8.11.8 is what a
+  plausible-sounding guess costs. A second line would only repeat the warning.
+
+### 8.13.3 What deliberately did not change
+
+* **`_apply_db_command` still answers from the intent.** It returns `True` once
+  the task is spawned, the timeline moves at once, and a refused dbconn op does
+  **not** rewind. That is the asymmetry still standing against `archive`, whose
+  `_refuse` calls `rewind_after_failure` so the entry stays retryable and its
+  "press Ctrl+Z to try again" is true. Copying it would mean passing `entry`
+  into `_apply_db_command` (whose signature is `value, forward`) *and* deciding
+  whether a legacy delete entry deserves to be retryable at all — §8.12.4
+  decision 1's territory, not a log fix. **Named, not done.** For the same
+  reason `_announce` offers no retry hint: with the pointer already moved,
+  Ctrl+Z would undo the *previous* entry, so "press Ctrl+Z" would be a second
+  lie.
+* **Decision 1, the D4 tension, is still open.** Undoing a legacy delete entry
+  still restores the deleted world from its backup. This step only stops the log
+  claiming that before it happens.
+* **`people` announces from the intent too — found while writing the test that
+  pins the surviving announcement.** `_apply_entry`'s people branch does not
+  restore anything itself; it spawns `people_service.apply`, which logs its own
+  *verified* outcome — `"↩ People list restored — {count} person(s)"` built from
+  what the store reports landed, or `"❌ People-list restore failed: {exc}"` at
+  error level. So undoing a people entry writes **two** lines: the intent line
+  from `_log_command` and, later, the verified one — and when the restore fails
+  the intent line still claims success ahead of the error. That is the dbconn
+  shape a third time. It is *less* harmful than dbconn's was, because a truthful
+  line always follows it, but it is the same wart, and fixing it means changing
+  user-visible log text for a kind that — unlike dbconn — already tells the
+  truth a moment later. **Not done
+  here**: the owner chose the dbconn line, and this one needs its own sign-off.
+  `labels` is the only command kind left that is genuinely synchronous
+  (`_apply_labels_command` restores, emits and returns), so its intent line is
+  accurate. `TestLogCommandSkipsTheSelfReportingKinds` pins today's wording for
+  both, which is what a future fix would have to change deliberately.
+
+### 8.13.4 RULE 16 / RULE 18
+
+* `_announce` — 4 statements, 3 params, cognitive 1, nesting 1. Module-level
+  rather than a method on purpose: `_apply_db_command` is an offender sitting at
+  cognitive **14 of 15** and LOC **25 of 30**, so an inline
+  `if result.get("ok"): host._log(...)` in each of its two branches would have
+  spent its last point of headroom on a log line. As written the offender gains
+  2 LOC (27/30) and 0 cognitive, and the gate reports no breach.
+* `_log_command` — one membership test replaces one equality test; statement
+  count and cognitive unchanged. Its docstring grew, and §8.11's docstring trap
+  was checked rather than assumed: the function is still 4 statements, and
+  §16.5 counts code lines, not prose.
+* `rule16_gate.py --with-clones` — **rc=0**, `breaches: []`, `not_checked: []`,
+  `clone scan: 0 new group(s), 0 stale baseline entr(ies)`. Offenders unchanged
+  at 10 function rows + 1 class row, every one of them in
+  `backend/history_query.py` or `bridge/history_bridge.py` — F4's targets — and
+  none in the `undo_*` family. The shared log-format string between `_announce`
+  and `_log_command` did not register as a clone.
+* **RULE 18** — `services/undo_db.py` 101 → **124** lines, still under 150,
+  which §18.2 calls "normal and good for leaves"; `services/undo_apply.py`
+  241 → **247**, inside the 150–300 band. The test file 452 → **554** gets no
+  `ideal-size:` note, per §18.5 and the reasoning already recorded in §8.12.5.
+* `vulture --min-confidence 90` is silent on all three touched files. `pylint`
+  emits **nothing at all** for `undo_db.py`, and for `undo_apply.py` only the
+  pre-existing `protected-access` / `missing-function-docstring` messages at
+  lines ≥ 179 (`ApplyCommand`) — none at `_log_command`. No new message type.
+
+### 8.13.5 Tests, including a gap the negative check found
+
+`test_success_is_announced_before_the_work_runs` existed to pin the *wrong*
+behaviour on purpose (§8.12.4). It is gone, replaced by two classes in
+`tests/integration/services/test_services_undo_gaps.py` (22 → **28** tests):
+
+`TestTheOutcomeAnnouncement`
+* `test_success_is_announced_only_after_the_op_succeeded` — `infos()` is empty
+  immediately after `undo()` returns, the line appears only once the task has
+  run, and the `restore_backup` call really happened.
+* `test_a_delete_with_no_backup_never_claims_a_restore` — the worst case from
+  §8.12.4: the permanent-deletion warning is there, no `restored` line, no
+  DbManager call, no `DbChanged`.
+* `test_a_failed_op_reports_the_error_once_and_no_success` — a refusal produces
+  the `emit_db_change` warning and nothing else.
+* `test_redo_of_a_delete_announces_the_re_delete_too` — the forward direction
+  reads `↪ Redo`, so the arrow follows `forward` rather than being hardcoded.
+* `test_a_switch_op_announces_from_its_result_too` — the create/load/clean
+  branch announces as well, and the world restarted.
+
+`TestLogCommandSkipsTheSelfReportingKinds` — **found by the negative check, not
+by the design.** The mutation "`_log_command` drops `archive` instead of
+`dbconn`" survived the entire suite: I-18's suppression had never been pinned by
+any test anywhere. Two tests now hold both names plus the label wording and the
+arrow, so removing either kind from the tuple fails.
+
+### 8.13.6 Negative check
+
+`/home/user/f3e_negative.py` — 8 mutations against the two touched modules,
+**8/8 caught**:
+
+| mutation | caught by |
+|---|---|
+| announce even when `ok` is false | `test_a_failed_op…`, `test_a_delete_with_no_backup…` |
+| arrows swapped (`↩` for redo) | `test_redo_of_a_delete…`, `test_success_is_announced…` |
+| level `info` → `warn` | every test reading `infos()` |
+| label replaced with `"restored"` | the `database restored` assertions |
+| `_log_command` reverted to archive-only | `test_success_is_announced…` |
+| `_log_command` drops archive instead | `TestLogCommandSkipsTheSelfReportingKinds` (new) |
+| delete branch stops announcing | `test_success_is_announced…` |
+| switch branch stops announcing | `test_a_switch_op_announces…` |
+
+The first pass reported 6/8, and both misses are worth more than the clean
+sweep. The archive mutation was a genuine MISS — a real hole in the suite, now
+closed by a test class that would not have been designed without it. The other
+was the harness's own fault: the anchor `            _announce(self._o, …)`
+matched twice, because a 12-space-indented line is a substring of the 16-space
+one; the anchor now carries its preceding line. Same lesson as §8.12 — a
+negative check that reports a clean sweep without ever having been seen to fail
+is not evidence.
+
+### 8.13.7 Verification
+
+* Suite: **2754 passed** (was 2748), 3 skipped, 1 deselected, 1 xfailed,
+  **894 subtests**, 8m04s — no failures, no new warnings.
+* Coverage, product-only (`actions/ app/ backend/ bridge/ core/ services/
+  stores/ ui/`): line **91.69%** (14147/15429), branch **86.82%** (3247/3740).
+  Line is exactly where F3d left it; branch moved 86.84% → 86.82%, i.e. two arcs
+  in a denominator of 3740, and the cause is visible rather than mysterious: the
+  new code adds branch arcs to `undo_apply.py`, whose partial branches were
+  already the family's worst.
+* `services/undo_db.py` — line **100%** (61/61) and branch **100%** (28/28),
+  **0 partial branches**. It was 100% (55/55) after F3d; the six new statements
+  are all covered, so the module did not trade its full coverage for the fix.
+* `services/undo_apply.py` — 87.82% → **89.93%** (125/139), because the new
+  `_log_command` tests exercise both the skip and the announce path for the
+  first time.
+
+### 8.13.8 Records updated
+
+* **SYSTEM_OF_RECORD** — new invariant **I-21** (a world action undone from the
+  timeline reports only what the DbManager returned; a refusal is not restated
+  because `emit_db_change` already warned), and the Undo / redo row's guarantee
+  now names it beside I-18. I-18 itself is untouched: its mechanics — read back,
+  error on refusal, restore the list half, rewind, emit `failed` — are
+  archive's, and dbconn does not claim them.
+* §8.12.4 decision 2 marked **RESOLVED** with a pointer here; decision 1 (the D4
+  tension) remains open and still needs the owner.
+* Archive README — F3e row.

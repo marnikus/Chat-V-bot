@@ -22,6 +22,27 @@ import os
 from services.undo_world import emit_db_change, restart_world
 
 
+def _announce(host, forward: bool, result) -> None:
+    """Say "database restored" — and only once the database really was.
+
+    The dbconn half of the 2026-09-11 fix. `undo_apply._log_command` used to
+    write this line the moment `_apply_db_command` *spawned* its task, so an
+    entry with nothing left to restore — a delete with no backup, which
+    `_db_delete_op` can only warn about — had already announced one. `archive`
+    learned this first and reports itself from the rows it read back; dbconn
+    now does the same, from the DbManager's own result.
+
+    A failed op is deliberately silent here: `emit_db_change` already turns
+    `result["error"]` into a warning, and every `{"ok": False}` the DbManager
+    returns carries one (12 of 12 in `services/db_lifecycle.py`), so a second
+    line would only repeat it.
+    """
+    if not result.get("ok"):
+        return
+    host._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
+              + host.UNDO_LABELS.get("dbconn", "database restored"), "info")
+
+
 class DbCommands:
     """Apply / reverse one DB-connection undo entry."""
 
@@ -87,6 +108,7 @@ class DbCommands:
                     await restart_world(self._o._memory, self._o._archive,
                                         self._o._labels, self._o,
                                         self._o._bus, "delete")
+                _announce(self._o, forward, result)
                 emit_db_change(self._o._bus, "delete", result)
                 return
             result = await self._o._db_switch_op(value, forward)
@@ -96,6 +118,7 @@ class DbCommands:
                     and not result.get("unchanged"):
                 await restart_world(self._o._memory, self._o._archive,
                                     self._o._labels, self._o, self._o._bus, op)
+            _announce(self._o, forward, result)
             emit_db_change(self._o._bus, op, result)
         self._o._timeline_commit.spawn("db command", work())
         return True

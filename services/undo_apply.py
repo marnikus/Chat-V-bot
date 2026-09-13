@@ -87,10 +87,16 @@ def _apply_labels_command(host, value: dict, forward: bool) -> bool:
 
 
 def _log_command(host, entry: dict, forward: bool) -> None:
-    """Announce a command entry; archive ones report themselves later,
-    with the database state they actually produced."""
+    """Announce a command entry — except the two that verify themselves.
+
+    `archive` and `dbconn` report later, from the state the database actually
+    ended up in: `services/undo_archive.py::_report` and
+    `services/undo_db.py::_announce`. Announcing here instead is the bug of
+    2026-09-11 — the timeline moves and the log says "restored" before the work
+    has run, so a refusal reads to the user as a success.
+    """
     kind = entry.get("kind")
-    if kind == "archive":
+    if kind in ("archive", "dbconn"):
         return
     host._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
               + host.UNDO_LABELS.get(kind, kind + " restored"), "info")
