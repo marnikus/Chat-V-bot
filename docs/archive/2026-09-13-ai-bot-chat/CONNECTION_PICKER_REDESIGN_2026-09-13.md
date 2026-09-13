@@ -169,3 +169,61 @@ the matching test failed each time, then restoring.
 Not verified: pixel rendering. QtWebEngine cannot start in this sandbox
 (`QRhiGles2: Failed to create context`, no Vulkan), so the CSS is reviewed
 against the real token set in `variables.css` rather than screenshotted.
+
+
+---
+
+## 6. Round 6b — four defects the first pass left
+
+The redesign was right in intent and wrong in four places. Each had a cause
+worth recording.
+
+### 6.1 Clicking a connection closed the popup
+
+The headline behaviour — browsing is not choosing — was implemented in the
+controller and then defeated by the dismiss handler ten lines below it.
+
+The dismiss handler asked, on the bubble phase, "is the clicked node inside
+the popup?". But the list's own delegated handler runs FIRST and re-renders
+the rows, so by the time the question was asked the clicked node had been
+replaced and detached. `closest()` on an orphan walks up to no popup at all,
+the click was judged to be outside, and the popup closed.
+
+The fix is to decide "inside" during the **capture** phase, before any
+handler can redraw, and read that flag on the way back up.
+
+The test suite could not have caught this: the DOM stub's `textContent = ''`
+dropped children without clearing their `parentNode`, so `closest()` kept
+succeeding on detached nodes — the stub was strictly more forgiving than a
+browser. Both that and capture-phase listeners are now modelled, and
+`clickConnection` fires the real three-step path (document capture → element
+handler → document bubble) instead of poking one handler directly.
+
+### 6.2 There was no way to add a connection without activating it
+
+Select does save-then-activate-then-close, which is right for "use this
+one" and useless for "add a second key and carry on". Save is back, as a
+secondary button: it stores and re-renders, and does not activate or close.
+Select remains the only action that closes on confirm.
+
+### 6.3 The popup was cut off
+
+`place()` clamped the horizontal axis and not the vertical: `top` was
+`anchor.bottom + 6` unconditionally. A gear low in the window pushed the
+footer — every confirming action — off the bottom edge. It now clamps both
+axes, flips above the anchor when below will not fit, and pins to the top
+when neither will; the panel is capped at `90vh` so it can never be bigger
+than the space being fitted.
+
+### 6.4 White fields
+
+This app has **no global `input` rule** — every window styles its own fields
+by id or class. A bare `<input>` in a new panel therefore inherits the
+browser default: white. The popup now paints its own with `--bg-input` /
+`--text-primary` / `--border-focus`, the same tokens the composer and label
+editors use, so matching the app is a consequence of sharing the palette.
+
+**Verification.** JS 88 passed (was 82) + 17; Python 3002 with only the known
+pre-existing failure; RULE 16 gate clean; RULE 18 re-checked — controller 310
+code lines, view 184, no function over 20. §6.1 and §6.3 were each proved by
+reverting the fix and watching the new test fail.

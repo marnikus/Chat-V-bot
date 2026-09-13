@@ -42,7 +42,14 @@ function mkEl(tag) {
     get textContent() {
       return el._text + el.children.map((c) => c.textContent).join('');
     },
-    set textContent(v) { el._text = String(v); el.children = []; },
+    set textContent(v) {
+      // the real DOM DETACHES the children it removes; a stub that leaves
+      // them pointing at their old parent makes closest() keep succeeding
+      // on a node that is no longer in the document, which is exactly the
+      // bug that shipped (a re-rendered row looked "inside" the popup).
+      el.children.forEach((c) => { c.parentNode = null; });
+      el._text = String(v); el.children = [];
+    },
     set innerHTML(v) { throw new Error('markup assignment is forbidden'); },
     appendChild(c) { el.children.push(c); c.parentNode = el; return c; },
     removeChild(c) {
@@ -122,13 +129,21 @@ global.document = {
   // Real, not a no-op: the popups dismiss themselves through a
   // document-level click handler, which a swallowed listener would hide.
   _listeners: {},
-  addEventListener(ev, fn) {
-    (this._listeners[ev] = this._listeners[ev] || []).push(fn);
+  _capture: {},
+  // Capture listeners are a separate list that runs FIRST, as the real
+  // event model does. A stub that ignored the third argument would run a
+  // capture handler in bubble order and silently defeat the very trick
+  // used to judge "inside the popup" before the DOM is redrawn.
+  addEventListener(ev, fn, capture) {
+    const bag = capture ? this._capture : this._listeners;
+    (bag[ev] = bag[ev] || []).push(fn);
   },
   fire(ev, extra) {
-    (this._listeners[ev] || []).forEach((fn) => fn(Object.assign(
+    const event = Object.assign(
       { target: null, preventDefault() {}, stopPropagation() {} },
-      extra || {})));
+      extra || {});
+    (this._capture[ev] || []).forEach((fn) => fn(event));
+    (this._listeners[ev] || []).forEach((fn) => fn(event));
   },
 };
 global.window = global;
@@ -865,10 +880,28 @@ function clickPreset(n) {
   return opt;
 }
 
+/* A real click runs the list's delegated handler AND THEN keeps bubbling
+   to the document's dismiss handler, with the SAME target. Firing only on
+   the list hid a shipped bug: the delegated handler re-renders the rows,
+   so by the time the document handler looks at the target it has been
+   detached and closest('#botSettingsBackdrop') finds nothing — a click on
+   a row was judged a click OUTSIDE the popup, and closed it. */
 function clickConnection(id) {
   const row = findAll($('botProviderList'), '.bot-provider')
     .find((r) => r.dataset.provider === id);
-  $('botProviderList').fire('click', { target: row });
+  clickPath(row, $('botProviderList'));
+}
+
+/* One real click, in the real order: the document's CAPTURE handlers, then
+   the element's own handler, then the document's BUBBLE handlers — all with
+   the same target. Getting this order right is what lets the test see the
+   shipped bug, because the middle step is the one that detaches the row. */
+function clickPath(target, host) {
+  const ev = { target: target };
+  (document._capture.click || []).forEach((fn) => fn(ev));
+  if (host) (host.listeners.click || []).forEach((fn) => fn(
+    Object.assign({ preventDefault() {}, stopPropagation() {} }, ev)));
+  (document._listeners.click || []).forEach((fn) => fn(ev));
 }
 
 t('the ⚙ toggles the popup rather than only opening it', () => {
@@ -896,11 +929,57 @@ t('a click inside does NOT dismiss it', () => {
   ok(BotSettings.isOpen(), 'editing a field must not close the popup');
 });
 
-t('it is anchored under the button, not centred as a modal', () => {
+t('it reuses the Bookmarks panel styling', () => {
   openSettings();
   ok($('botSettingsBackdrop').classList.contains('layout-menu'),
      'the popup must reuse the Bookmarks panel styling');
-  ok(!html.includes('aria-modal="true"'), 'it is a popup, not a modal');
+});
+
+t('every field in the popup is dark, like the rest of the app', () => {
+  /* The reported "white elements". This app has NO global input rule —
+     each window styles its own fields by id or class — so a bare <input>
+     in a new panel inherits the browser default, which is white on a
+     black app. The popup must therefore paint its own. */
+  const css = readUi('css/bot-chat.css');
+  const rule = /\.bot-provider-form input[^{]*\{([^}]*)\}/.exec(css);
+  ok(rule, 'the popup must style its own inputs');
+  ok(/background:\s*var\(--bg-input\)/.test(rule[1]),
+     'fields must use the app input background, not the browser default');
+  ok(/color:\s*var\(--text-primary\)/.test(rule[1]),
+     'typed text must be light, or it is invisible on a dark field');
+});
+
+t('the whole popup stays on screen, however low the button sits', () => {
+  /* The reported bug: anchored at anchor.bottom + 6, a gear near the
+     bottom of the window pushed the footer — Delete, Test, Save, Cancel,
+     Select — off the edge where it could not be clicked. */
+  global.window.innerWidth = 1280;
+  global.window.innerHeight = 800;
+  const panel = $('botSettingsBackdrop');
+  panel.offsetWidth = 760;
+  panel.offsetHeight = 600;
+  const lowGear = {
+    getBoundingClientRect: () => (
+      { left: 1100, right: 1140, top: 760, bottom: 784 }),
+  };
+  BotConnView.place(panel, lowGear);
+  const top = parseInt(panel.style.top, 10);
+  const left = parseInt(panel.style.left, 10);
+  ok(top >= 0, 'the top edge must be on screen');
+  ok(top + 600 <= 800, 'the BOTTOM edge — the buttons — must be on screen');
+  ok(left >= 0 && left + 760 <= 1280, 'both side edges must be on screen');
+});
+
+t('a popup taller than the window is pinned, not hung off the bottom', () => {
+  global.window.innerWidth = 1280;
+  global.window.innerHeight = 500;
+  const panel = $('botSettingsBackdrop');
+  panel.offsetWidth = 760;
+  panel.offsetHeight = 600;          // taller than the 500px window
+  BotConnView.place(panel, {
+    getBoundingClientRect: () => ({ left: 10, right: 50, top: 5, bottom: 29 }),
+  });
+  eq(parseInt(panel.style.top, 10), 8, 'pin to the top and let it scroll');
 });
 
 t('the popup lives OUTSIDE the sash grid, or it is destroyed on boot', () => {
@@ -1068,6 +1147,40 @@ t('viewing a connection shows ITS model and endpoint', () => {
   ok(/generativelanguage|\/v1beta\//.test($('botProviderUrl').value));
   clickConnection('c-grok-cheap');
   eq($('botProviderModel').value, 'grok-2-mini');
+});
+
+t('Save stores the connection and KEEPS the popup open', () => {
+  /* Adding a connection must not force you to activate it. Select is for
+     "use this one"; Save is for "keep this one and carry on editing". */
+  openSettings();
+  BotSettings.addNew();
+  $('botConnTitle').value = 'My second Grok';
+  $('botProviderKey').value = 'xai-fresh-key';
+  const before = calls.length;
+  $('botSettingsSaveBtn').fire('click');
+  const made = calls.slice(before).map((c) => c.name);
+  ok(made.indexOf('bot_save_connection') >= 0, 'Save must save');
+  eq(made.filter((n) => n === 'bot_use_connection').length, 0,
+     'Save must NOT activate the connection');
+  ok(BotSettings.isOpen(), 'Save must not close the popup');
+  eq(lastCall('bot_save_connection').args[1].title, 'My second Grok');
+});
+
+t('Save is offered for a brand-new connection too', () => {
+  openSettings();
+  BotSettings.addNew();
+  ok(!$('botSettingsSaveBtn').disabled,
+     'a new connection needs a way to be stored without selecting it');
+});
+
+t('a saved new connection appears in the list and stays viewed', () => {
+  openSettings();
+  BotSettings.addNew();
+  $('botConnTitle').value = 'Kimi work';
+  $('botProviderKey').value = 'sk-kimi-key';
+  $('botSettingsSaveBtn').fire('click');
+  ok(BotSettings.viewed, 'the new row becomes the viewed one');
+  ok(CONN_STATE.connections.some((c) => c.title === 'Kimi work'));
 });
 
 t('saving sends the viewed connection its own fields', () => {
