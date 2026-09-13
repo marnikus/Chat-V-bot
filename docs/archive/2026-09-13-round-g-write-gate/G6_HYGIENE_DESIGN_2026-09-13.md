@@ -122,13 +122,37 @@ number that goes stale.
 * Step end: full suite with the WebEngine deselect + coverage over the 8 roots
   — floors 91.3028 line / 87.4271 branch (the G5 result) must hold.
 
-## 8. OUTCOMES (filled during/after execution)
+## 8. OUTCOMES (filled 2026-09-13 after execution)
 
-* OUTCOME_NOTES: —
-* OUTCOME_IMPORTS: —
-* OUTCOME_COGNITIVE: —
-* OUTCOME_WARNING: —
-* OUTCOME_RULES: —
-* OUTCOME_DOCS: —
-* OUTCOME_SUITE: —
-* OUTCOME_GATES: —
+* OUTCOME_NOTES: three notes corrected (config_manager 509→507, dom_highlight
+  534→514, history_query 603→601); the other three measured accurate and left
+  untouched. Commit G6.1.
+* OUTCOME_IMPORTS: all four removed; `pylint --enable=W0611` on the three files
+  reports 0 findings; the modules import clean. Commit G6.2.
+* OUTCOME_COGNITIVE: both offenders reduced as designed —
+  `_build_router_class` 17 → 0 (phases: `_register_slots` 9 is the new max in
+  the file), `SettingsStore.get` 17 → under the fail line; `current_audit.py`
+  now lists **zero** functions with cognitive > 15 tree-wide. The router
+  contract tests (including both monkeypatched duplicate-name ValueError pins)
+  and the stores suite: 178 passed / 709 subtests. `dump_public_api.py`:
+  "no removed or changed symbols" — both goldens untouched. Commit G6.3.
+* OUTCOME_WARNING: awaited; the file passes under `-W error::RuntimeWarning`
+  (32 passed) and the full suite's stderr contains zero "never awaited"
+  occurrences. Commit G6.4.
+* OUTCOME_RULES: `wc -l docs/current/AGENT_RULES.md` = **728** (budget ~730);
+  appendix created; both stale §18.4 self-references corrected. Commit G6.5.
+* OUTCOME_DOCS: `docs/archive/README.md` 92 documents / 19 groups (the claimed
+  count equals `find docs/archive -name '*.md'` minus READMEs = 92);
+  `docs/README.md` counts corrected (86→92 archived, 165+26 → 173+28 test
+  files, tree gained the new group and the G1–G6 annotation, the Rounds F/G row
+  added to "Current vs. historical"). Commit G6.6.
+* OUTCOME_SUITE: **2 828 passed, 2 skipped, 1 deselected, 1 xfailed, 898
+  subtests, 476.8 s, exit 0** — the same count as after G5, as expected for a
+  behaviour-preserving step.
+* OUTCOME_COV: line 91.3028 → **91.3059**, branch 87.4271 → **87.4271** — both
+  G5 floors held (the tiny line gain is the new `_from_defaults`/phase
+  functions being fully covered).
+* OUTCOME_GATES: `rule16_gate.py` PASS ("All owned functions fit. Ratchet
+  intact. No stale overrides."); `tests/test_rule16_new_code.py` 23 tests OK;
+  vulture `--min-confidence 90` exactly 7 findings; stores import-count
+  baseline 41 unaffected (no imports added or removed at module scope).
