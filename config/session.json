@@ -6,111 +6,18 @@
     ],
     "minimized": []
   },
-  "grid_layout": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[34.93312352478363,18.017309205350116,47.04956726986625]}}",
-  "last_stack": [
-    {
-      "max_scrolls": 1000,
-      "scroll_pause_ms": 200,
-      "scroll_delta_y": 1000,
-      "viewport_selector": "cdk-virtual-scroll-viewport",
-      "load_timeout_ms": 2500,
-      "stall_threshold": 100,
-      "min_new_users": 0,
-      "person_selector": "user-item",
-      "nick_selector": ".primary-text",
-      "highlight_enabled": true,
-      "highlight_ms": 900,
-      "confirm_pause_ms": 500,
-      "purge_rejected": true,
-      "scroll_only": true,
-      "filter_female": "yes",
-      "filter_registered": "no",
-      "filter_guest": "no",
-      "filter_anonymous": "no",
-      "pre_delay_ms": 300,
-      "enabled": true,
-      "block_id": "SCROLL_PARSE"
-    },
-    {
-      "selector": "div[role='tab'].tab-item",
-      "child_selector": "p.chat-title",
-      "tab_name": "Гостиная",
-      "highlight_enabled": true,
-      "confirm_pause_ms": 700,
-      "pre_delay_ms": 500,
-      "enabled": true,
-      "block_id": "CLICK_MAIN_TAB"
-    },
-    {
-      "enabled": true,
-      "block_id": "CONDITIONAL_SKIP",
-      "pre_delay_ms": 0
-    },
-    {
-      "selector": "user-item",
-      "label_selector": ".primary-text",
-      "click_selector": ".user-container",
-      "tab_selector": "div[role='tab'].tab-item",
-      "tab_title_selector": "p.chat-title",
-      "verify_new_tab": true,
-      "tab_pause_ms": 800,
-      "highlight_enabled": true,
-      "confirm_pause_ms": 700,
-      "respect_order": false,
-      "use_person_from_memory": false,
-      "pre_delay_ms": 1000,
-      "enabled": true,
-      "block_id": "CLICK_USER"
-    },
-    {
-      "target_selector": "textarea[placeholder='Сообщение']",
-      "timeout_ms": 5000,
-      "pre_delay_ms": 200,
-      "enabled": true,
-      "block_id": "WAIT_PAGE_LOAD"
-    },
-    {
-      "message": "",
-      "use_composer": false,
-      "typing_speed_ms": 30,
-      "pre_delay_ms": 500,
-      "enabled": true,
-      "block_id": "TYPE_MESSAGE"
-    },
-    {
-      "selector": "button[type='submit']",
-      "fallback_selector": "button:has(mat-icon)",
-      "fallback_text": "send",
-      "highlight_enabled": true,
-      "confirm_pause_ms": 700,
-      "pre_delay_ms": 300,
-      "enabled": true,
-      "block_id": "CLICK_SEND"
-    },
-    {
-      "multiplier": 0.5,
-      "enabled": false,
-      "block_id": "SPEED_MULTIPLIER",
-      "pre_delay_ms": 0
-    },
-    {
-      "repeat_count": 20,
-      "enabled": true,
-      "block_id": "REPEAT_LOOP",
-      "pre_delay_ms": 500
-    }
-  ],
+  "grid_layout": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[34.93312352478363,18.017309205350116,47.04956726986625]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[50,50]}],\"sizes\":[54.424432263116685,45.57556773688332]}}",
+  "last_stack": [],
   "last_stack_preset": "",
   "block_config_pinned": true,
   "db_recent": [
-    "D:\\Google Drive\\Chat V Bot\\Chat V bot\\v.db",
-    "D:\\Google Drive\\Chat V Bot\\Chat V bot\\history.db"
+    "D:\\Google Drive\\Chat V Bot\\Chat V bot\\v.db"
   ],
   "window_geometry": {
-    "x": -2560,
+    "x": 0,
     "y": 23,
     "width": 2560,
     "height": 1377
   },
-  "last_url_preset": "devtools://devtools/bundled/devtools_app.html?remoteBase=https://chrome-devtools-frontend.appspot.com/serve_file/@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174/&targetType=tab&can_dock=true&panel=elements"
+  "last_url_preset": "https://ru.virt-chat.com/chat"
 }
