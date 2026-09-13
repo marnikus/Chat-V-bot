@@ -27,7 +27,7 @@
    stored secret is never echoed into the DOM — which also means a blank
    key field means "keep the one you have", not "erase it".
 
-   ideal-size: 314 lines reason=one window = one controller, at the top of
+   ideal-size: 310 lines reason=one window = one controller, at the top of
    RULE 18's band and level with bot-chat.js. The drawing half is
    bot-connection-view.js and the dropdown is dark-select.js.
    ═══════════════════════════════════════════════════════════════ */
@@ -47,22 +47,7 @@ const BotSettings = {
   _els: {},
 
   init() {
-    const $ = (id) => document.getElementById(id);
-    this._els = {
-      backdrop: $('botSettingsBackdrop'), list: $('botProviderList'),
-      openFromEditor: $('botPromptSettingsBtn'), count: $('botConnCount'),
-      key: $('botProviderKey'), keyState: $('botProviderKeyState'),
-      model: $('botProviderModel'), url: $('botProviderUrl'),
-      status: $('botSettingsStatus'), open: $('botSettingsBtn'),
-      cancel: $('botSettingsCancelBtn'), close: $('botSettingsCloseBtn'),
-      test: $('botTestConnBtn'), title: $('botConnTitle'),
-      provider: $('botConnProvider'), add: $('botConnNewBtn'),
-      remove: $('botConnDeleteBtn'), select: $('botConnSelectBtn'),
-      reveal: $('botKeyRevealBtn'), detailTitle: $('botDetailTitle'),
-      dot: $('botConnDot'), readyText: $('botConnReadyText'),
-      presetOptions: $('botPresetOptions'), presetDesc: $('botPresetDesc'),
-      apply: $('botApplyPresetBtn'),
-    };
+    this._els = BotConnView.collect();
     if (!this._els.backdrop) return;
     this._providerBox = DarkSelect.attach(this._els.provider, {
       placeholder: 'Choose a provider',
@@ -92,25 +77,30 @@ const BotSettings = {
 
   /* ── wiring ────────────────────────────────────────────────── */
 
+  /* Which button does what. Same shape as IDS, same reason. */
+  _actions() {
+    return {
+      select: () => this.select(), save: () => this.save(),
+      close: () => this.close(), cancel: () => this.close(),
+      test: () => this.test(), add: () => this.addNew(),
+      remove: () => this.remove(), apply: () => this.applyPreset(),
+      reveal: () => this.toggleKey(),
+    };
+  },
+
   _wire() {
-    const on = (el, fn) => { if (el) el.addEventListener('click', fn); };
-    const opener = (btn) => {
+    const actions = this._actions();
+    Object.keys(actions).forEach((name) => {
+      const el = this._els[name];
+      if (el) el.addEventListener('click', actions[name]);
+    });
+    [this._els.open, this._els.openFromEditor].forEach((btn) => {
       if (!btn) return;
       btn.addEventListener('click', (event) => {
         event.stopPropagation();      // the outside-click handler would
         this.toggle(btn);             // otherwise close it immediately
       });
-    };
-    opener(this._els.open);
-    opener(this._els.openFromEditor);
-    on(this._els.select, () => this.select());
-    on(this._els.close, () => this.close());
-    on(this._els.cancel, () => this.close());
-    on(this._els.test, () => this.test());
-    on(this._els.add, () => this.addNew());
-    on(this._els.remove, () => this.remove());
-    on(this._els.apply, () => this.applyPreset());
-    on(this._els.reveal, () => this.toggleKey());
+    });
     this._wireLists();
     this._wireDirty();
   },
@@ -382,14 +372,22 @@ const BotSettings = {
 };
 
 /* Dismiss on a click outside, exactly like the Grid view / Bookmarks menu.
-   Registered once at load: the popup's own clicks stopPropagation, and the
-   two ⚙ triggers do too, so this only ever sees a genuine outside click. */
+
+   "Inside" is decided during the CAPTURE phase, before any handler has had
+   a chance to redraw. Deciding it on the way back up is what made clicking
+   a connection close the popup: the list's own handler re-renders the rows
+   first, so the clicked node is detached by the time this runs, and
+   closest() on an orphan finds no popup and calls it an outside click. The
+   flag is read on the following bubble-phase event for the same click. */
 if (typeof document !== 'undefined' && document.addEventListener) {
+  let insidePopup = false;
   document.addEventListener('click', (event) => {
+    insidePopup = !!(event.target && event.target.closest &&
+                     event.target.closest('#botSettingsBackdrop'));
+  }, true);
+  document.addEventListener('click', () => {
     if (!BotSettings.isOpen()) return;
-    const inside = event.target && event.target.closest &&
-      event.target.closest('#botSettingsBackdrop');
-    if (!inside) BotSettings.close();
+    if (!insidePopup) BotSettings.close();
   });
 }
 

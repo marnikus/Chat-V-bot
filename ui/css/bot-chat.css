@@ -146,11 +146,17 @@
    Grid view / Bookmarks menu uses, so this popup speaks the same visual
    language by inheriting it rather than by re-describing it. Only the width
    differs — a two-column master/detail needs more room than a layout list. */
-.bot-settings-backdrop { width: min(760px, 95vw); padding: 0; }
+/* Both dimensions are capped against the VIEWPORT, so the panel can never
+   be larger than the space place() has to fit it into. Without the height
+   cap a long connection list grew the popup past the bottom of the window
+   and took the footer buttons with it. */
+.bot-settings-backdrop {
+  width: min(760px, 95vw); max-height: 90vh; padding: 0;
+}
 .bot-settings-backdrop.hidden { display: none; }
 .bot-settings {
   display: flex; flex-direction: column;
-  max-height: 82vh; overflow: hidden;
+  max-height: 90vh; overflow: hidden;
 }
 
 /* one button, three semantic colours
@@ -306,7 +312,23 @@
 .bot-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .bot-field--wide { grid-column: 1 / -1; }
 .bot-provider-form label { font-size: 11px; color: var(--text-muted); }
-.bot-provider-form input { width: 100%; }
+/* This app has no global input rule — every window paints its own fields
+   by id or class — so a bare <input> here would fall back to the browser
+   default and render WHITE on a black app. These are the same tokens the
+   composer and the label editors use, so the popup matches by sharing the
+   palette rather than by approximating it. */
+.bot-provider-form input,
+.bot-settings input[type="text"],
+.bot-settings input[type="password"] {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 5px 8px; font-size: var(--font-size-sm); font-family: inherit;
+}
+.bot-settings input::placeholder { color: var(--text-muted); }
+.bot-settings input:focus {
+  outline: none; border-color: var(--border-focus);
+}
 .bot-key-row { display: flex; gap: 5px; }
 .bot-key-row input { flex: 1 1 auto; min-width: 0; }
 

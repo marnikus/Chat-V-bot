@@ -15,12 +15,42 @@
    differently. Browsing is not choosing, so browsing must not look like
    choosing.
 
-   ideal-size: 152 lines reason=one view = one module.
+   ideal-size: 184 lines reason=one view = one module. It also owns the
+   element-id table, because which ids exist is a fact about the markup.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
 const BotConnView = {
+  /* id-for-id, the elements this controller touches. A table rather than
+     twenty lookups: the list is data, and init() stays a sentence. */
+  IDS: {
+    backdrop: 'botSettingsBackdrop', list: 'botProviderList',
+    openFromEditor: 'botPromptSettingsBtn', count: 'botConnCount',
+    key: 'botProviderKey', keyState: 'botProviderKeyState',
+    model: 'botProviderModel', url: 'botProviderUrl',
+    status: 'botSettingsStatus', open: 'botSettingsBtn',
+    cancel: 'botSettingsCancelBtn', close: 'botSettingsCloseBtn',
+    save: 'botSettingsSaveBtn', test: 'botTestConnBtn',
+    title: 'botConnTitle', provider: 'botConnProvider',
+    add: 'botConnNewBtn', remove: 'botConnDeleteBtn',
+    select: 'botConnSelectBtn', reveal: 'botKeyRevealBtn',
+    detailTitle: 'botDetailTitle', dot: 'botConnDot',
+    readyText: 'botConnReadyText', presetOptions: 'botPresetOptions',
+    presetDesc: 'botPresetDesc', apply: 'botApplyPresetBtn',
+  },
+
+  /** Look every one of them up once. Returns the same shape as IDS, with
+   *  elements for values — missing ones stay undefined so the controller's
+   *  own guard can decide whether the popup exists at all. */
+  collect() {
+    const els = {};
+    Object.keys(this.IDS).forEach((name) => {
+      els[name] = document.getElementById(this.IDS[name]);
+    });
+    return els;
+  },
+
   /** The left rail. Rows are buttons so the keyboard reaches them. */
   rows(host, state) {
     if (!host) return;
@@ -164,15 +194,32 @@ const BotConnView = {
     };
   },
 
-  /** Same arithmetic the layout menu uses: right-aligned, clamped. */
+  /** Right-aligned under the gear, then clamped on BOTH axes so no edge
+   *  can leave the window. The vertical clamp is the important one: this
+   *  popup is tall, its footer holds every confirming action, and a gear
+   *  near the bottom of the screen used to push those buttons out of
+   *  reach. If it cannot fit below the gear it flips above it; if it fits
+   *  in neither it pins to the top and scrolls inside its own body. */
   place(panel, anchor) {
     if (!anchor || !panel || !anchor.getBoundingClientRect) return;
     const at = anchor.getBoundingClientRect();
     const width = panel.offsetWidth || 760;
-    const left = Math.max(8, Math.min(at.right - width,
-                                      window.innerWidth - width - 8));
-    panel.style.left = left + 'px';
-    panel.style.top = (at.bottom + 6) + 'px';
+    const height = panel.offsetHeight || 0;
+    panel.style.left = this._clamp(at.right - width, width,
+                                   window.innerWidth) + 'px';
+    panel.style.top = this._clamp(this._below(at, height), height,
+                                  window.innerHeight) + 'px';
+  },
+
+  /** Below the anchor, or above it when below would overflow. */
+  _below(at, height) {
+    const room = window.innerHeight - at.bottom - 14;
+    return (height > room && at.top > height) ? at.top - height - 6
+                                              : at.bottom + 6;
+  },
+
+  _clamp(want, size, limit) {
+    return Math.max(8, Math.min(want, limit - size - 8));
   },
 
   /** The key field: a saved secret is described, never echoed back. */
