@@ -15,12 +15,11 @@
    Nodes are built with createElement/textContent only: a message is
    user (or model) text and must never become markup.
 
-   ideal-size: 391 lines reason=one window = one controller. Splitting the
-   render helpers out would cut the file but not the reading: every helper
-   here exists only for the verification flow above it, and the flow is what
-   a reader must hold whole. The parts that ARE separable have been
-   separated: the Prompt Editor (bot-prompt.js), the AI Settings dialog
-   (bot-settings.js), and the media rendering, which is not here at all —
+   ideal-size: 396 lines reason=one window = one controller, and the
+   verification flow above is what a reader must hold whole. Everything
+   separable HAS been separated: the Prompt Editor (bot-prompt.js), the AI
+   Connections window (bot-settings.js), how one message becomes a row
+   (bot-messages.js), and the media rendering, which is not ours at all —
    it is the DB window's renderer, called.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -29,11 +28,15 @@
 /** how long to let the collector fetch a restored file before reloading */
 const RESTORE_RELOAD_MS = 1200;
 
+/** where the "today only" checkbox remembers itself */
+const SCOPE_KEY = 'cvb.bot.scope';
+
 const BotChat = {
   nick: '',
   approved: '',                 // the approved suggestion text, '' when none
   _seq: 0,
   _pending: {},                 // req id -> what was asked for
+  _mediaSeq: 0,                 // one counter for media-restore requests
   _els: {},
 
   init() {
@@ -41,12 +44,14 @@ const BotChat = {
     this._els = {
       panel: $('winBotChat'), person: $('botChatPerson'),
       box: $('botChatBox'), labels: $('botReactionLabels'),
+      scope: $('botScopeToday'),
       status: $('botChatStatus'), send: $('botSendApprovedBtn'),
       hint: $('botApprovedHint'), direct: $('botDirectInput'),
       sendDirect: $('botSendDirectBtn'), reload: $('botReloadBtn'),
       suggest: $('botSuggestBtn'), analyze: $('botAnalyzeBtn'),
     };
     if (!this._els.box) return;
+    this._restoreScope();
     this._wire();
     this._updateSendButton();      // the disabled state is code, not markup
     this.renderLabels({ active: '', available: [] });
@@ -58,6 +63,12 @@ const BotChat = {
     on(this._els.suggest, () => this.ask('bot_suggest_reply', 'suggest'));
     on(this._els.analyze, () => this.ask('bot_analyze_reaction', 'analyze'));
     on(this._els.reload, () => this.openPerson(this.nick));
+    if (this._els.scope) {
+      this._els.scope.addEventListener('change', () => {
+        this._rememberScope();
+        if (this.nick) this.openPerson(this.nick);
+      });
+    }
     on(this._els.send, () => this.sendApproved());
     on(this._els.sendDirect, () => this.sendDirect());
     ['botSuggestEditBtn', 'botAnalyzeEditBtn'].forEach((id) => {
@@ -110,8 +121,34 @@ const BotChat = {
     const id = 'bot' + (++this._seq);
     this._pending[id] = kind;
     if (App.bridge && typeof App.bridge[slot] === 'function')
-      App.bridge[slot](id, arg);
+      App.bridge[slot](id, arg, this.scope());
     return id;
+  },
+
+  /** The scope survives a restart, in `localStorage` — the same place
+   *  sash-grid keeps its window state. A UI toggle is not world data, so
+   *  it does not belong in the config file the bridges own. */
+  _rememberScope() {
+    try { localStorage.setItem(SCOPE_KEY, this.scope()); }
+    catch (err) { /* private mode: the toggle still works this session */ }
+  },
+
+  _restoreScope() {
+    let saved = '';
+    try { saved = localStorage.getItem(SCOPE_KEY) || ''; }
+    catch (err) { saved = ''; }
+    if (saved && this._els.scope) this._els.scope.checked = saved !== 'all';
+  },
+
+  /** Which conversation the AI reads: today's messages, or all of them.
+   *
+   *  The checkbox travels with EVERY request, not just the message list —
+   *  otherwise it would change what the user sees while the model kept
+   *  reading a different conversation.
+   */
+  scope() {
+    const box = this._els.scope;
+    return (box && box.checked === false) ? 'all' : 'today';
   },
 
   // ── bridge answers ───────────────────────────────────────────
@@ -143,9 +180,25 @@ const BotChat = {
     if (!page || page.nick !== this.nick) return;
     this._clear();
     (page.items || []).forEach((item) => this._bubble(item));
-    this.setStatus(page.empty
-      ? 'No messages with this person today yet.'
-      : (page.items.length + ' message(s) from ' + page.day));
+    this.setStatus(page.empty ? this._emptyNote(page)
+                              : this._countNote(page));
+  },
+
+  _emptyNote(page) {
+    return page.scope === 'all'
+      ? 'No messages with this person in the archive yet.'
+      : 'No messages with this person today yet.';
+  },
+
+  /** Say how many messages are in play, and admit when the cap trimmed them:
+   *  a silently shortened history is a wrong answer the user cannot see. */
+  _countNote(page) {
+    const used = (page.items || []).length;
+    const where = page.scope === 'all' ? 'the whole conversation'
+                                       : page.day;
+    return page.truncated
+      ? (used + ' most recent of ' + page.total + ' message(s) from ' + where)
+      : (used + ' message(s) from ' + where);
   },
 
   // ── the two pending cards ────────────────────────────────────
@@ -272,58 +325,10 @@ const BotChat = {
 
   _clear() { if (this._els.box) this._els.box.textContent = ''; },
 
+  /** One message row — drawn by bot-messages.js, restored through here. */
   _bubble(item) {
-    const row = document.createElement('div');
-    row.className = 'bot-msg ' + (item.dir === 'out' ? 'out' : 'in');
-    const who = document.createElement('span');
-    who.className = 'bot-msg-who';
-    who.textContent = (item.from || (item.dir === 'out' ? 'me' : 'them')) +
-      (item.time ? ' · ' + item.time : '');
-    const body = document.createElement('div');
-    body.className = 'bot-msg-text';
-    body.textContent = item.text || '';
-    row.appendChild(who);
-    row.appendChild(body);
-    const media = this._media(item, row);
-    if (media) row.appendChild(media);
-    if (this._els.box) this._els.box.appendChild(row);
-    return row;
-  },
-
-  /**
-   * The media block of one message, drawn by the DB window's renderer.
-   *
-   * Bot Chat does NOT get its own media code. `HistoryModel.toRow` already
-   * resolves the cached file into a loadable src and `HistoryView.mediaNode`
-   * already draws every state the database has — cached, pending, failed,
-   * missing, evicted, images-off — so a GIF here looks like the same GIF
-   * there and there is one renderer to fix. A message whose file is gone
-   * gets the clickable "restore" marker; it is never silently blank.
-   */
-  _media(item, row) {
-    if (!item || !item.media) return null;
-    if (typeof HistoryModel === 'undefined' ||
-        typeof HistoryView === 'undefined') return this._mediaFallback(item);
-    const viewRow = HistoryModel.toRow(item, { showImages: true });
-    const node = HistoryView.mediaNode(viewRow, {
-      showImages: true,
-      onRestoreMedia: () => this._restore(item.media.id, row),
-    });
-    return node || this._mediaFallback(item);
-  },
-
-  /** Never a blank message: say what the attachment is even with no renderer. */
-  _mediaSeq: 0,
-
-  _mediaFallback(item) {
-    const media = item.media || {};
-    const note = document.createElement('span');
-    note.className = 'bot-msg-media-note';
-    const kind = media.kind || item.kind || 'attachment';
-    note.textContent = '[' + kind + ']' +
-      (media.state && media.state !== 'cached' ? ' · ' + media.state : '');
-    note.title = media.url || '';
-    return note;
+    return BotMessages.bubble(item, this._els.box,
+                              (id, row) => this._restore(id, row));
   },
 
   /**

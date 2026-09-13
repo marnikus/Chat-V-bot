@@ -408,6 +408,11 @@
                 data-template="analyze_reaction"
                 title="Edit this prompt in the Prompt Editor window">edit</button>
       </div>
+      <label class="bot-scope" for="botScopeToday"
+             title="Unticked, the AI reads this person's whole conversation instead of just today">
+        <input type="checkbox" id="botScopeToday" checked>
+        <span>Today’s messages only</span>
+      </label>
       <div class="bot-labels" id="botReactionLabels"
            title="Only one reaction label is active; clicking another one replaces it"></div>
       <div class="bot-chat-box" id="botChatBox"></div>
@@ -425,13 +430,13 @@
       <div class="bot-status" id="botChatStatus" aria-live="polite"></div>
     </div>
 
-    <!-- AI SETTINGS — a modal dialog, opened by the ⚙ in the AI Bot Chat
-         title bar. Not a grid window: it is opened rarely and closed again,
-         and the spec calls it a dialog. -->
+    <!-- AI CONNECTIONS — a modal dialog, opened by the ⚙ in the Grok Prompt
+         Editor title bar. Connection details live HERE and nowhere else:
+         the Prompt Editor holds prompt controls only. -->
     <div class="bot-settings-backdrop hidden" id="botSettingsBackdrop">
       <div class="bot-settings" role="dialog" aria-modal="true"
            aria-labelledby="botSettingsTitle">
-        <h3 id="botSettingsTitle">AI provider settings
+        <h3 id="botSettingsTitle">AI connections
           <span class="spacer"></span>
           <button id="botSettingsCloseBtn" class="btn-icon-sm" type="button"
                   title="Close without saving">✕</button>
@@ -439,6 +444,11 @@
         <div class="bot-settings-body">
           <div class="bot-provider-list" id="botProviderList"></div>
           <div class="bot-provider-form">
+            <label for="botConnTitle">Name</label>
+            <input id="botConnTitle" type="text" spellcheck="false"
+                   placeholder="e.g. Grok — grok-4.3">
+            <label for="botConnProvider">Provider</label>
+            <select id="botConnProvider"></select>
             <label for="botProviderKey">API key</label>
             <input id="botProviderKey" type="password" spellcheck="false"
                    autocomplete="off"
@@ -446,17 +456,19 @@
             <span id="botProviderKeyState" class="bot-hint"></span>
             <label for="botProviderModel">Model</label>
             <input id="botProviderModel" type="text" spellcheck="false"
-                   list="botProviderModels">
+                   placeholder="e.g. grok-4.3">
             <label for="botProviderUrl">Endpoint</label>
             <input id="botProviderUrl" type="text" spellcheck="false">
             <span class="bot-hint">Leave the endpoint as it is unless you use a proxy.</span>
           </div>
         </div>
         <div class="bot-settings-actions">
+          <button id="botConnNewBtn" class="btn-small" type="button"
+                  title="Add another connection">+ New</button>
           <button id="botTestConnBtn" class="btn-small" type="button"
                   title="Send one tiny request with these settings">Test connection</button>
-          <button id="botUseProviderBtn" class="btn-small" type="button"
-                  title="Make this the provider the AI Bot Chat uses">Use this provider</button>
+          <button id="botConnDeleteBtn" class="btn-small btn-danger" type="button"
+                  title="Delete this connection">Delete</button>
           <span class="spacer"></span>
           <button id="botSettingsSaveBtn" class="btn-success" type="button">Save</button>
           <button id="botSettingsCancelBtn" class="btn-small" type="button">Cancel</button>
@@ -470,9 +482,26 @@
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">edit_note</span> Grok Prompt Editor
         <span class="spacer"></span>
         <button id="botPromptPreviewBtn" class="btn-small" type="button"
-                title="Show exactly what would be sent to Grok for the current person">Preview</button>
+                title="Show exactly what would be sent for the current person">Preview</button>
+        <button id="botPromptSettingsBtn" class="btn-icon-sm" type="button"
+                title="AI connections — API keys, models, endpoints"><span class="material-icons">settings</span></button>
       </h3>
       <div class="bot-prompt-tabs" id="botPromptTabs"></div>
+      <div class="bot-prompt-bar">
+        <label for="botPresetSelect">Preset</label>
+        <select id="botPresetSelect" title="Saved versions of this prompt"></select>
+        <button id="botPresetSaveBtn" class="btn-small" type="button"
+                title="Save the editor text as a new preset">Save as…</button>
+        <button id="botPresetUpdateBtn" class="btn-small" type="button"
+                title="Overwrite the selected preset with the editor text">Update</button>
+        <button id="botPresetDeleteBtn" class="btn-small btn-danger" type="button"
+                title="Delete the selected preset">Delete</button>
+      </div>
+      <div class="bot-prompt-bar">
+        <label for="botConnSelect">AI connection</label>
+        <select id="botConnSelect" title="Which configured connection runs this prompt"></select>
+        <span id="botConnWarn" class="bot-hint"></span>
+      </div>
       <textarea id="botPromptText" class="bot-prompt-text" spellcheck="false"
                 placeholder="Prompt template — click a variable below to insert it"></textarea>
       <div id="botPromptWarn" class="bot-prompt-warn hidden" aria-live="polite"></div>
@@ -489,17 +518,6 @@
         <span id="botPromptStatus" class="bot-hint" aria-live="polite"></span>
       </div>
       <pre id="botPromptPreview" class="bot-prompt-preview hidden"></pre>
-      <div class="bot-conn">
-        <label for="botApiKeyInput">Grok API key</label>
-        <input id="botApiKeyInput" type="password" spellcheck="false"
-               autocomplete="off"
-               placeholder="xai-… — stored in settings.json on this machine">
-        <label for="botModelInput">Model</label>
-        <input id="botModelInput" type="text" spellcheck="false"
-               autocomplete="off" placeholder="grok-2-latest">
-        <button id="botConnSaveBtn" class="btn-small btn-primary" type="button"
-                title="Save the API key and model used for every Grok call">Save connection</button>
-      </div>
     </div>
 
   </main>
@@ -641,6 +659,7 @@
 <script src="js/color-picker.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/db-panel.js"></script>
+<script src="js/bot-messages.js"></script>
 <script src="js/bot-chat.js"></script>
 <script src="js/bot-settings.js"></script>
 <script src="js/bot-prompt.js"></script>

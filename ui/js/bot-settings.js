@@ -1,9 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════
-   bot-settings.js — the AI provider settings dialog
+   bot-settings.js — the AI Connections window
 
-   Opened by the ⚙ button in the AI Bot Chat title bar. Lists every
-   provider the backend supports, holds each one's API key, model and
-   endpoint, tests the connection, and marks which provider is active.
+   Opened by the ⚙ button in the Grok Prompt Editor title bar. Lists the
+   user's NAMED connections — several may share one provider — and holds
+   each one's key, model and endpoint. This is the ONLY place connection
+   details live; the Prompt Editor selects one and nothing more.
 
    The key is write-only here. The backend reports only a MASKED form
    ("xai-…mnop"), so a stored secret is never echoed back into the DOM
@@ -14,6 +15,7 @@
 'use strict';
 
 const BotSettings = {
+  connections: [],
   providers: [],
   active: '',
   selected: '',
@@ -29,7 +31,8 @@ const BotSettings = {
       status: $('botSettingsStatus'), open: $('botSettingsBtn'),
       save: $('botSettingsSaveBtn'), cancel: $('botSettingsCancelBtn'),
       close: $('botSettingsCloseBtn'), test: $('botTestConnBtn'),
-      use: $('botUseProviderBtn'),
+      title: $('botConnTitle'), provider: $('botConnProvider'),
+      add: $('botConnNewBtn'), remove: $('botConnDeleteBtn'),
     };
     if (!this._els.backdrop) return;
     this._wire();
@@ -42,7 +45,8 @@ const BotSettings = {
     on(this._els.cancel, () => this.close());
     on(this._els.save, () => this.save());
     on(this._els.test, () => this.test());
-    on(this._els.use, () => this.use());
+    on(this._els.add, () => this.addNew());
+    on(this._els.remove, () => this.remove());
     if (this._els.list) {
       this._els.list.addEventListener('click', (event) => {
         const row = event.target && event.target.closest
@@ -64,34 +68,48 @@ const BotSettings = {
   },
 
   load() {
-    if (!App.bridge || !App.bridge.bot_providers) return;
-    App.bridge.bot_providers((json) => this.setProviders(json));
+    if (!App.bridge || !App.bridge.bot_connections) return;
+    App.bridge.bot_connections((json) => this.setConnections(json));
   },
 
-  setProviders(json) {
+  setConnections(json) {
     let data = null;
     try { data = JSON.parse(json || 'null'); } catch (err) { data = null; }
+    this.connections = (data && data.connections) || [];
     this.providers = (data && data.providers) || [];
     this.active = (data && data.active) || '';
     if (!this.selected ||
-        !this.providers.some((p) => p.id === this.selected)) {
+        !this.connections.some((c) => c.id === this.selected)) {
       this.selected = this.active ||
-        (this.providers[0] ? this.providers[0].id : '');
+        (this.connections[0] ? this.connections[0].id : '');
     }
+    this._renderProviderChoices();
     this._renderList();
     this._renderForm();
+  },
+
+  _renderProviderChoices() {
+    const box = this._els.provider;
+    if (!box) return;
+    box.textContent = '';
+    this.providers.forEach((spec) => {
+      const opt = document.createElement('option');
+      opt.value = spec.id;
+      opt.textContent = spec.title;
+      box.appendChild(opt);
+    });
   },
 
   _renderList() {
     const host = this._els.list;
     if (!host) return;
     host.textContent = '';
-    this.providers.forEach((entry) => {
+    this.connections.forEach((entry) => {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'bot-provider' +
         (entry.id === this.selected ? ' selected' : '') +
-        (entry.active ? ' active' : '');
+        (entry.id === this.active ? ' active' : '');
       row.dataset.provider = entry.id;
       const name = document.createElement('span');
       name.className = 'bot-provider-name';
@@ -99,29 +117,52 @@ const BotSettings = {
       row.appendChild(name);
       const tag = document.createElement('span');
       tag.className = 'bot-provider-tag';
-      tag.textContent = entry.active ? 'in use'
-        : (entry.has_key ? 'configured' : 'no key');
+      tag.textContent = entry.problem ? '⚠ ' + entry.problem
+        : (entry.id === this.active ? 'in use · ' + entry.model : entry.model);
       row.appendChild(tag);
       host.appendChild(row);
     });
   },
 
   _current() {
-    return this.providers.find((p) => p.id === this.selected) || null;
+    return this.connections.find((c) => c.id === this.selected) || null;
   },
 
   _renderForm() {
-    const entry = this._current();
-    if (!entry) return;
+    const entry = this._current() || {};
     if (this._els.key) this._els.key.value = '';
+    if (this._els.title) this._els.title.value = entry.title || '';
+    if (this._els.provider && entry.provider)
+      this._els.provider.value = entry.provider;
     if (this._els.model) this._els.model.value = entry.model || '';
     if (this._els.url) this._els.url.value = entry.url || '';
     if (this._els.keyState) {
       this._els.keyState.textContent = entry.has_key
         ? 'A key is saved (' + (entry.masked || 'set') +
           ') — leave blank to keep it'
-        : 'No key saved yet for ' + entry.title;
+        : 'No key saved yet';
     }
+  },
+
+  /** Start a blank form for an additional connection. */
+  addNew() {
+    this.selected = '';
+    this._renderList();
+    this._renderForm();
+    if (this._els.title) this._els.title.value = '';
+    this.setStatus('New connection — name it, pick a provider, add a key.');
+  },
+
+  remove() {
+    if (!this.selected || !App.bridge || !App.bridge.bot_delete_connection) {
+      this.setStatus('Select a connection to delete.');
+      return;
+    }
+    App.bridge.bot_delete_connection(this.selected, (gone) => {
+      this.setStatus(gone ? 'Connection deleted.' : 'Could not delete it.');
+      if (gone) this.selected = '';
+      this.load();
+    });
   },
 
   select(provider) {
@@ -131,34 +172,31 @@ const BotSettings = {
     this.setStatus('');
   },
 
-  /** Save this provider's settings. Never touches another provider's key,
-   *  and never touches the prompt templates. */
+  /** Save this connection. Never touches another connection, and never
+   *  touches a prompt preset or template. */
   save() {
-    if (!this.selected || !App.bridge || !App.bridge.bot_save_provider) return;
+    if (!App.bridge || !App.bridge.bot_save_connection) return;
     const val = (el) => (el ? String(el.value || '') : '');
-    App.bridge.bot_save_provider(this.selected, val(this._els.key),
-                                 val(this._els.model), val(this._els.url),
-                                 (ok) => {
-                                   this.setStatus(ok ? 'Saved.'
-                                                     : 'Could not save.');
-                                   if (ok) this.load();
-                                 });
-  },
-
-  /** Make the selected provider the one the AI Bot Chat sends to. */
-  use() {
-    if (!this.selected || !App.bridge || !App.bridge.bot_use_provider) return;
-    App.bridge.bot_use_provider(this.selected, (ok) => {
-      this.setStatus(ok ? 'Now using this provider.' : 'Could not switch.');
-      if (ok) this.load();
-    });
+    if (!val(this._els.title)) { this.setStatus('Give it a name first.'); return; }
+    App.bridge.bot_save_connection(
+      this.selected, JSON.stringify({
+        title: val(this._els.title), provider: val(this._els.provider),
+        api_key: val(this._els.key), model: val(this._els.model),
+        url: val(this._els.url) }),
+      (ident) => {
+        this.setStatus(ident ? 'Saved.' : 'Could not save.');
+        if (ident) { this.selected = ident; this.load(); }
+      });
   },
 
   /** One real request through the real transport — see the bridge. */
   test() {
-    if (!this.selected || !App.bridge || !App.bridge.bot_test_provider) return;
+    if (!this.selected || !App.bridge || !App.bridge.bot_test_connection) {
+      this.setStatus('Save the connection before testing it.');
+      return;
+    }
     this.setStatus('Testing …');
-    App.bridge.bot_test_provider('bot-test-' + (++this._seq), this.selected);
+    App.bridge.bot_test_connection('bot-test-' + (++this._seq), this.selected);
   },
 
   /** The test's answer arrives on the Bot Chat bridge, keyed by req_id. */

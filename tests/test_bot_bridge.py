@@ -35,9 +35,10 @@ from backend.history_query import HistoryQuery  # noqa: E402
 from bridge.bot_bridge import BotBridge  # noqa: E402
 from bridge.bot_prompt_bridge import BotPromptBridge  # noqa: E402
 from bridge.bot_settings_bridge import BotSettingsBridge  # noqa: E402
+from services.bot_connections import ConnectionStore  # noqa: E402
 from bridge.context import BridgeContext  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
-from services.bot_grok import GrokSettings  # noqa: E402
+from services.bot_grok import client_for  # noqa: E402
 from stores.history_db import HistoryDB  # noqa: E402
 from stores.label_store import LabelStore  # noqa: E402
 
@@ -46,7 +47,13 @@ TODAY = date.today().isoformat()
 BOT_SLOTS = ["bot_load_today", "bot_suggest_reply", "bot_analyze_reaction",
              "bot_preview_prompt", "bot_send_message", "bot_reaction_state",
              "bot_apply_reaction", "bot_get_prompts", "bot_save_prompt",
-             "bot_reset_prompt", "bot_connection", "bot_save_connection"]
+             "bot_reset_prompt", "bot_get_variables", "bot_check_prompt",
+             # presets (Prompt Editor) and connections (AI Connections)
+             "bot_get_presets", "bot_save_preset", "bot_delete_preset",
+             "bot_prompt_connections", "bot_use_connection_for_prompts",
+             "bot_connections", "bot_save_connection",
+             "bot_delete_connection", "bot_use_connection",
+             "bot_test_connection"]
 BOT_SIGNALS = ["bot_reply_ready", "bot_error", "bot_prompts_changed"]
 
 
@@ -167,33 +174,33 @@ class TestRouterPublishesTheBotWire(unittest.TestCase):
 
 class TestLoadingAndAnswering(BotBridgeCase):
     def test_todays_messages_come_back_under_the_callers_id(self):
-        self.bridge.bot_load_today("r1", "Anna")
+        self.bridge.bot_load_today("r1", "Anna", "today")
         self.drain()
         page = self.answer("r1")
         self.assertEqual([i["text"] for i in page["items"]],
                          ["hi", "hello you"])
 
     def test_two_requests_do_not_cross(self):
-        self.bridge.bot_load_today("a", "Anna")
-        self.bridge.bot_load_today("b", "Nobody")
+        self.bridge.bot_load_today("a", "Anna", "today")
+        self.bridge.bot_load_today("b", "Nobody", "today")
         self.drain()
         self.assertFalse(self.answer("a")["empty"])
         self.assertTrue(self.answer("b")["empty"])
 
     def test_a_grok_failure_answers_on_the_error_signal(self):
         self.bridge.service.grok = FakeGrok(Err("grok_no_key", "no key"))
-        self.bridge.bot_suggest_reply("r2", "Anna")
+        self.bridge.bot_suggest_reply("r2", "Anna", "today")
         self.drain()
         self.assertEqual(self.errors[0][0], "r2")
         self.assertIn("no key", self.errors[0][1])
         self.assertEqual(self.replies, [])
 
     def test_a_raising_service_becomes_an_error_not_a_dead_request(self):
-        async def boom(_nick):
+        async def boom(_nick, _scope="today"):
             raise RuntimeError("database exploded")
 
-        self.bridge.service.today = boom
-        self.bridge.bot_load_today("r3", "Anna")
+        self.bridge.service.load = boom
+        self.bridge.bot_load_today("r3", "Anna", "today")
         self.drain()
         self.assertEqual(self.errors[0][0], "r3")
 
@@ -202,7 +209,7 @@ class TestVerificationFlow(BotBridgeCase):
     def test_a_suggestion_is_pending_and_sends_nothing(self):
         sent = []
         self.patch_deliver(sent)
-        self.bridge.bot_suggest_reply("s1", "Anna")
+        self.bridge.bot_suggest_reply("s1", "Anna", "today")
         self.drain()
         self.assertEqual(self.answer("s1")["state"], "pending")
         self.assertEqual(sent, [])                 # approval is a UI act only
@@ -237,7 +244,7 @@ class TestVerificationFlow(BotBridgeCase):
 class TestReactionLabelsOverTheWire(BotBridgeCase):
     def test_analysis_applies_no_label(self):
         self.bridge.service.grok = FakeGrok(Ok("positive - warm answer"))
-        self.bridge.bot_analyze_reaction("a1", "Anna")
+        self.bridge.bot_analyze_reaction("a1", "Anna", "today")
         self.drain()
         self.assertEqual(self.answer("a1")["reaction"], "positive")
         self.assertEqual(self.labels.ids_for("Anna"), [])
@@ -310,7 +317,7 @@ class TestPromptEditorOverTheWire(PromptBridgeCase):
     def test_a_saved_template_is_what_gets_sent_to_grok(self):
         """One library: what the editor saves is what the chat window sends."""
         self.editor.bot_save_prompt("suggest_reply", "Reply to {nick} now")
-        self.bridge.bot_suggest_reply("p1", "Anna")
+        self.bridge.bot_suggest_reply("p1", "Anna", "today")
         self.drain()
         self.assertEqual(self.grok.prompts[0], "Reply to Anna now")
 
@@ -319,7 +326,7 @@ class TestPromptEditorOverTheWire(PromptBridgeCase):
         chat = self.editor._chat_bridge()
         chat.bot_reply_ready.connect(
             lambda req, payload: answers.append((req, payload)))
-        self.editor.bot_preview_prompt("p2", "Anna", "analyze_reaction")
+        self.editor.bot_preview_prompt("p2", "Anna", "analyze_reaction", "today")
         self.drain()
         self.assertEqual(answers[0][0], "p2")
         self.assertIn("hello you", json.loads(answers[0][1])["prompt"])
@@ -335,7 +342,7 @@ class TestPromptEditorOverTheWire(PromptBridgeCase):
         """The library is only useful if the editor and the renderer agree."""
         for spec in json.loads(self.editor.bot_get_variables()):
             self.editor.bot_save_prompt("suggest_reply", spec["token"])
-            self.bridge.bot_suggest_reply("v" + spec["name"], "Anna")
+            self.bridge.bot_suggest_reply("v" + spec["name"], "Anna", "today")
             self.drain()
             self.assertNotEqual(self.grok.prompts[-1], spec["token"],
                                 spec["token"] + " reached Grok unresolved")
@@ -434,118 +441,283 @@ class TestTheLabelWriteIsUndoable(BotBridgeCase):
         self.assertIn("people", seen)
 
 
-class TestTheConnectionSettings(PromptBridgeCase):
-    def test_saving_a_key_makes_it_the_one_used(self):
-        self.assertTrue(self.editor.bot_save_connection("xai-9", "grok-x"))
-        state = json.loads(self.editor.bot_connection())
-        self.assertTrue(state["has_key"])
-        self.assertEqual(state["model"], "grok-x")
+class TestTheEditorHoldsNoConnectionSettings(PromptBridgeCase):
+    """Acceptance: "API settings are absent from the Prompt Editor body".
 
-    def test_the_key_never_travels_back_over_the_wire(self):
-        self.editor.bot_save_connection("xai-secret", "")
-        self.assertNotIn("xai-secret", self.editor.bot_connection())
+    Enforced on the bridge AND on the markup, because "absent" has to mean
+    absent — a hidden-but-wired key field would pass a screenshot review and
+    still be the thing the spec asked to remove.
+    """
 
+    def test_the_key_slots_are_gone_from_the_editor_bridge(self):
+        for slot in ("bot_connection", "bot_save_connection"):
+            self.assertFalse(hasattr(self.editor, slot),
+                             f"{slot} belongs to the connections window now")
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_the_editor_markup_has_no_key_or_endpoint_field(self):
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        html = open(os.path.join(repo, "ui", "index.html"),
+                    encoding="utf-8").read()
+        editor = html[html.index('id="winBotPrompt"'):]
+        editor = editor[:editor.index("</main>")]
+        for gone in ('id="botApiKeyInput"', 'id="botModelInput"',
+                     'id="botConnSaveBtn"'):
+            self.assertNotIn(gone, editor, f"{gone} is still in the editor")
+
+    def test_the_editor_still_selects_a_connection(self):
+        """"Configured elsewhere", not "unreachable": the editor must still
+        choose WHICH connection runs the prompt."""
+        data = json.loads(self.editor.bot_prompt_connections())
+        self.assertIn("connections", data)
+        self.assertIn("active", data)
 
 
 class SettingsBridgeCase(BotBridgeCase):
-    """The AI Settings dialog is its own surface, so its own bridge."""
+    """The AI Connections window is its own surface, so its own bridge."""
 
     def setUp(self):
         super().setUp()
         self.settings = BotSettingsBridge(self.ctx)
 
-    def entry(self, provider):
-        data = json.loads(self.settings.bot_providers())
-        return next(p for p in data["providers"] if p["id"] == provider)
+    def add(self, title, provider="grok", key="xai-secret-key-1", model="m1"):
+        return self.settings.bot_save_connection("", json.dumps(
+            {"title": title, "provider": provider, "api_key": key,
+             "model": model, "url": ""}))
+
+    def entry(self, ident):
+        data = json.loads(self.settings.bot_connections())
+        return next((c for c in data["connections"] if c["id"] == ident), None)
+
+    def listed(self):
+        return json.loads(self.settings.bot_connections())["connections"]
 
 
-class TestProviderSettingsOverTheWire(SettingsBridgeCase):
-    def test_the_dialog_lists_every_provider_with_its_state(self):
-        data = json.loads(self.settings.bot_providers())
-        ids = [p["id"] for p in data["providers"]]
-        self.assertIn("grok", ids)
-        self.assertIn("google", ids)
-        self.assertEqual(data["active"], "grok")
+class TestConnectionsOverTheWire(SettingsBridgeCase):
+    def test_a_malformed_payload_is_refused_rather_than_crashing(self):
+        """The fields cross the bridge as JSON; a broken string must come
+        back as "not saved", not as an exception through QWebChannel."""
+        self.assertEqual(self.settings.bot_save_connection("", "{oops"), "")
+        self.assertEqual(self.settings.bot_save_connection("", "[1,2]"), "")
+        self.assertEqual(self.listed(), [])
 
-    def test_a_saved_key_is_reported_masked_and_never_in_full(self):
-        self.settings.bot_save_provider("google", "AIza-supersecret-key",
-                                        "", "")
-        entry = self.entry("google")
+    def test_a_connection_is_created_and_listed(self):
+        ident = self.add("Grok — grok-4.3", model="grok-4.3")
+        self.assertTrue(ident)
+        entry = self.entry(ident)
+        self.assertEqual(entry["title"], "Grok — grok-4.3")
+        self.assertEqual(entry["model"], "grok-4.3")
+        self.assertTrue(entry["ok"])
+
+    def test_several_connections_can_share_one_provider(self):
+        """The whole reason connections are not providers: the user wants
+        "Grok grok-4.3" AND "Grok grok-2 (cheap)" at the same time."""
+        first = self.add("Grok — grok-4.3", model="grok-4.3")
+        second = self.add("Grok — cheap", model="grok-2-latest")
+        self.assertNotEqual(first, second)
+        models = {c["id"]: c["model"] for c in self.listed()}
+        self.assertEqual(models[first], "grok-4.3")
+        self.assertEqual(models[second], "grok-2-latest")
+
+    def test_a_google_connection_sits_beside_a_grok_one(self):
+        self.add("Grok", provider="grok")
+        google = self.add("Work Gemini", provider="google",
+                          key="AIza-key-1234", model="gemini-2.0-flash")
+        self.assertEqual(self.entry(google)["provider"], "google")
+        self.assertEqual(len(self.listed()), 2)
+
+    def test_the_key_is_masked_and_never_sent_in_full(self):
+        ident = self.add("Grok", key="xai-supersecret-key")
+        entry = self.entry(ident)
         self.assertTrue(entry["has_key"])
-        self.assertNotIn("supersecret", json.dumps(entry))
+        self.assertNotIn("supersecret", self.settings.bot_connections())
         self.assertTrue(entry["masked"])
 
-    def test_each_provider_keeps_its_own_key(self):
-        self.settings.bot_save_provider("grok", "xai-one-key-here", "", "")
-        self.settings.bot_save_provider("google", "AIza-other-key-x", "", "")
-        self.assertTrue(self.entry("grok")["has_key"])
-        self.assertTrue(self.entry("google")["has_key"])
-        self.assertNotEqual(self.entry("grok")["masked"],
-                            self.entry("google")["masked"])
+    def test_a_blank_key_on_update_keeps_the_stored_one(self):
+        ident = self.add("Grok", key="xai-original-key-x")
+        self.settings.bot_save_connection(ident, json.dumps(
+            {"title": "Grok", "provider": "grok", "api_key": "",
+             "model": "grok-4.3", "url": ""}))
+        entry = self.entry(ident)
+        self.assertTrue(entry["has_key"], "blank means unchanged, not erase")
+        self.assertEqual(entry["model"], "grok-4.3")
 
-    def test_switching_provider_keeps_the_prompt_templates(self):
-        """The acceptance criterion, tested the only way that means
-        anything: save a template, switch, read it back."""
-        editor = BotPromptBridge(self.ctx)
-        editor.bot_save_prompt("suggest_reply", "my careful template {nick}")
-        self.assertTrue(self.settings.bot_use_provider("google"))
-        self.assertEqual(json.loads(editor.bot_get_prompts())[0]["text"],
-                         "my careful template {nick}")
-
-    def test_switching_provider_keeps_the_other_provider_key(self):
-        self.settings.bot_save_provider("grok", "xai-keep-me-please", "", "")
-        self.settings.bot_use_provider("google")
-        self.settings.bot_save_provider("google", "AIza-new-key-here", "", "")
-        self.assertTrue(self.entry("grok")["has_key"],
-                        "switching away must not erase a stored key")
-
-    def test_the_active_provider_survives_a_restart(self):
-        self.settings.bot_use_provider("google")
-        reopened = ConfigManager(self.cfg._path)
-        self.assertEqual(GrokSettings.active_id(reopened), "google")
+    def test_a_connection_without_a_key_says_why(self):
+        entry = self.entry(self.add("Half-configured", key=""))
+        self.assertFalse(entry["ok"])
+        self.assertIn("no API key", entry["problem"])
 
     def test_an_unknown_provider_is_refused(self):
-        self.assertFalse(self.settings.bot_use_provider("nope"))
-        self.assertEqual(json.loads(self.settings.bot_providers())["active"],
-                         "grok")
+        self.assertEqual(self.settings.bot_save_connection(
+            "", json.dumps({"title": "Nope", "provider": "nonesuch",
+                            "api_key": "k", "model": "m"})), "")
+        self.assertEqual(self.listed(), [])
 
-    def test_saving_a_blank_key_keeps_the_stored_one(self):
-        """The field never echoes the key back, so blank means "unchanged" —
-        if it meant "erase", re-saving the model would silently log you out."""
-        self.settings.bot_save_provider("google", "AIza-original-key", "", "")
-        self.settings.bot_save_provider("google", "", "gemini-2.0-flash", "")
-        self.assertTrue(self.entry("google")["has_key"])
-        self.assertEqual(self.entry("google")["model"], "gemini-2.0-flash")
+    def test_deleting_one_connection_leaves_the_others(self):
+        keep, drop = self.add("Keep me"), self.add("Drop me")
+        self.assertTrue(self.settings.bot_delete_connection(drop))
+        ids = [c["id"] for c in self.listed()]
+        self.assertIn(keep, ids)
+        self.assertNotIn(drop, ids)
 
-    def test_the_endpoint_is_built_for_the_provider(self):
-        self.assertIn(":generateContent", self.entry("google")["endpoint"])
-        self.assertIn("api.x.ai", self.entry("grok")["endpoint"])
+    def test_connections_survive_a_restart(self):
+        ident = self.add("Persistent", model="grok-4.3")
+        store = ConnectionStore(ConfigManager(self.cfg._path))
+        found = store.get(ident)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.model, "grok-4.3")
+        self.assertEqual(found.api_key, "xai-secret-key-1")
+
+    def test_the_active_connection_survives_a_restart(self):
+        ident = self.add("Chosen")
+        self.assertTrue(self.settings.bot_use_connection(ident))
+        reopened = ConfigManager(self.cfg._path)
+        self.assertEqual(ConnectionStore(reopened).active().id, ident)
+
+    def test_deleting_the_active_connection_clears_the_choice(self):
+        ident = self.add("Only one")
+        self.settings.bot_use_connection(ident)
+        self.settings.bot_delete_connection(ident)
+        self.assertEqual(ConnectionStore(self.cfg).active_id(), "")
+
+    def test_the_dialog_offers_the_provider_kinds(self):
+        ids = [p["id"] for p in
+               json.loads(self.settings.bot_connections())["providers"]]
+        self.assertIn("grok", ids)
+        self.assertIn("google", ids)
+
+    def test_the_selected_connection_is_the_one_that_runs(self):
+        """The dropdown has to actually route the request, not just look
+        selected — that is the acceptance criterion."""
+        self.add("Grok one", model="grok-4.3")
+        google = self.add("Gemini", provider="google",
+                          key="AIza-key-9999", model="gemini-2.0-flash")
+        self.settings.bot_use_connection(google)
+        client = client_for(self.cfg)
+        self.assertEqual(client.settings.model, "gemini-2.0-flash")
+        self.assertIn("generativelanguage", client.settings.endpoint)
+
+
+class TestConnectionsAndPresetsAreIndependent(SettingsBridgeCase):
+    """Acceptance: deleting a preset must not affect AI connections — and
+    the converse, which is the more dangerous direction."""
+
+    def test_deleting_a_connection_keeps_the_prompt_presets(self):
+        editor = BotPromptBridge(self.ctx)
+        editor.bot_save_preset("suggest_reply", "Short", "be brief", "")
+        self.settings.bot_delete_connection(self.add("Doomed"))
+        presets = json.loads(editor.bot_get_presets("suggest_reply"))
+        self.assertEqual([p["title"] for p in presets], ["Short"])
+
+    def test_deleting_a_preset_keeps_the_connections(self):
+        editor = BotPromptBridge(self.ctx)
+        ident = self.add("Safe")
+        preset = editor.bot_save_preset("suggest_reply", "Short", "brief", "")
+        self.assertTrue(editor.bot_delete_preset(preset))
+        self.assertTrue(self.entry(ident)["has_key"])
+
+    def test_editing_a_preset_never_touches_a_key(self):
+        editor = BotPromptBridge(self.ctx)
+        ident = self.add("Keyed", key="xai-untouched-key")
+        editor.bot_save_preset("suggest_reply", "V2", "different text", "")
+        self.assertEqual(ConnectionStore(self.cfg).get(ident).api_key,
+                         "xai-untouched-key")
+
+
+class TestPromptPresets(PromptBridgeCase):
+    def titles(self, template="suggest_reply"):
+        return [p["title"] for p in
+                json.loads(self.editor.bot_get_presets(template))]
+
+    def test_a_preset_is_saved_and_listed(self):
+        self.assertTrue(self.editor.bot_save_preset(
+            "suggest_reply", "Short and casual", "be brief with {nick}", ""))
+        self.assertEqual(self.titles(), ["Short and casual"])
+
+    def test_a_new_preset_does_not_overwrite_another(self):
+        self.editor.bot_save_preset("suggest_reply", "One", "text one", "")
+        self.editor.bot_save_preset("suggest_reply", "Two", "text two", "")
+        self.assertEqual(sorted(self.titles()), ["One", "Two"])
+
+    def test_an_existing_preset_is_updated_in_place(self):
+        ident = self.editor.bot_save_preset("suggest_reply", "One", "old", "")
+        self.editor.bot_save_preset("suggest_reply", "One", "new text", ident)
+        presets = json.loads(self.editor.bot_get_presets("suggest_reply"))
+        self.assertEqual(len(presets), 1, "update must not create a second")
+        self.assertEqual(presets[0]["text"], "new text")
+
+    def test_a_preset_can_be_deleted(self):
+        ident = self.editor.bot_save_preset("suggest_reply", "Bye", "x", "")
+        self.assertTrue(self.editor.bot_delete_preset(ident))
+        self.assertEqual(self.titles(), [])
+        self.assertFalse(self.editor.bot_delete_preset(ident))
+
+    def test_presets_belong_to_their_template(self):
+        self.editor.bot_save_preset("suggest_reply", "For replies", "a", "")
+        self.editor.bot_save_preset("analyze_reaction", "For analysis", "b", "")
+        self.assertEqual(self.titles("suggest_reply"), ["For replies"])
+        self.assertEqual(self.titles("analyze_reaction"), ["For analysis"])
+
+    def test_presets_survive_a_restart(self):
+        self.editor.bot_save_preset("suggest_reply", "Durable", "keep me", "")
+        reopened = BotPromptBridge(
+            BridgeContext(config=ConfigManager(self.cfg._path)))
+        self.assertEqual(
+            [p["title"] for p in
+             json.loads(reopened.bot_get_presets("suggest_reply"))],
+            ["Durable"])
+
+    def test_an_empty_or_unnamed_preset_is_refused(self):
+        self.assertEqual(self.editor.bot_save_preset(
+            "suggest_reply", "Named", "   ", ""), "")
+        self.assertEqual(self.editor.bot_save_preset(
+            "suggest_reply", "", "text", ""), "")
+        self.assertEqual(self.titles(), [])
+
+    def test_a_preset_with_an_unknown_variable_is_still_saved(self):
+        """Same rule as templates (I-27): unknown is a warning, not a
+        refusal that silently discards the user's wording."""
+        self.assertTrue(self.editor.bot_save_preset(
+            "suggest_reply", "Draft", "hi {tone}", ""))
+
+    def test_saving_a_preset_does_not_change_the_live_template(self):
+        """Presets are a library: nothing is sent differently until the
+        user presses Save in the editor."""
+        before = json.loads(self.editor.bot_get_prompts())[0]["text"]
+        self.editor.bot_save_preset("suggest_reply", "Other", "different", "")
+        after = json.loads(self.editor.bot_get_prompts())[0]["text"]
+        self.assertEqual(before, after)
 
 
 class TestConnectionTest(SettingsBridgeCase):
-    def test_a_provider_with_no_key_fails_the_test_with_a_reason(self):
-        answers = []
-        chat = self.settings._chat_bridge()
-        chat.bot_reply_ready.connect(
-            lambda req, payload: answers.append((req, payload)))
-        self.settings.bot_test_provider("t1", "google")
-        self.drain()
-        report = json.loads(answers[0][1])
-        self.assertFalse(report["ok"])
-        self.assertEqual(report["code"], "grok_no_key")
-        self.assertIn("Google", report["detail"])
+    def answers(self):
+        got = []
+        self.settings._chat_bridge().bot_reply_ready.connect(
+            lambda req, payload: got.append((req, payload)))
+        return got
 
-    def test_the_test_names_the_provider_it_tested(self):
-        answers = []
-        chat = self.settings._chat_bridge()
-        chat.bot_reply_ready.connect(
-            lambda req, payload: answers.append((req, payload)))
-        self.settings.bot_test_provider("t2", "grok")
+    def test_an_unsaved_connection_cannot_be_tested(self):
+        got = self.answers()
+        self.settings.bot_test_connection("t0", "nope")
         self.drain()
-        self.assertEqual(json.loads(answers[0][1])["provider"], "grok")
+        report = json.loads(got[0][1])
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["code"], "bot_no_connection")
+
+    def test_a_connection_with_no_key_fails_with_a_reason(self):
+        ident = self.add("Keyless", key="")
+        got = self.answers()
+        self.settings.bot_test_connection("t1", ident)
+        self.drain()
+        report = json.loads(got[0][1])
+        self.assertFalse(report["ok"])
+        self.assertIn("no API key", report["detail"])
+
+    def test_the_test_names_the_connection_it_tested(self):
+        ident = self.add("Named one")
+        got = self.answers()
+        self.settings.bot_test_connection("t2", ident)
+        self.drain()
+        self.assertEqual(json.loads(got[0][1])["connection"], ident)
 
 
 class TestTheUiCallsSlotsThatExist(unittest.TestCase):

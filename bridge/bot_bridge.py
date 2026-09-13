@@ -102,20 +102,20 @@ class BotBridge(QObject):
         return self._service
 
     # ── the AI Bot Chat window ───────────────────────────────────
-    @Slot(str, str)
-    def bot_load_today(self, req_id, nick):
-        """The current day's messages of this person."""
-        schedule(self, req_id, self.service.today(nick))
+    @Slot(str, str, str)
+    def bot_load_today(self, req_id, nick, scope):
+        """This person's messages — today's, or the whole conversation."""
+        schedule(self, req_id, self.service.load(nick, scope))
 
-    @Slot(str, str)
-    def bot_suggest_reply(self, req_id, nick):
-        """Ask Grok for a reply; it arrives PENDING, nothing is sent."""
-        schedule(self, req_id, self.service.suggest_reply(nick))
+    @Slot(str, str, str)
+    def bot_suggest_reply(self, req_id, nick, scope):
+        """Ask the model for a reply; it arrives PENDING, nothing is sent."""
+        schedule(self, req_id, self.service.suggest_reply(nick, scope))
 
-    @Slot(str, str)
-    def bot_analyze_reaction(self, req_id, nick):
-        """Ask Grok to classify the last answer. No label is written."""
-        schedule(self, req_id, self.service.analyze_reaction(nick))
+    @Slot(str, str, str)
+    def bot_analyze_reaction(self, req_id, nick, scope):
+        """Classify the person's last answer. No label is written."""
+        schedule(self, req_id, self.service.analyze_reaction(nick, scope))
 
     @Slot(str, str, str)
     def bot_send_message(self, req_id, nick, text):

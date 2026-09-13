@@ -17,6 +17,13 @@ Four of them, in the order the window uses them:
 
 Everything answers a plain dict the bridge can serialise, or a `Result` for
 the two operations that can fail on the wire.
+
+ideal-size: 292 lines reason=just under RULE 18's 300 and holding. The
+separable parts are already out: transcript shaping (`bot_transcript`),
+prompt templates (`bot_prompts`), presets (`bot_presets`), connections
+(`bot_connections`), label rules (`bot_reactions`). What remains is the
+window's own flow — load, ask, confirm, write — plus the three module-level
+delivery helpers that only this flow calls.
 """
 
 from __future__ import annotations
@@ -34,6 +41,9 @@ log = logging.getLogger("chatbot")
 
 #: how many of the day's messages are worth sending as context
 CONTEXT_LIMIT = 60
+#: the two history scopes the Bot Chat window offers
+SCOPE_TODAY = "today"
+SCOPE_ALL = "all"
 #: how far back to read before filtering to today. `HistoryQuery.page` is
 #: frozen by the AREA D API snapshot and takes no `day=`, so the day filter
 #: happens here; this bounds how many rows that costs.
@@ -53,9 +63,31 @@ def empty_detail(nick: str, page: dict) -> str:
     """
     if page.get("reason") == "archive_closed":
         return "no database is open — open a world first"
+    if page.get("reason") == "no_messages_at_all":
+        return (f"no messages with {nick} in the archive at all — "
+                f"collect the chat first")
     return (f"no messages with {nick} archived under {page.get('day')} — "
-            f"collect the chat first, or it may still be dated the "
-            f"previous day")
+            f"collect the chat first, it may still be dated the previous "
+            f"day, or untick “today only” to use the whole conversation")
+
+
+def scoped_page(nick: str, rows, scope: str) -> dict:
+    """The day payload for one scope, with an honest reason when it is empty.
+
+    Module-level and pure: it reads no state off the service, and both the
+    cap and the "which scope was empty" wording are things the tests want to
+    pin down directly.
+    """
+    everything = scope == SCOPE_ALL
+    found = list(rows or []) if everything \
+        else items_of_day(rows, today_key())
+    items = found[-CONTEXT_LIMIT:]
+    empty_reason = "no_messages_at_all" if everything else "no_messages_today"
+    return {"nick": nick, "items": items, "empty": not items,
+            "day": today_key(),
+            "scope": SCOPE_ALL if everything else SCOPE_TODAY,
+            "truncated": len(found) > len(items), "total": len(found),
+            "reason": "" if items else empty_reason}
 
 
 async def open_partner(parser) -> str:
@@ -144,25 +176,28 @@ class BotChatService:
         store = self.label_store
         return ReactionLabels(store) if store is not None else None
 
-    async def today(self, nick: str) -> dict:
-        """The current day's messages of one person (empty is not broken).
+    async def load(self, nick: str, scope: str = SCOPE_TODAY) -> dict:
+        """One person's messages: today's, or the whole conversation.
 
         Reads through `HistoryQuery.page` — the archive's ONE read — rather
         than a second hand-written SELECT. The first version did write its
-        own, and dropped the `media` join doing so, which is why a GIF
-        rendered as a blank message: the renderer was fine, the query was a
-        worse copy of one that already existed (RULE 5).
+        own and dropped the `media` join doing so, which is why a GIF
+        rendered blank: the renderer was fine, the query was a worse copy of
+        one that already existed (RULE 5). `scoped_page` then applies the
+        scope and the cap.
         """
         query = getattr(self.archive, "query", None)
         db = getattr(self.archive, "db", None)
         if query is None or db is None or not getattr(db, "is_open", False):
             return {"nick": nick, "items": [], "empty": True,
-                    "day": today_key(), "reason": "archive_closed"}
+                    "day": today_key(), "scope": scope,
+                    "reason": "archive_closed"}
         page = await query.page(nick, limit=PAGE_LIMIT)
-        items = items_of_day(page.get("items"), today_key())[-CONTEXT_LIMIT:]
-        return {"nick": nick, "items": items, "empty": not items,
-                "day": today_key(),
-                "reason": "" if items else "no_messages_today"}
+        return scoped_page(nick, page.get("items"), scope)
+
+    async def today(self, nick: str) -> dict:
+        """Today's messages — the default scope, kept for its four callers."""
+        return await self.load(nick, SCOPE_TODAY)
 
     def context_of(self, nick: str, page: dict, custom: str = "") -> dict:
         """The values every prompt variable resolves against.
@@ -188,16 +223,23 @@ class BotChatService:
                 return str(item.get("name") or "")
         return ""
 
-    async def preview(self, nick: str, template_id: str) -> dict:
-        """Exactly what would be sent to Grok — the Prompt Editor shows it."""
-        page = await self.today(nick)
+    async def preview(self, nick: str, template_id: str,
+                      scope: str = SCOPE_TODAY) -> dict:
+        """Exactly what would be sent — the Prompt Editor shows it."""
+        page = await self.load(nick, scope)
         return {"nick": nick, "template": template_id,
                 "prompt": self.prompts.render(
                     template_id, self.context_of(nick, page))}
 
-    async def suggest_reply(self, nick: str) -> Result[dict]:
-        """A pending reply suggestion — approved and sent by the user only."""
-        page = await self.today(nick)
+    async def suggest_reply(self, nick: str,
+                            scope: str = SCOPE_TODAY) -> Result[dict]:
+        """A pending reply suggestion — approved and sent by the user only.
+
+        The scope is the window's checkbox: it must reach HERE and not only
+        the message list, or the box would change what the user sees while
+        the model kept reading a different conversation.
+        """
+        page = await self.load(nick, scope)
         if page["empty"]:
             return Err("bot_no_messages", empty_detail(nick, page))
         rendered = self.prompts.render("suggest_reply",
@@ -207,9 +249,10 @@ class BotChatService:
             return answer
         return Ok({"nick": nick, "text": answer.value, "state": "pending"})
 
-    async def analyze_reaction(self, nick: str) -> Result[dict]:
-        """Grok's reading of the person's last answer. Writes nothing."""
-        page = await self.today(nick)
+    async def analyze_reaction(self, nick: str,
+                               scope: str = SCOPE_TODAY) -> Result[dict]:
+        """The model's reading of the person's last answer. Writes nothing."""
+        page = await self.load(nick, scope)
         last = last_inbound(page["items"])
         if not last:
             if page["empty"]:

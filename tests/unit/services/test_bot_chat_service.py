@@ -15,6 +15,7 @@ What is pinned:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import tempfile
@@ -28,10 +29,13 @@ if ROOT not in sys.path:
 
 from backend.config_manager import ConfigManager            # noqa: E402
 from services import bot_chat                                # noqa: E402
+from services import bot_connections                         # noqa: E402
 from services import bot_providers                         # noqa: E402
+from services.bot_connections import ConnectionStore         # noqa: E402
+from services.bot_presets import PresetLibrary               # noqa: E402
 from services import bot_variables                          # noqa: E402
 from services.bot_chat import BotChatService, as_transcript, last_inbound  # noqa: E402
-from services.bot_grok import (GrokClient, GrokSettings,      # noqa: E402
+from services.bot_grok import (GrokClient, GrokSettings, client_for,  # noqa: E402
                                mask, reply_text)
 from services.bot_prompts import PromptLibrary, is_usable    # noqa: E402
 from backend.history_query import HistoryQuery               # noqa: E402
@@ -684,39 +688,24 @@ class TestGrokConnectionSettings(unittest.TestCase):
                                               "config.json"))
         self.settings = GrokSettings(self.cfg)
 
-    def test_a_saved_key_is_used_by_the_next_call(self):
-        self.assertTrue(self.settings.save("xai-123", "grok-test"))
-        self.assertEqual(GrokSettings(self.cfg).api_key, "xai-123")
-        self.assertEqual(GrokSettings(self.cfg).model, "grok-test")
-
-    def test_it_survives_a_restart(self):
-        self.settings.save("xai-123")
-        reopened = ConfigManager(self.cfg.path) if hasattr(self.cfg, "path") \
-            else self.cfg
-        self.assertEqual(GrokSettings(reopened).api_key, "xai-123")
-
-    def test_saving_only_the_model_keeps_the_key(self):
-        """The password input never echoes the key back, so a blank field
-        means "unchanged", not "erase it"."""
-        self.settings.save("xai-123", "grok-2")
-        self.settings.save("", "grok-3")
-        self.assertEqual(GrokSettings(self.cfg).api_key, "xai-123")
-        self.assertEqual(GrokSettings(self.cfg).model, "grok-3")
-
-    def test_the_reported_state_never_contains_the_key(self):
-        self.settings.save("xai-secret", "grok-2")
-        state = self.settings.state()
-        self.assertTrue(state["has_key"])
-        self.assertNotIn("xai-secret", str(state))
+    def test_legacy_settings_are_still_readable(self):
+        """`GrokSettings` is now a READER only — the connection store uses it
+        to adopt an install configured before connections existed. Writing
+        moved to `ConnectionStore.save`, so there is one way to store a key."""
+        self.cfg.set("grok", "api_key", "xai-old-key")
+        self.assertEqual(GrokSettings(self.cfg).api_key, "xai-old-key")
+        for gone in ("save", "use", "state"):
+            self.assertFalse(hasattr(GrokSettings(self.cfg), gone),
+                             gone + " is a second way to write a key")
 
     def test_the_missing_key_error_names_a_place_that_exists(self):
         client = GrokClient(config=self.cfg, session_factory=None)
         detail = run(client.complete("hi")).detail
-        self.assertIn("AI Settings", detail)
+        self.assertIn("AI Connections", detail)
         repo = os.path.dirname(ROOT)
         html = open(os.path.join(repo, "ui", "index.html"),
                     encoding="utf-8").read()
-        for element in ('id="botSettingsBtn"', 'id="botProviderKey"'):
+        for element in ('id="botPromptSettingsBtn"', 'id="botProviderKey"'):
             self.assertIn(element, html,
                           "the error sends the user somewhere that exists")
 
@@ -895,6 +884,259 @@ class TestPromptLibrary(unittest.TestCase):
         self.assertFalse(is_usable("   "))
         self.assertTrue(is_usable("{oops}"), "unknown is not broken")
         self.assertTrue(is_usable("plain text"))
+
+
+
+class TestHistoryScope(unittest.TestCase):
+    """The "today only" checkbox — item 5.
+
+    It must reach the AI calls, not just the message list: a box that
+    changed what the user sees while the model kept reading a different
+    conversation would be worse than no box.
+    """
+
+    def service(self, rows=None):
+        from core.result import Ok
+        db = run(make_db(rows if rows is not None else [
+            ("in", "Anna", "ancient", "2020-01-01"),
+            ("out", "me", "older", YESTERDAY),
+            ("in", "Anna", "hello today", TODAY)]))
+        grok = FakeGrok(Ok("sure"))
+        return BotChatService(archive=FakeArchive(db), config=None,
+                              grok=grok), grok
+
+    def test_today_is_the_default_and_filters_by_day(self):
+        svc, _ = self.service()
+        page = run(svc.load("Anna"))
+        self.assertEqual([i["text"] for i in page["items"]], ["hello today"])
+        self.assertEqual(page["scope"], "today")
+
+    def test_all_returns_the_whole_conversation(self):
+        svc, _ = self.service()
+        page = run(svc.load("Anna", "all"))
+        self.assertEqual([i["text"] for i in page["items"]],
+                         ["ancient", "older", "hello today"])
+        self.assertEqual(page["scope"], "all")
+
+    def test_the_scope_reaches_the_prompt_not_just_the_list(self):
+        svc, grok = self.service()
+        run(svc.suggest_reply("Anna", "all"))
+        self.assertIn("ancient", grok.prompts[-1])
+        run(svc.suggest_reply("Anna", "today"))
+        self.assertNotIn("ancient", grok.prompts[-1])
+
+    def test_the_analysis_honours_the_scope_too(self):
+        """With nothing said today, "today only" has no answer to judge,
+        while the wider scope can still reach the last real reply."""
+        rows = [("in", "Anna", "left on read yesterday", YESTERDAY)]
+        svc, grok = self.service(rows)
+        self.assertEqual(run(svc.analyze_reaction("Anna", "today")).code,
+                         "bot_no_messages")
+        self.assertTrue(run(svc.analyze_reaction("Anna", "all")).is_ok)
+        self.assertIn("left on read yesterday", grok.prompts[-1])
+
+    def test_the_preview_honours_the_scope(self):
+        """Otherwise the editor would preview a prompt the app never sends."""
+        svc, _ = self.service()
+        shown = run(svc.preview("Anna", "suggest_reply", "all"))["prompt"]
+        self.assertIn("ancient", shown)
+
+    def test_full_history_is_still_capped_and_says_so(self):
+        """"Not restricted to today" must not mean "post the whole archive
+        to a metered API" — and a silently shortened history is a wrong
+        answer the user cannot see."""
+        rows = [("in", "Anna", f"msg {n}", TODAY)
+                for n in range(bot_chat.CONTEXT_LIMIT + 15)]
+        svc, _ = self.service(rows)
+        page = run(svc.load("Anna", "all"))
+        self.assertEqual(len(page["items"]), bot_chat.CONTEXT_LIMIT)
+        self.assertTrue(page["truncated"])
+        self.assertEqual(page["total"], bot_chat.CONTEXT_LIMIT + 15)
+        self.assertEqual(page["items"][-1]["text"],
+                         f"msg {bot_chat.CONTEXT_LIMIT + 14}",
+                         "the cap must keep the NEWEST messages")
+
+    def test_an_empty_archive_explains_which_scope_was_empty(self):
+        db = run(make_db([]))
+        svc = BotChatService(archive=FakeArchive(db), config=None,
+                             grok=FakeGrok(None))
+        every = run(svc.load("Anna", "all"))
+        self.assertEqual(every["reason"], "no_messages_at_all")
+        self.assertIn("at all", bot_chat.empty_detail("Anna", every))
+        just_today = run(svc.load("Anna", "today"))
+        self.assertEqual(just_today["reason"], "no_messages_today")
+        self.assertIn("today only", bot_chat.empty_detail("Anna", just_today))
+
+    def test_today_stays_available_as_its_own_call(self):
+        svc, _ = self.service()
+        self.assertEqual(run(svc.today("Anna"))["scope"], "today")
+
+
+class TestConnections(unittest.TestCase):
+    """Named connections — several may share one provider."""
+
+    def config(self):
+        return ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+
+    def store(self):
+        return ConnectionStore(self.config())
+
+    def test_a_connection_resolves_its_provider_endpoint_and_model(self):
+        store = self.store()
+        ident = store.save("", {"title": "Work Gemini", "provider": "google",
+                                "api_key": "AIza-k", "model": "gemini-x"})
+        conn = store.get(ident)
+        self.assertEqual(conn.spec.id, "google")
+        self.assertIn("gemini-x:generateContent", conn.endpoint)
+        self.assertEqual(conn.title, "Work Gemini")
+
+    def test_a_connection_falls_back_to_its_providers_defaults(self):
+        store = self.store()
+        ident = store.save("", {"title": "Bare", "provider": "grok",
+                                "api_key": "k"})
+        conn = store.get(ident)
+        self.assertEqual(conn.model, bot_providers.spec_of("grok").model)
+        self.assertEqual(conn.url, bot_providers.spec_of("grok").url)
+
+    def test_the_problem_is_named_rather_than_silently_skipped(self):
+        store = self.store()
+        keyless = store.get(store.save("", {"title": "No key",
+                                            "provider": "grok"}))
+        self.assertEqual(keyless.problem(), "no API key")
+        self.assertFalse(keyless.state()["ok"])
+
+    def test_a_connection_whose_provider_vanished_says_so(self):
+        """Config outlives code: a provider id can disappear in an update."""
+        conn = bot_connections.Connection("x", {"provider": "obsolete",
+                                                "api_key": "k"})
+        self.assertIn("unknown provider", conn.problem())
+
+    def test_the_state_never_contains_the_key(self):
+        store = self.store()
+        conn = store.get(store.save("", {"title": "T", "provider": "grok",
+                                         "api_key": "xai-very-secret-key"}))
+        self.assertNotIn("very-secret", json.dumps(conn.state()))
+        self.assertTrue(conn.state()["masked"])
+
+    def test_two_connections_of_one_provider_keep_separate_models(self):
+        store = self.store()
+        big = store.save("", {"title": "Big", "provider": "grok",
+                              "api_key": "k1", "model": "grok-4.3"})
+        cheap = store.save("", {"title": "Cheap", "provider": "grok",
+                                "api_key": "k2", "model": "grok-2-latest"})
+        self.assertNotEqual(big, cheap)
+        self.assertEqual(store.get(big).model, "grok-4.3")
+        self.assertEqual(store.get(cheap).model, "grok-2-latest")
+
+    def test_active_falls_back_to_the_first_usable_connection(self):
+        """A prompt should run rather than fail because nobody pressed
+        "use this one" yet."""
+        store = self.store()
+        first = store.save("", {"title": "First", "provider": "grok",
+                                "api_key": "k"})
+        self.assertEqual(store.active().id, first)
+
+    def test_use_refuses_an_unknown_id(self):
+        store = self.store()
+        self.assertFalse(store.use("nonesuch"))
+
+    def test_ids_do_not_collide_for_similar_names(self):
+        store = self.store()
+        one = store.save("", {"title": "Grok 4.3", "provider": "grok",
+                              "api_key": "k"})
+        two = store.save("", {"title": "Grok 2", "provider": "grok",
+                              "api_key": "k"})
+        self.assertNotEqual(one, two)
+
+
+class TestLegacySettingsBecomeAConnection(unittest.TestCase):
+    """An install configured before connections existed must keep working
+    without the user re-typing a key."""
+
+    def config(self):
+        cfg = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+        cfg.set("grok", "api_key", "xai-legacy-key-1")
+        cfg.set("grok", "model", "grok-legacy")
+        cfg.save()
+        return cfg
+
+    def test_an_old_grok_key_is_adopted_as_a_connection(self):
+        store = ConnectionStore(self.config())
+        connections = store.all()
+        self.assertEqual(len(connections), 1)
+        self.assertEqual(connections[0].api_key, "xai-legacy-key-1")
+        self.assertEqual(connections[0].model, "grok-legacy")
+
+    def test_the_adopted_connection_is_what_the_client_uses(self):
+        cfg = self.config()
+        self.assertEqual(client_for(cfg).settings.model, "grok-legacy")
+
+    def test_adoption_does_not_run_twice(self):
+        cfg = self.config()
+        ConnectionStore(cfg).all()
+        store = ConnectionStore(cfg)
+        store.save("", {"title": "Mine", "provider": "google",
+                        "api_key": "AIza-k"})
+        self.assertEqual(len(ConnectionStore(cfg).all()), 2)
+
+    def test_a_fresh_install_has_no_connections_and_does_not_crash(self):
+        blank = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+        store = ConnectionStore(blank)
+        self.assertEqual(store.all(), [])
+        self.assertIsNone(store.active())
+        self.assertEqual(run(client_for(blank).complete("hi")).code,
+                         "grok_no_key")
+
+
+class TestConnectionsWithoutAConfig(unittest.TestCase):
+    """The services are built before a config exists (headless runs, several
+    bridge tests). Every verb must answer, not raise."""
+
+    def store(self):
+        return ConnectionStore(None)
+
+    def test_reads_are_empty(self):
+        store = self.store()
+        self.assertEqual(store.all(), [])
+        self.assertEqual(store.active_id(), "")
+        self.assertIsNone(store.get("anything"))
+
+    def test_writes_refuse_rather_than_pretend(self):
+        store = self.store()
+        self.assertEqual(store.save("", {"title": "T", "provider": "grok"}), "")
+        self.assertFalse(store.delete("x"))
+        self.assertFalse(store.use("x"))
+
+
+class TestPresetLibrary(unittest.TestCase):
+    def library(self):
+        return PresetLibrary(
+            ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json")))
+
+    def test_a_preset_round_trips(self):
+        lib = self.library()
+        ident = lib.save("suggest_reply", "Casual", "hey {person_name}")
+        self.assertEqual(lib.get(ident)["text"], "hey {person_name}")
+        self.assertEqual(lib.for_template("suggest_reply")[0]["title"],
+                         "Casual")
+
+    def test_an_unknown_template_is_refused(self):
+        self.assertEqual(self.library().save("nope", "T", "text"), "")
+
+    def test_deleting_an_absent_preset_is_false_not_an_error(self):
+        self.assertFalse(self.library().delete("nothing-here"))
+
+    def test_a_preset_only_lists_under_its_own_template(self):
+        lib = self.library()
+        lib.save("suggest_reply", "A", "a")
+        self.assertEqual(lib.for_template("analyze_reaction"), [])
+
+    def test_no_config_is_empty_not_broken(self):
+        lib = PresetLibrary(None)
+        self.assertEqual(lib.for_template("suggest_reply"), [])
+        self.assertEqual(lib.save("suggest_reply", "T", "x"), "")
+        self.assertFalse(lib.delete("x"))
+
 
 
 if __name__ == "__main__":
