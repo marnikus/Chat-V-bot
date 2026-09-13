@@ -955,6 +955,26 @@ recorded here as the next named target, and it is cheap — 26 statements, four
 call paths, and `tests/integration/services/test_undo_support_contract.py`
 already builds the fixture shape they need.
 
+**Corrected by F3d, on the record.** Two things above were wrong, and writing the
+tests is what showed it:
+
+* **The framing.** This is *not* "the half of the ported DB-undo-restore feature
+  that destroys and restores a world file". `bridge/db_bridge.py` guards its only
+  `dbconn` push with `if op != "delete"`, so **no current product path records a
+  delete entry at all** — D4 makes a world delete permanent, and
+  `test_db_manager.py::test_a_delete_is_not_an_undo_step` already pinned that. The
+  delete branch is reachable *only* from an entry a previous version persisted
+  into a world's `undo_history` table, which `sync_world_state` merges into the
+  live timeline untouched. That is what `_apply_db_command`'s own docstring means
+  by "legacy entries" — a phrase that was in the code all along and that a
+  coverage number alone did not force anyone to read.
+* **The count.** "26 statements, four call paths" described the delete half only.
+  Closing the module also needed `_db_switch_op`'s forward branch, which nothing
+  re-did either, and which was the file's last uncovered line.
+
+The gap was real and worth closing; the *reason* it was uncovered was not the one
+§8.11.8 guessed. §8.12 records what was written and what it found.
+
 #### 8.11.9 RULE 16 and RULE 18 recheck
 
 Every function in the five-file family (61 of them) re-measured with the gate's
@@ -1045,3 +1065,136 @@ evidence:
   unused import whose honest removal would dissolve the window. Reordering or
   splitting the imports to break the span was rejected: it is the cosmetic
   span-shrinking §18.5 forbids and it would reintroduce pylint C0411.
+
+### 8.12 F3d executed — the seams `services/undo_db.py` exposed
+
+A **test-only** step: `git status` for it is one new file and no product line
+changed, so the equivalence evidence in §8.11.7 is untouched and the family's
+RULE 16 numbers are exactly §8.11.9's.
+
+#### 8.12.1 Numbers
+
+| | before F3d | after |
+|---|---|---|
+| `services/undo_db.py` line coverage | 45.68% (29/55) | **100.00%** (55/55) |
+| repo line coverage | 91.51% | **91.69%** (14,142/15,423) |
+| repo branch coverage | 86.36% | **86.84%** (3,246/3,738) |
+| suite | 2726 passed / 894 subtests | **2748 passed / 0 failed** / 894 subtests |
+| clone scan / RULE 16 gate | 0 new, 0 stale, rc=0 | unchanged |
+
+`tests/integration/services/test_services_undo_gaps.py` — 22 tests, 452 lines, in
+the `*_gaps.py` convention already used by `test_services_db_gaps.py` and
+`test_services_collector_gaps.py`: a file that exists because a *seam* was
+untested, whose docstring names what the other suites already cover so the next
+reader does not duplicate it.
+
+The fixture is the missing piece §8.11.8 could not name: **no test anywhere
+constructed an `UndoService` with a `dbs=`**, which is why the whole module was
+cold. `FakeDbs` records every `delete` / `load` / `clean` / `restore_backup` call
+and returns a canned result, so each test asserts the call that was made and not
+merely that something happened.
+
+#### 8.12.2 What the tests lock
+
+* **`_db_delete_op`, both directions**, including the two warnings that make a
+  permanent delete say so instead of pretending ("Nothing to re-delete — the file
+  is already gone", "Database deletions are permanent — no backup exists to
+  restore"), and the `str(value.get("backup") or "")` coercion that makes a
+  *missing* key behave like a missing backup. Legacy entries are exactly the ones
+  whose shape cannot be assumed, so the coercion is contract, not detail.
+* **`_db_op_forward`**: `create` loads with `create=True`, `load` with
+  `create=False`, `clean` empties the *live* world and ignores the entry's path,
+  an unknown op returns `None` and calls nothing.
+* **`_db_switch_op`, both ways**: forward to `path`, backward to `before_path`
+  (or to the clean's `backup`). Direction *is* the contract here — backwards and
+  the app reopens the wrong world.
+* **`_apply_db_command`'s delete branch end to end**: restart the world only on
+  `ok`; announce on any result, with `switched=True` only when the live world
+  really moved and with the DbManager's own error reaching the Log Console; and
+  on `None` do neither.
+
+#### 8.12.3 The guard is a negative check, and one mutation taught something
+
+Nine mutations of `services/undo_db.py`, each required to fail a named test
+(`/home/user/f3d_negative.py`; restores the file and re-verifies the baseline
+afterwards): **9 of 9 caught** — swapping the delete op's directions, re-deleting
+a file that is already gone, pretending a permanent delete can be restored,
+creating on a plain load, dropping the clean branch, announcing only successes,
+rebuilding the world after a failure, announcing an op that never ran, and
+sending a redo backwards to `before_path`.
+
+The eighth **missed on the first run**, and the miss was the useful part.
+Deleting the `if result is None: return` guard changes nothing a bus-only recorder
+can see: the resulting `AttributeError` dies inside the spawned task, and
+`TimelineCommit._crash_log` reports it through the `chatbot` **logger**, not the
+EventBus. So "the op declined cleanly" and "the op raised in a background task"
+looked identical to the test — while looking very different to a user reading the
+log. The suite now attaches a WARNING-level handler to that logger and asserts no
+"db command failed", which is what turned the miss into a catch.
+
+#### 8.12.4 Two findings locked rather than fixed
+
+Both are product decisions, and a test-only step has no business making either.
+Each is asserted by a test whose docstring says so, so the behaviour cannot drift
+without someone reading the reason.
+
+1. **The D4 tension.** D4 says a deleted world stays deleted and no Ctrl+Z brings
+   it back, and `test_a_delete_is_not_an_undo_step` pins that nothing writes such
+   an entry. But a legacy entry already sitting in a world's `undo_history` table
+   is merged into the live timeline by `sync_world_state` and, undone, **restores
+   the deleted file from its backup** —
+   `test_a_legacy_delete_entry_still_restores_the_world`, with
+   `test_redo_of_a_legacy_delete_deletes_the_file_again` for the other direction.
+   Both behaviours are true today and neither is obviously wrong: honouring an
+   undo step the user was once promised is defensible, and so is treating every
+   delete as permanent from D4 onwards. Choosing means either dropping
+   `dbconn`/`delete` entries when a world loads (a migration decision, and it
+   would silently rewrite a persisted timeline) or documenting that pre-D4 worlds
+   keep one undoable delete. **Not decided here; it needs the owner.**
+2. **`dbconn` announces success from the intent.** `_apply_db_command` returns
+   `True` after spawning, so `_log_command` writes "↩ Undo — database restored"
+   synchronously and the op runs afterwards. `_log_command` suppresses exactly
+   that line for `archive` — "archive ones report themselves later, with the
+   database state they actually produced" — because announcing the intent is what
+   let a locked database keep a person deleted while the log said "archive
+   restored" (bug 2026-09-11, SYSTEM_OF_RECORD I-18). `dbconn` never got the same
+   fix. `test_success_is_announced_before_the_work_runs` pins the worst case: an
+   entry with no backup logs "database restored" and only *then* admits the delete
+   is permanent. The fix is small — suppress `dbconn` in `_log_command` and let
+   `emit_db_change` report the outcome, as archive does — but it changes
+   user-visible log text, so it is named here instead of being slipped into a
+   test commit.
+
+#### 8.12.5 RULE 16 / RULE 18 notes for the step
+
+* No product function changed; the family's maxima stay CC 9, cognitive 14,
+  nesting 3, params 8, function LOC 32, and its four violations are still HEAD's
+  four (§8.11.9).
+* The new file is a test module: 452 lines, no product logic, `vulture
+  --min-confidence 90` silent on it, and no `unused-argument` left once the
+  restart fake's unused parameters were underscored. Its 19 `protected-access`
+  hits are the point rather than a smell — it drives `_db_delete_op`,
+  `_db_op_forward` and `_db_switch_op` directly, which is what a seams file does
+  (`test_services_db_gaps.py` does the same to `DbManager`).
+* §18.2's band governs product modules; the repo's test files run to 817 lines
+  (`tests/test_world_write_gate.py`) and this one is not given an `ideal-size:`
+  note, because there is no constraint to name and §18.5 forbids inventing one.
+* Remaining coverage gaps in the family, attributed per function rather than per
+  impression — §8.11.8 is what a plausible-sounding guess costs. None is a new
+  gap; all are now *measurable per module*, which is the point of having split
+  the file.
+  * `undo_world.py` 84.34% — `restart_world`'s three failure paths (66-68 the
+    queue that did not follow the switch, 72-73 a failed undo sync, 79-80 the
+    guarded nick broadcast), `_schedule_world_undo_save` (98 — **no test calls
+    this method at all**), and `sync_world_state`'s "the world table is the
+    truth" skip (113).
+  * `undo_history.py` 85.71% — `_migrated_entry` (54-58), i.e. the seq-preserving
+    legacy rebuild is entirely unexercised, which is the function whose bug
+    "pushed every app entry ahead of the world entries and issued duplicate
+    seqs".
+  * `undo_apply.py` 87.82% — `_values_equal`'s exception fallback (40-41),
+    `_position_of`'s found path (60), `_apply_labels_command` (80),
+    `_apply_archive_command`'s two refusal returns (133, 135),
+    `rewind_after_failure`'s non-dict early return (149), `_apply_entry`'s
+    command-kind branch (164-165) and people branch (170-173), and `redo`'s
+    "cannot re-apply" `Err` (226).
