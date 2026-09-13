@@ -65,13 +65,18 @@ Each step follows the same discipline (RULE 16 §16.5/§16.6):
 | Step | Do | Outcome metric (target) |
 |---|---|---|
 | **1** ✅ | Split `backend/chat_sync.py` → `backend/chat_sync/` (10 modules) | file 791 → ≤278, MI 10.8 → ≥39.9 |
-| **2** | Split `services/db_deletion.py` + `db_deletion_flow.py` → `services/db_deletion/` | 665+509 → ≤300 each |
+| **2** ✅ | Split `services/db_deletion.py` + `db_deletion_flow.py` → `services/db_deletion/` | 665+509 → ≤300 each |
 | **3** ✅ | Extract `ScrollParser` (probe / parse / settle) | class 507/37 → ≤150/≤15 |
-| **4** | Extract `Collector` (lifecycle / tick-sync / push) | class 518/39 → ≤150/≤15 |
+| **4** ✅ | Extract `Collector` (lifecycle / tick-sync / push) | class 518/39 → ≤150/≤15 |
 | **5** ✅ | Split `backend/history_query.py` beside the `history_repo*` family | file 606 → ≤300 |
-| **6** | Split the bridge facades (`HistoryBridge`, `StackBridge`) per surface | class 474/31 → ≤150/≤15 |
-| **7** | Extract `UndoService` (undo / redo / world-sync / archive) | class 409/27 → ≤150/≤15 |
+| **6** ✅ | Split the bridge facades (`HistoryBridge`, `StackBridge`) per surface | class 474/31 → ≤150/≤15 |
+| **7** ✅ | Extract `UndoService` (undo / redo / world-sync / archive) | class 409/27 → ≤150/≤15 |
 | **8** | Split the remaining 400–530 LOC backend modules | files > 500 → **0** |
+
+Steps 6 and 7 were executed on 2026-09-13; their designs (and their
+before/after numbers) live in
+[`docs/archive/2026-09-13-god-classes/`](../2026-09-13-god-classes/), because
+an archived doc is true as of the date in its folder name (RULE 17).
 
 Success of the round: **no file over 500 LOC** and **no class over 150 LOC /
 15 methods** outside the documented §16.4 compat facades, with the suite and

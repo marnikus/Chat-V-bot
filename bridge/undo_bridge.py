@@ -1,6 +1,6 @@
 """UndoBridge — the global undo timeline's JS surface.
 
-The UndoService (services/undo_service.py) owns the timeline; this bridge
+The UndoService (services/undo_service/) owns the timeline; this bridge
 translates Results into the wire payloads and keeps the compatibility
 slots (per-surface undo/redo aliases) alive.
 """

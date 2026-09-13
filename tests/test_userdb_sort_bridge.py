@@ -2,7 +2,7 @@
 
 `HistoryDb` sends `{q, limit, offset, sort, dir}` to the `userdb_page` slot
 and paints whatever comes back, in the order it comes back. These tests drive
-the REAL `Bridge` (bridge/router.py + bridge/history_bridge.py) over the real
+the REAL `Bridge` (bridge/router.py + bridge/history_bridge/) over the real
 request-id/signal protocol and pin:
 
   * `dir` actually reaches the query and the answer echoes it;

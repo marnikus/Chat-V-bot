@@ -12,10 +12,13 @@ thresholds is how a gate starts disagreeing with itself.
 Three kinds of check live here:
 
 1. **Hard gate** — every function this feature owns fits all six limits.
-2. **Ratchet** — `HistoryQuery` and `HistoryBridge` were already over the
-   class limits before this feature (362 and 490 LOC) and cannot be split here
-   (the AREA D API snapshot and the QWebChannel wire contract both pin them).
-   So their size is frozen: it may shrink, it may not grow.
+2. **Ratchet** — a class that was already over the class limits before this
+   feature and cannot be split here has its size frozen: it may shrink, it may
+   not grow. `HistoryQuery` (362 LOC) left the ratchet in god-class step 5 and
+   `HistoryBridge` (493 LOC) in step 6 — both are small facades over single-
+   responsibility mixins now, so the ratchet dict is EMPTY and the
+   "enforcement actually fires" proof below is anchored on a real oversized
+   class elsewhere in the tree instead.
 3. **The gate is not vacuous** — a known over-limit function must actually be
    reported, and every override must be justified and still needed.
 
@@ -164,25 +167,36 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
         self.assertIn(key, rows, "class enforcement did not scan the owned file")
         self.assertEqual(rows[key]["violations"], [])
 
+    #: A real class in the tree that is over BOTH class caps today (225 LOC /
+    #: 44 direct methods at the 2026-09-13 measurement): the archive's write
+    #: facade. It is not owned by this feature, so the test lends it to the
+    #: gate for one run to prove the enforcement loop measures real code.
+    OVERSIZED = ("stores/history_repo.py", "HistoryRepo", "ensure_person")
+
     def test_enforcement_actually_fires_on_real_oversized_classes(self):
-        """The strongest check: with the ratchet lifted, the genuinely
-        oversized legacy class must be reported. Proves the loop is wired to
-        real measurement rather than passing because nothing was examined.
-        (God-class step 5 split `HistoryQuery`, so only `HistoryBridge`
-        remains oversized.)"""
-        saved = dict(gate.RATCHET)
+        """The strongest check: a genuinely oversized class must be reported.
+        Proves the loop is wired to real measurement rather than passing
+        because nothing was examined. (God-class steps 5 and 6 split
+        `HistoryQuery` and `HistoryBridge` into mixins, so no class in an
+        owned file is oversized any more — the proof is anchored on a real
+        oversized class elsewhere in the tree instead of going vacuous.)"""
+        saved_owned = list(gate.OWNED)
+        saved_ratchet = dict(gate.RATCHET)
+        gate.OWNED.append(self.OVERSIZED)
         gate.RATCHET.clear()
         try:
             breaches = gate.run()["breaches"]
         finally:
-            gate.RATCHET.update(saved)
+            gate.OWNED[:] = saved_owned
+            gate.RATCHET.update(saved_ratchet)
+        rel, name, _fn = self.OVERSIZED
         self.assertTrue(
-            any("HistoryBridge" in b and "loc" in b for b in breaches),
-            "with the ratchet lifted, HistoryBridge (493 LOC) must breach the "
-            f"{gate.CLASS_LIMITS['loc']} cap; got: {breaches}")
+            any(name in b and "loc" in b for b in breaches),
+            f"{rel}::{name} is over the {gate.CLASS_LIMITS['loc']}-LOC cap and "
+            f"must be reported; got: {breaches}")
         self.assertTrue(
-            any("HistoryBridge" in b and "methods" in b for b in breaches),
-            f"HistoryBridge must breach the methods cap too; got: {breaches}")
+            any(name in b and "methods" in b for b in breaches),
+            f"{name} must breach the methods cap too; got: {breaches}")
 
 
 class TestPreExistingDebtDoesNotGrow(unittest.TestCase):
@@ -196,6 +210,29 @@ class TestPreExistingDebtDoesNotGrow(unittest.TestCase):
                     grew.append(f"{rel}::{name} {axis} {info[axis]} > "
                                 f"frozen {cap[axis]}")
         self.assertEqual(grew, [], "\n".join(grew))
+
+    def test_the_ratchet_still_bites_when_it_has_something_to_hold(self):
+        """`RATCHET` is EMPTY since god-class step 6 split `HistoryBridge`
+        (step 5 split `HistoryQuery`), so the loop above passes vacuously.
+        This pins the mechanism itself: a cap below the real measurement of a
+        real class must be reported as growth, on both axes."""
+        rel, name = "stores/history_repo.py", "HistoryRepo"
+        info = gate.classes(rel).get(name)
+        self.assertIsNotNone(info, f"{name} disappeared from {rel}")
+        saved = dict(gate.RATCHET)
+        gate.RATCHET[(rel, name)] = {"loc": info["loc"] - 1,
+                                     "methods": info["methods"] - 1}
+        try:
+            breaches = gate.run()["breaches"]
+        finally:
+            gate.RATCHET.clear()
+            gate.RATCHET.update(saved)
+        for axis in ("loc", "methods"):
+            self.assertTrue(
+                any(name in b and axis in b and "frozen" in b
+                    for b in breaches),
+                f"growth of {name}'s {axis} over a frozen cap must be "
+                f"reported; got: {breaches}")
 
 
 class TestOverridesAreHonest(unittest.TestCase):
@@ -264,10 +301,25 @@ class TestCloneBaselineIsHonest(unittest.TestCase):
             self.assertEqual(list(sig), sorted(sig), f"unsorted entry: {sig}")
             self.assertGreaterEqual(len(sig), 2, f"not a cross-file group: {sig}")
 
-    def test_the_owned_file_group_is_the_pre_existing_import_header(self):
-        """Documents why an owned file appears in the baseline at all."""
-        self.assertIn(("bridge/db_bridge.py", "bridge/history_bridge.py"),
-                      gate.CLONE_BASELINE)
+    def test_no_owned_file_is_excused_by_the_clone_baseline(self):
+        """Documents the day the last owned file LEFT the baseline.
+
+        Until god-class step 6 (2026-09-13) the baseline carried
+        ('bridge/db_bridge.py', 'bridge/history_bridge.py') — the standard
+        import header both modules had carried since the base commit.
+        Splitting `bridge/history_bridge.py` into a package whose leaves
+        import only what they use removed that group. Nothing this feature
+        owns may be excused by the frozen baseline now: an owned file
+        reappearing there is duplication the feature introduced, not
+        pre-existing debt.
+        """
+        owned = {rel for rel, _cls, _fn in gate.OWNED}
+        excused = sorted({rel for group in gate.CLONE_BASELINE for rel in group}
+                         & owned)
+        self.assertEqual(
+            excused, [],
+            "owned files excused by CLONE_BASELINE — new duplication frozen "
+            "instead of fixed: " + ", ".join(excused))
 
     def test_no_new_clone_groups_and_no_stale_baseline_entries(self):
         result = gate.run(with_clones=True)

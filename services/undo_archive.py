@@ -1,6 +1,6 @@
 """The archive half of an undo entry — apply it, prove it, report it.
 
-`services/undo_service.py` owns WHEN a command runs (the ONE global
+`services/undo_service/` owns WHEN a command runs (the ONE global
 timeline); this collaborator owns HOW: it applies both halves of an archive
 entry (the People-list snapshot and the archive rows), reads the world back
 and reports only what the rows now show.

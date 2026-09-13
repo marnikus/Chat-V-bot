@@ -116,7 +116,7 @@ class DbManager:
     restore_backup with the media-reference scans. Every public name this
     class exposed before is a one-line delegate, so callers (the frozen
     `backend/db_manager.py` shim, `bridge/db_bridge.py`,
-    `services/undo_service.py`) see no change.
+    `services/undo_service/`) see no change.
     """
 
     def __init__(self, config=None, service=None, root: str = ""):

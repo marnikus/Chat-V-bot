@@ -95,8 +95,8 @@ are reported as information, not failures — nothing imported them from here
 into failures if that ever stops being true.
 
 Behaviour is locked first by
-`tests/integration/services/test_undo_world_commands.py` (35 tests, step 7a,
-`e11128a`), which took this file's coverage from the undo suites **73% → 94%**
+`tests/integration/services/test_undo_world_commands.py` (35 tests, step 7a),
+which took this file's coverage from the undo suites **73% → 94%**
 (199 passed).
 
 ## The split

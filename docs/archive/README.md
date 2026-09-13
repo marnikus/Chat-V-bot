@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**88 documents in 15 groups.**
+**90 documents in 16 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -28,6 +28,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-db-undo-restore/`](#2026-09-11-db-undo-restore) | 1 | The two bugs that ate a person: the world-file write gate (`stores/world_lock.py`), the archive command that verifies itself, the DB window’s refresh wiring and the instant, session-sized trash. |
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | RULE 1’s worked examples (visual click runner), moved out of the rules file so it stays loadable in one read. |
 | [`2026-09-12-god-classes/`](#2026-09-12-god-classes) | 6 | The god-class & size-debt round (RULE 19 step 4): the plan, and steps 1–5 — splitting `chat_sync`, the deletion family, `scroll_parser`, `Collector` and `history_query`. |
+| [`2026-09-13-god-classes/`](#2026-09-13-god-classes) | 2 | The same round, executed the next day: steps 6–7 — the two Qt bridge facades split by wire surface, and the `UndoService` god class split into `services/undo_service/`, each with the tool that proves the surface did not change. |
 
 ---
 
@@ -250,3 +251,17 @@ low-cohesion modules the baseline flagged as known debt.
 - [`STEP3_SCROLL_PARSER_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP3_SCROLL_PARSER_DESIGN_2026-09-12.md) — Step 3: `backend/scroll_parser.py` → `backend/scroll_parser/`, one mixin per phase, with the `asyncio` patch seam preserved
 - [`STEP4_COLLECTOR_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP4_COLLECTOR_DESIGN_2026-09-12.md) — Step 4: `services/collector_service.py` → `services/collector/`, five mixins + a facade, with the `sync_conversation` patch seam preserved
 - [`STEP5_HISTORY_QUERY_DESIGN_2026-09-12.md`](2026-09-12-god-classes/STEP5_HISTORY_QUERY_DESIGN_2026-09-12.md) — Step 5: `backend/history_query.py` → `backend/history_query/`, three mixins + value objects, with the frozen test seam preserved
+
+---
+
+## 2026-09-13-god-classes
+
+The god-class & size-debt round continues (RULE 19 step 4, steps 6–7 of
+[`2026-09-12-god-classes/ROUND_PLAN_2026-09-12.md`](2026-09-12-god-classes/ROUND_PLAN_2026-09-12.md)).
+A new dated folder because an archived doc is true as of the date in its folder
+name (RULE 17).
+
+*2 docs.*
+
+- [`STEP6_BRIDGE_FACADES_DESIGN_2026-09-13.md`](2026-09-13-god-classes/STEP6_BRIDGE_FACADES_DESIGN_2026-09-13.md) — Step 6: `bridge/history_bridge.py` + `bridge/stack_bridge.py` → one package each, seven plain-class mixins per facade, with the QWebChannel metaobject surface proven IDENTICAL
+- [`STEP7_UNDO_SERVICE_DESIGN_2026-09-13.md`](2026-09-13-god-classes/STEP7_UNDO_SERVICE_DESIGN_2026-09-13.md) — Step 7: `services/undo_service.py` → `services/undo_service/`, eight mixins + a facade, with the `MAX_STACK_HISTORY` patch seam kept live, two dead methods removed and four observed-not-changed behaviours pinned

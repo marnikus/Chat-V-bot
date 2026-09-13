@@ -1,6 +1,6 @@
 """TimelineCommit — writing the ONE global undo timeline (AREA C split).
 
-`services/undo_service.py` keeps the timeline state machine (push / undo /
+`services/undo_service/` keeps the timeline state machine (push / undo /
 redo / projections); this collaborator owns what happens when the timeline
 is written:
 
