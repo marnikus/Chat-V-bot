@@ -16,10 +16,10 @@ import logging
 from datetime import datetime
 from typing import Iterable, Optional
 
-from stores.history.history_models import (MAX_LIVE_ITEMS, AppendResult, MessageRecord)
-from stores.history.history_requests import AppendRequest
-from stores.history.history_repo_identity import (_as_record, align_batch,
+from stores.history_models import (MAX_LIVE_ITEMS, AppendResult, MessageRecord)
+from stores.history_repo_identity import (_as_record, align_batch,
                                           resolve_days)
+from stores.history_requests import WriteContext
 
 log = logging.getLogger("chatbot")
 
@@ -53,11 +53,7 @@ class AppendPlanner:
                      tail_any: Optional[str] = None,
                      prepend: bool = False) -> AppendResult:
         """Archive one collected batch. See `HistoryRepo.append` for the
-        contract; the steps are `_align`, `_write_rows` and `_after_write`.
-
-        NOTE: This function signature is preserved for backward compatibility.
-        New code should use `append_v2` which takes an `AppendRequest` object.
-        """
+        contract; the steps are `_align`, `_write_rows` and `_after_write`."""
         now = now or datetime.now()
         person_id = await self._owner.ensure_person(nick)
         recs = [_as_record(r) for r in (records or [])]
@@ -89,65 +85,9 @@ class AppendPlanner:
             last_ord, result)
         await self._owner.db.commit()
 
-        await self._owner._after_write(person_id, my_nick, dom_count, head_sig,
-                                tail_sig, bootstrapped=True,
-                                head_any=head_any, tail_any=tail_any)
-        person = await self._owner.get_person_by_id(person_id)
-        result.added = added
-        result.skipped = len(recs) - added
-        result.gap = gap
-        result.reason = reason
-        result.last_ord = last_ord
-        result.total = _person_total(person)
-        return result
-
-    async def append_v2(self, request: AppendRequest) -> AppendResult:
-        """Archive one collected batch using a parameter object.
-
-        This is the preferred API going forward (RULE 19.4). The old `append`
-        method is preserved for backward compatibility.
-        """
-        now = request.now or datetime.now()
-        person_id = await self._owner.ensure_person(request.nick)
-        recs = [_as_record(r) for r in (request.records or [])]
-        result = AppendResult(person_id=person_id)
-
-        if not recs:
-            return await self._report_unchanged(
-                person_id, result, request.dom_count,
-                request.head_sig, request.tail_sig,
-                request.head_any, request.tail_any)
-        if request.prepend:
-            return await self._prepend(
-                person_id, recs, request.my_nick, now,
-                request.dom_count, request.head_sig, request.tail_sig,
-                request.session_id, nick=request.nick,
-                head_any=request.head_any, tail_any=request.tail_any)
-
-        cursor = await self._owner.get_cursor(person_id)
-        start, gap, reason = self._align(
-            [r.dup_key for r in recs], cursor, recs,
-            request.align, request.expect_idx)
-        days = resolve_days([r.ts_display for r in recs], now)
-        last_ord = await self._owner._last_ord(person_id)
-        result.first_ord = last_ord + 1
-        if gap:
-            await self._record_gap(
-                person_id, last_ord, reason,
-                _gap_note(reason, request.expect_idx,
-                         recs[0].idx if recs else 0))
-
-        added, last_ord = await self._write_rows(
-            person_id, recs[start:], days[start:],
-            request.my_nick, request.nick, request.session_id,
-            last_ord, result)
-        await self._owner.db.commit()
-
-        await self._owner._after_write(
-            person_id, request.my_nick, request.dom_count,
-            request.head_sig, request.tail_sig,
-            bootstrapped=True,
-            head_any=request.head_any, tail_any=request.tail_any)
+        await self._owner._after_write(WriteContext(
+            person_id, my_nick, dom_count, head_sig, tail_sig,
+            bootstrapped=True, head_any=head_any, tail_any=tail_any))
         person = await self._owner.get_person_by_id(person_id)
         result.added = added
         result.skipped = len(recs) - added
@@ -294,9 +234,9 @@ class AppendPlanner:
                 await self._collect(result, rec, await self._ord_of(slot_id),
                                     day, my_nick, media_id)
             await self._owner.db.commit()
-        await self._owner._after_write(person_id, my_nick, dom_count, head_sig,
-                                tail_sig, bootstrapped=True,
-                                head_any=head_any, tail_any=tail_any)
+        await self._owner._after_write(WriteContext(
+            person_id, my_nick, dom_count, head_sig, tail_sig,
+            bootstrapped=True, head_any=head_any, tail_any=tail_any))
         person = await self._owner.get_person_by_id(person_id)
         result.total = int(person["message_count"]) if person else 0
         result.last_ord = await self._owner._last_ord(person_id)

@@ -18,18 +18,14 @@ except Exception:
 log = logging.getLogger("chatbot")
 
 
-# ideal-size: 248 lines reason=RunQueueMixin is a 180-line mixin that is
-# co-located with RunProgress (65 lines) because they share the same consumer
-# (services/run/coordinator.py) and the mixin's methods (label_allows,
-# filter_by_labels, queue_order, etc.) are called directly from the coordinator
-# in the same tight loop. Splitting would add an import hop without reducing
-# coupling. The low maintainability index (27.8) comes from the mixin's many
-# small helper methods (worst CC is 6), not from complexity concentration.
-# Structure:
-#   RunProgress: 65 LOC — counters + ETA calculation, emits RunProgressChanged events
-#   RunQueueMixin: 183 LOC — label filtering, queue ordering, single-target guards,
-#     pause handling, and take-phase logic. All methods are called from
-#     coordinator.py in a single _run_take_phase / _run_single_target_cycle flow.
+# F7 (ROUND_F_DESIGN_2026-09-12.md §6) names this file for an MI of 27.85 that is
+# NOT a size problem: 258 lines sits inside RULE 18's 150–300 band, so no
+# `ideal-size:` note applies here — §18.5 is for exceeding an ideal. The density
+# is measured, not asserted: RunProgress 40 LOC / 7 methods, RunQueueMixin
+# 177 LOC / 14 methods, worst CC 9 (`queue_order`, `_run_single_target_cycle`),
+# and `_run_single_target_cycle` at 31 LOC is over §16.1's fail line as legacy
+# debt. §6 asks for decomposition of those, not a split; it is still owed, and a
+# higher MI from prose is not progress (§16.2 anti-gaming).
 
 
 @dataclass(frozen=True, slots=True)

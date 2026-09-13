@@ -33,7 +33,7 @@ from backend.chat_parser import ChatParser  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from services.collector_service import Collector, CollectorState  # noqa: E402
-from stores.history.history_models import SyncResult  # noqa: E402
+from stores.history_models import SyncResult  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(

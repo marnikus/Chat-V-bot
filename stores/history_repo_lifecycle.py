@@ -14,8 +14,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from stores.history.history_models import dedupe_key
-from stores.history.history_repo_identity import TAIL_FP_LIMIT
+from stores.history_models import dedupe_key
+from stores.history_repo_identity import TAIL_FP_LIMIT
+from stores.history_requests import WriteContext
 
 log = logging.getLogger("chatbot")
 
@@ -357,19 +358,17 @@ class PersonLifecycle:
                                   (index, int(row[0])))
         await self._owner.db.commit()
 
-    async def _after_write(self, person_id: int, my_nick: str, dom_count: int,
-                           head_sig: Optional[str], tail_sig: Optional[str],
-                           bootstrapped: Optional[bool],
-                           head_any: Optional[str] = None,
-                           tail_any: Optional[str] = None) -> None:
+    async def _after_write(self, ctx: WriteContext) -> None:
         """Refresh counters and the resume cursor.
 
-        `head_sig` / `tail_sig` (and their author-agnostic twins) of None
-        mean "leave as is"; an empty string deliberately CLEARS the
+        `ctx.head_sig` / `ctx.tail_sig` (and their author-agnostic twins) of
+        None mean "leave as is"; an empty string deliberately CLEARS the
         signature, which is how an interrupted read tells the next pass that
-        it may not trust the shortcut.
+        it may not trust the shortcut. The eight values travel as one object
+        because every caller already holds all eight (RULE 19 §19.4).
         """
-        await self._recount(person_id, my_nick)
+        person_id = ctx.person_id
+        await self._recount(person_id, ctx.my_nick)
         tail = [r for r in await self._owner.db.fetchall(
             "SELECT fp, dup_key FROM (SELECT fp, dup_key, ord FROM messages "
             "WHERE person_id=? ORDER BY ord DESC LIMIT ?) ORDER BY ord",
@@ -377,7 +376,8 @@ class PersonLifecycle:
         tail_fps = [r[0] for r in tail]
         tail_keys = [r[1] for r in tail]
         current = await self._owner.get_cursor(person_id)
-        flag = current["bootstrapped"] if bootstrapped is None else bootstrapped
+        flag = (current["bootstrapped"] if ctx.bootstrapped is None
+                else ctx.bootstrapped)
         await self._owner.db.execute(
             "INSERT INTO cursors(person_id, last_ord, dom_count, head_sig, "
             "tail_sig, head_any, tail_any, tail_fps, tail_keys, "
@@ -390,11 +390,11 @@ class PersonLifecycle:
             "tail_keys=excluded.tail_keys, "
             "bootstrapped=excluded.bootstrapped, updated_at=excluded.updated_at",
             (person_id, await self._owner._last_ord(person_id),
-             dom_count or current.get("dom_count") or 0,
-             _sig_or(current, "head_sig", head_sig),
-             _sig_or(current, "tail_sig", tail_sig),
-             _sig_or(current, "head_any", head_any),
-             _sig_or(current, "tail_any", tail_any),
+             ctx.dom_count or current.get("dom_count") or 0,
+             _sig_or(current, "head_sig", ctx.head_sig),
+             _sig_or(current, "tail_sig", ctx.tail_sig),
+             _sig_or(current, "head_any", ctx.head_any),
+             _sig_or(current, "tail_any", ctx.tail_any),
              json.dumps(tail_fps), json.dumps(tail_keys), 1 if flag else 0,
              datetime.now().isoformat(timespec="seconds")))
         await self._owner.db.commit()
@@ -434,6 +434,6 @@ class PersonLifecycle:
                             tail_any: Optional[str] = None) -> None:
         if not dom_count and head_sig is None and tail_sig is None:
             return
-        await self._after_write(person_id, "", dom_count, head_sig, tail_sig,
-                                bootstrapped=None, head_any=head_any,
-                                tail_any=tail_any)
+        await self._after_write(WriteContext(
+            person_id, "", dom_count, head_sig, tail_sig,
+            head_any=head_any, tail_any=tail_any))

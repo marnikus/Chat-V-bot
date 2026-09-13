@@ -6,10 +6,10 @@ passes a `req_id` and Python answers on a signal carrying the same id
 The archive service (services/history_service.py) owns the database.
 """
 
-# ideal-size: 542 lines reason=QWebChannel wire contract pins every @Slot
-# signature that the frontend expects; the class is ratcheted at 493 LOC / 45
-# methods in tools/metrics/rule16_gate.py and may shrink but may not grow.
-# See docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §6.
+# ideal-size: 544 lines reason=QWebChannel wire contract pins every @Slot
+# signature the frontend expects; HistoryBridge is ratcheted at 467 LOC / 44
+# methods in tools/metrics/rule16_gate.py (lowered from 493/45 by the boot-wait
+# fix) and may shrink but may not grow. ROUND_F_DESIGN_2026-09-12.md §6, F4.
 
 from __future__ import annotations
 

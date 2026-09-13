@@ -39,8 +39,8 @@ from datetime import datetime
 from typing import Any, Callable, Optional
 
 from backend.chat_text import signature as _signature
-from stores.history.history_models import MAX_LIVE_ITEMS, SyncResult
-from stores.history.history_repo import align_batch
+from stores.history_models import MAX_LIVE_ITEMS, SyncResult
+from stores.history_repo import align_batch
 
 log = logging.getLogger("chatbot")
 

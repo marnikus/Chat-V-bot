@@ -1,32 +1,15 @@
 """Portable window-preset document validation and compatibility metadata.
 
-This module provides a pure-validation pipeline for window-preset documents
-(export/import of the UI layout). It is intentionally NOT split despite its
-287 lines because:
+One file for cohesion, not size: 22 pure validators form a strict DAG
+(_decode → _header → _grid → _states → _windows → _screen → validate_document),
+each returning (value, error) and short-circuiting on the first error; the
+WindowPresetService facade only delegates. Splitting would scatter the DAG.
 
-  * Every function is small (4–25 LOC), pure, and single-purpose — the low
-    maintainability index (16.1) comes from having ~40 tiny functions in one
-    file, not from complexity in any one function (worst CC is 4).
-  * The functions form a strict validation DAG: _decode → _header → _grid →
-    _states → _windows → _screen → validate_document. Each step returns
-    (value, error) and short-circuits on the first error.
-  * Splitting would scatter the validation logic across files while keeping
-    all callers in the same place (validate_document), gaining no cohesion.
-
-Structure (by responsibility):
-  * Constants: FORMAT, SCHEMA_VERSION, APP_VERSION, GRID_TYPE
-  * Header validators: _decode, _text, _header_error, _preset_name, _timestamp, _header
-  * Grid validators: _grid
-  * Window-state validators: _id_list, _states
-  * Bounds validators: _number, _bound_values, _bounds_extend_screen, _bounds
-  * Window validators: _window_id, _window_state, _window_entry, _windows
-  * Screen validators: _screen
-  * Public API: validate_document (composes all validators)
-  * Facade class: WindowPresetService (delegates to the functions above)
-
-The validation is strict: unknown fields are ignored, known fields must be
-present and conform to the schema. This keeps the preset format stable across
-app versions (compatibility_note explains version mismatches).
+F7 names this file because its MI (16.08 before this note) is low WITHOUT the
+file being large, which a line-count sort never surfaces. The measured cause is
+volume: worst CC is 9 (_grid), and _grid (24 LOC) and validate_document (22) are
+the two past RULE 18 §18.1's ideal — so §6 asks for their decomposition, not a
+split, and that decomposition is still owed.
 """
 
 from __future__ import annotations

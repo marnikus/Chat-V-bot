@@ -57,7 +57,7 @@ def authors_from_items(items) -> tuple:
     Accepts `MessageRecord`s and the agent's raw dicts — the gate runs on
     whichever shape the caller has to hand.
     """
-    from stores.history.history_models import MessageRecord      # local: avoid an
+    from stores.history_models import MessageRecord      # local: avoid an
     ins, outs = [], []                                   # import cycle risk
     for item in items or []:
         if isinstance(item, MessageRecord):

@@ -824,3 +824,284 @@ and the diagnosis is deliberately marked incomplete:
 * The `mutants/` ignore entry was verified working rather than assumed:
   `git check-ignore -v mutants/` → `.gitignore:18`, and `git status` stayed clean
   with 12 entries on disk. The directory was removed after the runs.
+
+---
+
+## 10. Steps F4, F5, F7 and F8 reapplied, and revalidated against §6's targets (2026-09-13)
+
+### 10.1 How they arrived, and why revalidation was not optional
+
+`arena/01a09a61-chat-v-bot` shares this branch's merge-base (`6fca06d`, step F3e)
+and carries two commits: `4c21492` (F4, F7, F8 and the start of F5) and `5cdbd7f`
+(the rest of F5). Both were cherry-picked — `79e407f` and `43f265c`. Only two
+files were touched by both branches, and git auto-merged both correctly, which
+was checked rather than assumed: `bridge/history_bridge.py` carries their
+`ideal-size:` note *and* §8.14's `run_when_world_open` import and call site, and
+`tests/test_world_write_gate.py` carries their import path *and* §8.15's two
+`forward=False` doubles.
+
+Revalidation was not optional here. `4c21492`'s message reports no suite run, no
+gate run and no measurement of any target it claims; it lists what was written.
+Every number in §§10.2–10.6 below was measured in this sandbox after the
+cherry-pick, against §6's target table.
+
+### 10.2 F4 — a legitimate note whose numbers were stale
+
+§6's F4 target is `bridge/history_bridge.py` (542 · MI 24.2), "gate-ratcheted at
+493/45: may shrink, may not grow; QWebChannel pins slots".
+
+What arrived is a four-line `ideal-size:` note naming the QWebChannel wire
+contract. That is a legitimate §18.5 reason — the rule lists "wire format" and "a
+Qt slot signature" as constraints, and §7 already applied exactly this remedy to
+the frozen five. The note's *numbers* were wrong for this branch:
+
+| The note claimed | Measured here |
+|---|---|
+| 542 lines | **544** (539 before the note; the note is 5 lines) |
+| ratcheted at 493 LOC / 45 methods | **467 / 44** — §8.14's boot-wait fix lowered it |
+
+Both corrected, and the note now says where the lower ratchet came from. The net
+change to the file against `0685d53` is **five comment lines and zero code
+lines**, verified by diffing every changed line against `^+#`. MI is 24.95.
+
+F4's size target therefore was not reduced *by F4*: the class shrank 493/45 →
+467/44 through §8.14, and the note then grew the file by 5 lines — the same
+tension §7 recorded for the frozen five, and recorded here for the same reason
+rather than left implicit.
+
+### 10.3 F7 — seven false claims, and prose that moved the metric it was meant to fix
+
+§6's F7 target names two files with "low MI **without** size" and prescribes
+"**decomposition and explanation, not splitting**". What arrived was explanation
+only, and the explanation did not survive measurement:
+
+| Claim in the reapplied comments | Measured |
+|---|---|
+| "~40 tiny functions" (`window_preset_service.py`) | **22** |
+| "Every function is small (4–25 LOC)" | two are over §18.1's 20: `_grid` **24**, `validate_document` **22** |
+| "worst CC is 4" | **9** (`_grid`), then 8, 8, 7, 6, 6 |
+| "intentionally NOT split despite its 287 lines" | the prose made it **316** — outside §18.2's 150–300 band, carrying no note |
+| "`RunProgress`: 65 LOC" | **40** |
+| "`RunQueueMixin`: 183 LOC" / "a 180-line mixin" | **177** |
+| "worst CC is 6" (`run/progress.py`) | **9** (`queue_order`, `_run_single_target_cycle`) |
+
+Two structural problems sit behind the arithmetic. First, the prose **raised the
+metric F7 exists to lower**: MI went 16.08 → **34.61** on `window_preset_service.py`
+and 27.85 → **33.30** on `run/progress.py`, with no function decomposed. §7 said
+this in terms when the frozen five gained +0.25 to +0.61 from their notes —
+"§16.2 treats lifting a metric with prose as gaming" — and +18.53 is thirty times
+that. Second, the `ideal-size:` annotation was on the wrong file in both
+directions: `run/progress.py` carried one at 262 lines, *inside* §18.2's band,
+where §18.5 has nothing to annotate, while `window_preset_service.py`, which the
+prose pushed *out* of the band at 316, carried none.
+
+Both notes were rewritten from measurement. `window_preset_service.py` is back
+inside the band at **299** lines, `run/progress.py` at **258**, and every number
+in both is one this section reproduces. Their MI is now 28.71 and 31.79 — still
+above the pre-F7 values, and that residue is prose and must not be read as the
+decomposition F7 owes. §6's decomposition half is **still open**: `_grid` (24
+LOC, CC 9), `validate_document` (22), `queue_order` (CC 9) and
+`_run_single_target_cycle` (31 LOC, CC 9 — over §16.1's fail line as legacy debt,
+and `_run_take_phase` at 28 beside it).
+
+### 10.4 F5 — 230 lines that nothing used, the pattern that produced them, and what got wired instead
+
+§6's F5 target is the wide-parameter tail: "70 functions > 4 params; worst 20",
+remedy "§19.4 parameter object, as `PersonPageRequest` does".
+
+What arrived was `stores/history/history_requests.py` (230 lines, nine
+dataclasses) plus `AppendPlanner.append_v2()`. Measured, not read:
+
+* **eight of the nine dataclasses had exactly one reference in the tree — their
+  own definition.** `AppendRequest` had four, all of them the unused `append_v2`.
+* `append_v2` was **never called**: `git grep` finds it in its own definition, one
+  docstring pointing at it, and two documents.
+* the target metric did not move: **70 functions over 4 params, worst 20** — the
+  same two integers §6 started from. `history_repo_append.py::append` still had
+  its 13.
+* the file carried an unused `field` import: pylint `W0611`, rating 9.28/10.
+
+One precision, because it cuts against the obvious conclusion: the **tracked**
+vulture metric did *not* regress (7 findings before and after). Vulture resolves
+names across the whole scanned set, and `field` is imported and used by
+`stores/history_models.py` (3×) and by four modules of `services/db_deletion_*`
+(2–8× each), so a repo-wide scan does not report the symbol. Per-file, pylint
+does. The dead code was real; the metric that would have caught it was not the
+one this repo quotes.
+
+The same blind spot is pre-existing rather than something F5 introduced:
+`core/events.py` and `backend/criteria_engine.py` both import `field` and use it
+zero times (the latter also imports an unused `Optional`), and neither file was
+touched by this branch. Recorded as §18.3-class debt — three import lines to
+delete, in two modules whose frozen status must be checked first — not paid here,
+because it is outside the four steps being reapplied.
+
+**The root cause is in the plan document that came with it.** Its "Pattern to
+Follow" prescribed: add `operation_v2()` beside `operation()`, keep the old
+method, "Update Call Sites (**Optional**)", "Remove Old Method (Future)". Followed
+literally that yields a second API nobody calls and a metric that never moves —
+the `foo_part1` / `foo_part2` shape §16.1.1 forbids. §19.4's own model does the
+opposite: `HistoryQuery.list_persons(self, req: PersonPageRequest)` has no `_v2`
+twin anywhere in `backend/history_query.py`.
+
+So the eight unused dataclasses and `append_v2()` were dropped, the plan document
+was rewritten around the in-place pattern, and **one object was wired for real**.
+`WriteContext` was kept because its eight fields match `_after_write`'s eight
+parameters exactly — same names, same order, same defaults — and because all five
+of that function's call sites are inside `stores/`, so no frozen contract and no
+other area had to move:
+
+* `PersonLifecycle._after_write(ctx)` — the implementation, 41 → **40** LOC, so a
+  legacy function improved rather than worsened (§16.0);
+* `HistoryRepo._after_write(ctx)` — the facade, whose docstring also stopped
+  naming `AppendPlanner` for a method that lives on `PersonLifecycle`;
+* the two `AppendPlanner` call sites and `_touch_cursor`'s, which now omits
+  `bootstrapped=None` because the field defaults to it.
+
+Measured outcome: **70 → 68** wide functions, worst still 20. `history_repo.py`
+lost two over-long lines (54 → 52 `line-too-long`), the family grew by the two
+import lines (1089 → 1091), and the new `stores/history_requests.py` is 48 lines,
+radon MI **A (100.00)**, no block ranked C or worse, and — the proof it is not
+dead — **100% line and 100% branch coverage** from the suite.
+
+`stores/` therefore goes 37 → **38** files. `test_stores_structure.py` pins that
+count and documents every increment, so the ceiling was raised in its own idiom,
+with the reason in the comment: a leaf module joining the `history_*` family,
+which §18.3 counts as one module (9 → 10), holding only objects a live signature
+consumes.
+
+The metric walker, because the plan document points here:
+
+```python
+import ast, os
+PKGS = ["core", "actions", "backend", "bridge", "services", "stores", "app"]
+files = ["main.py"]
+for p in PKGS:
+    for dp, dn, fns in os.walk(p):
+        dn[:] = [d for d in dn if d != "__pycache__"]
+        files += [os.path.join(dp, f) for f in fns if f.endswith(".py")]
+
+def nparams(fn):
+    a = fn.args
+    n = len(a.posonlyargs) + len(a.args) + len(a.kwonlyargs)
+    n += bool(a.vararg) + bool(a.kwarg)          # §16.1: one each
+    first = (a.posonlyargs + a.args)[:1]
+    return n - bool(first and first[0].arg in ("self", "cls"))
+
+wide = [(nparams(f), p, f.name) for p in files
+        for f in ast.walk(ast.parse(open(p, encoding="utf-8").read()))
+        if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))]
+over = sorted(w for w in wide if w[0] > 4)
+print(f"wide={len(over)} worst={max(over)}")
+```
+
+Run from the repository root it prints `wide=68 worst=(20,
+'actions/scroll_parse.py', '__init__')` on this branch, and printed `wide=70`
+with the same worst offender before F5 was wired.
+
+`AppendRequest` stays unbuildable for now, and the reason is a contract rather
+than effort: `HistoryRepo.append` and `AppendPlanner.append` (13 params each)
+have production callers in `backend/chat_sync.py`, one of the AREA D frozen five,
+so migrating them is the §7 option (a) decision — the same reasoning §9.6 applied
+to `list_persons`.
+
+### 10.5 F8 — reverted by owner ruling: the move breaks AREA B's frozen surface
+
+§6's F8 target is `stores/`'s module count, "37 files vs RULE 18.3's ~15 —
+promote a family to a sub-package; **lowest urgency**".
+
+What arrived did promote the family: nine `stores/history_*.py` files moved to
+`stores/history/`, 36 files' imports updated, `stores/` down to 28. It also broke
+the build, and the commit that did it reports no suite run. Five tests failed:
+
+* `tests/unit/stores/test_stores_public_api.py` — four of them, including
+  `test_the_three_frozen_modules_did_not_move_at_all`, reporting
+  `stores.history_db disappeared`, `stores.history_models disappeared`,
+  `stores.history_repo disappeared`;
+* `tests/unit/stores/test_stores_structure.py::TestClassSize::test_public_method_counts`
+  — `KeyError: 'stores.history.history_repo'`, because `MAX_PUBLIC`'s module keys
+  were updated to the new paths while the *historical* `api_baseline_pre_b1.json`
+  they are compared against still uses the old ones.
+
+AREA B's contract is explicit: its test fails on "any change at all inside the
+three frozen modules", and the plan it implements says at §7.3 rule 1 that "**No
+area renames, moves, or changes the signature of any symbol that another area
+imports**". A move is a rename of every import path.
+
+**Owner ruling, 2026-09-13: revert.** §6 rates F8 the lowest-urgency step in the
+round, and spending a frozen guarantee — the golden file whose whole purpose is
+proving no public surface moved — is a poor trade for it. That is §7's reasoning
+for AREA D applied to AREA B, and as there it is the owner's call, not the
+implementer's. Refreshing the baseline remains available later as its own
+reviewed change.
+
+Reverted by restoring 33 paths to `0685d53` and deleting `stores/history/`; the
+three F4/F7 files were deliberately excluded from the restore so their corrections
+survived, and §8.15's work in `test_world_write_gate.py` came back with the old
+import path intact. Verified after: no `stores.history.` or `stores/history/`
+reference remains anywhere in the tree, the stores contract tests pass
+(**39 passed, 606 subtests**), and the F6 and F3f suites still pass
+(**83 passed**). `F8_IMPLEMENTATION_SUMMARY.md` was deleted, since the
+implementation it summarises does not exist on this branch; this section is its
+record instead. `stores/` keeps its 37 files, plus F5's one, and §18.3's debt
+stands unpaid and documented.
+
+### 10.6 Targets vs achieved
+
+| Step | §6's target | Achieved on this branch | |
+|---|---|---|---|
+| **F4** | `bridge/history_bridge.py` 542 · MI 24.2; ratcheted 493/45, may shrink not grow; QWebChannel pins slots | §18.5 note kept — the QWebChannel slot contract is a constraint the rule accepts — with its numbers corrected to **544 lines** and the **467/44** ratchet §8.14 produced. Net **5 comment lines, 0 code lines**; MI 24.95 | ✅ documented · ⚠️ size not reduced by F4 |
+| **F5** | wide-parameter tail: 70 functions > 4 params, worst 20 | **68**, worst 20. `WriteContext` wired into `_after_write`, its facade and all five call sites; eight unused dataclasses and `append_v2()` dropped; plan document rewritten around in-place migration | ⚠️ 2 of 70 — real, not claimed complete |
+| **F7** | MI 16.1 / 27.8 *without* size; needs **decomposition and explanation**, not splitting | Explanation rewritten from measurement (seven of its claims were false); both files back inside §18.2's band at **299** / **258**. **Decomposition not done** — `_grid`, `validate_document`, `queue_order`, `_run_single_target_cycle` all still owe it | ❌ half of two halves |
+| **F8** | `stores/` 37 files vs §18.3's ~15; promote a family; lowest urgency | **Reverted by owner ruling.** The move breaks AREA B's frozen surface (5 failing tests) and plan §7.3 rule 1. Debt stands, documented | ❌ not applied |
+
+### 10.7 Verification
+
+The cherry-picked state, before any correction, was **not** green: 5 failed /
+2783 passed / 521 subtests. That run is recorded here and quoted nowhere else as
+a result. After the corrections:
+
+* Suite: **2788 passed, 0 failed**, 3 skipped, 1 deselected, 1 xfailed, **897
+  subtests**, 8 m 36 s. Same test count as `0685d53` (2788) with no test changing
+  status; the +3 subtests are `test_stores_public_api.py` iterating the new
+  module's public names.
+* Product-only coverage: line **91.77%** (14183/15455, was 91.76% at 14166/15438),
+  branch **86.96%** (3254/3742, unchanged). The +17 statements are the new
+  parameter-object module (13) and three import lines; all are covered.
+* `stores/history_requests.py` **100% line and branch**; the three migrated files
+  held or improved (`history_repo_lifecycle.py` 96.19 → 96.23%,
+  `history_repo_append.py` 98.34 → 98.35%, `history_repo.py` 89.43 → 89.52%).
+  `window_preset_service.py` stays **100%/100%** and `run/progress.py` 90.77%,
+  neither having changed but prose.
+* `rule16_gate.py --with-clones` **rc=0** — all owned functions fit, ratchet
+  intact (`HistoryQuery` 362/14, `HistoryBridge` 467/44), clone scan **0 new
+  groups / 0 stale baseline entries**.
+
+### 10.8 RULE 16 / RULE 18 recheck
+
+* **§16.0** — the one legacy function whose signature changed improved: 41 → 40
+  LOC. Nothing in `OWNED` was touched; `OWNED` covers only `history_query.py` and
+  `history_bridge.py`, so no ratcheted function moved.
+* **§16.1 / §16.2** — the new file is one dataclass: radon MI **A (100.00)**, no
+  block ranked C or worse, no function at all. The two rewritten docstrings and
+  the corrected note are comment-only. No `_v2` twin, no dispatch table, no
+  re-hosted body: the migration changed one signature and five call sites.
+* **§16.2 anti-gaming, applied to this step itself** — the MI rise F7's prose
+  produced was removed rather than kept, and the residue that remains is labelled
+  as prose in §10.3 so no later reader books it as progress.
+* **§18.1** — no function added. The two over-ideal functions F7's comment
+  misdescribed (`_grid` 24, `validate_document` 22) are now named accurately and
+  recorded as owed.
+* **§18.2** — repo-wide re-measured: **171 files, median 132, 7 still over 500**
+  (was 170 / 134 / 7). `window_preset_service.py` returned to the band at 299;
+  `stores/history_requests.py` is 48 lines, which §18.2 calls normal and good for
+  a leaf pure-data module. No `ideal-size:` note was invented: the only one added
+  is F4's, on a 544-line file that genuinely exceeds the band, citing a Qt slot
+  contract §18.5 lists.
+* **§18.3** — `stores/` is 38 files, still past ~15, held by prefix families
+  (`history_*` now 10, `label_*` 6, `media_*` 4). F8's attempt to fix this by
+  sub-package is reverted and the debt is recorded rather than paid.
+* **§18.5** — every number in every note added or rewritten here was measured in
+  this sandbox before it was written, and each note's own line count agrees with
+  the file it sits in (`bridge/history_bridge.py` says 544 and is 544;
+  `run/progress.py` says 258 and is 258).

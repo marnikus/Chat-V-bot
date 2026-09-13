@@ -20,20 +20,21 @@ import uuid
 from datetime import datetime
 from typing import Iterable, Optional
 
-from stores.history.history_db import HistoryDB
-from stores.history.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+from stores.history_db import HistoryDB
+from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
                                     MessageRecord, dedupe_key,  # noqa: F401
                                     fingerprint)  # noqa: F401
-from stores.history.history_repo_append import AppendPlanner
-from stores.history.history_repo_identity import (                        # noqa: F401
+from stores.history_repo_append import AppendPlanner
+from stores.history_repo_identity import (                        # noqa: F401
     TAIL_FP_LIMIT,
     align_batch,
     resolve_days,
 )
-from stores.history.history_repo_identity import ConversationIdentity
-from stores.history.history_repo_lifecycle import PersonLifecycle
-from stores.history.history_repo_media import MediaRecovery
+from stores.history_repo_identity import ConversationIdentity
+from stores.history_repo_lifecycle import PersonLifecycle
+from stores.history_repo_media import MediaRecovery
+from stores.history_requests import WriteContext
 
 log = logging.getLogger("chatbot")
 
@@ -213,9 +214,9 @@ class HistoryRepo:
         """See `AppendPlanner._touch_cursor` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
         await self.lifecycle._touch_cursor(person_id, dom_count, head_sig, tail_sig, head_any, tail_any)
 
-    async def _after_write(self, person_id: int, my_nick: str, dom_count: int, head_sig: Optional[str], tail_sig: Optional[str], bootstrapped: Optional[bool], head_any: Optional[str]=None, tail_any: Optional[str]=None) -> None:
-        """See `AppendPlanner._after_write` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        await self.lifecycle._after_write(person_id, my_nick, dom_count, head_sig, tail_sig, bootstrapped, head_any, tail_any)
+    async def _after_write(self, ctx: WriteContext) -> None:
+        """See `PersonLifecycle._after_write` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
+        await self.lifecycle._after_write(ctx)
 
     async def _recount(self, person_id: int, my_nick: str='') -> None:
         """See `AppendPlanner._recount` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""

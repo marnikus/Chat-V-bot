@@ -1,116 +1,136 @@
 # F5: Parameter Objects for Wide-Parameter Functions
 
-**Date:** 2026-09-13  
-**Status:** In Progress (pattern established, partial implementation)  
-**Design Reference:** ROUND_F_DESIGN_2026-09-12.md §6, RULE 19.4
+**Date:** 2026-09-13
+**Status:** Started for real — 1 of 70 migrated, metric 70 → 68
+**Design Reference:** ROUND_F_DESIGN_2026-09-12.md §6 (step F5), RULE 19 §19.4
+**Outcome record:** ROUND_F_DESIGN_2026-09-12.md §10
 
 ## Overview
 
-F5 addresses the 70+ functions across the codebase that have more than 4 parameters (RULE 16 limit). The approach follows §19.4: use parameter objects (dataclasses) to group related parameters, following the pattern established by `PersonPageRequest` in `backend/history_query.py`.
+F5 addresses the functions that take more than 4 parameters (§16.1's fail line).
+The remedy §19.4 prescribes is a parameter object: related arguments become
+fields of one typed request, the way `PersonPageRequest` carries the six options
+`HistoryQuery.list_persons` used to take positionally.
 
-## Progress
+Baseline, measured 2026-09-13: **70 functions over 4 params, worst 20**
+(`actions/scroll_parse.py::__init__`). After this step: **68, worst 20**.
 
-### Completed (F8 → F5b stores/ half)
-- Moved `history_*` family (9 files) to `stores/history/` sub-package (F8)
-- This reduced `stores/` from 37 to 28 files
-- Created `stores/history/history_requests.py` with `AppendRequest` parameter object
-- Added `append_v2()` method to `AppendPlanner` demonstrating the pattern
+## What actually happened, and the correction that matters
 
-### Remaining for F5b (stores/ half - ~26 functions)
-The following functions in `stores/` (including `stores/history/`) have > 4 parameters and need parameter objects:
+This plan arrived from branch `arena/01a09a61-chat-v-bot` describing nine
+dataclasses and an `append_v2()` demonstration. Re-measured here, none of it was
+wired: eight of the nine dataclasses had exactly **one** reference in the whole
+tree — their own definition — `append_v2()` was never called, and the target
+metric read 70 before and 70 after. Unused code that moves no metric is the
+`foo_part1` / `foo_part2` shape §16.1.1 forbids, so the eight were dropped and
+`append_v2()` with them.
 
-#### stores/history/history_repo.py (10 functions)
-1. `append` - 13 params → Use `AppendRequest`
-2. `_prepend` - 11 params → Use `PrependRequest` (to be created)
-3. `rename_if_same_conversation` - 8 params → Use `RenameRequest`
-4. `_after_write` - 8 params → Use `WriteContext`
-5. `recover_media` - 6 params → Use `MediaRecoveryRequest`
-6. `_touch_cursor` - 6 params → Use `CursorUpdate`
-7. `_take_empty_slot` - 5 params → Use `SlotFillRequest`
-8. `_ui_record` - 5 params → Use `UIRecordRequest`
+**The pattern below was the root cause, and it is corrected here.** The original
+text prescribed adding `operation_v2()` beside `operation()`, then marked
+"Update Call Sites" as *optional* and "Remove Old Method" as *future*. Following
+that literally produces a second API nobody calls and a metric that never moves.
+§19.4's own model does the opposite — `list_persons(self, req)` has no `_v2`
+twin anywhere in `backend/history_query.py`. So:
 
-#### stores/history/history_repo_append.py (9 functions)
-1. `append` - 13 params → Use `AppendRequest` (already created)
-2. `_prepend` - 11 params → Use `PrependRequest`
-3. `_write_rows` - 8 params → Use `WriteRowsRequest`
-4. `_insert_message` - 8 params → Use `MessageInsertRequest`
-5. `_report_unchanged` - 7 params → Use `UnchangedReport`
-6. `_collect` - 6 params → Use `CollectRequest`
-7. `_align` - 5 params → Use `AlignRequest`
-8. `_take_empty_slot` - 5 params → Use `SlotFillRequest`
-9. `_align` - 5 params → Use `AlignRequest`
+### The pattern this repo follows
 
-#### stores/history/history_repo_identity.py (3 functions)
-1. `rename_if_same_conversation` - 8 params
-2. `_same_conversation` - 6 params
-3. `_ui_record` - 5 params
+1. **Create the parameter object** in `stores/history_requests.py`, fields in the
+   order the old signature had them, defaults preserved exactly.
+2. **Change the signature in place.** No `_v2`, no parallel API, no deprecation
+   window — one function, one way to call it.
+3. **Update every call site in the same commit.** This is not optional; a
+   parameter object with unmigrated callers is dead code.
+4. **Measure the metric afterwards** and record the before/after count. If it did
+   not move, the step did not happen.
 
-#### stores/history/history_repo_lifecycle.py (3 functions)
-1. `_after_write` - 8 params
-2. `_touch_cursor` - 6 params
-3. `_resequence` - needs review
+Pick functions whose call sites are all inside one family first. `_after_write`
+was chosen because all five of its call sites are in `stores/`, so nothing
+outside the family — and no frozen contract — had to move.
 
-#### stores/history/history_repo_media.py (2 functions)
-1. `__init__` - 8 params
-2. `recover_media` - 6 params
+## Done
 
-#### stores/history/history_models.py (2 functions)
-1. `fingerprint` - 6 params
-2. `dedupe_key` - 5 params
+| Function | Was | Now | Call sites updated |
+|---|---|---|---|
+| `stores/history_repo_lifecycle.py::PersonLifecycle._after_write` | 8 params | `ctx: WriteContext` | 5 (2 in `history_repo_append.py`, 1 in `_touch_cursor`, the facade, and its delegation) |
+| `stores/history_repo.py::HistoryRepo._after_write` (facade) | 8 params | `ctx: WriteContext` | — |
 
-#### stores/media_store.py (1 function)
-1. `__init__` - 6 params → Use `MediaStoreConfig`
+The implementation went 41 → 40 LOC, so the legacy function improved rather than
+worsened (§16.0), and `history_repo.py` lost two over-long lines (54 → 52
+`line-too-long`). `WriteContext` is the only object in `history_requests.py`,
+which is why `stores/` gained exactly one file (37 → 38, justified in
+`tests/unit/stores/test_stores_structure.py`).
 
-### F5a (neutral files - ~36 functions)
-Functions in other directories (services/, backend/, etc.) also need parameter objects. These are parallel-safe and can be done independently.
+## Remaining — 68 functions
 
-## Pattern to Follow
+**Do not** recreate the eight dropped dataclasses speculatively. Add one when its
+function is migrated, in the same commit.
 
-### 1. Create Parameter Object
-```python
-@dataclass
-class OperationRequest:
-    """Parameters for [operation]."""
-    param1: type = default
-    param2: type = default
-    # ... all parameters from the function signature
-```
+`AppendRequest` in particular cannot be wired yet: `HistoryRepo.append` (13
+params) and `AppendPlanner.append` (13) have production callers in
+`backend/chat_sync.py`, which the AREA D snapshot freezes. Migrating them is a
+coordinated change needing the §7 option (a) decision first — the same reasoning
+§9.6 applied to `list_persons`.
 
-### 2. Add New Method
-```python
-async def operation_v2(self, request: OperationRequest) -> Result:
-    """New API using parameter object. Old method preserved for compatibility."""
-    # Use request.param1, request.param2, etc.
-```
+### `stores/` (paths are `stores/*.py`; the `stores/history/` sub-package was reverted)
 
-### 3. Update Call Sites (Optional)
-- Gradually migrate call sites from `operation()` to `operation_v2()`
-- Old method can be deprecated once all call sites are updated
+* `history_repo_append.py` — `append` 13 (blocked, see above), `_prepend` 11,
+  `_write_rows` 8, `_insert_message` 8, `_report_unchanged` 7, `_collect` 6,
+  `_align` 5, `_take_empty_slot` 5
+* `history_repo.py` (facade twins of the above) — `append` 13, `_prepend` 11,
+  `rename_if_same_conversation` 8, `recover_media` 6, `_touch_cursor` 6,
+  `_ui_record` 5, `_take_empty_slot` 5
+* `history_repo_identity.py` — `rename_if_same_conversation` 8,
+  `_same_conversation` 6, `_ui_record` 5
+* `history_repo_lifecycle.py` — `_touch_cursor` 6
+* `history_repo_media.py` — `__init__` 8, `recover_media` 6
+* `history_models.py` — `fingerprint` 6, `dedupe_key` 5 (module-level functions,
+  so check for bare `fingerprint(` callers, not just `.fingerprint(`)
+* `media_store.py` — `__init__` 6
 
-### 4. Remove Old Method (Future)
-- Once all call sites use the new API, the old method can be removed
-- This reduces parameter count without breaking existing code
+All five `_after_write`-class candidates with **zero callers outside `stores/`**
+are the safe next ones: `_write_rows`, `_insert_message`, `_report_unchanged`,
+`_same_conversation`, `_align`.
 
-## Example: AppendRequest
+### Outside `stores/` (~36 functions, parallel-safe)
 
-See `stores/history/history_requests.py` for the `AppendRequest` implementation.
-
-## Next Steps
-
-1. **F5b Priority 1:** Create parameter objects for the 5 worst offenders in `stores/history/` (append, _prepend, rename_if_same_conversation, _after_write, recover_media)
-2. **F5b Priority 2:** Update the remaining functions in `stores/history/`
-3. **F5b Priority 3:** Address `stores/media_store.py`
-4. **F5a:** Address functions in services/, backend/, and other directories
-
-## Files Modified
-- `stores/history/history_requests.py` - NEW (parameter objects)
-- `stores/history/history_repo_append.py` - Added `append_v2()` method
-- All imports updated from `stores.history_*` to `stores.history.history_*`
+Worst first: `actions/scroll_parse.py::__init__` 20,
+`backend/scroll_parser.py::__init__` 19 (AREA D frozen),
+`backend/chat_parser.py::sync_conversation` 14, `actions/click_user.py::__init__`
+13. Note that RULE 3 keeps block settings as explicit instance attributes, so an
+action block's wide `__init__` may be a documented constraint rather than a
+migration candidate — decide per block, do not assume.
 
 ## Verification
-Run the following to verify F8 is complete:
+
 ```bash
-python -m unittest tests.unit.stores.test_stores_structure.TestFileSize
+# the metric, before and after any F5 commit — walker lives in
+# ROUND_F_DESIGN_2026-09-12.md §10.4 and prints "wide=68 worst=..." here
+# (it printed wide=70 before WriteContext was wired)
+
+# nothing dead was added: no unused import, and the repo-wide dead-code metric
+# stays at its 7 findings with WriteContext absent from them
+pylint stores/history_requests.py                     # expect no W0611
+vulture core actions backend bridge services stores app ui main.py \
+    --min-confidence 90                               # expect 7, none of them ours
+
+# the family still behaves
+python -m pytest tests/unit/stores tests/test_history_repo_conflicts.py \
+    tests/test_history_repo_lifecycle.py tests/test_history_db_unit.py -q
 ```
 
-Expected: All tests pass, stores/ has 28 files.
+Expected: the wide count falls by exactly the number of functions migrated, and
+no dataclass exists that a signature does not consume. Verified 2026-09-13:
+`wide=68 worst=20`, no `W0611`, vulture 7 findings with `WriteContext` absent,
+**137 passed / 2 skipped / 709 subtests**.
+
+Two readings to get right, both of which mislead in the opposite direction:
+
+* **Do not scan the file alone.** `vulture stores/history_requests.py
+  --min-confidence 60` reports `unused class 'WriteContext'` and its fields,
+  because a single-file scan cannot see the five call sites in `stores/`.
+  Repo-wide at ≥90 — the confidence this repo tracks — it is clean, and the
+  coverage report settles it independently at 100% line and branch.
+* **`R0902` (too many instance attributes) is expected here and is not a
+  finding.** The module's rating is 9.17 for it, and the sibling dataclass module
+  `stores/history_models.py` carries the same code at 8.93 alongside C0116,
+  R0913 and R0917. Eight fields is the shape of the signature it replaced.

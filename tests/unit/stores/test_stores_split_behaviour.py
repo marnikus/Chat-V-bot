@@ -35,9 +35,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
 
-from stores.history.history_db import SCHEMA_VERSION, HistoryDB        # noqa: E402
-from stores.history.history_models import MessageRecord, fingerprint  # noqa: E402
-from stores.history.history_repo import HistoryRepo                    # noqa: E402
+from stores.history_db import SCHEMA_VERSION, HistoryDB        # noqa: E402
+from stores.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_repo import HistoryRepo                    # noqa: E402
 from stores.label_store import LabelStore                      # noqa: E402
 from stores.media_store import MediaStore                      # noqa: E402
 from stores.preset_store import PresetStore                    # noqa: E402

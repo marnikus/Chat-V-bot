@@ -16,10 +16,10 @@ from typing import Any, Iterable, Optional
 
 import aiosqlite
 
-# The schema lives in `stores/history/history_schema.py` now (the B2 split, design
+# The schema lives in `stores/history_schema.py` now (the B2 split, design
 # §2.4); these names are re-exported because `backend/history_db.py`, the
 # bridges and the tests have always read them off this module.
-from stores.history.history_schema import (                                   # noqa: F401
+from stores.history_schema import (                                   # noqa: F401
     FTS_SCHEMA,                                                       # noqa: F401
     INDEX_SQL,                                                        # noqa: F401
     LEGACY_MESSAGES_CONSTRAINT,                                       # noqa: F401
@@ -40,9 +40,9 @@ class HistoryDB:
     """Thin async wrapper around the archive's SQLite file."""
 
     def __init__(self, path: str, use_fts: bool = True):
-        from stores.history.history_schema_repair import \
+        from stores.history_schema_repair import \
             SchemaMigrator                # local: it imports this package's
-        # schema module, and `stores.history.history_db` is what that module's callers
+        # schema module, and `stores.history_db` is what that module's callers
         # reach for — importing it at module scope would close a cycle
         self.path = path
         self._want_fts = use_fts
