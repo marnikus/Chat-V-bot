@@ -218,3 +218,12 @@ class SyncResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def sql_count(row, key: str) -> int:
+    """One aggregate column as an int, reading SQL NULL as zero.
+
+    COUNT never returns NULL but SUM and MAX over an empty set do, and the
+    persons row stores these as NOT NULL integers.
+    """
+    return int(row[key] or 0)

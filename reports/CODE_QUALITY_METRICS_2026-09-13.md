@@ -15,7 +15,9 @@ plan this audit hands over to is **Round G**:
 
 Across **2,058** production functions there is still **not one** above Radon
 cyclomatic complexity 10 and **not one** nested deeper than 4. Two functions sit
-at cognitive 17, both recorded exemptions. Tests are the strongest they have
+at cognitive 17, both recorded exemptions. *(Superseded by round G: see the
+G6 closing note at the end of this section — max cognitive is now 15, and the
+population sitting exactly at CC 10 fell from 16 to 5.)* Tests are the strongest they have
 been: **2,800 passed / 3 skipped / 0 failed** plus **897 subtests**, line
 coverage **90.87%**, branch **86.94%**, and all **26** JS entrypoints green.
 
@@ -82,8 +84,8 @@ vendored assets, frontend JavaScript, generated caches.
 | Cyclomatic complexity (max) | ≤ 10 per function | **10** | ✅ at the ceiling, none above |
 | Functions with CC > 10 | 0 | **0 / 2,058** | ✅ closed |
 | Mean / median / p95 CC | — | 3.03 / 2 / 8 | ✅ healthy distribution |
-| Cognitive complexity (max) | ≤ 15 | **17** | ⚠️ 2 functions |
-| Functions cognitive > 15 | 0 | **2 (0.1%)** | ⚠️ see below |
+| Cognitive complexity (max) | ≤ 15 | **17** → **15** after G6 | ✅ closed |
+| Functions cognitive > 15 | 0 | **2 (0.1%)** → **0** after G6 | ✅ closed |
 | Mean cognitive | — | **2.09** | ✅ flat, not just capped |
 | Nesting depth (max) | ≤ 3–4 | **4** | ✅ met at loose bound |
 | Functions nesting > 4 | 0 | **0** | ✅ closed |
@@ -125,11 +127,69 @@ of this tree**; the two current outliers are ordinary Python and are in scope
 for G6. That is a correction, not a regression: neither function got worse, the
 JS builders got measured properly.
 
+### 1.x G6 closing note — the ceiling was a cluster, not a peak
+
+Re-measured after round G (2026-09-13, end of round):
+
+| Metric | Before G6 | After G6 | Target |
+|---|---:|---:|---|
+| Max cognitive complexity | 17 | **15** | ≤ 15 ✅ |
+| Functions cognitive > 15 | 2 | **0** | 0 ✅ |
+| Functions at CC exactly 10 | 16 | **5** | ≤ 5 ✅ |
+| Functions CC > 10 | 0 | **0** | 0 ✅ |
+
+Two corrections to the record, both of the same kind — a number that was
+believed rather than measured:
+
+1. **`dom_probe.build_probe` is cognitive 8, not 17.** The §16.1.5 exemption
+   covers its *length* (a 122-line JS literal) and never covered complexity.
+   The earlier reports carried the 17 forward from a run that attributed the
+   whole module to the function. AGENT_RULES §16.1.5 now says so explicitly.
+2. **`bridge/history_bridge.py::history_delete_person` was the real cognitive
+   outlier at 16**, and nothing in the reports named it. It is now 10, with
+   the soft/hard deletion bookkeeping extracted to a module-level
+   `_record_person_deletion` whose docstring states why a hard delete pushes
+   no undo entry.
+
+**What the CC-10 cluster turned out to be.** Sixteen functions sat exactly at
+the ceiling and only *six* of them were complex in any sense a reader would
+recognise. Radon charges +1 per `and`/`or`, so a function that is nothing but
+defensive coalescing — `int(row["n"] or 0)` eight times over — scores the same
+as one with eight real branches. `stores/label_filter.py::set_filter` is the
+clearest case: **CC 10, cognitive 2, zero `if` statements**. Measuring both
+metrics together is what separates them; measuring CC alone would have sent
+this round refactoring straight-line code.
+
+So the eleven that were changed were chosen by *cognitive* load, and each
+extraction names a responsibility rather than splitting a body:
+`_page_rows`/`_neighbour_flags` (paging cursors vs. edge detection),
+`_truncate_all`/`_move_world_media_to_trash` (the containment guard that stops
+a clean from taking every world's images), `_open_fallback` (normalising a
+raised failure and an `ok: False` into one refusal path), `_no_match_line`,
+`_rename_if_free`, `_reattributed_params`, `_cached_file_exists` and
+`_downloads_unavailable`. The last two were each about to be written twice, in
+`media_store` and `media_fetch`; they live in `media_layout`, the module both
+already depend on, so the clone baseline stayed at 10 groups rather than 12.
+
+**Two things the gates caught that review would not have.** Extracting helpers
+as *methods* grew `HistoryQuery` and `HistoryBridge` past their frozen class
+ceilings — the RULE 16 ratchet failed the commit, and the helpers moved to
+module scope where they belonged. Separately, the `stores/` 400-SLOC test
+failed because `media_fetch.py` was already at 398; the fix was not to raise
+the ceiling but to put the shared helper in the module that shares it, leaving
+both files *smaller* than before the round.
+
+**The canary had to be replaced.** `tests/test_rule16_new_code.py` proves the
+gate is not vacuous by asserting a known-oversized function is still reported.
+That canary was `HistoryQuery.page` — 53 LOC — which this round reduced to 29,
+so the test failed by succeeding. Its own message says to pick another rather
+than soften the check; the canary is now `HistoryQuery._search` (49 LOC).
+
 ## 2. Size and volume metrics
 
 | Metric | Your threshold | Measured | Verdict |
 |---|---|---:|---|
-| Function LOC (max) | ≤ 20–30 | **122** (`dom_probe.build_probe`, JS literal, §16.1.5) | ❌ documented exemption |
+| Function LOC (max) | ≤ 20–30 | **122** (`dom_probe.build_probe`, JS literal, §16.1.5) | ❌ documented exemption (LOC only — its cognitive complexity is 8) |
 | Mean / median function LOC | — | 9.51 / 7 | ✅ well inside |
 | Functions > 30 LOC | few | **43 (2.1%)** | ⚠️ tail |
 | Functions in the RULE 18.1 band (4–20) | aim | **61.9%** (p90 = 20) | ⚠️ down from 63.6% |

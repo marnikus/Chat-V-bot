@@ -26,6 +26,19 @@ KIND_NAMES = {"url_exact": "exact URL", "url_path": "URL path",
               "host": "host", "keyword": "keyword"}
 
 
+def _no_match_line(query: str, tabs) -> str:
+    """The "nothing matched" log line, listing the first five open tabs.
+
+    The list is what makes the failure actionable -- the user needs to see
+    what WAS open to understand why their preset missed -- and it is capped
+    at five with an ellipsis so a browser with thirty tabs cannot flood the
+    run panel.
+    """
+    shown = "; ".join(f"{t.title} — {t.url}" for t in tabs[:5])
+    more = "…" if len(tabs) > 5 else ""
+    return f"❌ No open tab matches “{query}”. Available: {shown}{more}"
+
+
 class CdpService:
     """Tab fetch / connect / URL-preset matching."""
 
@@ -105,10 +118,7 @@ class CdpService:
             return Ok([])
         matches = best_matches(query, [t.__dict__ for t in tabs])
         if not matches:
-            self._log(
-                f"❌ No open tab matches “{query}”. Available: "
-                + "; ".join(f"{t.title} — {t.url}" for t in tabs[:5])
-                + ("…" if len(tabs) > 5 else ""), "error")
+            self._log(_no_match_line(query, tabs), "error")
             self._bus.emit(TabMatchResult(query=query, matches_json="[]"))
             return Ok([])
         for m in matches[:3]:

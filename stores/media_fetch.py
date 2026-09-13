@@ -26,7 +26,8 @@ from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 from backend import chat_agent_js
-from stores.media_layout import _extension, _now, infer_kind
+from stores.media_layout import (_cached_file_exists, _downloads_unavailable,
+                                 _extension, _now, infer_kind)
 
 log = logging.getLogger("chatbot")
 
@@ -165,7 +166,7 @@ class MediaFetcher:
 
     async def process_pending(self, limit: int = 25) -> int:
         """Cache up to `limit` pending files. Returns how many were stored."""
-        if not self._owner.enabled or self._owner.paused or self._owner.cdp is None:
+        if _downloads_unavailable(self._owner):
             return 0
         limit = int(limit)
         if limit <= 0:
@@ -432,10 +433,7 @@ class MediaFetcher:
         row = await self._owner.get(media_id)
         if not row:
             return {"state": "missing", "id": media_id, "path": "", "url": ""}
-        if not self._owner.enabled or self._owner.paused or self._owner.cdp is None:
-            return await self._owner.path_for(media_id)
-        path = row.get("cache_path") or ""
-        if row.get("state") == "cached" and path and os.path.exists(path):
+        if _downloads_unavailable(self._owner) or _cached_file_exists(row):
             return await self._owner.path_for(media_id)
         await self._owner.db.execute(
             "UPDATE media SET state='pending', fail_reason='', "

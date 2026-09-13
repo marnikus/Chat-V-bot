@@ -24,7 +24,7 @@ from typing import Optional
 from stores.history_db import HistoryDB
 from stores.media_cache import MediaCachePolicy
 from stores.media_fetch import MediaFetcher
-from stores.media_layout import MediaLayout
+from stores.media_layout import MediaLayout, _cached_file_exists
 from stores.media_layout import (                     # noqa: F401
     IMAGE_EXT,
     MIME_EXT,
@@ -43,6 +43,20 @@ log = logging.getLogger("chatbot")
 #: import `slugify_nick` from this name) — see `tools/metrics/stores_api.py`
 __all__ = ["MediaStore", "slugify_nick", "infer_kind", "IMAGE_EXT",
            "MIME_EXT", "TRANSLIT", "SAFE_CHARS", "RESERVED"]
+
+
+def _path_payload(row: dict, usable: bool) -> dict:
+    """One media row as the dict the UI reads.
+
+    The path is blanked when the file is not usable so no caller can be
+    tempted to open it; the URL is always included, because re-downloading
+    from it is exactly the recovery path an unusable row needs.
+    """
+    return {"state": row.get("state"),
+            "path": (row.get("cache_path") or "") if usable else "",
+            "url": row.get("url") or "",
+            "kind": row.get("kind") or "image",
+            "bytes": int(row.get("bytes") or 0)}
 
 
 class MediaStore:
@@ -219,15 +233,12 @@ class MediaStore:
         row = await self.get(media_id)
         if not row:
             return {"state": "missing", "path": "", "url": ""}
-        path = row.get("cache_path") or ""
-        usable = row.get("state") == "cached" and path and os.path.exists(path)
+        usable = _cached_file_exists(row)
         if usable:
             await self.db.execute("UPDATE media SET last_used=? WHERE id=?",
                                   (_now(), row["id"]))
             await self.db.commit()
-        return {"state": row.get("state"), "path": path if usable else "",
-                "url": row.get("url") or "", "kind": row.get("kind") or "image",
-                "bytes": int(row.get("bytes") or 0)}
+        return _path_payload(row, usable)
 
     async def clipboard_payload(self, media_id) -> dict:
         """What the UI should put on the clipboard for a left click."""

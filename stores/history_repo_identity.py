@@ -127,6 +127,25 @@ def _ui_media_payload(row: dict, media_id, rec) -> dict:
     }
 
 
+def _reattributed_params(row: dict, clean: str) -> tuple:
+    """The UPDATE parameters that re-identify one stored line under `clean`.
+
+    Identity is (direction, author, timestamp, kind, payload) and the author
+    is the only part changing, so every other field is read back from the row
+    exactly as the original write derived it -- a media line is identified by
+    its URL, a text line by its text. Direction is pinned to "in" because
+    only received lines carry the partner's nick.
+    """
+    payload = row.get("media_url") or row.get("text") or ""
+    ts = row.get("ts_display") or ""
+    kind = row.get("kind") or "text"
+    return (clean,
+            dedupe_key("in", clean, ts, kind, payload),
+            fingerprint("in", clean, ts, kind, payload,
+                        int(row.get("occ") or 0)),
+            int(row["id"]))
+
+
 class ConversationIdentity:
     """Who a line belongs to, and how it becomes a row."""
 
@@ -345,16 +364,9 @@ class ConversationIdentity:
             "WHERE m.person_id=? AND m.from_nick=?",
             (pid, old_nick))
         for row in rows:
-            payload = row.get("media_url") or row.get("text") or ""
-            occ = int(row.get("occ") or 0)
             await self._owner.db.execute(
                 "UPDATE messages SET from_nick=?, dup_key=?, fp=? WHERE id=?",
-                (clean,
-                 dedupe_key("in", clean, row.get("ts_display") or "",
-                            row.get("kind") or "text", payload),
-                 fingerprint("in", clean, row.get("ts_display") or "",
-                             row.get("kind") or "text", payload, occ),
-                 int(row["id"])))
+                _reattributed_params(row, clean))
         if rows:
             await self._owner.db.commit()
         return len(rows)

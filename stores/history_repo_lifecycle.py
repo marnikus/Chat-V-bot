@@ -14,7 +14,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime
 
-from stores.history_models import dedupe_key
+from stores.history_models import dedupe_key, sql_count
 from stores.history_repo_identity import TAIL_FP_LIMIT
 from stores.history_requests import WriteContext
 
@@ -411,21 +411,30 @@ class PersonLifecycle:
             "(SELECT MAX(ord) FROM messages WHERE person_id=?) AS last_ord "
             "FROM messages WHERE person_id=? AND deleted_at=''",
             (person_id, person_id))
-        person = await self._owner.get_person_by_id(person_id) or {}
-        nicks = list(person.get("my_nicks") or [])
-        clean = self._owner.normalise_nick(my_nick)
-        if clean and clean not in nicks:
-            nicks.append(clean)
+        nicks = await self._my_nicks_including(person_id, my_nick)
         await self._owner.db.execute(
             "UPDATE persons SET message_count=?, in_count=?, out_count=?, "
             "media_count=?, last_ord=?, my_nicks=?, "
             "first_seen=COALESCE(?, first_seen), last_seen=COALESCE(?, last_seen) "
             "WHERE id=?",
-            (int(row["n"] or 0), int(row["ins"] or 0), int(row["outs"] or 0),
-             int(row["media"] or 0), int(row["last_ord"] or 0),
+            (sql_count(row, "n"), sql_count(row, "ins"), sql_count(row, "outs"),
+             sql_count(row, "media"), sql_count(row, "last_ord"),
              json.dumps(nicks, ensure_ascii=False),
              row["first_ts"], row["last_ts"], person_id))
         await self._owner.db.commit()
+
+    async def _my_nicks_including(self, person_id: int, my_nick: str) -> list:
+        """This person's known my_nicks, with `my_nick` added if it is new.
+
+        The list only ever grows: a nick I used in this conversation once is
+        still mine later, so a run that does not see it must not drop it.
+        """
+        person = await self._owner.get_person_by_id(person_id) or {}
+        nicks = list(person.get("my_nicks") or [])
+        clean = self._owner.normalise_nick(my_nick)
+        if clean and clean not in nicks:
+            nicks.append(clean)
+        return nicks
 
     async def _touch_cursor(self, ctx: WriteContext) -> None:
         """Move the resume cursor, and nothing else.

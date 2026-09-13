@@ -70,8 +70,22 @@ def _config_label_state(raw) -> dict | None:
     if not defs and not assign:
         return None
     return {"defs": defs, "assign": assign,
-            "filter": raw.get("filter") or {"include": [], "exclude": []},
-            "next_id": int(raw.get("next_id") or 0)}
+            "filter": _label_filter(raw), "next_id": _next_id(raw)}
+
+
+def _label_filter(raw: dict) -> dict:
+    """The saved include/exclude filter, or an empty one.
+
+    An absent filter must become the empty pair rather than None: the store
+    treats "no filter" as "everyone passes", and a missing key downstream
+    would read as an empty whitelist that blocks everyone.
+    """
+    return raw.get("filter") or {"include": [], "exclude": []}
+
+
+def _next_id(raw: dict) -> int:
+    """The saved id counter, defaulting to 0 for a config that has none."""
+    return int(raw.get("next_id") or 0)
 
 
 def _legacy_text(row: dict, key: str, default: str = "") -> str:

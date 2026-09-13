@@ -212,17 +212,27 @@ async def _switch(lifecycle, st) -> None:
     fallback = lifecycle._pick_fallback(st.target)
     if not fallback:
         raise_refusal(st, "switch", "no other database to switch to")
+    opened = await _open_fallback(lifecycle, fallback)
+    if not opened.get("ok"):
+        raise_refusal(st, "switch",
+                      str(opened.get("error", "cannot switch away")))
+    st.world_changed = True
+
+
+async def _open_fallback(lifecycle, fallback) -> dict:
+    """Open `fallback`, reporting any failure as a result dict.
+
+    A raised error and a returned `ok: False` mean the same thing to the
+    caller -- the switch did not happen -- so both are normalised here and
+    the caller is left with one refusal path. CancelledError is re-raised
+    because a cancelled switch is not a failed switch.
+    """
     try:
-        opened = await lifecycle._load_unlocked(fallback)
+        return await lifecycle._load_unlocked(fallback) or {}
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001
-        raise_refusal(st, "switch", str(exc) or "cannot switch away")
-    if not (opened or {}).get("ok"):
-        raise_refusal(
-            st, "switch",
-            str((opened or {}).get("error", "cannot switch away")))
-    st.world_changed = True
+        return {"ok": False, "error": str(exc) or "cannot switch away"}
 
 
 # ── phase 4: detach lingering handles on the victim ─────────────────

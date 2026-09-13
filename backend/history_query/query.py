@@ -28,6 +28,46 @@ from stores.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
 
+async def _page_rows(db, select, pid: int, before_ord, after_ord, limit: int):
+    """The one page of rows the cursor asks for, always oldest-first.
+
+    Three cursors, one shape. `after_ord` reads forwards and is already
+    ascending; the other two read backwards so SQLite can walk the ord
+    index from the newest end, and are reversed here. Reversing at the
+    point of the query -- rather than leaving it to the caller -- is what
+    lets the caller treat items[0] as the oldest row in every case.
+    """
+    where = "WHERE m.person_id=? AND m.deleted_at='' "
+    if after_ord is not None:
+        return await db.fetchdicts(
+            select + where + "AND m.ord>? ORDER BY m.ord LIMIT ?",
+            (pid, int(after_ord), limit))
+    if before_ord is not None:
+        rows = await db.fetchdicts(
+            select + where +
+            "AND m.ord<? ORDER BY m.ord DESC LIMIT ?",
+            (pid, int(before_ord), limit))
+    else:
+        rows = await db.fetchdicts(
+            select + where + "ORDER BY m.ord DESC LIMIT ?",
+            (pid, limit))
+    return list(reversed(rows))
+
+async def _neighbour_flags(db, pid: int, items: list) -> tuple:
+    """`(has_more, has_newer)` -- is there anything past either edge?
+
+    An empty page has no edges to look past, so both are False without a
+    query; that guard is why the counts below can index items directly.
+    """
+    if not items:
+        return False, False
+    sql = ("SELECT COUNT(*) FROM messages WHERE person_id=? AND "
+           "deleted_at='' AND ord")
+    older = await db.scalar(sql + "<?", (pid, items[0]["ord"]), 0)
+    newer = await db.scalar(sql + ">?", (pid, items[-1]["ord"]), 0)
+    return bool(older), bool(newer)
+
+
 class HistoryQuery:
     """
 
@@ -84,34 +124,10 @@ Every read the UI performs against the archive."""
         total = int(await self.db.scalar(
             self._COUNT_ALIVE, (pid,), 0))
 
-        if after_ord is not None:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "AND m.ord>? ORDER BY m.ord LIMIT ?",
-                (pid, int(after_ord), limit))
-        elif before_ord is not None:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "AND m.ord<? ORDER BY m.ord DESC LIMIT ?",
-                (pid, int(before_ord), limit))
-            rows = list(reversed(rows))
-        else:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "ORDER BY m.ord DESC LIMIT ?", (pid, limit))
-            rows = list(reversed(rows))
-
-        items = [self._item(r) for r in rows]
-        first = items[0]["ord"] if items else 0
-        last = items[-1]["ord"] if items else 0
-        has_more = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-            "deleted_at='' AND ord<?",
-            (pid, first if items else 0), 0)) if items else False
-        has_newer = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-            "deleted_at='' AND ord>?",
-            (pid, last), 0)) if items else False
+        items = [self._item(r) for r in
+                 await _page_rows(self.db, self._SELECT, pid,
+                                  before_ord, after_ord, limit)]
+        has_more, has_newer = await _neighbour_flags(self.db, pid, items)
         return {
             "nick": person["nick"],
             "items": items,
@@ -122,6 +138,7 @@ Every read the UI performs against the archive."""
             "missing": False,
             "my_nicks": self._my_nicks(person),
         }
+
 
     async def around(self, nick: str, ord_: int, radius: int = 25) -> dict:
         person = await self._person_row(nick)

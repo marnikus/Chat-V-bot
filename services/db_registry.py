@@ -271,25 +271,33 @@ def _victim_folder_db_files(registry, victim_abs: str) -> list:
     from services import db_deletion
     if not victim_abs:
         return []
-    victim_dir = os.path.dirname(
-        os.path.abspath(str(victim_abs))) or ""
+    victim_dir = os.path.dirname(os.path.abspath(str(victim_abs))) or ""
+    if not victim_dir or not os.path.isdir(victim_dir):
+        return []
+    if os.path.abspath(victim_dir) == _active_dir(registry):
+        return []
+    files: list[str] = []
+    # Listing failures were swallowed in the inline original too;
+    # _append_db_files only reports them for the managed inventory.
+    try:
+        db_deletion._append_db_files(files, victim_dir)
+    except OSError:
+        return []
+    return files
+
+
+def _active_dir(registry) -> str:
+    """The directory holding the active world's db, or '' when unknown.
+
+    '' is deliberately a value no real directory compares equal to, so a
+    registry that cannot answer leaves the victim directory eligible rather
+    than silently protecting it.
+    """
     try:
         active = registry.active_path()
-        active_dir = os.path.dirname(
-            os.path.abspath(active)) if active else ""
     except Exception:  # noqa: BLE001
-        active_dir = ""
-    files: list[str] = []
-    if victim_dir and os.path.isdir(victim_dir) and \
-            os.path.abspath(victim_dir) != os.path.abspath(
-                active_dir or victim_dir + "_x"):
-        # Listing failures were swallowed in the inline original too;
-        # _append_db_files only reports them for the managed inventory.
-        try:
-            db_deletion._append_db_files(files, victim_dir)
-        except OSError:
-            return []
-    return files
+        return ""
+    return os.path.dirname(os.path.abspath(active)) if active else ""
 
 
 def _remembered_existing_dbs(registry) -> list:

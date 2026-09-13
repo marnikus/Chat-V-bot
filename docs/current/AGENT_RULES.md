@@ -357,6 +357,9 @@ modules and context files — are RULE 18.
 **16.1.5 Embedded-JS exception (explicit)**
 
 `backend/dom_probe.py` `build_probe` is 122 LOC because it embeds a JS probe.
+Measured 2026-09-13: its cognitive complexity is **8**, not the 17 recorded in
+earlier reports — the length is the literal, not the logic. The exemption is
+about LOC only; it never covered complexity and does not now.
 **Do not refactor that builder to meet 30 LOC.** New probe builders may exceed
 30 LOC **only** when the excess is a single JS/HTML string literal. The Python
 control flow around that literal must still be CC ≤ 10 and nesting ≤ 4.

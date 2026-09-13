@@ -43,6 +43,23 @@ def _unfilter(data: dict, wanted: str) -> None:
                                  if i != wanted]
 
 
+def _rename_if_free(label: dict, name, defs) -> None:
+    """Rename `label` unless the name is blank or already taken.
+
+    A silent no-op is deliberate: the rename comes from an inline edit in the
+    UI, where rejecting the keystroke and keeping the old name is the
+    behaviour the user expects from a duplicate. Comparison is casefolded
+    because two labels differing only in case are the same label to a reader.
+    """
+    clean = normalize_name(name)
+    if not clean:
+        return
+    taken = any(d is not label and d["name"].casefold() == clean.casefold()
+                for d in defs)
+    if not taken:
+        label["name"] = clean
+
+
 class LabelAssignments:
     """Label definitions, per-person assignment and undo snapshots."""
 
@@ -124,11 +141,7 @@ class LabelAssignments:
         if label is None:
             return None
         if name is not None:
-            clean = normalize_name(name)
-            if clean and not any(d is not label and
-                                 d["name"].casefold() == clean.casefold()
-                                 for d in data["defs"]):
-                label["name"] = clean
+            _rename_if_free(label, name, data["defs"])
         if color is not None:
             label["color"] = normalize_color(color, label["color"])
         self._owner._save(data)

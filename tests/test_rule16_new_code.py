@@ -47,10 +47,12 @@ gate = _load_gate()
 LIMITS, OWNED, RATCHET, OVERRIDES = (gate.LIMITS, gate.OWNED, gate.RATCHET,
                                      gate.OVERRIDES)
 
-# A real function in this repo that is over the limit (53 LOC at the time of
+# A real function in this repo that is over the limit (49 LOC at the time of
 # writing). Used to prove the measurement detects a breach, so a green gate
-# cannot simply be a gate that measures nothing.
-CANARY = ("backend/history_query/query.py", "HistoryQuery", "page")
+# cannot simply be a gate that measures nothing. The previous canary was
+# `page` in the same class; G6 brought it down to 29 LOC, and the test's own
+# failure message says to pick another rather than to soften the check.
+CANARY = ("backend/history_query/query.py", "HistoryQuery", "_search")
 
 
 class TestTheGateIsNotVacuous(unittest.TestCase):

@@ -75,6 +75,35 @@ def _copy_file_to(clipboard, mode: str, path: str) -> bool:
     return True
 
 
+def _record_person_deletion(ctx, nick, hard, token, snapshots):
+    """Log a completed deletion and, when soft, make it undoable.
+
+    A hard delete is terminal: the label is forgotten and nothing is pushed,
+    because there is no state left to restore. A soft delete pushes the
+    people rows either side of the removal so Ctrl+Z can put the person back
+    as well as their messages -- but only when both snapshots exist, since a
+    half-known before/after would restore the archive into a shape that
+    never existed.
+    """
+    if hard:
+        ctx.label_store.forget(nick)
+        ctx.bus.emit(LogMessage(
+            message=f"🔥 “{nick}” erased permanently (not undoable)",
+            level="warn"))
+        return
+    entry = {"op": "delete_person", "nick": nick, "token": token}
+    before, after = snapshots
+    if before is not None and after is not None:
+        entry["people"] = {"before": before, "after": after}
+    ctx.undo.push("archive", entry)
+    ctx.bus.emit(LogMessage(
+        message=f"🗑 “{nick}” and their history removed — "
+                "Ctrl+Z restores both", level="warn"))
+
+
+
+
+
 class HistoryBridge(QObject):
     history_page_ready = Signal(str, str)    # req_id, JSON page
     history_search_ready = Signal(str, str)  # req_id, JSON results
@@ -256,21 +285,10 @@ class HistoryBridge(QObject):
                     log.debug("people row for %s not removed: %s",
                               clean, exc)
             people_after = await self._people_snapshot()
-            if ok and not hard:
-                entry = {"op": "delete_person", "nick": clean,
-                         "token": token}
-                if people_before is not None and people_after is not None:
-                    entry["people"] = {"before": people_before,
-                                       "after": people_after}
-                self.ctx.undo.push("archive", entry)
-                self.ctx.bus.emit(LogMessage(
-                    message=f"🗑 “{clean}” and their history removed — "
-                            "Ctrl+Z restores both", level="warn"))
-            elif ok and hard:
-                self.ctx.label_store.forget(clean)
-                self.ctx.bus.emit(LogMessage(
-                    message=f"🔥 “{clean}” erased permanently "
-                            "(not undoable)", level="warn"))
+            if ok:
+                _record_person_deletion(
+                    self.ctx, clean, bool(hard), token,
+                    (people_before, people_after))
             self.userdb_changed.emit(json.dumps(
                 {"action": "deleted", "nick": clean, "hard": bool(hard),
                  "ok": ok}, ensure_ascii=False))
@@ -397,6 +415,7 @@ class HistoryBridge(QObject):
         return True
 
     # ── helpers ──────────────────────────────────────────────────
+
     async def _people_snapshot(self):
         if self.ctx.memory is None:
             return None
