@@ -22,9 +22,9 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stores.history_db import HistoryDB  # noqa: E402
-from stores.history_models import MessageRecord  # noqa: E402
-from stores.history_repo import (  # noqa: E402
+from stores.history.history_db import HistoryDB  # noqa: E402
+from stores.history.history_models import MessageRecord  # noqa: E402
+from stores.history.history_repo import (  # noqa: E402
     HistoryRepo,
     align_batch,
     resolve_days,

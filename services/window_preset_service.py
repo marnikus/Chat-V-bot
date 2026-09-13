@@ -1,4 +1,33 @@
-"""Portable window-preset document validation and compatibility metadata."""
+"""Portable window-preset document validation and compatibility metadata.
+
+This module provides a pure-validation pipeline for window-preset documents
+(export/import of the UI layout). It is intentionally NOT split despite its
+287 lines because:
+
+  * Every function is small (4–25 LOC), pure, and single-purpose — the low
+    maintainability index (16.1) comes from having ~40 tiny functions in one
+    file, not from complexity in any one function (worst CC is 4).
+  * The functions form a strict validation DAG: _decode → _header → _grid →
+    _states → _windows → _screen → validate_document. Each step returns
+    (value, error) and short-circuits on the first error.
+  * Splitting would scatter the validation logic across files while keeping
+    all callers in the same place (validate_document), gaining no cohesion.
+
+Structure (by responsibility):
+  * Constants: FORMAT, SCHEMA_VERSION, APP_VERSION, GRID_TYPE
+  * Header validators: _decode, _text, _header_error, _preset_name, _timestamp, _header
+  * Grid validators: _grid
+  * Window-state validators: _id_list, _states
+  * Bounds validators: _number, _bound_values, _bounds_extend_screen, _bounds
+  * Window validators: _window_id, _window_state, _window_entry, _windows
+  * Screen validators: _screen
+  * Public API: validate_document (composes all validators)
+  * Facade class: WindowPresetService (delegates to the functions above)
+
+The validation is strict: unknown fields are ignored, known fields must be
+present and conform to the schema. This keeps the preset format stable across
+app versions (compatibility_note explains version mismatches).
+"""
 
 from __future__ import annotations
 

@@ -20,20 +20,20 @@ import uuid
 from datetime import datetime
 from typing import Iterable, Optional
 
-from stores.history_db import HistoryDB
-from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
+from stores.history.history_db import HistoryDB
+from stores.history.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
                                     MessageRecord, dedupe_key,  # noqa: F401
                                     fingerprint)  # noqa: F401
-from stores.history_repo_append import AppendPlanner
-from stores.history_repo_identity import (                        # noqa: F401
+from stores.history.history_repo_append import AppendPlanner
+from stores.history.history_repo_identity import (                        # noqa: F401
     TAIL_FP_LIMIT,
     align_batch,
     resolve_days,
 )
-from stores.history_repo_identity import ConversationIdentity
-from stores.history_repo_lifecycle import PersonLifecycle
-from stores.history_repo_media import MediaRecovery
+from stores.history.history_repo_identity import ConversationIdentity
+from stores.history.history_repo_lifecycle import PersonLifecycle
+from stores.history.history_repo_media import MediaRecovery
 
 log = logging.getLogger("chatbot")
 

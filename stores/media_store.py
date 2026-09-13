@@ -21,7 +21,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from stores.history_db import HistoryDB
+from stores.history.history_db import HistoryDB
 from stores.media_cache import MediaCachePolicy
 from stores.media_fetch import MediaFetcher
 from stores.media_layout import MediaLayout

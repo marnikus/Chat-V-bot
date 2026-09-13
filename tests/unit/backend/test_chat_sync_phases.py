@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 
 from backend.chat_parser import ChatParser, sync_conversation  # noqa: E402
 from backend.chat_sync import SyncPersister, SyncSession  # noqa: E402
-from stores.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history.history_models import MessageRecord, fingerprint  # noqa: E402
 
 NOW = datetime(2026, 9, 9, 10, 0, 0)
 

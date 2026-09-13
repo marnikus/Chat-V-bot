@@ -29,7 +29,7 @@ import logging
 import os
 
 from services.history.trash import open_world
-from stores.history_db import HistoryDB
+from stores.history.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
 

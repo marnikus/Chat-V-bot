@@ -43,7 +43,7 @@ from services.undo_archive import (ArchiveCommands, _disagrees,  # noqa: E402
                                    _outcome, _person_verdict, _reason,
                                    _rows, _row_verdict, _state)
 from stores import world_lock  # noqa: E402
-from stores.history_db import HistoryDB  # noqa: E402
+from stores.history.history_db import HistoryDB  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 from test_chat_parser_delta import FakePage, raw  # noqa: E402

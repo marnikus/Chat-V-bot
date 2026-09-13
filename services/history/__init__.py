@@ -6,8 +6,8 @@ from typing import Optional
 from backend.chat_parser import ChatParser
 from backend.history_query import HistoryQuery
 from services.collector_service import Collector, DEFAULTS as COLLECTOR_DEFAULTS
-from stores.history_db import HistoryDB
-from stores.history_repo import HistoryRepo
+from stores.history.history_db import HistoryDB
+from stores.history.history_repo import HistoryRepo
 from stores.media_store import MediaStore
 
 from . import trash
