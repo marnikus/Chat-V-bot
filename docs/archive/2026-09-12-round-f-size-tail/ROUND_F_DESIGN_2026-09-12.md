@@ -1079,13 +1079,21 @@ a result. After the corrections:
 
 ### 10.8 RULE 16 / RULE 18 recheck
 
-* **§16.0** — the one legacy function whose signature changed improved: 41 → 40
-  LOC. Nothing in `OWNED` was touched; `OWNED` covers only `history_query.py` and
-  `history_bridge.py`, so no ratcheted function moved.
+* **§16.0** — two rows of its table decide this step. A *new* class in `stores/`
+  is a **hard fail** if any §16.1–§16.2 threshold is exceeded: `WriteContext` is
+  **20 LOC, 0 methods**, against class limits of ≤ 120 ideal / > 150 fail and
+  ≤ 15 methods, so it clears. An *edit of a function that already violates a
+  threshold* must "not worsen the metric; prefer reduce": `_after_write` was
+  already 41 LOC against §16.1's 30 before this step, and it is now **40**, so it
+  reduced rather than worsened. Nothing in `OWNED` was touched — it covers only
+  `history_query.py` and `history_bridge.py` — so no ratcheted function moved, and
+  the gate confirms it (rc=0, ratchet intact).
 * **§16.1 / §16.2** — the new file is one dataclass: radon MI **A (100.00)**, no
   block ranked C or worse, no function at all. The two rewritten docstrings and
   the corrected note are comment-only. No `_v2` twin, no dispatch table, no
-  re-hosted body: the migration changed one signature and five call sites.
+  re-hosted body: the migration changed one signature and five call sites. The
+  parameter count of the migrated function went 8 → 1, which is the metric F5
+  exists to move; the wide total moved 70 → 68 with it.
 * **§16.2 anti-gaming, applied to this step itself** — the MI rise F7's prose
   produced was removed rather than kept, and the residue that remains is labelled
   as prose in §10.3 so no later reader books it as progress.

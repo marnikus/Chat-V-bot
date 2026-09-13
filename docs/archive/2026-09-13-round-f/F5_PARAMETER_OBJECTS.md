@@ -134,3 +134,10 @@ Two readings to get right, both of which mislead in the opposite direction:
   finding.** The module's rating is 9.17 for it, and the sibling dataclass module
   `stores/history_models.py` carries the same code at 8.93 alongside C0116,
   R0913 and R0917. Eight fields is the shape of the signature it replaced.
+  Stated plainly, because it is a real difference: `WriteContext` is *not* the
+  same shape as §19.4's model — `PersonPageRequest` has 6 fields and so stays
+  under pylint's 7-attribute default, `WriteContext` has 8 and does not. What
+  §16.2 gates on a class is physical LOC (ideal ≤ 120, fail > 150) and method
+  count (≤ 15): `WriteContext` is **20 LOC, 0 methods** and `PersonPageRequest`
+  97 LOC, 7 methods, so both sit well inside. The pylint code is a linter
+  default this round does not track, not a rule threshold.
