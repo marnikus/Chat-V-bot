@@ -82,13 +82,16 @@ def dump_module(qualname: str) -> dict:
     except Exception as exc:                      # noqa: BLE001
         return {"import_error": repr(exc)}
     out = {"functions": {}, "classes": {}, "values": {}}
+    exports = set(getattr(mod, "__all__", ()))
     for name, obj in sorted(vars(mod).items()):
         if name.startswith("_"):
             continue
         owner = getattr(obj, "__module__", None)
-        if inspect.isfunction(obj) and owner == qualname:
+        # Explicit facade exports remain API even when implemented elsewhere.
+        is_public = owner == qualname or name in exports
+        if inspect.isfunction(obj) and is_public:
             out["functions"][name] = _sig(obj)
-        elif inspect.isclass(obj) and owner == qualname:
+        elif inspect.isclass(obj) and is_public:
             out["classes"][name] = dump_class(obj)
         elif owner == qualname and not isinstance(obj, types.ModuleType):
             if isinstance(obj, (list, tuple)):

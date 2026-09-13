@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-10 (this checkout) |
-| Test suite | `2545 passed, 3 skipped, 1 deselected, 1 xfailed, 771 subtests passed` + 22 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **90.44%** · branch **84.38%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-13 (round 4 through steps 8–9) |
+| Test suite | `2898 passed, 3 skipped, 1 deselected, 1 xfailed, 774 subtests passed` + 25 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **91.21175%** · branch **85.99340%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -50,7 +50,7 @@ collector** archives whatever private conversation is on screen.
 | **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/test_visual_click_contract.py`, `tests/test_find_click_visual.py` |
 | **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
-| **Passive collector** | Heartbeat probe per tick; archives only when the conversation changed; never blocks the UI; throttled (not paused) during a run | `services/collector_service.py`, `services/collector_tick.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
+| **Passive collector** | Heartbeat probe per tick; archives only when changed; never blocks the UI; throttled (not paused) during runs; sync retry/pacing waits honor Stop without dropping completed chunks | `services/collector_service.py`, `services/collector_tick.py`, `backend/sync/reading.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
 | **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person | `stores/history_*`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
 | **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
 | **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/test_person_labels.py`, `tests/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
@@ -112,7 +112,7 @@ services/history/runtime.on_binding → Collector.handle_push
 backend/chat_parser.verify_private(state, nick, my_nick)   ← the two-step gate
    │  refuse → nothing is written, push channel disarmed until a tick re-verifies
    ▼
-backend/chat_sync (delta/align) → stores/history_repo* (append, dedup, media)
+backend/chat_sync (exports) → backend/sync/session.run_sync → stores/history_repo*
 ```
 
 The collector heartbeat (`services/collector_tick.py`) runs the same gate as
@@ -161,7 +161,7 @@ Each one is enforced in code and pinned by a test. Rule numbers refer to
 | **I-9** | A seek writes nothing: scroll-only mode neither collects, rejects nor purges | `backend/scroll_parser.py` (RULE 11) |
 | **I-10** | One chronological undo timeline for every editable surface; automatic side-effects are never recorded | `services/undo_service.py` (RULE 12) |
 | **I-11** | State that cannot be read back is never persisted (grid layout is validated and rejected, not repaired) | `services/layout_service.py` (RULE 13) |
-| **I-12** | The archive is not the queue: filters, purges, undo and People-list edits never delete archived messages; collectors never add to the queue | `stores/history_repo*`, `stores/user_memory.py` (RULE 14) |
+| **I-12** | The archive is not the queue: filters, purges, undo and People-list edits never delete archived messages; collectors must not add to the queue. **Known violation:** Collector adds unknown partners | `stores/history_repo*`, `stores/user_memory.py` (RULE 14); [next correctness fix](../archive/2026-09-13-refactor-round4/FOLLOW_UP_PRIORITIES.md) |
 | **I-13** | Nothing is archived without the two-step private gate, re-applied on every write path; the gate fails **closed** | `backend/chat_parser.verify_private()` (RULE 15) |
 | **I-14** | Media bytes are filed under the conversation they belong to, never in a global pile | `stores/media_layout.py` (RULE 15) |
 | **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion_flow.py`, `services/db_lifecycle.py` |
@@ -206,7 +206,7 @@ non-destructive).
 |---|---|---|
 | Contracts | `core/` (5 files) | DI container, EventBus, interfaces, `Result` — no Qt, no I/O |
 | Blocks | `actions/` (23) | The 16 action blocks + `BaseAction`, registry, cancellation |
-| Page-facing | `backend/` (30) | CDP client, DOM probes, chat parser + private gate, chat sync, scroll parser, visual click, media handler; **compatibility shims** for the pre-split names |
+| Page-facing | `backend/` (includes 7-file `sync/`) | CDP, DOM probes, private gate; sync session + lifecycle/viewport/plan/read/persist; scroll, visual click, media; **compatibility shims** for pre-split names |
 | Wire | `bridge/` (12) | `bridge/router.py` — ONE QObject on the QWebChannel, assembled from nine domain bridges: cdp · stack · people · history · label · db · collector · undo · layout |
 | Orchestration | `services/` (31) | `run/` (engine), `history/`, collector, db lifecycle + deletion, layout, people, undo |
 | Persistence | `stores/` (35) | SQLite world store + schema/repair, JSON stores, labels, media, presets, undo |
@@ -223,11 +223,11 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2545 tests + 771 subtests)
+# Python (2837 tests + 774 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (22 Node harness files)
+# Front-end (25 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)
@@ -262,11 +262,11 @@ dict, and the collector status strings.
 
 | Metric | Fail line | Measured now |
 |---|---|---|
-| Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
-| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC 10, mean CC 3.1, mean cognitive 2.17, max nesting 4, zero functions over gate (2026-09-11 CC round 3) |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **90.44% / 84.38%** |
-| Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
-| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 6 lines (57.7% in band) · median file 130 lines — RULE 18, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
+| Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | 44 legacy functions > 30 LOC; touched functions do not worsen |
+| Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | max CC 10, max nesting 4; one legacy cognitive offender (router, 17); settings cognition 17 → 6 (round 4) |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.21175% / 85.99340%** (round 4; frozen RULE 16 floors unchanged) |
+| Enforcement / baseline | staged general gate; hosted CI **inactive** | [Gate usage / limits](../archive/2026-09-13-refactor-round4/CHANGED_CODE_GATE.md); [original baseline](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
+| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | sync family: 7 files, each ≤ 221 lines; session 91 LOC / 12 methods, facade 33 lines; [`steps 6–7 results`](../../reports/REFACTOR_ROUND4_STEPS_6_7_2026-09-13.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
 
 ---
@@ -275,6 +275,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-13 | [Round 4 queue](../archive/2026-09-12-refactor-round4/ROUND4_DESIGN.md) · [steps 8–9 design](../archive/2026-09-13-refactor-round4/STEPS_8_9_DESIGN.md) · [results](../../reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md) | All nine steps delivered locally; hosted activation pending. Next: Collector queue ownership, then bounded lifecycle work |
 | 2026-09-11 | [CC tail fixes — round 3](../archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) | How the 63-function CC queue went to zero over-gate functions |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |
 | 2026-09-10 | [`_delete_unlocked` decomposition](../archive/2026-09-10-safety-refactor/DELETE_FLOW_EXTRACTION_DESIGN_2026-09-10.md) · [CC tail extraction](../archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md) · [remaining tail](../archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md) | How the worst hotspots were split without changing behaviour |
@@ -282,7 +283,6 @@ dict, and the collector status strings.
 | 2026-09-10 | [Code quality gates](../archive/2026-09-10-quality-gates/CODE_QUALITY_GATES_DESIGN_2026-09-10.md) · [RULE 16 fit](../archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md) | Where the thresholds came from and how they are measured |
 | 2026-09-09 | [Four-area refactor plan](../archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_FOUR_AREA_PLAN.md) (+ areas [A](../archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_A_IMPLEMENTATION_DESIGN.md) [B](../archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_B_DESIGN.md) [C](../archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_C_DESIGN.md) [D](../archive/2026-09-09-four-area-refactor/REFACTOR_2026-09-09_AREA_D_DESIGN.md)) | Why the code is split into `core/actions/backend/bridge/services/stores` |
 | 2026-09-09 | [Test-suite designs](../archive/2026-09-09-test-suite/) · [module matrix](../archive/2026-09-09-test-suite/TEST_COVERAGE_MODULE_MATRIX.md) | Which suite pins which module, and why |
-| 2026-09-08 | [One DB = One World](../archive/2026-09-08-one-db-one-world/DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md) | The storage model in §5 |
 
 ---
 

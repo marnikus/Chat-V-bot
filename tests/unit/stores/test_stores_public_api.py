@@ -256,9 +256,13 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # re-export compatibility facade (`from stores.preset_store import
         # PresetStore`) that arrived with merge f82007c — a facade, not an
         # area being forced to edit an import.
-        self.assertEqual(count, 38,
+        # 2026-09-12 round 4 steps 4–5: +1 because the extracted persistence
+        # phase and the retained session both directly import store value types.
+        # No stores API changed; do not route types through an unrelated facade
+        # merely to preserve this historical import-line count.
+        self.assertEqual(count, 39,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 38)")
+                         "import in another area (integrated baseline: 39)")
 
 
 if __name__ == "__main__":

@@ -9,10 +9,12 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**78 documents in 11 groups.**
+The dated groups below preserve the designs; latest additions appear first.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-13-refactor-round4/`](2026-09-13-refactor-round4/STEPS_8_9_DESIGN.md) | 4 | [Steps 6–7](2026-09-13-refactor-round4/STEPS_6_7_DESIGN.md), steps 8–9, [gate usage](2026-09-13-refactor-round4/CHANGED_CODE_GATE.md), [follow-up priorities](2026-09-13-refactor-round4/FOLLOW_UP_PRIORITIES.md). Results: `reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md`. |
+| [`2026-09-12-refactor-round4/`](2026-09-12-refactor-round4/ROUND4_DESIGN.md) | 2 | Round-4 queue plus [steps 4–5](2026-09-12-refactor-round4/STEPS_4_5_DESIGN.md); outcomes through steps 4–5 in `reports/REFACTOR_ROUND4_STEPS_4_5_2026-09-12.md`. |
 | [`2026-09-04-foundation/`](#2026-09-04-foundation) | 5 | The original architecture proposal (written before any code existed — **superseded by `docs/current/SYSTEM_OF_RECORD.md`**) plus the first three rounds of bug fixes and the configurable Find & Click block. |
 | [`2026-09-05-grid-scroll-undo/`](#2026-09-05-grid-scroll-undo) | 15 | The window grid ("sash layout"), the Scroll & Parse pipeline, visual click confirmation, filter purging and the first global undo timeline. |
 | [`2026-09-06-collector-and-history/`](#2026-09-06-collector-and-history) | 15 | The message-history archive, its three windows, the passive collector, and the person-targeting blocks (`{{nick}}`, Pick Person, Mark Messaged, attach/composer behaviour). |

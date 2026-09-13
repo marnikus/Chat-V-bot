@@ -1,29 +1,8 @@
-# RULE 16 enforcement in CI.
-#
-# NOT ACTIVE YET. This file lives in tools/ci/ rather than .github/workflows/
-# because the commit was refused:
-#
-#   remote rejected ... (refusing to allow a GitHub App to create or update
-#   workflow `.github/workflows/quality-gate.yml` without `workflows`
-#   permission)
-#
-# A GitHub App token cannot author workflow files. Someone with `workflows`
-# permission has to activate it, by copying it into place:
-#
-#   mkdir -p .github/workflows
-#   cp tools/ci/quality-gate.yml .github/workflows/quality-gate.yml
-#
-# Until that is done the gate runs from the pre-commit hook only, and a
-# --no-verify bypass is unguarded. Do not delete this file in the meantime —
-# it is the only record of the intended CI configuration.
-#
-# Runs the same gate script the pre-commit hook runs, so a bypassed hook still
-# fails the build. See docs/AGENT_RULES_CODE_QUALITY.md.
-#
-# Two jobs, deliberately split: the gate needs no system libraries at all
-# (pure AST + radon), so it must never be the thing that fails because a Qt
-# runtime dependency was missing on the runner. The suite job installs those.
-
+# INACTIVE TEMPLATE, NOT A HOSTED CHECK.
+# A previous push was rejected because the connected GitHub App lacked workflow
+# permission. An authorized maintainer must copy this to .github/workflows/.
+# Hosted enforcement/branch protection remains pending; --no-verify can bypass
+# local hooks. No claim is made here that the App permission has since changed.
 name: quality gate
 
 on:
@@ -31,62 +10,74 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  BEFORE_SHA: ${{ github.event.before }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+  CURRENT_BRANCH: ${{ github.ref_name }}
+
 jobs:
   rule16-gate:
-    name: RULE 16 size, complexity & smells
-    runs-on: ubuntu-latest
+    name: RULE 16 structure, unused code and clones
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install the measuring tools
-        run: |
-          python -m pip install --upgrade pip
-          # The gate only needs radon + cognitive_complexity + vulture +
-          # pylint; installing the whole dev set keeps one source of truth.
-          pip install -r requirements-dev.txt
-
-      - name: Measure
-        # --with-clones adds the AST duplication scan (~20s). The pre-commit
-        # hook deliberately omits it: spec §7 puts duplication in CI, not in
-        # pre-commit. Without the flag the gate prints "clone scan: SKIPPED"
-        # rather than implying the check passed.
+      - name: Install measuring tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Resolve the comparison base
+        id: base
+        run: python -m tools.metrics.changed_code.ci >> "$GITHUB_OUTPUT"
+      - name: General changed-code gate
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base }}
+        run: python tools/metrics/changed_code_gate.py --base "$BASE_SHA" --with-clones
+      - name: Historical feature invariants
         run: python tools/metrics/rule16_gate.py --with-clones
-
-      - name: The gate, as a test
-        # --noconftest: tests/conftest.py imports PySide6's WebEngine bindings,
-        # which this job does not install. conftest provides only a teardown
-        # hook, and this suite uses none of it.
-        run: python -m pytest --noconftest -q tests/test_rule16_new_code.py
+      - name: Gate behavior tests (no Qt imports)
+        run: >-
+          python -m pytest --noconftest -q tests/test_rule16_new_code.py
+          tests/test_changed_code_gate.py tests/test_changed_code_policy.py
+          tests/test_changed_code_inspections.py
 
   test-suite:
-    name: pytest
-    runs-on: ubuntu-latest
+    name: full tests and baseline-ratcheted branch coverage
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: System libraries PySide6 needs
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1 \
-            libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2
-
+            libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2t64
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Run the suite
+        run: python -m pip install -r requirements-dev.txt
+      - name: Resolve the comparison base
+        id: base
+        run: python -m tools.metrics.changed_code.ci >> "$GITHUB_OUTPUT"
+      - name: Run the actual suite and verify fresh coverage
         env:
           QT_QPA_PLATFORM: offscreen
-        # test_sash_webengine.py needs a real GPU/GL context and cannot run
-        # headless on a runner; it is deselected locally for the same reason.
-        run: python -m pytest -q --deselect tests/test_sash_webengine.py
+          BASE_SHA: ${{ steps.base.outputs.base }}
+        # Excludes ONLY the real-WebEngine GL case, not its whole test module.
+        # This invokes pytest itself and rejects source changes during tests.
+        run: python tools/metrics/changed_code_gate.py --base "$BASE_SHA" --run-tests
+      - name: JavaScript DOM harnesses
+        run: |
+          for test in tests/test_*.js; do node "$test"; done

@@ -312,7 +312,7 @@ the saved file rather than the remote URL.
 Mandatory for every change to production Python. Numbers, scopes, tools and
 exceptions are frozen here. Origin and rationale:
 [`docs/archive/2026-09-10-quality-gates/CODE_QUALITY_GATES_DESIGN_2026-09-10.md`](../archive/2026-09-10-quality-gates/CODE_QUALITY_GATES_DESIGN_2026-09-10.md).
-Executable form: `tests/test_rule16_new_code.py` (run it; do not re-derive).
+Executable form: [general changed-code gate](../archive/2026-09-13-refactor-round4/CHANGED_CODE_GATE.md) plus `tests/test_rule16_new_code.py` (historical invariants).
 Baseline snapshot:
 [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md).
 
@@ -336,7 +336,7 @@ satisfy §16.3.
 |---|---:|---:|---|
 | Function / method physical LOC | ≤ 20 | **> 30** | Inclusive AST source span: first `def`/`async def` line through last line of body. Includes blanks and docstring. Excludes decorator lines. Nested functions counted separately. Lambdas ignored. |
 | Class physical LOC | ≤ 120 | **> 150** | Inclusive AST span of the `class` body. Nested classes counted separately. |
-| Parameters per function | ≤ 3 | **> 4** | Exclude leading `self` / `cls`. Count keyword-only args. Count `*args` and `**kwargs` as **one each**. |
+| Parameters per function | ≤ 3 | **> 4** | Exclude leading method receiver `self` / `cls`, not static/free arguments. Count keyword-only args. Count `*args` and `**kwargs` as **one each**. |
 | Direct methods per class | ≤ 10 | **> 15** | Methods defined on the class body only (not inherited). Include `__init__`, properties' fget/fset if defined as `def` on the class. |
 
 These are the **fail** lines. The sizes to *aim at* — for functions, files,
@@ -432,7 +432,7 @@ licence to add more.
 An override is a comment CI/review parses:
 
 ```python
-def wide_legacy_adapter(self, a, b, c, d, e):  # quality-override: params=5 reason=CDP wire matches Chrome DevTools payload
+def wide_legacy_adapter(a, b, c, d, e):  # quality-override: params=5 reason=CDP wire matches Chrome DevTools payload
     ...
 ```
 
@@ -550,8 +550,8 @@ thresholds are RULE 16's and they are unchanged; this rule tells you where to
 "Lines" is counted exactly as in §16.1 — the inclusive physical span, docstring
 included, decorator lines excluded, nested functions counted separately — so a
 number in this rule and a number in RULE 16 always mean the same thing. The
-reference implementation of that count is the AST walker in
-`tests/test_rule16_new_code.py`.
+reference implementation is `tools/metrics/changed_code/symbols.py`; historical
+feature checks remain in `tests/test_rule16_new_code.py`.
 
 ### 18.1 Functions — 4–20 lines
 

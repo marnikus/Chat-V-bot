@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **78 archived ones**. That is
+This repository has **three current docs** and a **dated archive**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 78 archived docs
+    ├── README.md                    ← index of archived designs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -32,7 +32,7 @@ Also in the repo, not under `docs/`:
 |---|---|
 | [`README.md`](../README.md) | User manual: install, Chrome flags, UI tour |
 | [`reports/`](../reports/) | Measured code-quality snapshots (the coverage/complexity **baseline** the rules compare against) |
-| `tests/` | The executable spec — 156 Python test files + 22 Node harness files |
+| `tests/` | The executable spec — Python contract suites + 25 Node harness files |
 
 ---
 
@@ -63,6 +63,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Storage model (one DB = one world) | system of record §5 | [`2026-09-08-one-db-one-world/`](archive/2026-09-08-one-db-one-world/) |
 | Message archive + collector | system of record §2, §3.2 | [`2026-09-06-collector-and-history/`](archive/2026-09-06-collector-and-history/), [`2026-09-07-labels-and-collector/`](archive/2026-09-07-labels-and-collector/) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
+| Refactoring round 4 | system of record §8; [steps 8–9 results](../reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md) | [Original queue](archive/2026-09-12-refactor-round4/ROUND4_DESIGN.md); [general gate](archive/2026-09-13-refactor-round4/CHANGED_CODE_GATE.md) and [next priorities](archive/2026-09-13-refactor-round4/FOLLOW_UP_PRIORITIES.md). Local work complete; hosted activation pending |
 | Tests | system of record §7 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/) |
 
 ---

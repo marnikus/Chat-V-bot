@@ -3,7 +3,8 @@
 Owns the settings tree: chrome / scroll / delays / ui / history / collector
 and any unknown section no other store claims. Reads fall back to the
 defaults below so a fresh install (or a fresh clone) is fully functional
-with no file present.
+with no file present. Imports point to the JSON-store lifecycle; no backend
+or service dependencies belong here.
 """
 
 from __future__ import annotations
@@ -74,6 +75,16 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
 _UNSET = object()
 
 
+def _default_value(keys: tuple[str, ...], default: Any) -> Any:
+    """Resolve a missing overlay path from the shipped defaults, not a merge."""
+    node = SETTINGS_DEFAULTS
+    for key in keys:
+        node = node.get(key, default) if isinstance(node, dict) else default
+        if node is default:
+            return default
+    return node
+
+
 class SettingsStore(JsonFileStore):
     """One JSON file, one settings tree, atomic saves.
 
@@ -94,14 +105,7 @@ class SettingsStore(JsonFileStore):
             else:
                 return default
             if node is _UNSET:
-                # fall back to the defaults tree (same walk)
-                node = SETTINGS_DEFAULTS
-                for k in keys:
-                    node = (node.get(k, default)
-                            if isinstance(node, dict) else default)
-                    if node is default:
-                        return default
-                return node
+                return _default_value(keys, default)
         return node
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:
