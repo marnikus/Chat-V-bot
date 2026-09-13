@@ -246,7 +246,7 @@ t('approving does NOT send — it only enables the Send button', () => {
 
 t('clicking Send to Person delivers the approved text', () => {
   $('botSendApprovedBtn').fire('click');
-  eq(lastCall('bot_send_message').args[1], 'See you tomorrow?');
+  eq(lastCall('bot_send_message').args[2], 'See you tomorrow?');
   BotChat.onReply(lastCall('bot_send_message').args[0],
                   JSON.stringify('See you tomorrow?'));
   ok($('botSendApprovedBtn').disabled,
@@ -283,8 +283,22 @@ t('a direct message is sent without any AI involvement', () => {
   const aiBefore = calls.filter((c) => c.name === 'bot_suggest_reply').length;
   $('botDirectInput').value = 'my own words';
   $('botSendDirectBtn').fire('click');
-  eq(lastCall('bot_send_message').args[1], 'my own words');
+  eq(lastCall('bot_send_message').args[2], 'my own words');
   eq(calls.filter((c) => c.name === 'bot_suggest_reply').length, aiBefore);
+});
+
+t('every send names the person, so the backend can refuse a wrong chat', () => {
+  // The window's person and the browser's open tab drift apart the moment
+  // anyone clicks another chat; the nick is what lets the backend notice.
+  $('botDirectInput').value = 'for Anna only';
+  $('botSendDirectBtn').fire('click');
+  eq(lastCall('bot_send_message').args[1], 'Anna', 'direct send carries nick');
+  $('botSuggestBtn').fire('click');
+  reply(lastCall('bot_suggest_reply').args[0],
+        { nick: 'Anna', text: 'Approved one', state: 'pending' });
+  cards().pop().querySelector('.bot-approve').fire('click');
+  $('botSendApprovedBtn').fire('click');
+  eq(lastCall('bot_send_message').args[1], 'Anna', 'AI send carries nick too');
 });
 
 t('an empty direct message is refused', () => {

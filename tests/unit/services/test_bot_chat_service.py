@@ -29,7 +29,8 @@ if ROOT not in sys.path:
 from backend.config_manager import ConfigManager            # noqa: E402
 from services import bot_chat                                # noqa: E402
 from services.bot_chat import BotChatService, as_transcript, last_inbound  # noqa: E402
-from services.bot_grok import GrokClient, reply_text         # noqa: E402
+from services.bot_grok import (GrokClient, GrokSettings,      # noqa: E402
+                               first_choice, reply_text)
 from services.bot_prompts import PromptLibrary, is_usable    # noqa: E402
 from stores.history_db import HistoryDB                      # noqa: E402
 
@@ -54,9 +55,17 @@ class FakeGrok:
 
 
 class FakeArchive:
-    def __init__(self, db=None, labels=None):
+    """Only what the service may read off the archive: the database.
+
+    Notably NOT a `labels` attribute — the real `HistoryService` has none
+    (it keeps the store as the private `_labels`), and a double that invents
+    one is how the label write came to be dead in the app while green in the
+    suite. The store is injected instead; `TestRealArchiveInterface` holds
+    the line against the real class.
+    """
+
+    def __init__(self, db=None):
         self.db = db
-        self.labels = labels
 
 
 async def make_db(rows):
@@ -95,12 +104,33 @@ class TestTodaysMessages(unittest.TestCase):
         page = run(svc.today("Anna"))
         self.assertEqual(page["items"], [])
         self.assertTrue(page["empty"])
-        self.assertNotIn("reason", page)
+        self.assertEqual(page["reason"], "no_messages_today")
 
     def test_a_closed_archive_says_why(self):
         svc = BotChatService(archive=FakeArchive(None), config=None)
         page = run(svc.today("Anna"))
         self.assertTrue(page["empty"])
+        self.assertEqual(page["reason"], "archive_closed")
+
+    def test_the_two_empty_causes_do_not_share_a_message(self):
+        """The user can act on one of them and not the other, so "nothing
+        today" must say WHICH nothing it is — and name the day, because the
+        archive dates a row from the page's clock stamps, not this process's
+        calendar (just after midnight a fresh chat can still be yesterday)."""
+        closed = bot_chat.empty_detail("Anna", {"reason": "archive_closed"})
+        none_today = bot_chat.empty_detail(
+            "Anna", {"reason": "no_messages_today", "day": TODAY})
+        self.assertIn("database", closed)
+        self.assertNotEqual(closed, none_today)
+        self.assertIn(TODAY, none_today)
+        self.assertIn("previous day", none_today)
+
+    def test_a_closed_database_handle_is_not_read_from(self):
+        """`db` outlives a world switch; `is_open` is the honest check."""
+        db = run(make_db([("in", "Anna", "hi", TODAY)]))
+        run(db.close())
+        page = run(BotChatService(archive=FakeArchive(db),
+                                  config=None).today("Anna"))
         self.assertEqual(page["reason"], "archive_closed")
 
     def test_deleted_messages_are_invisible(self):
@@ -179,17 +209,34 @@ class TestSuggestAndAnalyze(unittest.TestCase):
         self.assertIn("hello you", preview["prompt"])
 
 
+class FakeParser:
+    """Stands in for the ChatParser: reports who the open tab talks to."""
+
+    def __init__(self, partner="Anna", boom=False):
+        self.partner = partner
+        self.boom = boom
+
+    async def state(self):
+        if self.boom:
+            raise RuntimeError("page gone")
+        return {"partner": self.partner}
+
+
 class TestDeliver(unittest.TestCase):
     class FakeCdp:
         is_connected = True
 
+    def deliver(self, text, nick="Anna", parser=None):
+        return run(bot_chat.deliver(self.FakeCdp(), nick, text,
+                                    parser=parser or FakeParser()))
+
     def test_an_empty_message_is_refused(self):
-        self.assertEqual(run(bot_chat.deliver(self.FakeCdp(), "  ")).code,
-                         "bot_empty_message")
+        self.assertEqual(self.deliver("  ").code, "bot_empty_message")
 
     def test_a_disconnected_tab_is_refused(self):
-        self.assertEqual(run(bot_chat.deliver(None, "hi")).code,
-                         "bot_not_connected")
+        self.assertEqual(
+            run(bot_chat.deliver(None, "Anna", "hi")).code,
+            "bot_not_connected")
 
     def test_a_failed_type_stops_before_clicking_send(self):
         from backend import message_injector
@@ -207,7 +254,7 @@ class TestDeliver(unittest.TestCase):
         message_injector.type_message, message_injector.click_send = (no_type,
                                                                       click)
         try:
-            result = run(bot_chat.deliver(self.FakeCdp(), "hi"))
+            result = self.deliver("hi")
         finally:
             message_injector.type_message, message_injector.click_send = original
         self.assertEqual(result.code, "bot_type_failed")
@@ -222,10 +269,69 @@ class TestDeliver(unittest.TestCase):
         original = (message_injector.type_message, message_injector.click_send)
         message_injector.type_message, message_injector.click_send = (ok, ok)
         try:
-            result = run(bot_chat.deliver(self.FakeCdp(), "hi"))
+            result = self.deliver("hi")
         finally:
             message_injector.type_message, message_injector.click_send = original
         self.assertEqual(result.value, "hi")
+
+
+class TestTheRecipientIsVerified(unittest.TestCase):
+    """Sending is the only irreversible act here — it must hit the right chat.
+
+    The window's person is chosen in User Memory; the browser's open tab is
+    chosen by whatever the user last clicked. When they disagree the message
+    must NOT go out: `chat_sync` already refuses to *read* a mismatched
+    conversation (`partner_mismatch`), and writing to the wrong person is
+    worse than reading the wrong one.
+    """
+
+    class FakeCdp:
+        is_connected = True
+
+    def setUp(self):
+        from backend import message_injector
+        self.sent = []
+
+        async def typed(_cdp, text, *a, **k):
+            self.sent.append(text)
+            return True
+
+        async def clicked(*_a, **_k):
+            return True
+
+        self._original = (message_injector.type_message,
+                          message_injector.click_send)
+        message_injector.type_message = typed
+        message_injector.click_send = clicked
+        self.injector = message_injector
+
+    def tearDown(self):
+        (self.injector.type_message,
+         self.injector.click_send) = self._original
+
+    def send(self, nick, parser):
+        return run(bot_chat.deliver(self.FakeCdp(), nick, "hi", parser=parser))
+
+    def test_the_matching_chat_is_delivered_to(self):
+        self.assertTrue(self.send("Anna", FakeParser("Anna")).is_ok)
+        self.assertEqual(self.sent, ["hi"])
+
+    def test_another_persons_open_chat_refuses_and_sends_NOTHING(self):
+        result = self.send("Anna", FakeParser("Boris"))
+        self.assertTrue(result.is_err)
+        self.assertEqual(result.code, "bot_wrong_chat")
+        self.assertEqual(self.sent, [], "not one keystroke may reach the page")
+        self.assertIn("Boris", result.detail)
+        self.assertIn("Anna", result.detail)
+
+    def test_the_comparison_ignores_case_and_stray_whitespace(self):
+        self.assertTrue(self.send("Anna", FakeParser("  anna ")).is_ok)
+
+    def test_an_unreadable_page_refuses_too_the_gate_fails_closed(self):
+        for parser in (FakeParser(boom=True), FakeParser(""), None):
+            result = self.send("Anna", parser)
+            self.assertEqual(result.code, "bot_unknown_chat")
+        self.assertEqual(self.sent, [])
 
 
 class FakeResponse:
@@ -304,9 +410,74 @@ class TestGrokClient(unittest.TestCase):
     def test_body_parsing_distinguishes_every_bad_shape(self):
         self.assertEqual(reply_text("nope").code, "grok_bad_body")
         self.assertEqual(reply_text({"choices": []}).code, "grok_no_choices")
+        self.assertEqual(reply_text({"choices": "no"}).code, "grok_no_choices")
+        # a present-but-empty choice reads as "no usable choice", not as a
+        # model that answered with nothing
+        self.assertEqual(reply_text({"choices": [None]}).code,
+                         "grok_no_choices")
         self.assertEqual(
             reply_text({"choices": [{"message": {"content": ""}}]}).code,
             "grok_empty")
+
+
+class TestFirstChoice(unittest.TestCase):
+    def test_it_picks_the_first_choice_or_says_there_is_none(self):
+        self.assertEqual(first_choice({"choices": [{"a": 1}, {"b": 2}]}),
+                         {"a": 1})
+        for body in ({"choices": []}, {"choices": "nope"}, {}):
+            self.assertIsNone(first_choice(body), body)
+        self.assertIsNone(first_choice({"choices": [None]}),
+                          "an empty first choice is no choice")
+
+
+class TestGrokConnectionSettings(unittest.TestCase):
+    """The key must be settable from the app, and the error must not lie.
+
+    Before this round the key existed only in `settings.json` — nothing in
+    the UI wrote it — while `complete()` told the user to "set it in the
+    Prompt Editor window", which had no such field. The feature was
+    unusable out of the box and the instruction pointed nowhere.
+    """
+
+    def setUp(self):
+        self.cfg = ConfigManager(os.path.join(tempfile.mkdtemp(),
+                                              "config.json"))
+        self.settings = GrokSettings(self.cfg)
+
+    def test_a_saved_key_is_used_by_the_next_call(self):
+        self.assertTrue(self.settings.save("xai-123", "grok-test"))
+        self.assertEqual(GrokSettings(self.cfg).api_key, "xai-123")
+        self.assertEqual(GrokSettings(self.cfg).model, "grok-test")
+
+    def test_it_survives_a_restart(self):
+        self.settings.save("xai-123")
+        reopened = ConfigManager(self.cfg.path) if hasattr(self.cfg, "path") \
+            else self.cfg
+        self.assertEqual(GrokSettings(reopened).api_key, "xai-123")
+
+    def test_saving_only_the_model_keeps_the_key(self):
+        """The password input never echoes the key back, so a blank field
+        means "unchanged", not "erase it"."""
+        self.settings.save("xai-123", "grok-2")
+        self.settings.save("", "grok-3")
+        self.assertEqual(GrokSettings(self.cfg).api_key, "xai-123")
+        self.assertEqual(GrokSettings(self.cfg).model, "grok-3")
+
+    def test_the_reported_state_never_contains_the_key(self):
+        self.settings.save("xai-secret", "grok-2")
+        state = self.settings.state()
+        self.assertTrue(state["has_key"])
+        self.assertNotIn("xai-secret", str(state))
+
+    def test_the_missing_key_error_names_a_place_that_exists(self):
+        client = GrokClient(config=self.cfg, session_factory=None)
+        detail = run(client.complete("hi")).detail
+        self.assertIn("Prompt Editor", detail)
+        repo = os.path.dirname(ROOT)
+        html = open(os.path.join(repo, "ui", "index.html"),
+                    encoding="utf-8").read()
+        self.assertIn('id="botApiKeyInput"', html,
+                      "the error sends the user to a field that must exist")
 
 
 class TestPromptLibrary(unittest.TestCase):

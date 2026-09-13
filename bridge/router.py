@@ -28,6 +28,7 @@ from typing import Any, Optional, Type
 from PySide6.QtCore import QMetaMethod, QObject, Signal, Slot
 
 from bridge.bot_bridge import BotBridge
+from bridge.bot_prompt_bridge import BotPromptBridge
 from bridge.collector_bridge import CollectorBridge
 from bridge.context import BridgeContext
 from bridge.cdp_bridge import CdpBridge
@@ -51,7 +52,7 @@ log = logging.getLogger("chatbot")
 #: the eleven domain bridges, in wiring order
 BRIDGE_CLASSES = [CdpBridge, StackBridge, FileBridge, PeopleBridge,
                   HistoryBridge, LabelBridge, DbBridge, CollectorBridge,
-                  UndoBridge, LayoutBridge, BotBridge]
+                  UndoBridge, LayoutBridge, BotBridge, BotPromptBridge]
 
 # Qt type-name → Python type for signature rebuilding
 _QT_TYPES = {

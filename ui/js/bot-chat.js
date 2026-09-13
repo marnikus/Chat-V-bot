@@ -192,14 +192,23 @@ const BotChat = {
   sendApproved() {
     if (!this.approved) return;              // the button is the only gate
     this.setStatus('Sending the approved message…');
-    this._send('bot_send_message', 'send', this.approved);
+    this._deliver(this.approved);
   },
 
   sendDirect() {
     const text = this._els.direct ? this._els.direct.value.trim() : '';
     if (!text) { this.setStatus('⚠ Write a message first.'); return; }
     this.setStatus('Sending your message…');
-    this._send('bot_send_message', 'send', text);
+    this._deliver(text);
+  },
+
+  /* Both send paths carry the nick: the backend refuses to deliver into a
+     chat tab that belongs to somebody else. */
+  _deliver(text) {
+    const id = 'bot' + (++this._seq);
+    this._pending[id] = 'send';
+    if (App.bridge && typeof App.bridge.bot_send_message === 'function')
+      App.bridge.bot_send_message(id, this.nick, text);
   },
 
   onSent(payload) {
