@@ -15,14 +15,19 @@
    Nodes are built with createElement/textContent only: a message is
    user (or model) text and must never become markup.
 
-   ideal-size: 311 lines reason=one window = one controller. Splitting the
+   ideal-size: 391 lines reason=one window = one controller. Splitting the
    render helpers out would cut the file but not the reading: every helper
    here exists only for the verification flow above it, and the flow is what
-   a reader must hold whole. The Prompt Editor, which IS separable, is a
-   separate window in its own file (bot-prompt.js).
+   a reader must hold whole. The parts that ARE separable have been
+   separated: the Prompt Editor (bot-prompt.js), the AI Settings dialog
+   (bot-settings.js), and the media rendering, which is not here at all —
+   it is the DB window's renderer, called.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
+
+/** how long to let the collector fetch a restored file before reloading */
+const RESTORE_RELOAD_MS = 1200;
 
 const BotChat = {
   nick: '',
@@ -112,6 +117,11 @@ const BotChat = {
   // ── bridge answers ───────────────────────────────────────────
 
   onReply(reqId, json) {
+    // The Prompt Editor and the AI Settings dialog answer on THIS bridge's
+    // signals (the router exposes one signal of each name), so each first
+    // claims the requests it made, keyed by req_id.
+    if (typeof BotSettings !== 'undefined' &&
+        BotSettings.onReply(reqId, json)) return;
     const kind = this._pending[reqId];
     delete this._pending[reqId];
     let payload = null;
@@ -123,6 +133,8 @@ const BotChat = {
   },
 
   onError(reqId, message) {
+    if (typeof BotSettings !== 'undefined' &&
+        BotSettings.onError(reqId, '', message)) return;
     delete this._pending[reqId];
     this.setStatus('⚠ ' + message);
   },
@@ -272,8 +284,61 @@ const BotChat = {
     body.textContent = item.text || '';
     row.appendChild(who);
     row.appendChild(body);
+    const media = this._media(item, row);
+    if (media) row.appendChild(media);
     if (this._els.box) this._els.box.appendChild(row);
     return row;
+  },
+
+  /**
+   * The media block of one message, drawn by the DB window's renderer.
+   *
+   * Bot Chat does NOT get its own media code. `HistoryModel.toRow` already
+   * resolves the cached file into a loadable src and `HistoryView.mediaNode`
+   * already draws every state the database has — cached, pending, failed,
+   * missing, evicted, images-off — so a GIF here looks like the same GIF
+   * there and there is one renderer to fix. A message whose file is gone
+   * gets the clickable "restore" marker; it is never silently blank.
+   */
+  _media(item, row) {
+    if (!item || !item.media) return null;
+    if (typeof HistoryModel === 'undefined' ||
+        typeof HistoryView === 'undefined') return this._mediaFallback(item);
+    const viewRow = HistoryModel.toRow(item, { showImages: true });
+    const node = HistoryView.mediaNode(viewRow, {
+      showImages: true,
+      onRestoreMedia: () => this._restore(item.media.id, row),
+    });
+    return node || this._mediaFallback(item);
+  },
+
+  /** Never a blank message: say what the attachment is even with no renderer. */
+  _mediaSeq: 0,
+
+  _mediaFallback(item) {
+    const media = item.media || {};
+    const note = document.createElement('span');
+    note.className = 'bot-msg-media-note';
+    const kind = media.kind || item.kind || 'attachment';
+    note.textContent = '[' + kind + ']' +
+      (media.state && media.state !== 'cached' ? ' · ' + media.state : '');
+    note.title = media.url || '';
+    return note;
+  },
+
+  /**
+   * Ask the collector to fetch a media file again, then reload the day.
+   *
+   * Same `media_restore` slot the DB window's store calls — the archive has
+   * one restore path and this is it.
+   */
+  _restore(mediaId, row) {
+    if (row) row.dataset.restoring = '1';
+    if (!App.bridge || typeof App.bridge.media_restore !== 'function') return;
+    App.bridge.media_restore('bot-media-' + (++this._mediaSeq),
+                             String(mediaId));
+    if (this.nick)
+      setTimeout(() => this.openPerson(this.nick), RESTORE_RELOAD_MS);
   },
 
   _card(title, text) {

@@ -22,33 +22,22 @@ the two operations that can fail on the wire.
 from __future__ import annotations
 
 import logging
-from datetime import date
 
 from core.result import Err, Ok, Result
 from services.bot_grok import GrokClient
 from services.bot_prompts import PromptLibrary
 from services.bot_reactions import ReactionLabels, parse
+from services.bot_transcript import (as_transcript, item_text, items_of_day,
+                                     last_inbound, today_key)
 
 log = logging.getLogger("chatbot")
 
 #: how many of the day's messages are worth sending as context
 CONTEXT_LIMIT = 60
-
-
-def today_key() -> str:
-    """The archive's `day` value for today (messages store `YYYY-MM-DD`)."""
-    return date.today().isoformat()
-
-
-def as_transcript(items: list) -> str:
-    """The day's messages as the plain "Nick: text" block Grok reads."""
-    lines = []
-    for item in items:
-        who = item.get("from") or ("me" if item.get("dir") == "out" else "them")
-        text = str(item.get("text") or "").strip()
-        if text:
-            lines.append(f"{who}: {text}")
-    return "\n".join(lines)
+#: how far back to read before filtering to today. `HistoryQuery.page` is
+#: frozen by the AREA D API snapshot and takes no `day=`, so the day filter
+#: happens here; this bounds how many rows that costs.
+PAGE_LIMIT = 200
 
 
 def empty_detail(nick: str, page: dict) -> str:
@@ -67,14 +56,6 @@ def empty_detail(nick: str, page: dict) -> str:
     return (f"no messages with {nick} archived under {page.get('day')} — "
             f"collect the chat first, or it may still be dated the "
             f"previous day")
-
-
-def last_inbound(items: list) -> dict:
-    """The person's own last message of the day, or an empty dict."""
-    for item in reversed(items):
-        if item.get("dir") != "out" and str(item.get("text") or "").strip():
-            return item
-    return {}
 
 
 async def open_partner(parser) -> str:
@@ -164,40 +145,63 @@ class BotChatService:
         return ReactionLabels(store) if store is not None else None
 
     async def today(self, nick: str) -> dict:
-        """The current day's messages of one person (empty is not broken)."""
+        """The current day's messages of one person (empty is not broken).
+
+        Reads through `HistoryQuery.page` — the archive's ONE read — rather
+        than a second hand-written SELECT. The first version did write its
+        own, and dropped the `media` join doing so, which is why a GIF
+        rendered as a blank message: the renderer was fine, the query was a
+        worse copy of one that already existed (RULE 5).
+        """
+        query = getattr(self.archive, "query", None)
         db = getattr(self.archive, "db", None)
-        if db is None or not getattr(db, "is_open", False):
+        if query is None or db is None or not getattr(db, "is_open", False):
             return {"nick": nick, "items": [], "empty": True,
                     "day": today_key(), "reason": "archive_closed"}
-        rows = await db.fetchdicts(
-            "SELECT m.direction, m.from_nick, m.text, m.ts_display FROM "
-            "messages m JOIN persons p ON p.id = m.person_id WHERE "
-            "p.nick=? AND m.day=? AND m.deleted_at='' ORDER BY m.ord ASC "
-            "LIMIT ?", (nick, today_key(), CONTEXT_LIMIT))
-        items = [{"dir": row["direction"], "from": row["from_nick"],
-                  "text": row["text"], "time": row["ts_display"]}
-                 for row in rows]
+        page = await query.page(nick, limit=PAGE_LIMIT)
+        items = items_of_day(page.get("items"), today_key())[-CONTEXT_LIMIT:]
         return {"nick": nick, "items": items, "empty": not items,
                 "day": today_key(),
                 "reason": "" if items else "no_messages_today"}
 
+    def context_of(self, nick: str, page: dict, custom: str = "") -> dict:
+        """The values every prompt variable resolves against.
+
+        The ONE place a template's context is built, so the Prompt Editor's
+        preview cannot drift from what is actually sent. It holds today's
+        messages and this person's label — nothing from the config, the
+        filesystem or another conversation, which is what keeps private and
+        system data out of prompts by construction.
+        """
+        items = page.get("items") or []
+        last = item_text(last_inbound(items))
+        return {"person_name": nick, "all_msg": as_transcript(items),
+                "last_msg": last, "msg": custom or last,
+                "reaction_label": self.active_label_name(nick)}
+
+    def active_label_name(self, nick: str) -> str:
+        """The label currently on this person, named as the user sees it."""
+        state = self.reaction_state(nick)
+        active = state.get("active") or ""
+        for item in state.get("available") or []:
+            if item.get("id") == active:
+                return str(item.get("name") or "")
+        return ""
+
     async def preview(self, nick: str, template_id: str) -> dict:
         """Exactly what would be sent to Grok — the Prompt Editor shows it."""
         page = await self.today(nick)
-        items = page["items"]
         return {"nick": nick, "template": template_id,
-                "prompt": self.prompts.render(template_id, {
-                    "nick": nick, "conversation": as_transcript(items),
-                    "last_message": last_inbound(items).get("text", "")})}
+                "prompt": self.prompts.render(
+                    template_id, self.context_of(nick, page))}
 
     async def suggest_reply(self, nick: str) -> Result[dict]:
         """A pending reply suggestion — approved and sent by the user only."""
         page = await self.today(nick)
         if page["empty"]:
             return Err("bot_no_messages", empty_detail(nick, page))
-        rendered = self.prompts.render("suggest_reply", {
-            "nick": nick, "conversation": as_transcript(page["items"]),
-            "last_message": last_inbound(page["items"]).get("text", "")})
+        rendered = self.prompts.render("suggest_reply",
+                                       self.context_of(nick, page))
         answer = await self.grok.complete(rendered)
         if answer.is_err:
             return answer
@@ -213,15 +217,14 @@ class BotChatService:
             return Err("bot_no_answer",
                        f"{nick} has not answered today ({page['day']}) — "
                        f"nothing to analyze")
-        rendered = self.prompts.render("analyze_reaction", {
-            "nick": nick, "conversation": as_transcript(page["items"]),
-            "last_message": last.get("text", "")})
+        rendered = self.prompts.render("analyze_reaction",
+                                       self.context_of(nick, page))
         answer = await self.grok.complete(rendered)
         if answer.is_err:
             return answer
         result = parse(answer.value)
         result.update({"nick": nick, "state": "pending",
-                       "last_message": last.get("text", "")})
+                       "last_message": item_text(last)})
         return Ok(result)
 
     def reaction_state(self, nick: str) -> dict:

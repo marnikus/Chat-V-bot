@@ -153,3 +153,33 @@ class BotBridge(QObject):
                 message=f"🏷 {nick}: “{reaction} first reaction” applied",
                 level="success"))
         return json.dumps(result.value, ensure_ascii=False)
+
+class BotSideBridge(QObject):
+    """Base for the AI feature's SIDE windows: the Prompt Editor and the AI
+    Settings dialog.
+
+    Both are their own window with their own bridge, and both answer on
+    `BotBridge`'s signals — the router exposes ONE signal of each name, so
+    replies ride the chat bridge keyed by `req_id`. That shared wiring lives
+    here rather than being copied into each (the clone scanner caught the
+    copy, which is what it is for).
+    """
+
+    def __init__(self, ctx, parent=None):
+        super().__init__(parent)
+        self.ctx = ctx
+        self._fallback = None
+
+    def _chat_bridge(self):
+        """The Bot Chat bridge — owner of the signals answers arrive on.
+
+        Must be the SAME object every time or a reply is emitted into
+        something nobody is connected to. The router caches its bridges;
+        without one, this caches its own.
+        """
+        getter = getattr(self.parent(), "_bridge", None)
+        if getter is not None:
+            return getter(BotBridge)
+        if self._fallback is None:
+            self._fallback = BotBridge(self.ctx, parent=self)
+        return self._fallback

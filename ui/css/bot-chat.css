@@ -110,3 +110,67 @@
   border-radius: 4px;
 }
 .bot-conn button { grid-column: 2; justify-self: start; }
+
+/* ── prompt variable library ──────────────────────────────────── */
+.bot-vars { margin: 4px 0; font-size: 11px; }
+.bot-vars summary { cursor: pointer; color: var(--muted, #8a8f98); }
+.bot-vars-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.bot-var {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  max-width: 220px; padding: 3px 6px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border, #2c2f36); border-radius: 4px;
+  background: var(--panel-2, #1b1e24); color: inherit; font: inherit;
+}
+.bot-var:hover { border-color: var(--accent, #4c8dff); }
+.bot-var-token { font-family: monospace; color: var(--accent, #4c8dff); }
+.bot-var-desc {
+  color: var(--muted, #8a8f98); font-size: 10px; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+.bot-prompt-warn {
+  padding: 3px 6px; border-radius: 4px; font-size: 11px;
+  background: rgba(255, 204, 0, .12); color: #ffcc00;
+}
+
+/* ── media inside a bot message ───────────────────────────────── */
+.bot-msg-media-note {
+  display: inline-block; margin-top: 2px; padding: 1px 5px; font-size: 11px;
+  border: 1px dashed var(--border, #2c2f36); border-radius: 4px;
+  color: var(--muted, #8a8f98);
+}
+
+/* ── AI provider settings dialog ──────────────────────────────── */
+.bot-settings-backdrop {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center; background: rgba(0, 0, 0, .55);
+}
+.bot-settings-backdrop.hidden { display: none; }
+.bot-settings {
+  width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 10px 12px;
+  border: 1px solid var(--border, #2c2f36); border-radius: 8px;
+  background: var(--panel, #14171c);
+}
+.bot-settings h3 { display: flex; align-items: center; margin: 0 0 8px; }
+.bot-settings-body { display: flex; gap: 10px; }
+.bot-provider-list {
+  display: flex; flex-direction: column; gap: 4px; min-width: 150px;
+}
+.bot-provider {
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 7px;
+  cursor: pointer; text-align: left; font: inherit; color: inherit;
+  border: 1px solid var(--border, #2c2f36); border-radius: 5px;
+  background: var(--panel-2, #1b1e24);
+}
+.bot-provider.selected { border-color: var(--accent, #4c8dff); }
+.bot-provider.active { background: rgba(76, 141, 255, .14); }
+.bot-provider-name { font-weight: 600; }
+.bot-provider-tag { font-size: 10px; color: var(--muted, #8a8f98); }
+.bot-provider-form {
+  display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto;
+}
+.bot-provider-form label { font-size: 11px; color: var(--muted, #8a8f98); }
+.bot-provider-form input { width: 100%; }
+.bot-settings-actions {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+}

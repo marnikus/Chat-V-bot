@@ -6,9 +6,10 @@ them, so the two wires are separated for the same reason the two windows are.
 It also keeps each class inside RULE 16's method budget, which one combined
 bridge no longer was.
 
-What it owns: the two editable templates, the live preview of exactly what
-would be sent to Grok, and the connection settings (API key, model) — without
-which the feature cannot make a single call.
+What it owns: the two editable templates, the variable library the editor
+lists, the live preview of exactly what would be sent, and the active
+provider's key/model shortcut. Choosing BETWEEN providers is the AI Settings
+dialog's job and lives in `BotSettingsBridge` — a third window, a third wire.
 
 The API key travels ONE way. `bot_connection` reports whether a key is set
 and which model is used, never the key itself, so a saved secret is never
@@ -20,42 +21,21 @@ from __future__ import annotations
 import json
 import logging
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import Signal, Slot
 
-from bridge.bot_bridge import schedule
+from bridge.bot_bridge import BotSideBridge, schedule
+from services import bot_variables
 from services.bot_grok import GrokSettings
 
 log = logging.getLogger("chatbot")
 
 
-class BotPromptBridge(QObject):
+class BotPromptBridge(BotSideBridge):
     #: Only ONE new signal: the preview answers on the Bot Chat bridge's
     #: `bot_reply_ready` / `bot_error`, because the router exposes one signal
     #: of each name and JS listens to it once. `req_id` already keeps the two
     #: windows' answers apart, which is the whole point of that pattern.
     bot_prompts_changed = Signal(str)        # JSON: every template
-
-    def __init__(self, ctx, parent=None):
-        super().__init__(parent)
-        self.ctx = ctx
-        self._fallback = None
-
-    def _chat_bridge(self):
-        """The Bot Chat bridge — owner of the service and of the two signals
-        a preview answers on.
-
-        Must be the SAME object every time: a preview answers on its signals,
-        so handing out a fresh bridge per call would emit the answer into an
-        object nobody is connected to. The router already caches its bridges;
-        without one, this caches its own.
-        """
-        from bridge.bot_bridge import BotBridge
-        getter = getattr(self.parent(), "_bridge", None)
-        if getter is not None:
-            return getter(BotBridge)
-        if self._fallback is None:
-            self._fallback = BotBridge(self.ctx, parent=self)
-        return self._fallback
 
     @property
     def _prompts(self):
@@ -98,6 +78,25 @@ class BotPromptBridge(QObject):
         owner = self._chat_bridge()
         schedule(owner, req_id, owner.service.preview(nick, template_id))
 
+    # ── the variable library ─────────────────────────────────────
+    @Slot(result=str)
+    def bot_get_variables(self):
+        """Every placeholder a template may use, with a description.
+
+        Served from `bot_variables`, which is also what resolves them, so the
+        editor cannot list a variable that would not work.
+        """
+        return json.dumps(bot_variables.catalog(), ensure_ascii=False)
+
+    @Slot(str, result=str)
+    def bot_check_prompt(self, text):
+        """Which placeholders are recognised, unknown or malformed.
+
+        A warning only — the editor still saves the template. Refusing the
+        save is what used to throw the user's work away.
+        """
+        return json.dumps(bot_variables.validate(text), ensure_ascii=False)
+
     # ── connection ───────────────────────────────────────────────
     @Slot(result=str)
     def bot_connection(self):
@@ -106,5 +105,5 @@ class BotPromptBridge(QObject):
 
     @Slot(str, str, result=bool)
     def bot_save_connection(self, api_key, model):
-        """Store the Grok API key / model the editor collected."""
+        """Store the active provider's API key / model."""
         return bool(self._settings.save(api_key, model))
