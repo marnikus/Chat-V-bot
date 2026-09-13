@@ -1,9 +1,10 @@
 """The knobs of one conversation sync, in one immutable place.
 
 First file of the `chat_sync_*` family (the seam and family map live in
-`backend/chat_sync.py`). `backend.chat_parser.sync_conversation()` still
-takes its keyword arguments — that signature is the public contract of the
-archive reader; this is where they land before the phases read them.
+`backend/chat_sync.py`). `backend.chat_parser.sync_conversation()`
+takes this object directly (Round G step 4; it used to gather the keyword
+arguments itself) — that signature is the public contract of the archive
+reader, and this is what the phases read.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ from typing import Any, Callable, Optional
 class SyncOptions:
     """The eleven optional knobs of one sync, in one immutable place.
 
-    `backend.chat_parser.sync_conversation()` still takes them as keyword
-    arguments (that signature is the public contract of the archive reader);
-    this is where they land before the phases read them.
+    `backend.chat_parser.sync_conversation()` takes this object as its
+    fourth parameter (that signature is the public contract of the archive
+    reader); the phases read the knobs from here.
     """
 
     my_nick: str = ""

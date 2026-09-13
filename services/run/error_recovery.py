@@ -4,6 +4,8 @@ import asyncio
 import logging
 import time
 
+from .requests import StepContext
+
 log = logging.getLogger("chatbot")
 
 
@@ -152,8 +154,8 @@ class RunExecutionMixin:
         try:
             result, status = await self._step_status(block, user)
             if status == "ok":
-                status = self._handle_step_result(block, user.nick, idx,
-                                                  started, result)
+                status = self._handle_step_result(
+                    block, result, StepContext(user.nick, idx, started))
                 await self._call_action_hook(block, user.nick, status)
             return status
         finally:
@@ -189,9 +191,10 @@ class RunExecutionMixin:
         self.step_complete.emit(block.display_name, nick)
         raise exc
 
-    def _handle_step_result(self, block, nick: str, idx: int, started: float, result) -> str:
+    def _handle_step_result(self, block, result, step: StepContext) -> str:
         from actions.base_action import ActionResult
-        elapsed = time.monotonic() - started
+        nick, idx = step.nick, step.idx
+        elapsed = time.monotonic() - step.started
         if result == ActionResult.OK:
             self.debug_msg.emit(f"      ✓ Step {idx} OK ({elapsed:.2f}s)", "success")
             self._tracer.note({"type": "step_end", "status": "ok", "duration_s": round(elapsed, 3), **self._ctx})

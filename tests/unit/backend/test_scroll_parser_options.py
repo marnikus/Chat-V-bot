@@ -12,9 +12,10 @@ lost page (RULE 7). Those are pinned here against a scripted fake CDP.
 
 Contracts proven here:
 
-  SP#1   `ScrollOptions` defaults are exactly the constructor's defaults;
-  SP#2   `from_options()` builds a parser equivalent to the long call;
-  SP#3   the legacy 20-parameter constructor keeps working, name for name;
+  SP#1   the constructor takes exactly one options value, and a bare parser
+         carries the `ScrollOptions` defaults field for field;
+  SP#2   `from_options()` builds a parser equivalent to the ctor call;
+  SP#3   a knob passed inside `ScrollOptions` reaches the parser unchanged;
   SP#4   the three knobs that were clamped/normalised are still clamped;
   SP#5   newly RENDERED people are counted even in seek mode (stall math);
   SP#6   a seek writes nothing but the found person, and never purges;
@@ -65,7 +66,7 @@ def make(pages, **kw):
     kw.setdefault("pause_ms", 0)
     kw.setdefault("poll_ms", 1)
     kw.setdefault("load_timeout_ms", 60)
-    return ScrollParser(cdp=FakeCDP(pages), **kw)
+    return ScrollParser(cdp=FakeCDP(pages), options=ScrollOptions(**kw))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -79,32 +80,21 @@ class TestScrollOptions(unittest.TestCase):
             raise unittest.SkipTest("ScrollOptions is part of D2")
 
     def test_defaults_are_the_constructor_defaults(self):
-        """One source of truth: the frozen dataclass and the long legacy
-        signature may not drift apart."""
+        """One configuration surface (Round G step 4): the ctor takes exactly
+        one options value, and a bare parser carries the `ScrollOptions`
+        defaults field for field — there is no second default list left that
+        could drift."""
         import inspect
-        params = dict(inspect.signature(ScrollParser.__init__).parameters)
-        fields = {f.name: f for f in ScrollOptions.__dataclass_fields__.values()}
-        # every option the constructor takes must exist with the same default
-        missing = object()
-        for name, param in params.items():
-            if name in ("self", "cdp", "criteria"):
-                continue
+        params = list(inspect.signature(ScrollParser.__init__).parameters)
+        self.assertEqual(params, ["self", "cdp", "options", "criteria"])
+        bare = ScrollParser(cdp=FakeCDP([])).options
+        for name, field in ScrollOptions.__dataclass_fields__.items():
+            if field.default_factory is not dataclasses.MISSING:
+                continue                     # mutable default: not comparable
             with self.subTest(option=name):
-                self.assertIn(name, fields,
-                              f"{name} is a constructor knob but not an option")
-                default = missing if param.default is inspect.Parameter.empty \
-                    else param.default
-                field = fields[name]
-                if field.default_factory is not dataclasses.MISSING:
-                    continue                     # mutable default: not comparable
-                field_default = (missing if field.default is dataclasses.MISSING
-                                 else field.default)
-                if default is missing or field_default is missing:
-                    self.assertIs(default, field_default)
-                    continue
-                self.assertEqual(default, field_default)
+                self.assertEqual(getattr(bare, name), field.default)
 
-    def test_from_options_equals_the_long_call(self):
+    def test_from_options_equals_the_ctor_call(self):
         pages = [[person("Anna"), person("Boris", female=False)]]
         kwargs = dict(pause_ms=0, poll_ms=1, load_timeout_ms=60,
                       scroll_dy=120, stall_threshold=1, max_scrolls=2,
@@ -121,12 +111,13 @@ class TestScrollOptions(unittest.TestCase):
         self.assertEqual(second_log, first_log)
         self.assertEqual(second.scrolls, first.scrolls)
 
-    def test_the_legacy_constructor_still_takes_every_knob(self):
-        parser = make([[person("Anna")]])
-        options = getattr(parser, "options", parser)      # pre-D2 fallback
-        self.assertEqual(options.max_scrolls, 50)
-        self.assertEqual(options._pause_ms if hasattr(options, "_pause_ms")
-                         else options.pause_ms, 0)
+    def test_a_knob_inside_the_options_reaches_the_parser(self):
+        parser = ScrollParser(cdp=FakeCDP([[person("Anna")]]),
+                              options=ScrollOptions(max_scrolls=7,
+                                                    pause_ms=0))
+        self.assertEqual(parser.options.max_scrolls, 7)
+        self.assertEqual(parser.max_scrolls, 7)       # the run reads the property
+        self.assertEqual(parser.options.pause_ms, 0)
         self.assertEqual(parser.known_nicks, set())
         self.assertIsNone(parser._criteria)
 
@@ -283,9 +274,7 @@ class TestScrollLoop(unittest.TestCase):
 
     def test_end_of_list_needs_the_geometry_and_a_quiet_window(self):
         """SP#10 — one quiet scroll is not the end; the stall counter is."""
-        parser = ScrollParser(cdp=FakeCDP([[person("Anna")]], page_height=100),
-                              pause_ms=0, poll_ms=1, load_timeout_ms=60,
-                              stall_threshold=3)
+        parser = ScrollParser(cdp=FakeCDP([[person("Anna")]], page_height=100), options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=60, stall_threshold=3))
         result, log = msgs(parser)
         self.assertTrue(result.reached_end)
         self.assertIn("⏹ Bottom of the list reached and no new people "
@@ -293,9 +282,7 @@ class TestScrollLoop(unittest.TestCase):
 
     def test_a_list_that_never_settles_is_cut_off_by_max_scrolls(self):
         pages = [[person(f"P{i}")] for i in range(12)]
-        parser = ScrollParser(cdp=FakeCDP(pages, page_height=10),
-                              pause_ms=0, poll_ms=1, load_timeout_ms=30,
-                              stall_threshold=2, max_scrolls=1)
+        parser = ScrollParser(cdp=FakeCDP(pages, page_height=10), options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=30, stall_threshold=2, max_scrolls=1))
         result, log = msgs(parser)
         self.assertEqual(result.scrolls, 1)
         self.assertFalse(result.reached_end)
@@ -310,8 +297,7 @@ class TestScrollLoop(unittest.TestCase):
             stopped["n"] += 1
             return stopped["n"] > 3          # stops while settling after a scroll
 
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=200, should_stop=should_stop)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=200, should_stop=should_stop))
         result, log = msgs(parser)
         self.assertTrue(result.stopped)
         self.assertNotIn("❌ Lost the page context while scrolling",
@@ -354,8 +340,7 @@ class TestScrollLoop(unittest.TestCase):
         """SP#13."""
         pages = [[person("Anna")], [person("Bella")], [person("Cara")]]
         cdp = FakeCDP(pages, page_height=10)
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=60, max_scrolls=50)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=60, max_scrolls=50))
         result, log = msgs(parser, min_new_users=2)
         self.assertTrue(result.stopped_early)
         self.assertEqual(len(result.collected), 2)

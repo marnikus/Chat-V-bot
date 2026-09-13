@@ -20,7 +20,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from core.events import EventBus, LogMessage, PeopleChanged, UsersDeleted  # noqa: E402
-from services.people_service import PeopleService, people_row  # noqa: E402
+from services.people_service import (  # noqa: E402
+    PeopleDeps, PeopleService, people_row)
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -79,9 +80,7 @@ class PeopleCase(unittest.IsolatedAsyncioTestCase):
         self.undo = FakeUndo()
         self.engine = FakeEngine()
         self.labels = FakeLabels()
-        self.service = PeopleService(memory=self.memory, engine=self.engine,
-                                     labels=self.labels, undo=self.undo,
-                                     bus=self.bus)
+        self.service = PeopleService(PeopleDeps(memory=self.memory, engine=self.engine, labels=self.labels, undo=self.undo, bus=self.bus))
 
     async def asyncTearDown(self):
         await self.memory.close()
@@ -302,7 +301,7 @@ class TestWiring(PeopleCase):
         memory2 = UserMemory(os.path.join(self._tmp.name, "users2.db"))
         await memory2.init()
         bus2 = EventBus()
-        self.service.attach(memory=memory2, bus=bus2)
+        self.service.attach(PeopleDeps(memory=memory2, bus=bus2))
         self.assertIs(self.service._memory, memory2)
         self.assertIs(self.service._bus, bus2)
         events = []

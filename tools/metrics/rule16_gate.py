@@ -190,6 +190,23 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # break the span is the cosmetic span-shrinking §18.5 forbids and would
 # reintroduce C0411. Same situation as the F1 pair
 # ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py').
+# Maintenance 2026-09-13 (Round G, step G4): two entries change.
+#
+# REMOVED — ('services/run/__init__.py', 'services/run_service/__init__.py').
+# W6 extended the lazy __getattr__ re-exports of services/run/__init__.py with
+# RunDeps/StepContext, which broke the shared import/__all__ header window the
+# group was frozen on; clone_scan no longer reports it, so the baseline
+# ratchets down by one.
+#
+# ADDED — ('bridge/context.py', 'services/wiring_requests.py'). Same header
+# noise as the others: W7 turned BridgeContext into a dataclass and the W5
+# bundle module opens with the identical four statements — __future__,
+# dataclass, typing (Any, Optional), core.events.EventBus. Both genuinely
+# need exactly those imports (each annotates Optional[EventBus] fields and
+# Any-typed collaborators); no logic is copied. A click_user|scroll_parse
+# group W8 briefly created was dissolved instead of recorded — NewTabCheck
+# .before is Optional[dict] (the annotation _verify_new_tab always had), so
+# click_user does not import Any and the shared window stays under MIN_SPAN.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector_field.py"),
@@ -197,11 +214,11 @@ CLONE_BASELINE = frozenset({
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
+    ("bridge/context.py", "services/wiring_requests.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_world.py"),
-    ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",

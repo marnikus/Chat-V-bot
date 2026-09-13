@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
@@ -180,10 +181,8 @@ class E2ECase(unittest.IsolatedAsyncioTestCase):
                                 max_file_mb=cap_mb, max_cache_mb=200)
         self.repo = HistoryRepo(self.db, media=self.store, session_id="e2e")
         parser = ChatParser(page, chunk_size=80, chunk_pause_ms=0)
-        col = Collector(cdp=page, repo=self.repo, parser=parser,
-                        media=self.store,
-                        settings={"my_nick": ME, "auto_backfill": False,
-                                  **settings})
+        col = Collector(CollectorDeps(cdp=page, repo=self.repo, parser=parser, media=self.store, settings={"my_nick": ME, "auto_backfill": False,
+                                  **settings}))
         col.now = lambda: NOW
         self.logs = []
         col.collector_log.connect(

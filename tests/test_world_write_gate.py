@@ -38,6 +38,7 @@ from core.events import LogMessage  # noqa: E402
 from core.result import Err  # noqa: E402
 from services import undo_service  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from services.history import trash  # noqa: E402
 from services.undo_archive import (ArchiveCommands, _disagrees,  # noqa: E402
                                    _outcome, _person_verdict, _reason,
@@ -465,8 +466,7 @@ class WorldCase(unittest.IsolatedAsyncioTestCase):
         self.memory = UserMemory(self.world)
         await self.memory.init()
         self.page = ConnectedPage([])
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.world, memory=self.memory)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.world, memory=self.memory))
         await self.service.init()
         self.service.collector.configure(my_nick="Me")
         br = Bridge.__new__(Bridge)
@@ -844,8 +844,7 @@ class TestTrashLifecycle(WorldCase):
         await self.service.db.init()          # … and its stamp is left behind
         await self.service.db.set_meta("session", "a previous app run")
         await self.service.db.close()
-        fresh = HistoryService(cdp=ConnectedPage([]), config=self.cfg,
-                               db_path=self.world, memory=self.memory)
+        fresh = HistoryService(HistoryDeps(cdp=ConnectedPage([]), config=self.cfg, db_path=self.world, memory=self.memory))
         await fresh.init()                    # … and the world is opened
         try:
             self.assertIsNone(await fresh.repo.get_person("Mloni"),

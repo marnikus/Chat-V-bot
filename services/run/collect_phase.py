@@ -64,9 +64,11 @@ class CollectPhaseMixin:
     async def _call_pipeline(self, block, known):
         """Run the pipeline under the retry policy; None after _collect_failed."""
         from actions.cancellation import RunStopped
+        from actions.scroll_parse import PipelineRun
+        run = PipelineRun(engine=self, panel_criteria=self._criteria, known_messaged=known)
         try:
             return await self._retry.retry_with_backoff(
-                lambda: block.run_pipeline(self._cdp, self, panel_criteria=self._criteria, known_messaged=known),
+                lambda: block.run_pipeline(self._cdp, run),
                 fallback=lambda exc: self._collect_failed(block, exc),
                 stop=self)
         except asyncio.CancelledError:

@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))), "tests"))
@@ -66,8 +67,7 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
         self.cfg.set("history", "media", media_cfg)
         self.page = AddBindingCdp([raw(f"m{i}", idx=i) for i in range(4)])
         self.db_path = os.path.join(self.dir, "history.db")
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_path)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await self.service.init()
 
     async def asyncTearDown(self):
@@ -204,8 +204,7 @@ class TestMigrationBranches(ServiceCase):
 # ══════════════════════════════════════════════════════════════════
 class TestQueryBranches(ServiceCase):
     async def test_get_meta_flag_false_when_db_unreadable(self):
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=os.path.join(self.dir, "h2.db"))
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=os.path.join(self.dir, "h2.db")))
         self.assertFalse(await service2.get_meta_flag("anything"),
                          "a not-yet-opened db reads as 'flag unset'")
         await service2.close()
@@ -268,8 +267,7 @@ class TestMutateBranches(ServiceCase):
         self.assertEqual(self.service.my_nick, "Zoe Doe")
 
     async def test_save_gaze_with_closed_world_is_a_noop(self):
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=os.path.join(self.dir, "h3.db"))
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=os.path.join(self.dir, "h3.db")))
         service2.collector._nick = "Nick"
         await service2.save_gaze()       # db never opened → no-op, no raise
         try:

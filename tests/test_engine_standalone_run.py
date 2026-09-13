@@ -31,6 +31,7 @@ from backend.action_engine import (  # noqa: E402
     USER_SCOPED_BLOCKS,
     ActionEngine,
 )
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserRecord  # noqa: E402
 
 
@@ -83,7 +84,7 @@ class FakeMemory:
 
 
 def build_engine(memory):
-    engine = ActionEngine(cdp=None, memory=memory, criteria=None)
+    engine = ActionEngine(RunDeps(cdp=None, memory=memory, criteria=None))
     logs = []
     engine.log_msg.connect(lambda m: logs.append(("log", m, "info")))
     engine.debug_msg.connect(lambda m, l: logs.append(("debug", m, l)))

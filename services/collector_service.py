@@ -25,17 +25,16 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal
 
 from backend import chat_agent_js
-from backend.chat_parser import (ChatParser, _signature, sync_conversation,
-                                 verify_private)
+from backend.chat_parser import (SyncOptions, _signature,
+                                 sync_conversation, verify_private)
 from services.collector_loop import RunLoop
 from services.collector_pacing import Pacing
 from services.collector_partner import PartnerMemory
 from services.collector_push import PushPath
 from services.collector_report import Reporter
 from services.collector_settings import TuningKnobs
-from services.collector_states import (CollectorState, DEFAULTS,
-                                       init_run_counters)
-from stores.history_repo import HistoryRepo
+from services.collector_states import (CollectorDeps, CollectorState,
+                                       DEFAULTS, init_run_counters)
 
 log = logging.getLogger("chatbot")
 
@@ -48,9 +47,7 @@ class Collector(QObject):
     people_changed = Signal(str)        # json {nick, kind, source}
     collector_log = Signal(str)         # json {ts, level, message, nick}
 
-    def __init__(self, cdp, repo: HistoryRepo, parser: ChatParser,
-                 media=None, settings: Optional[dict] = None,
-                 lease=None, memory=None, parent=None):
+    def __init__(self, deps: CollectorDeps, parent=None):
         super().__init__(parent)
 
         # Built first, from `self` only: `__init__` below already calls
@@ -63,14 +60,15 @@ class Collector(QObject):
         self._knobs = TuningKnobs(self)
         self._loop = RunLoop(self)
 
-        self.cdp = cdp
-        self.repo = repo
-        self.parser = parser
-        self.media = media
-        self.lease = lease
-        self.memory = memory
+        # The collaborators travel as one `CollectorDeps` (Round G step 4).
+        self.cdp = deps.cdp
+        self.repo = deps.repo
+        self.parser = deps.parser
+        self.media = deps.media
+        self.lease = deps.lease
+        self.memory = deps.memory
         self._settings = dict(DEFAULTS)
-        self.configure(**(settings or {}))
+        self.configure(**(deps.settings or {}))
         self.now = datetime.now
 
         # Per-run counters: the states module owns the fresh-value recipe
@@ -133,19 +131,20 @@ class Collector(QObject):
     async def _sync(self, nick: str, my_nick: str, bootstrap: bool,
                     backfill_older: bool = False):
         cap = int(self._settings["max_bootstrap"] or 0) if bootstrap else 0
-        kwargs = dict(my_nick=my_nick,
-                      require_private=bool(self._settings["require_private"]),
-                      verify_partner=True,
-                      max_messages=cap or None,
-                      backfill_older=backfill_older,
-                      backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
-                      now=self.now(),
-                      media=self.media if self._settings["download_media"] else None)
+        options = SyncOptions(
+            my_nick=my_nick,
+            require_private=bool(self._settings["require_private"]),
+            verify_partner=True,
+            max_messages=cap or None,
+            backfill_older=backfill_older,
+            backfill_wait_s=float(self._settings.get("backfill_wait_s", 2.0)),
+            now=self.now(),
+            media=self.media if self._settings["download_media"] else None)
         if self.lease is not None:
             async with self.lease.low():
                 return await sync_conversation(self.parser, self.repo, nick,
-                                               **kwargs)
-        return await sync_conversation(self.parser, self.repo, nick, **kwargs)
+                                               options)
+        return await sync_conversation(self.parser, self.repo, nick, options)
 
     async def backfill_older(self) -> str:
         """Force one scroll-to-top full-history pass for the current person."""

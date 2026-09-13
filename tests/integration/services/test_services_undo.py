@@ -31,7 +31,7 @@ from core.events import (EventBus, StackLoaded, UndoHistoryChanged,  # noqa: E40
                          PeopleChanged)
 from services.layout_service import LayoutService  # noqa: E402
 from services.run import normalize_blocks  # noqa: E402
-from services.undo_service import UndoService  # noqa: E402
+from services.undo_service import UndoDeps, UndoService  # noqa: E402
 
 BLOCK_A = [{"block_id": "PAUSE", "pause_ms": 5}]
 BLOCK_B = [{"block_id": "CLICK_MAIN_TAB"}]
@@ -82,7 +82,7 @@ class UndoCase(unittest.TestCase):
         self.changed = []
         self.bus.subscribe(UndoHistoryChanged,
                            lambda e: self.changed.append(e))
-        self.undo = UndoService(config=self.cfg, bus=self.bus)
+        self.undo = UndoService(config=self.cfg, deps=UndoDeps(bus=self.bus))
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -207,7 +207,7 @@ class TestUndoRedoCommands(UndoCase):
 
     def test_undo_stack_applies_previous_state(self):
         engine = self.engine()
-        self.undo.attach(engine=engine)
+        self.undo.attach(UndoDeps(engine=engine))
         self.undo.push("stack", BLOCK_A)
         self.undo.push("stack", BLOCK_B)
         result = self.undo.undo()
@@ -220,7 +220,7 @@ class TestUndoRedoCommands(UndoCase):
 
     def test_redoing_a_stack_takes_it_forward_again(self):
         engine = self.engine()
-        self.undo.attach(engine=engine)
+        self.undo.attach(UndoDeps(engine=engine))
         self.undo.push("stack", BLOCK_A)
         self.undo.push("stack", BLOCK_B)
         self.undo.undo()
@@ -231,7 +231,7 @@ class TestUndoRedoCommands(UndoCase):
 
     def test_undo_emits_stack_loaded_for_entries(self):
         engine = self.engine()
-        self.undo.attach(engine=engine)
+        self.undo.attach(UndoDeps(engine=engine))
         loaded = []
         self.bus.subscribe(StackLoaded, lambda e: loaded.append(e))
         self.undo.push("stack", BLOCK_A)
@@ -245,7 +245,7 @@ class TestUndoRedoCommands(UndoCase):
 class TestWorldSplit(UndoCase):
     def test_world_entries_go_to_the_world_table(self):
         archive = FakeArchive(open_=True)
-        self.undo.attach(archive=archive)
+        self.undo.attach(UndoDeps(archive=archive))
 
         async def go():
             self.undo.push("people", {"before": [], "after": [{"nick": "A"}]})
@@ -271,7 +271,7 @@ class TestWorldSplit(UndoCase):
                     "value": {"before": [], "after": []}},
                    {"seq": 4, "kind": "labels",
                     "value": {"before": {}, "after": {}}}])
-        self.undo.attach(archive=archive)
+        self.undo.attach(UndoDeps(archive=archive))
         self.cfg.set_state(undo_history=[
             {"seq": 1, "kind": "stack", "value": BLOCK_A},
             {"seq": 3, "kind": "grid", "value": GRID_X}])
@@ -284,7 +284,7 @@ class TestWorldSplit(UndoCase):
         self.assertTrue(all(e.get("seq") for e in history))
 
     def test_sync_with_no_archive_keeps_config_only(self):
-        self.undo.attach(archive=None)
+        self.undo.attach(UndoDeps(archive=None))
         self.cfg.set_state(undo_history=[
             {"seq": 1, "kind": "stack", "value": BLOCK_A}])
         result = asyncio.run(self.undo.sync_world_state())
@@ -300,7 +300,7 @@ class TestWorldSplit(UndoCase):
             open_=True,
             world=[{"seq": 2, "kind": "people",
                     "value": {"before": [], "after": []}}])
-        self.undo.attach(archive=archive)
+        self.undo.attach(UndoDeps(archive=archive))
         self.cfg.set_state(undo_history=[
             {"seq": 1, "kind": "stack", "value": BLOCK_A},
             {"seq": 3, "kind": "grid", "value": GRID_FULL}])
@@ -447,12 +447,12 @@ class TestPeopleIntegration(unittest.IsolatedAsyncioTestCase):
         from stores.user_memory import UserMemory
         self.memory = UserMemory(os.path.join(self._tmp.name, "users.db"))
         await self.memory.init()
-        from services.people_service import PeopleService
-        self.people = PeopleService(memory=self.memory, bus=EventBus())
+        from services.people_service import PeopleDeps, PeopleService
+        self.people = PeopleService(PeopleDeps(memory=self.memory, bus=EventBus()))
         self.cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
         self.undo = UndoService(config=self.cfg)
-        self.undo.attach(people=self.people, archive=None)
-        self.people.attach(undo=self.undo)
+        self.undo.attach(UndoDeps(people=self.people, archive=None))
+        self.people.attach(PeopleDeps(undo=self.undo))
 
     async def asyncTearDown(self):
         await self.memory.close()

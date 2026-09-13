@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.db_manager import DbManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
 
 
@@ -46,8 +47,7 @@ class DbCase(unittest.IsolatedAsyncioTestCase):
         self.cfg.set("history", "media", media_cfg)
         self.page = ConnectedPage([raw(f"m{i}", idx=i) for i in range(4)])
         self.db_path = os.path.join(self.dir, "history.db")
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_path)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await self.service.init()
         self.manager = DbManager(config=self.cfg, service=self.service,
                                  root=self.dir)

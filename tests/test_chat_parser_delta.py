@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import (  # noqa: E402
     ChatParser,
+    SyncOptions,
     align,
     parse_records,
     sync_conversation,
@@ -340,7 +341,7 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
         kw.setdefault("chunk_pause_ms", 0)
         kw.setdefault("now", NOW)
         return await sync_conversation(parser, self.repo, "Nick",
-                                       my_nick="Me", **kw)
+                                       SyncOptions.from_kwargs(my_nick="Me", **kw))
 
     async def test_bootstrap_then_delta_then_nothing(self):
         page = FakePage([raw(f"m{i}", idx=i) for i in range(10)])
@@ -578,9 +579,9 @@ class TestSyncScenarios(unittest.IsolatedAsyncioTestCase):
     async def test_partner_mismatch_never_files_under_the_wrong_nick(self):
         page = FakePage([raw("a", idx=0)], partner="SomeoneElse")
         parser = ChatParser(page, chunk_size=10)
-        res = await sync_conversation(parser, self.repo, "Nick", my_nick="Me",
-                                      verify_partner=True, chunk_pause_ms=0,
-                                      now=NOW)
+        res = await sync_conversation(parser, self.repo, "Nick",
+                                      SyncOptions(my_nick="Me", verify_partner=True,
+                                                  chunk_pause_ms=0, now=NOW))
         self.assertFalse(res.ok)
         self.assertEqual(res.reason, "partner_mismatch")
         self.assertIsNone(await self.repo.get_person("Nick"))

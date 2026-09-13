@@ -1263,6 +1263,34 @@
       "config_schema": "(self) -> dict",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
      }
+    },
+    "NewTabCheck": {
+     "ancestry": [
+      "NewTabCheck",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "before": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "label": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "nick": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, nick: str, label: str, before: Optional[dict] = None) -> None"
+     }
     }
    },
    "functions": {
@@ -1612,6 +1640,74 @@
   },
   "actions.scroll_parse": {
    "classes": {
+    "PipelineRun": {
+     "ancestry": [
+      "PipelineRun",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "cbs": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "engine": {
+       "default": "None",
+       "type": "Any"
+      },
+      "known_messaged": {
+       "default": "None",
+       "type": "Any"
+      },
+      "panel_criteria": {
+       "default": "None",
+       "type": "Any"
+      },
+      "seek_nicks": {
+       "default": "None",
+       "type": "Any"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, engine: Any = None, panel_criteria: Any = None, known_messaged: Any = None, seek_nicks: Any = None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> None"
+     }
+    },
+    "ScrollCallbacks": {
+     "ancestry": [
+      "ScrollCallbacks",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "log_cb": {
+       "default": "None",
+       "type": "Any"
+      },
+      "on_collect": {
+       "default": "None",
+       "type": "Any"
+      },
+      "on_reject": {
+       "default": "None",
+       "type": "Any"
+      },
+      "should_stop": {
+       "default": "None",
+       "type": "Any"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, log_cb: Any = None, on_collect: Any = None, on_reject: Any = None, should_stop: Any = None) -> None"
+     }
+    },
     "ScrollParse": {
      "ancestry": [
       "ScrollParse",
@@ -1636,11 +1732,11 @@
      "methods": {
       "__init__": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
       "build_filter": "(self, panel_criteria=None) -> backend.person_filter.PersonFilter",
-      "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollParser",
+      "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> backend.scroll_parser.ScrollParser",
       "config_schema": "(self) -> dict",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str",
-      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None, panel_criteria=None, known_messaged: set | None = None, on_collect=None, on_reject=None, should_stop=None, seek_nicks: set | None = None) -> backend.scroll_parser_model.CollectResult",
-      "to_scroll_options": "(self, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser_model.ScrollOptions"
+      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, run: Optional[actions.scroll_parse.PipelineRun] = None) -> backend.scroll_parser_model.CollectResult",
+      "to_scroll_options": "(self, panel_criteria=None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> backend.scroll_parser_model.ScrollOptions"
      }
     }
    },
@@ -1920,7 +2016,7 @@
       "pause": "(self) -> 'None'",
       "restore_scroll": "(self, top: 'int') -> 'dict'",
       "scroll_to_top": "(self) -> 'dict'",
-      "settle_after_top": "(self, first_state: 'dict', wait_ms: 'int' = 300, stable_polls: 'int' = 3, max_wait_s: 'float' = 6.0, minimum_count: 'int' = 0) -> 'dict'",
+      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'",
       "slice": "(self, start: 'int', end: 'int') -> 'list[MessageRecord]'",
       "state": "(self) -> 'dict'"
      }
@@ -1976,9 +2072,9 @@
    "functions": {
     "align": "(dom_fps, tail_fps) -> 'Alignment'",
     "parse_records": "(raw: 'Iterable') -> 'list[MessageRecord]'",
-    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media=None) -> 'SyncResult'",
+    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', options: 'Optional[SyncOptions]' = None) -> 'SyncResult'",
     "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
-    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', items=None, require_private: 'bool' = True) -> 'PrivateCheck'"
+    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', query: 'PrivateQuery' = PrivateQuery(items=None, require_private=True)) -> 'PrivateCheck'"
    },
    "values": {}
   },
@@ -2500,9 +2596,9 @@
    "classes": {},
    "functions": {
     "build_clear_probe": "() -> str",
-    "build_click_probe": "(click_selector: Optional[str] = None, highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff9500', caption: str = 'CLICK', do_click: bool = True) -> str",
-    "build_find_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff2d2d', caption: str = 'FOUND', max_candidates: int = 6) -> str",
-    "build_highlight_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'exact', color: str = '#00c853', caption: str = 'MATCH', highlight_ms: int = 900, clear_first: bool = True) -> str",
+    "build_click_probe": "(click_selector: Optional[str] = None, spec: Optional[backend.probe_requests.ClickProbeSpec] = None) -> str",
+    "build_find_probe": "(selector: str, spec: Optional[backend.probe_requests.FindProbeSpec] = None) -> str",
+    "build_highlight_probe": "(selector: str, spec: Optional[backend.probe_requests.HighlightSpec] = None) -> str",
     "interpret_click": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_click_target": "(result) -> tuple[str, str]",
     "interpret_find": "(result, label: str = 'element') -> tuple[str, str]"
@@ -2512,7 +2608,7 @@
   "backend.dom_probe": {
    "classes": {},
    "functions": {
-    "build_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', click: bool = False, click_selector: Optional[str] = None, click_root: bool = False, max_candidates: int = 6) -> str",
+    "build_probe": "(selector: str, spec: Optional[backend.probe_requests.ProbeSpec] = None) -> str",
     "interpret": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_wait": "(result, label: str = 'element') -> tuple[str, str]"
    },
@@ -2690,7 +2786,7 @@
     }
    },
    "functions": {
-    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str, file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None, verify_poll_ms: int = 200) -> bool",
+    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str = '', options: Optional[backend.media_handler.AttachOptions] = None, **legacy) -> bool",
     "attach_with_options": "(cdp: backend.cdp_client.CDPClient, options: backend.media_handler.AttachOptions) -> bool",
     "list_image_files": "(folder: str, file_pattern: str) -> list[str]",
     "parse_patterns": "(file_pattern: str) -> list[str]"
@@ -2724,6 +2820,68 @@
   },
   "backend.message_injector_type": {
    "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.parser_requests": {
+   "classes": {
+    "PrivateQuery": {
+     "ancestry": [
+      "PrivateQuery",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "items": {
+       "default": "None",
+       "type": "Any"
+      },
+      "require_private": {
+       "default": "True",
+       "type": "bool"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, items: 'Any' = None, require_private: 'bool' = True) -> None"
+     }
+    },
+    "SettleSpec": {
+     "ancestry": [
+      "SettleSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "max_wait_s": {
+       "default": "6.0",
+       "type": "float"
+      },
+      "minimum_count": {
+       "default": "0",
+       "type": "int"
+      },
+      "stable_polls": {
+       "default": "3",
+       "type": "int"
+      },
+      "wait_ms": {
+       "default": "300",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, wait_ms: 'int' = 300, stable_polls: 'int' = 3, max_wait_s: 'float' = 6.0, minimum_count: 'int' = 0) -> None"
+     }
+    }
+   },
    "functions": {},
    "values": {}
   },
@@ -2761,15 +2919,43 @@
       "PersonFilter",
       "object"
      ],
-     "attrs": {},
+     "attrs": {
+      "anonymous": "'no'",
+      "female": "'yes'",
+      "guest": "'yes'",
+      "panel_criteria": "None",
+      "registered": "'no'"
+     },
      "bases": [
       "object"
      ],
-     "fields": {},
+     "fields": {
+      "anonymous": {
+       "default": "'no'",
+       "type": "str"
+      },
+      "female": {
+       "default": "'yes'",
+       "type": "str"
+      },
+      "guest": {
+       "default": "'yes'",
+       "type": "str"
+      },
+      "panel_criteria": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "registered": {
+       "default": "'no'",
+       "type": "str"
+      }
+     },
      "inherited": {},
      "methods": {
       "__call__": "(self, person: dict) -> bool",
-      "__init__": "(self, female: str = 'yes', registered: str = 'no', guest: str = 'yes', anonymous: str = 'no', panel_criteria: Optional[object] = None)",
+      "__init__": "(self, female: str = 'yes', registered: str = 'no', guest: str = 'yes', anonymous: str = 'no', panel_criteria: Optional[object] = None) -> None",
+      "__post_init__": "(self)",
       "check": "(self, person: dict) -> backend.person_filter.FilterVerdict",
       "describe": "(self) -> str",
       "is_empty": "<property>",
@@ -2788,6 +2974,184 @@
    "functions": {},
    "values": {}
   },
+  "backend.probe_requests": {
+   "classes": {
+    "ClickProbeSpec": {
+     "ancestry": [
+      "ClickProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'CLICK'",
+       "type": "str"
+      },
+      "color": {
+       "default": "'#ff9500'",
+       "type": "str"
+      },
+      "do_click": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight_ms": {
+       "default": "1200",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, highlight: 'bool' = True, highlight_ms: 'int' = 1200, color: 'str' = '#ff9500', caption: 'str' = 'CLICK', do_click: 'bool' = True) -> None"
+     }
+    },
+    "FindProbeSpec": {
+     "ancestry": [
+      "FindProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'FOUND'",
+       "type": "str"
+      },
+      "color": {
+       "default": "'#ff2d2d'",
+       "type": "str"
+      },
+      "highlight": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight_ms": {
+       "default": "1200",
+       "type": "int"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'contains'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "max_candidates": {
+       "default": "6",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'contains', highlight: 'bool' = True, highlight_ms: 'int' = 1200, color: 'str' = '#ff2d2d', caption: 'str' = 'FOUND', max_candidates: 'int' = 6) -> None"
+     }
+    },
+    "HighlightSpec": {
+     "ancestry": [
+      "HighlightSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'MATCH'",
+       "type": "str"
+      },
+      "clear_first": {
+       "default": "True",
+       "type": "bool"
+      },
+      "color": {
+       "default": "'#00c853'",
+       "type": "str"
+      },
+      "highlight_ms": {
+       "default": "900",
+       "type": "int"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'exact'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'exact', color: 'str' = '#00c853', caption: 'str' = 'MATCH', highlight_ms: 'int' = 900, clear_first: 'bool' = True) -> None"
+     }
+    },
+    "ProbeSpec": {
+     "ancestry": [
+      "ProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "click": {
+       "default": "False",
+       "type": "bool"
+      },
+      "click_root": {
+       "default": "False",
+       "type": "bool"
+      },
+      "click_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'contains'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "max_candidates": {
+       "default": "6",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'contains', click: 'bool' = False, click_selector: 'Optional[str]' = None, click_root: 'bool' = False, max_candidates: 'int' = 6) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "backend.scroll_parser": {
    "classes": {
     "ScrollParser": {
@@ -2802,7 +3166,7 @@
      "fields": {},
      "inherited": {},
      "methods": {
-      "__init__": "(self, cdp: 'CDPClient', criteria=None, viewport_sel: 'str' = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: 'int' = 300, pause_ms: 'int' = 800, stall_threshold: 'int' = 3, max_scrolls: 'int' = 50, load_timeout_ms: 'int' = 2500, poll_ms: 'int' = 150, person_filter: 'PersonFilter | None' = None, person_selector: 'str' = 'user-item', nick_selector: 'str' = '.primary-text', highlight_enabled: 'bool' = True, highlight_ms: 'int' = 900, confirm_pause_ms: 'int' = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
+      "__init__": "(self, cdp: 'CDPClient', options: 'ScrollOptions | None' = None, criteria=None)",
       "collect": "(self, progress_cb=None, min_new_users: 'int' = 0, known_messaged: 'set | None' = None, seek_nicks: 'set | None' = None) -> 'CollectResult'",
       "from_options": "(cls, cdp: 'CDPClient', options: 'ScrollOptions', criteria=None) -> \"'ScrollParser'\"",
       "max_scrolls": "<property>",
@@ -3210,7 +3574,7 @@
    },
    "functions": {
     "click_phase": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, found: dict, engine: Optional[object] = None) -> str",
-    "find_and_click": "(cdp: backend.cdp_client.CDPClient, *, selector: str, label_selector: str = '', match_text: str = '', match_mode: str = 'contains', click_enabled: bool = True, click_selector: str = '', highlight_enabled: bool = True, confirm_pause_ms: int = 700, highlight_ms: int = 1200, label: str = 'element', engine: Optional[object] = None) -> str",
+    "find_and_click": "(cdp: backend.cdp_client.CDPClient, request: Optional[backend.visual_click.ClickRequest] = None, engine: Optional[object] = None, **legacy) -> str",
     "find_and_click_exact": "(cdp: backend.cdp_client.CDPClient, *, text: str, **kw) -> str",
     "find_phase": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, engine: Optional[object] = None) -> Optional[dict]",
     "run_click": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, engine: Optional[object] = None) -> str"

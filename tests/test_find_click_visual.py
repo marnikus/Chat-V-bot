@@ -16,6 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from backend.probe_requests import ClickProbeSpec, FindProbeSpec  # noqa: E402
 from backend.dom_highlight import (  # noqa: E402
     COLOR_CLICK,
     COLOR_FIND,
@@ -56,7 +57,7 @@ def tabs(active_text="Гостиная"):
 
 class TestFindPhase(unittest.TestCase):
     def test_finds_matching_tab_and_draws_red_outline(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная")
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
         (res,), eff = run_js([expr], tabs())
         self.assertTrue(res["found"])
         self.assertEqual(res["total"], 3)
@@ -78,13 +79,13 @@ class TestFindPhase(unittest.TestCase):
         self.assertFalse(res["clicked"])
 
     def test_highlight_geometry_matches_element(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная")
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
         (res,), _ = run_js([expr], tabs())
         self.assertEqual(res["rect"]["x"], 120)
         self.assertEqual(res["rect"]["width"], 120)
 
     def test_not_found_reports_candidates_and_no_overlay(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Нет такой")
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Нет такой"))
         (res,), eff = run_js([expr], tabs())
         self.assertFalse(res["found"])
         self.assertEqual(res["total"], 3)
@@ -97,7 +98,7 @@ class TestFindPhase(unittest.TestCase):
         nodes = [{"tag": "div", "className": "tab-item", "hidden": True,
                   "children": [{"tag": "p", "className": "chat-title",
                                 "text": "Гостиная"}]}]
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная")
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
         (res,), _ = run_js([expr], nodes)
         self.assertTrue(res["found"])
         self.assertFalse(res["visible"])
@@ -106,8 +107,7 @@ class TestFindPhase(unittest.TestCase):
         self.assertEqual(level, "warn")
 
     def test_highlight_can_be_disabled(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная",
-                                highlight=False)
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", highlight=False))
         (res,), eff = run_js([expr], tabs())
         self.assertTrue(res["found"])
         self.assertFalse(res["highlighted"])
@@ -120,27 +120,26 @@ class TestFindPhase(unittest.TestCase):
         self.assertEqual(res["index"], 0)
 
     def test_overlays_do_not_accumulate_between_runs(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная")
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
         _, eff = run_js([expr, expr, expr], tabs())
         # each new find clears the previous overlays first
         for phase_overlays in eff["overlays"]:
             self.assertEqual(len(phase_overlays), 1)
 
     def test_outline_auto_expires(self):
-        expr = build_find_probe("div.tab-item", "p.chat-title", "Гостиная",
-                                highlight_ms=900)
+        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", highlight_ms=900))
         _, eff = run_js([expr], tabs())
         self.assertIn(900, eff["timers"])
 
 
 class TestClickPhase(unittest.TestCase):
     def _find(self, **kw):
-        return build_find_probe("div.tab-item", "p.chat-title", "Гостиная", **kw)
+        return build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", **kw))
 
     def test_orange_outline_then_click_on_stashed_element(self):
         exprs = [self._find(),
-                 build_click_probe(do_click=False),      # highlight only
-                 build_click_probe(highlight=False, do_click=True)]
+                 build_click_probe(spec=ClickProbeSpec(do_click=False)),      # highlight only
+                 build_click_probe(spec=ClickProbeSpec(highlight=False, do_click=True))]
         (found, pre, done), eff = run_js(exprs, tabs())
         self.assertTrue(found["found"])
         # phase 2a: orange outline, no click yet
@@ -159,14 +158,14 @@ class TestClickPhase(unittest.TestCase):
 
     def test_click_targets_the_element_the_find_phase_highlighted(self):
         """Regression: the click must not re-query and hit a different node."""
-        exprs = [self._find(), build_click_probe(highlight=False)]
+        exprs = [self._find(), build_click_probe(spec=ClickProbeSpec(highlight=False))]
         (found, done), eff = run_js(exprs, tabs())
         self.assertEqual(found["index"], 1)
         self.assertTrue(done["clicked"])
         self.assertEqual(len(eff["clicks"]), 1)
 
     def test_click_selector_targets_inner_element(self):
-        exprs = [self._find(), build_click_probe(click_selector="p.chat-title")]
+        exprs = [self._find(), build_click_probe("p.chat-title")]
         (_, done), eff = run_js(exprs, tabs())
         self.assertTrue(done["clicked"])
         self.assertEqual(eff["clicks"], ["p.chat-title"])
@@ -180,9 +179,8 @@ class TestClickPhase(unittest.TestCase):
         null and the block silently never clicked. The root itself must be used
         when it is what the selector describes.
         """
-        exprs = [build_find_probe("div[role='tab'].tab-item", "p.chat-title",
-                                  "Гостиная"),
-                 build_click_probe(click_selector="div[role='tab'].tab-item")]
+        exprs = [build_find_probe("div[role='tab'].tab-item", FindProbeSpec("p.chat-title", "Гостиная")),
+                 build_click_probe("div[role='tab'].tab-item")]
         (found, done), eff = run_js(exprs, tabs())
         self.assertTrue(found["found"])
         self.assertTrue(done["clicked"], done.get("error"))
@@ -190,7 +188,7 @@ class TestClickPhase(unittest.TestCase):
         self.assertIn("itself", done.get("note") or "")
 
     def test_missing_click_selector_is_an_error_not_a_wrong_click(self):
-        exprs = [self._find(), build_click_probe(click_selector="button.nope")]
+        exprs = [self._find(), build_click_probe("button.nope")]
         (_, done), eff = run_js(exprs, tabs())
         self.assertFalse(done["clicked"])
         self.assertIn("not found inside", done["error"])

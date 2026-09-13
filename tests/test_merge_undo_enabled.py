@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.scroll_parse import ScrollParse  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
@@ -54,7 +55,7 @@ def run_stack(blocks, seed=()):
             await mem.upsert_user(UserRecord(nick=nick, gender="female",
                                              guest=True))
         cdp = HighlightCDP(PAGES, page_height=100)
-        eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
         eng.load_stack(blocks)
         await eng.execute()
         names = sorted(u.nick for u in await mem.get_all())

@@ -276,9 +276,17 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # scroll_parser_dom). The stores/ surface itself is unchanged; the
         # invariant (a stores refactor never forces another area to edit an
         # import) still holds.
-        self.assertEqual(count, 42,
+        # 42 -> 41 (2026-09-13, Round G4 parameter objects): the old
+        # `Collector.__init__` carried `repo: HistoryRepo` as an annotation,
+        # which is why services/collector_service.py imported the name. W6
+        # moved the seven collaborators into the `CollectorDeps` bundle, whose
+        # fields are uniformly `Any` (like every other Deps bundle — no import
+        # cycles, no astroid setattr fallout), so the annotation-only import
+        # went away with the signature. The stores/ surface is untouched; this
+        # is a services-side refactor legitimately shrinking the count.
+        self.assertEqual(count, 41,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 42)")
+                         "import in another area (integrated baseline: 41)")
 
 
 if __name__ == "__main__":

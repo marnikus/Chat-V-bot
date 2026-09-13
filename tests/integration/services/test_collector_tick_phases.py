@@ -33,6 +33,7 @@ from backend.chat_parser import ChatParser  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from services.collector_service import Collector, CollectorState  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from stores.history_models import SyncResult  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
@@ -73,16 +74,13 @@ class TickCase(unittest.IsolatedAsyncioTestCase):
         self.page = ConnectedPage([raw(f"m{i}", from_nick="Nick", idx=i)
                                    for i in range(3)])
         self.parser = ChatParser(self.page, chunk_size=10, chunk_pause_ms=0)
-        self.col = Collector(cdp=self.page, repo=self.repo,
-                             parser=self.parser, media=self.media,
-                             settings={"heartbeat_ms": 1000,
+        self.col = Collector(CollectorDeps(cdp=self.page, repo=self.repo, parser=self.parser, media=self.media, settings={"heartbeat_ms": 1000,
                                        "idle_heartbeat_ms": 3000,
                                        "throttle_factor": 4,
                                        "my_nick": "Me",
                                        "require_two_participants": True,
                                        "require_private": True,
-                                       "download_media": True},
-                             memory=self.memory)
+                                       "download_media": True}, memory=self.memory))
         self.col.now = lambda: NOW
         self.logs = []
         self.col.collector_log.connect(lambda p: self.logs.append(json.loads(p)))
@@ -251,8 +249,8 @@ class TestArchivePhase(TickCase):
         """A fresh repo: bootstrap pass with auto-backfill requested."""
         syncs = []
 
-        async def fake_sync(parser, repo, nick, **kwargs):
-            syncs.append((nick, kwargs))
+        async def fake_sync(parser, repo, nick, options=None):
+            syncs.append((nick, options))
             return SyncResult(ok=True, added=0, total=0, count=3,
                               reason="bootstrap", records=[])
 
@@ -260,10 +258,10 @@ class TestArchivePhase(TickCase):
                         fake_sync):
             state = await self.col.tick()
         self.assertEqual(state, CollectorState.NO_NEW)
-        nick, kwargs = syncs[0]
+        nick, options = syncs[0]
         self.assertEqual(nick, "Nick")
-        self.assertTrue(kwargs["backfill_older"])
-        self.assertIsNone(kwargs["max_messages"])   # max_bootstrap=0 → no cap
+        self.assertTrue(options.backfill_older)
+        self.assertIsNone(options.max_messages)     # max_bootstrap=0 → no cap
 
     async def test_sync_failure_returns_not_private(self):
         await self.collect_all()

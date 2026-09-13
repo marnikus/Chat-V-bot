@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
 from backend.chat_parser import ChatParser, sync_conversation  # noqa: E402
-from backend.chat_sync import SyncPersister, SyncSession  # noqa: E402
+from backend.chat_sync import SyncOptions, SyncPersister, SyncSession  # noqa: E402
 from stores.history_models import MessageRecord, fingerprint  # noqa: E402
 
 NOW = datetime(2026, 9, 9, 10, 0, 0)
@@ -101,9 +101,7 @@ class FakeParser:
         self.restore_calls.append(top)
         return {"ok": True, "top": top}
 
-    async def settle_after_top(self, first_state, *, wait_ms=300,
-                               stable_polls=3, max_wait_s=6.0,
-                               minimum_count=0):
+    async def settle_after_top(self, first_state, spec=None):
         self.settles += 1
         state = dict(first_state)
         # a real re-probe keeps the pane's own geometry — only the scroll
@@ -204,7 +202,8 @@ class FakeRepo:
 
 def sync(parser, repo, **kw):
     kw.setdefault("now", NOW)
-    return asyncio.run(sync_conversation(parser, repo, "Nick", **kw))
+    return asyncio.run(sync_conversation(parser, repo, "Nick",
+                                         SyncOptions.from_kwargs(**kw)))
 
 
 # ══════════════════════════════════════════════════════════════════

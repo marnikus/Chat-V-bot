@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 from backend.config_manager import ConfigManager  # noqa: E402
 from services.db_service import (DbManager, db_stem,  # noqa: E402
                                  file_group_size, folder_size, safe_db_name)
+from services.history import HistoryDeps  # noqa: E402
 
 
 class TestNameAndStem(unittest.TestCase):
@@ -168,9 +169,7 @@ class RestoreCase(unittest.IsolatedAsyncioTestCase):
         media_cfg = dict(self.cfg.get("history", "media", default={}) or {})
         media_cfg["cache_dir"] = os.path.join(self.dir, "saved_media")
         self.cfg.set("history", "media", media_cfg)
-        self.service = HistoryService(
-            cdp=None, config=self.cfg,
-            db_path=os.path.join(self.dir, "history.db"))
+        self.service = HistoryService(HistoryDeps(cdp=None, config=self.cfg, db_path=os.path.join(self.dir, "history.db")))
         await self.service.init()
         self.manager = DbManager(config=self.cfg, service=self.service,
                                  root=self.dir)

@@ -22,9 +22,11 @@ pattern):
     chat_sync_read      SLICE_RETRIES, ChunkReader, DeltaAligner
     chat_sync_session   SyncViewport, SyncSession — the shared run state
 
-The split is internal: `backend.chat_parser.sync_conversation()` keeps its
-exact 14-parameter signature and delegates here, so `services/collector_service`
-and the `COLLECT_HISTORY` block are untouched. Every public name this module
+The split is internal: `backend.chat_parser.sync_conversation()` is the
+public entry point and delegates here. Since Round G step 4 it takes the
+knobs as one typed `SyncOptions` (it used to gather 11 keyword arguments
+into one itself); `services/collector_service` and the `COLLECT_HISTORY`
+block build the object at the call site. Every public name this module
 owned before the split is re-exported below, so existing import sites —
 `chat_parser`'s seam, the phase tests, the plan tests — are unchanged.
 
@@ -64,7 +66,7 @@ __all__ = [
 ]
 
 
-async def run_sync(parser, repo, nick: str,
+async def run_sync(parser, repo, nick: str,  # quality-override: params=5 reason=compat seam: mirrors the legacy keyword surface of chat_sync.run
                    options: Optional[SyncOptions] = None, **legacy) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 

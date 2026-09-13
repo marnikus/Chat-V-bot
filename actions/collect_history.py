@@ -20,7 +20,7 @@ from typing import Optional
 
 from actions.base_action import ActionResult, BaseAction
 from backend.cdp_client import CDPClient
-from backend.chat_parser import sync_conversation
+from backend.chat_parser import SyncOptions, sync_conversation
 
 log = logging.getLogger("chatbot")
 
@@ -33,7 +33,7 @@ class CollectHistory(BaseAction):
     #: overridable in tests so day resolution is deterministic
     now = staticmethod(datetime.now)
 
-    def __init__(self, target: str = "active", mode: str = "incremental",
+    def __init__(self, target: str = "active", mode: str = "incremental",  # quality-override: params=9 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  require_private: bool = True, max_messages: int = 0,
                  chunk_size: int = 80, chunk_pause_ms: int = 40,
                  download_media: bool = True, fail_if_empty: bool = False,
@@ -217,14 +217,12 @@ class _CollectRun:
         self.say(f"🗃 Collecting message history with “{self.nick}” "
                  f"({self.state.get('count', 0)} visible)…", "info")
         stopping = getattr(self.engine, "is_stopping", None)
-        self.result = await sync_conversation(
-            parser, repo, self.nick, my_nick=self.my_nick,
-            require_private=block.require_private, verify_partner=self.verify,
-            max_messages=block.max_messages or None,
-            chunk_pause_ms=block.chunk_pause_ms, should_stop=stopping,
-            on_progress=self._progress, now=block.now(),
-            backfill_older=(block.mode == "full"),
-            media=repo.media if block.download_media else None)
+        self.result = await sync_conversation(parser, repo, self.nick, SyncOptions(
+            my_nick=self.my_nick, require_private=block.require_private,
+            verify_partner=self.verify, max_messages=block.max_messages or None,
+            chunk_pause_ms=block.chunk_pause_ms, should_stop=stopping, now=block.now(),
+            on_progress=self._progress, backfill_older=(block.mode == "full"),
+            media=repo.media if block.download_media else None))
 
     def _progress(self, done: int, total: int) -> None:
         """RULE 5: every chunk, as it lands."""

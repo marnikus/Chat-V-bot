@@ -126,10 +126,21 @@ class _TypeCtx:
     text: str
     speed_ms: int
     report: Optional[Callable]
-    noun: str
-    warn_direct: str
-    warn_paste: str
+    #: "message" or "search" — selects the ladder's log wording
+    kind: str = "message"
     attempts: list = field(default_factory=list)
+    #: derived from `kind` in `__post_init__` (the `_ladder_words` pair)
+    noun: str = ""
+    warn_direct: str = ""
+    warn_paste: str = ""
+
+    def __post_init__(self):
+        self.noun, self.warn_direct, self.warn_paste = _ladder_words(self.kind)
+
+    @property
+    def noun_cap(self) -> str:
+        """The capitalised noun of the final failure line."""
+        return "Search field" if self.kind == "search" else "Textarea"
 
 
 def _ladder_words(kind: str) -> tuple:
@@ -212,29 +223,23 @@ async def _attempt_insert_text(ctx: _TypeCtx) -> bool:
     return False
 
 
-async def _run_type_strategies(cdp: CDPClient, sel: str, text: str,
-                               typing_speed_ms: int, report,
-                               kind: str) -> bool:
+async def _run_type_strategies(ctx: _TypeCtx) -> bool:
     """Shared verified typing ladder: value setter → Ctrl+V → insertText.
 
-    `kind` selects the log wording — "message" reproduces the original Type
-    Message strings byte-for-byte, "search" is used for the users-list
+    `ctx.kind` selects the log wording — "message" reproduces the original
+    Type Message strings byte-for-byte, "search" is used for the users-list
     search box. Returns True only when the page actually accepted the text
     (read-back equals what was sent).
     """
-    noun, warn_direct, warn_paste = _ladder_words(kind)
-    ctx = _TypeCtx(cdp=cdp, sel=sel, text=text, speed_ms=typing_speed_ms,
-                   report=report, noun=noun, warn_direct=warn_direct,
-                   warn_paste=warn_paste)
     if await _attempt_set_value(ctx):
         return True
-    _rep(report, warn_direct, "warn")
+    _rep(ctx.report, ctx.warn_direct, "warn")
     if await _attempt_paste(ctx):
         return True
-    _rep(report, warn_paste, "warn")
+    _rep(ctx.report, ctx.warn_paste, "warn")
     if await _attempt_insert_text(ctx):
         return True
-    noun_cap = "Search field" if kind == "search" else "Textarea"
-    _rep(report, f"❌ {noun_cap} value injection failed (page did not accept "
-                 "input): " + "; ".join(ctx.attempts), "error")
+    _rep(ctx.report,
+         f"❌ {ctx.noun_cap} value injection failed (page did not accept "
+         "input): " + "; ".join(ctx.attempts), "error")
     return False

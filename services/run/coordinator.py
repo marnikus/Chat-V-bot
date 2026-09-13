@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
-from core.events import EventBus
 from actions.base_action import BaseAction, get_action_class
 from actions.cancellation import RunStopped, check_stopped, is_stop_requested
 try:
@@ -27,6 +26,7 @@ from .error_recovery import RetryPolicy, RunExecutionMixin
 from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
 from .progress import RunProgress, RunQueueMixin
 from .run_lifecycle import RunLifecycleMixin
+from .requests import RunDeps
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
 
@@ -36,12 +36,12 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, CollectPhaseMixin,
     stack_complete = Signal(); log_msg = Signal(str); debug_msg = Signal(str, str)
     step_started = Signal(int, str, str); person_found = Signal(str); person_removed = Signal(str)
 
-    def __init__(self, cdp: 'CDPClient', memory: 'UserMemory', criteria: 'CriteriaEngine', bus: EventBus | None = None, hooks: RunHooks | None = None, retry_policy: RetryPolicy | None = None, progress: RunProgress | None = None, parent: QObject | None = None):
+    def __init__(self, deps: RunDeps, parent: QObject | None = None):
         super().__init__(parent)
-        self._cdp, self._memory, self._criteria = cdp, memory, criteria
-        self.criteria = criteria; self._stack: list[BaseAction] = []; self._running = self._paused = self._stop_requested = False
+        self._cdp, self._memory, self._criteria = deps.cdp, deps.memory, deps.criteria
+        self.criteria = deps.criteria; self._stack: list[BaseAction] = []; self._running = self._paused = self._stop_requested = False
         self._tracer = None; self._ctx: dict = {}; self._run_seq = 0; self._state = RunStateMachine()
-        self._hooks = hooks or RunHooks(); self._retry = retry_policy or RetryPolicy(); self.progress = progress or RunProgress(bus)
+        self._hooks = deps.hooks or RunHooks(); self._retry = deps.retry_policy or RetryPolicy(); self.progress = deps.progress or RunProgress(deps.bus)
         self.composer_text = self.selected_nick = ""; self.history = None; self.label_filter = self.label_reason = None
 
     def load_stack(self, blocks: list[dict]) -> None:

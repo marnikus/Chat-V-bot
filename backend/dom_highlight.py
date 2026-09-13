@@ -23,14 +23,10 @@ background, so it can never intercept the click nor affect page layout.
 import json
 from typing import Optional
 
-from backend.dom_probe import MATCH_CONTAINS, MATCH_EXACT, _js_str  # noqa: F401
-
-#: Outline colour used for the FIND phase.
-COLOR_FIND = "#ff2d2d"      # red
-#: Outline colour used for the CLICK phase.
-COLOR_CLICK = "#ff9500"     # orange
-#: Outline colour used when a person matches the filter and is collected.
-COLOR_COLLECT = "#00c853"   # green
+from backend.dom_probe import MATCH_EXACT, _js_str
+from backend.probe_requests import (  # noqa: F401  (re-exported: constants moved)
+    COLOR_CLICK, COLOR_COLLECT, COLOR_FIND, ClickProbeSpec, FindProbeSpec,
+    HighlightSpec)
 
 #: Attribute marking every overlay node so they can be bulk-removed.
 HIGHLIGHT_ATTR = "data-cf-highlight"
@@ -333,87 +329,73 @@ _CLICK_BODY = """
 
 
 
-def build_find_probe(
-    selector: str,
-    label_selector: Optional[str] = None,
-    match_text: Optional[str] = None,
-    match_mode: str = MATCH_CONTAINS,
-    highlight: bool = True,
-    highlight_ms: int = 1200,
-    color: str = COLOR_FIND,
-    caption: str = "FOUND",
-    max_candidates: int = 6,
-) -> str:
+def build_find_probe(selector: str,
+                     spec: Optional[FindProbeSpec] = None) -> str:
     """Phase 1 probe: find the element, highlight it in RED, do NOT click.
 
     The matched node is stashed on ``window.__cfStash`` so the click phase can
-    act on the exact same element instead of re-querying the DOM.
+    act on the exact same element instead of re-querying the DOM. The knobs
+    travel as one :class:`FindProbeSpec`; None means the RED-outline defaults.
     """
+    spec = spec or FindProbeSpec()
     return _probe(_FIND_BODY,
                   selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  highlight="true" if highlight else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms),
+                  label_selector=(_js_str(spec.label_selector)
+                                  if spec.label_selector else "null"),
+                  match_text=(_js_str(spec.match_text) if spec.match_text
+                              else "null"),
+                  exact="true" if spec.match_mode == MATCH_EXACT else "false",
+                  highlight="true" if spec.highlight else "false",
+                  color=_js_str(spec.color),
+                  caption=_js_str(spec.caption),
+                  hms=int(spec.highlight_ms),
                   stash=STASH_KEY,
-                  maxcand=int(max_candidates))
+                  maxcand=int(spec.max_candidates))
 
 
-def build_click_probe(
-    click_selector: Optional[str] = None,
-    highlight: bool = True,
-    highlight_ms: int = 1200,
-    color: str = COLOR_CLICK,
-    caption: str = "CLICK",
-    do_click: bool = True,
-) -> str:
+def build_click_probe(click_selector: Optional[str] = None,
+                      spec: Optional[ClickProbeSpec] = None) -> str:
     """Phase 2 probe: highlight the click target in ORANGE, then click it.
 
     Operates on the element stashed by :func:`build_find_probe`. When
     ``click_selector`` is given, the click target is that element *inside* the
-    stashed node; otherwise the stashed node itself is clicked.
+    stashed node; otherwise the stashed node itself is clicked. The knobs
+    travel as one :class:`ClickProbeSpec`.
     """
+    spec = spec or ClickProbeSpec()
     return _probe(_CLICK_BODY,
-                  click_selector=_js_str(click_selector) if click_selector else "null",
-                  highlight="true" if highlight else "false",
-                  do_click="true" if do_click else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms),
+                  click_selector=(_js_str(click_selector) if click_selector
+                                  else "null"),
+                  highlight="true" if spec.highlight else "false",
+                  do_click="true" if spec.do_click else "false",
+                  color=_js_str(spec.color),
+                  caption=_js_str(spec.caption),
+                  hms=int(spec.highlight_ms),
                   stash=STASH_KEY)
 
 
-def build_highlight_probe(
-    selector: str,
-    label_selector: Optional[str] = None,
-    match_text: Optional[str] = None,
-    match_mode: str = MATCH_EXACT,
-    color: str = COLOR_COLLECT,
-    caption: str = "MATCH",
-    highlight_ms: int = 900,
-    clear_first: bool = True,
-) -> str:
+def build_highlight_probe(selector: str,
+                          spec: Optional[HighlightSpec] = None) -> str:
     """Highlight an element WITHOUT clicking it or touching the click stash.
 
     Used for pure visual confirmation — e.g. showing which person just matched
     the filter during Scroll & Parse. Deliberately does NOT call
     ``scrollIntoView``: moving the viewport mid-scroll would corrupt the
-    parser's position tracking.
+    parser's position tracking. The knobs travel as one
+    :class:`HighlightSpec`; None means the GREEN "MATCH" defaults.
     """
+    spec = spec or HighlightSpec()
     return _probe(_HIGHLIGHT_BODY,
                   selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  clear="true" if clear_first else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms))
+                  label_selector=(_js_str(spec.label_selector)
+                                  if spec.label_selector else "null"),
+                  match_text=(_js_str(spec.match_text) if spec.match_text
+                              else "null"),
+                  exact="true" if spec.match_mode == MATCH_EXACT else "false",
+                  clear="true" if spec.clear_first else "false",
+                  color=_js_str(spec.color),
+                  caption=_js_str(spec.caption),
+                  hms=int(spec.highlight_ms))
 
 
 def build_clear_probe() -> str:

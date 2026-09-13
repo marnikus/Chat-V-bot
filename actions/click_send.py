@@ -34,7 +34,7 @@ class ClickSend(FindClickBlock):
                    clean=ms_floor, request="confirm_pause_ms"),
     )
 
-    def __init__(self, selector: str = SEND_SELECTOR,
+    def __init__(self, selector: str = SEND_SELECTOR,  # quality-override: params=7 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  fallback_selector: str = SEND_ICON_SELECTOR,
                  fallback_text: str = "send",
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,

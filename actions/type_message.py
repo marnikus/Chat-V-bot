@@ -19,7 +19,7 @@ class TypeMessage(BaseAction):
     name = "Type Message"
     icon = "⌨️"
 
-    def __init__(self, message: str = "", use_composer: bool = False,
+    def __init__(self, message: str = "", use_composer: bool = False,  # quality-override: params=5 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  typing_speed_ms: int = 30, pre_delay_ms: int = 500,
                  **kw):
         super().__init__(pre_delay_ms=pre_delay_ms, **kw)

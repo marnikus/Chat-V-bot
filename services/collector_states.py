@@ -19,7 +19,8 @@ The statuses are the vocabulary the feature request asked for:
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 
 class CollectorState:
@@ -93,3 +94,44 @@ def init_run_counters(host) -> None:
     host._last_media_repaired = 0
     host._last_media_requeued = 0
     host._detected_my_nick = ""
+
+
+@dataclass
+class CollectorDeps:
+    """The collaborators one `Collector` runs with (Round G step 4).
+
+    The facade constructor takes this single value instead of seven
+    keywords; `services/history/__init__.py` (the only production caller)
+    and the tests build it at the call site.
+    """
+
+    cdp: Any = None
+    repo: Any = None
+    parser: Any = None
+    media: Any = None
+    settings: Optional[dict] = None
+    lease: Any = None
+    memory: Any = None
+
+
+@dataclass(frozen=True, slots=True)
+class TailSigs:
+    """The four DOM signatures of one tick probe.
+
+    `collector_tick.CollectorArchive` computes them once per tick and hands
+    them to `maybe_rename` and `cursor_check` as one value (Round G step 4);
+    the field names match `HistoryRepo.rename_if_same_conversation`'s.
+    """
+
+    head_sig: str = ""
+    tail_sig: str = ""
+    head_any: str = ""
+    tail_any: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class TickIdent:
+    """Whose conversation the tick archives: the partner and my own nick."""
+
+    nick: str
+    my_nick: str = ""

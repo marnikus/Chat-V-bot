@@ -20,6 +20,13 @@ from __future__ import annotations
 import os
 
 from services.undo_world import emit_db_change, restart_world
+from services.wiring_requests import RestartDeps
+
+
+def _deps_of(o) -> RestartDeps:
+    """The world's collaborators as one value — both restart calls below."""
+    return RestartDeps(memory=o._memory, archive=o._archive, labels=o._labels,
+                       undo=o, bus=o._bus)
 
 
 def _announce(host, forward: bool, result) -> None:
@@ -105,9 +112,7 @@ class DbCommands:
                 if result is None:   # the op already said why it did not run
                     return
                 if result.get("ok"):
-                    await restart_world(self._o._memory, self._o._archive,
-                                        self._o._labels, self._o,
-                                        self._o._bus, "delete")
+                    await restart_world(_deps_of(self._o), "delete")
                 _announce(self._o, forward, result)
                 emit_db_change(self._o._bus, "delete", result)
                 return
@@ -116,8 +121,7 @@ class DbCommands:
                 return
             if op in ("create", "load") and result.get("ok") \
                     and not result.get("unchanged"):
-                await restart_world(self._o._memory, self._o._archive,
-                                    self._o._labels, self._o, self._o._bus, op)
+                await restart_world(_deps_of(self._o), op)
             _announce(self._o, forward, result)
             emit_db_change(self._o._bus, op, result)
         self._o._timeline_commit.spawn("db command", work())

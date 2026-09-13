@@ -24,12 +24,13 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Callable, Iterable, Optional
+from typing import Iterable, Optional
 
 from backend import chat_agent_js, chat_text
 from backend.chat_sync import (  # noqa: F401  (re-exported: the seam, §3.1)
     SLICE_RETRIES, SyncOptions, merge_live as _merge_live, run_sync)
+from backend.parser_requests import (  # noqa: F401  (re-exported with the gate)
+    PrivateQuery, SettleSpec)
 from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
                                     MessageRecord,  # noqa: F401
@@ -194,7 +195,7 @@ def _foreign_authors(outs, names: _GateNames) -> tuple:
 
 
 def verify_private(state: dict, nick: str, my_nick: str = "",
-                   items=None, require_private: bool = True) -> PrivateCheck:
+                   query: PrivateQuery = PrivateQuery()) -> PrivateCheck:
     """The gate. `ok` is False unless BOTH steps pass.
 
     RULE 15: this is the only place the private-chat decision is made, and it
@@ -206,7 +207,7 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
     # The guard ORDER is part of the contract: the run panel shows whichever
     # reason fired first, so not_private → no_partner → title → self_chat →
     # authors must stay in that sequence.
-    refusal = _tab_gate(state, names, require_private)
+    refusal = _tab_gate(state, names, query.require_private)
     if refusal is not None:
         return refusal
     refusal = _partner_gate(names)
@@ -217,7 +218,7 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
         return refusal
 
     # ── step 1: exactly two nicks ─────────────────────────────────
-    authors = _authors_of(state, items, names)
+    authors = _authors_of(state, query.items, names)
     if authors is None:
         return names.refuse("no_author_data",
                             "this page cannot tell me who wrote what")
@@ -342,35 +343,34 @@ class ChatParser:
         return raw if isinstance(raw, dict) else {}
 
     async def settle_after_top(self, first_state: dict,
-                               wait_ms: int = 300,
-                               stable_polls: int = 3,
-                               max_wait_s: float = 6.0,
-                               minimum_count: int = 0) -> dict:
+                               spec: Optional[SettleSpec] = None) -> dict:
         """Poll until the pane is at the top and older lines stopped arriving.
 
         The chat loads older history asynchronously when it is scrolled up, so
         the collector must wait for the DOM to settle before it reads. A slow
         or virtualised page must not be mistaken for an empty chat: if the
         conversation had messages before the scroll and the DOM loses them
-        while it re-renders older lines, `minimum_count` keeps us polling until
-        the visible count returns (and stays) above that floor. A page that
-        times out reports `_settled=False` so the caller knows the full scan
-        is incomplete and must be retried.
+        while it re-renders older lines, `spec.minimum_count` keeps us polling
+        until the visible count returns (and stays) above that floor. A page
+        that times out reports `_settled=False` so the caller knows the full
+        scan is incomplete and must be retried. The knobs travel as one
+        `SettleSpec`; None means the defaults.
         """
-        floor = max(0, int(minimum_count or 0))
+        spec = spec or SettleSpec()
+        floor = max(0, int(spec.minimum_count or 0))
         last_count = int(first_state.get("count") or 0)
         stable = 0
-        deadline = asyncio.get_event_loop().time() + max_wait_s
+        deadline = asyncio.get_event_loop().time() + spec.max_wait_s
         state = first_state
-        while stable < stable_polls:
+        while stable < spec.stable_polls:
             state, count, settled = await self._poll_snapshot(floor)
             stable = stable + 1 if settled and count == last_count else 0
             last_count = count
-            state["_settled"] = stable >= stable_polls
-            done = self._settle_exit(state, stable, stable_polls, deadline)
+            state["_settled"] = stable >= spec.stable_polls
+            done = self._settle_exit(state, stable, spec.stable_polls, deadline)
             if done is not None:
                 return done
-            await asyncio.sleep(wait_ms / 1000.0)
+            await asyncio.sleep(spec.wait_ms / 1000.0)
         state["_settled"] = True
         return state
 
@@ -407,35 +407,20 @@ class ChatParser:
 
 
 async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
-                            my_nick: str = "",
-                            require_private: bool = False,
-                            verify_partner: bool = False,
-                            max_messages: Optional[int] = None,
-                            chunk_pause_ms: Optional[int] = None,
-                            should_stop: Optional[Callable[[], bool]] = None,
-                            on_progress: Optional[Callable[[int, int], None]] = None,
-                            now: Optional[datetime] = None,
-                            backfill_older: bool = False,
-                            backfill_wait_s: float = 2.0,
-                            media=None) -> SyncResult:
+                            options: Optional[SyncOptions] = None) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 
-    With `backfill_older=True` the pane is first scrolled to its first message
-    (and put back after the read). This is the “full history from the
+    With `options.backfill_older=True` the pane is first scrolled to its first
+    message (and put back after the read). This is the “full history from the
     beginning” path: the in-page virtualiser only keeps recent nodes, so the
     earliest lines visit the DOM only after scrolling up.
 
     The algorithm itself is in `backend.chat_sync` (see its module docstring
     for the phase map); this signature is the public contract of the archive
     reader and stays put — it is what `services/collector_service` and the
-    COLLECT_HISTORY block call. The keyword arguments are gathered into a
-    `SyncOptions` and handed to `run_sync()`, which returns the same
-    `SyncResult` this function always returned.
+    COLLECT_HISTORY block call. The knobs travel as one typed `SyncOptions`
+    (Round G step 4: the gathering this body used to do now happens at the
+    call sites, which already knew every value by name); `options=None`
+    means all defaults.
     """
-    options = SyncOptions.from_kwargs(
-        my_nick=my_nick, require_private=require_private,
-        verify_partner=verify_partner, max_messages=max_messages,
-        chunk_pause_ms=chunk_pause_ms, should_stop=should_stop,
-        on_progress=on_progress, now=now, backfill_older=backfill_older,
-        backfill_wait_s=backfill_wait_s, media=media)
     return await run_sync(parser, repo, nick, options)

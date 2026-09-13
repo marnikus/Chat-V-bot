@@ -26,9 +26,8 @@ This gives the UI logger everything it needs to answer:
 import json
 from typing import Optional
 
-# Match modes for the (optional) text comparison
-MATCH_CONTAINS = "contains"
-MATCH_EXACT = "exact"
+from backend.probe_requests import (  # noqa: F401  (re-exported: constants moved)
+    MATCH_CONTAINS, MATCH_EXACT, ProbeSpec)
 
 
 def _js_str(value: str) -> str:
@@ -36,37 +35,21 @@ def _js_str(value: str) -> str:
     return json.dumps(str(value), ensure_ascii=False)
 
 
-def build_probe(
-    selector: str,
-    label_selector: Optional[str] = None,
-    match_text: Optional[str] = None,
-    match_mode: str = MATCH_CONTAINS,
-    click: bool = False,
-    click_selector: Optional[str] = None,
-    click_root: bool = False,
-    max_candidates: int = 6,
-) -> str:
+def build_probe(selector: str, spec: Optional[ProbeSpec] = None) -> str:
     """Return a JS expression string that resolves to the probe JSON.
 
-    :param selector:        CSS selector for querySelectorAll.
-    :param label_selector:  optional child CSS selector whose text is used
-                            for the label / text match (falls back to node).
-    :param match_text:      if set, only elements whose label contains (or
-                            exactly equals) this text are considered matches.
-    :param match_mode:      MATCH_CONTAINS or MATCH_EXACT.
-    :param click:           if True, click the resolved click target when a
-                            match is found and clickable.
-    :param click_selector:  optional child CSS selector used as the click
-                            target (e.g. ".user-container" inside user-item).
-    :param click_root:      if True click the root matched node instead of the
-                            label element (used by tab clicks).
-    :param max_candidates:  how many candidate rows to include in the result.
+    :param selector: CSS selector for querySelectorAll.
+    :param spec:     the knobs (label child selector, text match, click
+                     target, candidate sample) as one :class:`ProbeSpec`;
+                     None means "plain visibility probe, no click".
     """
+    spec = spec or ProbeSpec()
     click_js = ""
-    if click:
-        if click_selector:
-            target_expr = ("(node.querySelector(%s) || el)" % _js_str(click_selector))
-        elif click_root:
+    if spec.click:
+        if spec.click_selector:
+            target_expr = ("(node.querySelector(%s) || el)"
+                           % _js_str(spec.click_selector))
+        elif spec.click_root:
             target_expr = "node"
         else:
             target_expr = "el"
@@ -151,11 +134,12 @@ def build_probe(
 })()
 """ % {
         "selector": _js_str(selector),
-        "label_selector": _js_str(label_selector) if label_selector else "null",
-        "match_text": _js_str(match_text) if match_text else "null",
-        "exact": "true" if match_mode == MATCH_EXACT else "false",
+        "label_selector": (_js_str(spec.label_selector)
+                           if spec.label_selector else "null"),
+        "match_text": _js_str(spec.match_text) if spec.match_text else "null",
+        "exact": "true" if spec.match_mode == MATCH_EXACT else "false",
         "click_js": click_js,
-        "maxcand": int(max_candidates),
+        "maxcand": int(spec.max_candidates),
     }
     return expr
 

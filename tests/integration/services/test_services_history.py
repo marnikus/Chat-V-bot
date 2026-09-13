@@ -25,6 +25,7 @@ from backend.history_models import MessageRecord, fingerprint  # noqa: E402
 from services.history import (HistoryService,  # noqa: E402
                                       HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT,
                                       OLD_MAX_FILE_MB, _merge, _db_stem)
+from services.history import HistoryDeps  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "tests"))
@@ -70,8 +71,7 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
         self.cfg.set("history", "media", media_cfg)
         self.page = AddBindingCdp([raw(f"m{i}", idx=i) for i in range(4)])
         self.db_path = os.path.join(self.dir, "history.db")
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_path)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await self.service.init()
 
     async def asyncTearDown(self):
@@ -103,8 +103,7 @@ class TestSettings(ServiceCase):
     async def test_stored_values_override_defaults(self):
         cfg = ConfigManager(os.path.join(self.dir, "cfg2.json"))
         cfg.set("history", {"enabled": False, "media": {"max_file_mb": 50}})
-        service = HistoryService(cdp=self.page, config=cfg,
-                                 db_path=os.path.join(self.dir, "h2.db"))
+        service = HistoryService(HistoryDeps(cdp=self.page, config=cfg, db_path=os.path.join(self.dir, "h2.db")))
         await service.init()
         self.assertFalse(service.enabled)
         self.assertEqual(service.settings()["media"]["max_file_mb"], 50)
@@ -113,8 +112,7 @@ class TestSettings(ServiceCase):
     async def test_old_2mb_cap_is_migrated_up(self):
         cfg = ConfigManager(os.path.join(self.dir, "cfg3.json"))
         cfg.set("history", {"media": {"max_file_mb": OLD_MAX_FILE_MB}})
-        service = HistoryService(cdp=self.page, config=cfg,
-                                 db_path=os.path.join(self.dir, "h3.db"))
+        service = HistoryService(HistoryDeps(cdp=self.page, config=cfg, db_path=os.path.join(self.dir, "h3.db")))
         await service.init()
         self.assertEqual(service.settings()["media"]["max_file_mb"],
                          MAX_FILE_MB_DEFAULT)
@@ -123,8 +121,7 @@ class TestSettings(ServiceCase):
     async def test_larger_cap_is_kept(self):
         cfg = ConfigManager(os.path.join(self.dir, "cfg4.json"))
         cfg.set("history", {"media": {"max_file_mb": 44}})
-        service = HistoryService(cdp=self.page, config=cfg,
-                                 db_path=os.path.join(self.dir, "h4.db"))
+        service = HistoryService(HistoryDeps(cdp=self.page, config=cfg, db_path=os.path.join(self.dir, "h4.db")))
         await service.init()
         self.assertEqual(service.settings()["media"]["max_file_mb"], 44)
         await service.close()
@@ -186,8 +183,7 @@ class TestWorldSettings(ServiceCase):
         await asyncio.sleep(0.05)   # let the async app_settings write land
         await self.service.db.commit()
         # a NEW service on the same world must restore the world's nick
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=self.db_path)
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await service2.init()
         self.assertEqual(service2.my_nick, "WorldNick")
         await service2.close()
@@ -201,8 +197,7 @@ class TestWorldSettings(ServiceCase):
             "VALUES('media_max_file_mb', 'NaN', '2026-01-01')")
         await self.service.db.commit()
         # reload — must not raise and must keep defaults
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=self.db_path)
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await service2.init()
         self.assertNotEqual(service2.my_nick, None)
         await service2.close()
@@ -240,8 +235,7 @@ class TestGaze(ServiceCase):
         self.service.collector._last_sync_count = 3
         await self.service.save_gaze()
 
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=self.db_path)
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await service2.init()
         self.assertEqual(service2.collector._nick, "Partner")
         self.assertEqual(service2.collector._added, 7)
@@ -272,8 +266,7 @@ class TestMigration(ServiceCase):
     async def test_prunes_ghost_recent_paths(self):
         self.cfg.set_state(db_recent=[os.path.join(self.dir, "gone.db"),
                                       self.db_path])
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=self.db_path)
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         await service2.db.init()      # NOT full init: init() runs migrate_install
         report = await service2.migrate_install()
         self.assertTrue(report["recent_pruned"])
@@ -321,8 +314,7 @@ class TestMigration(ServiceCase):
         memory = UserMemory(legacy)
         await memory.init()
         await memory.upsert_user(UserRecord(nick="New"))
-        service2 = HistoryService(cdp=self.page, config=self.cfg,
-                                  db_path=self.db_path)
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path))
         service2.memory = memory
         await service2.init()          # init() runs migrate_install()
         # world row wins on conflict; legacy-only row added; file renamed
@@ -407,8 +399,7 @@ class TestLifecycle(ServiceCase):
         # disabled
         cfg = ConfigManager(os.path.join(self.dir, "cfg5.json"))
         cfg.set("history", {"enabled": False})
-        service2 = HistoryService(cdp=self.page, config=cfg,
-                                  db_path=os.path.join(self.dir, "h5.db"))
+        service2 = HistoryService(HistoryDeps(cdp=self.page, config=cfg, db_path=os.path.join(self.dir, "h5.db")))
         await service2.init()
         service2.start()
         self.assertIsNone(service2._task)

@@ -21,6 +21,7 @@ if ROOT not in sys.path:
 from backend.config_manager import ConfigManager  # noqa: E402
 from services.db_service import DbManager  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 
 
 async def wait_for(box, timeout=5.0):
@@ -40,7 +41,7 @@ def make_config(tmpdir: str) -> ConfigManager:
 
 
 async def make_service(cfg: ConfigManager, db_path: str) -> HistoryService:
-    svc = HistoryService(cdp=None, config=cfg, db_path=db_path)
+    svc = HistoryService(HistoryDeps(cdp=None, config=cfg, db_path=db_path))
     await svc.init()
     return svc
 

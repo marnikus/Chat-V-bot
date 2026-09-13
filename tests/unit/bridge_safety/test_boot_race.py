@@ -35,6 +35,7 @@ from bridge.context import BridgeContext  # noqa: E402
 from bridge.history_bridge import HistoryBridge  # noqa: E402
 from bridge.people_bridge import PeopleBridge  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 PEOPLE = ("Mloni", "Bea", "Cy")
@@ -53,7 +54,7 @@ async def seed_world(path: str) -> None:
     for nick in PEOPLE:
         await memory.upsert_user(UserRecord(nick=nick))
     await memory.close()
-    archive = HistoryService(cdp=FakeCdp(), db_path=path)
+    archive = HistoryService(HistoryDeps(cdp=FakeCdp(), db_path=path))
     await archive.db.init()
     for nick in PEOPLE:                       # the real write path
         await archive.repo.ensure_person(nick)
@@ -67,8 +68,7 @@ class BootRaceCase(unittest.IsolatedAsyncioTestCase):
         await seed_world(self.path)
         # Both stores exist but are CLOSED — exactly the state the page sees.
         self.memory = UserMemory(self.path)
-        self.archive = HistoryService(cdp=FakeCdp(), db_path=self.path,
-                                      memory=self.memory)
+        self.archive = HistoryService(HistoryDeps(cdp=FakeCdp(), db_path=self.path, memory=self.memory))
         self.ctx = BridgeContext(memory=self.memory, bus=EventBus())
         self.ctx.archive = self.archive
 

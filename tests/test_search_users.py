@@ -31,6 +31,7 @@ from actions.base_action import ActionResult  # noqa: E402
 from actions.search_users import SearchUsers  # noqa: E402
 from actions.take_person import TakePerson  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -295,7 +296,7 @@ class TestEngineSearchUsers(unittest.TestCase):
             async with MemHarness() as mem:
                 cdp = SearchCDP()
                 logs, details = [], []
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
                 eng.log_msg.connect(lambda m: logs.append(m))
                 eng.debug_msg.connect(lambda m, lvl: details.append(m))
                 eng.load_stack([{"block_id": "SEARCH_USERS", "text": "Lena",
@@ -324,7 +325,7 @@ class TestEngineSearchUsers(unittest.TestCase):
                     ("2026-09-01T10:00:00", "Bella"))
                 await mem._db.commit()
                 cdp = SearchCDP()
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
                 eng.load_stack([
                     {"block_id": "TAKE_PERSON", "pick_mode": "order_first"},
                     {"block_id": "SEARCH_USERS", "text": "find {{nick}}"}])

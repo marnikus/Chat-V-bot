@@ -31,7 +31,7 @@ from backend.message_injector_field import (
 from backend.message_injector_field import (  # noqa: F401  # pylint: disable=unused-import
     _js, _same_text)
 from backend.message_injector_send import SEND_SELECTOR, click_send
-from backend.message_injector_type import _run_type_strategies
+from backend.message_injector_type import _run_type_strategies, _TypeCtx
 # tests/test_search_users.py runs inspect.getsource(injector._try_set_value),
 # which follows __module__ to the sibling; re-export only.
 from backend.message_injector_type import (  # noqa: F401  # pylint: disable=unused-import
@@ -57,8 +57,7 @@ async def type_message(cdp: CDPClient, text: str, typing_speed_ms: int = 30,
     if not text:
         _rep(report, "⚠ Message text is empty — nothing typed", "warn")
         return False
-    return await _run_type_strategies(cdp, sel, text, typing_speed_ms,
-                                      report, "message")
+    return await _run_type_strategies(_TypeCtx(cdp, sel, text, typing_speed_ms, report, "message"))
 
 
 async def type_search(cdp: CDPClient, text: str,
@@ -101,4 +100,4 @@ async def type_search(cdp: CDPClient, text: str,
             return False
         _rep(report, "✅ Search field clicked — cursor inside", "success")
 
-    return await _run_type_strategies(cdp, sel, text, 0, report, "search")
+    return await _run_type_strategies(_TypeCtx(cdp, sel, text, 0, report, "search"))

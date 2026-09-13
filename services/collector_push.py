@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.chat_parser import verify_private
+from backend.chat_parser import PrivateQuery, verify_private
 from services.collector_states import CollectorState
 
 log = logging.getLogger("chatbot")
@@ -71,7 +71,7 @@ class PushPath:
              "partner": data.get("partner") or self._o._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
-            self._o._nick, self._o.my_nick, items=items)
+            self._o._nick, self._o.my_nick, PrivateQuery(items=items))
 
     async def _append_push(self, items: list):
         """Store the pushed records; None when the write raised."""

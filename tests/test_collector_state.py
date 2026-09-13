@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector, CollectorState  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import fingerprint  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
@@ -52,12 +53,10 @@ class CollectorCase(unittest.IsolatedAsyncioTestCase):
         self.repo = HistoryRepo(self.db, session_id="s")
         self.page = ConnectedPage([raw(f"m{i}", idx=i) for i in range(4)])
         self.parser = ChatParser(self.page, chunk_size=10, chunk_pause_ms=0)
-        self.col = Collector(cdp=self.page, repo=self.repo,
-                             parser=self.parser, media=None,
-                             settings={"heartbeat_ms": 1000,
+        self.col = Collector(CollectorDeps(cdp=self.page, repo=self.repo, parser=self.parser, media=None, settings={"heartbeat_ms": 1000,
                                        "idle_heartbeat_ms": 3000,
                                        "throttle_factor": 4,
-                                       "my_nick": "Me"})
+                                       "my_nick": "Me"}))
         self.col.now = lambda: NOW
         self.statuses = []
         self.col.status_changed.connect(

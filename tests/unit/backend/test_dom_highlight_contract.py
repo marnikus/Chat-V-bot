@@ -24,6 +24,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
+from backend.probe_requests import (  # noqa: E402
+    ClickProbeSpec, FindProbeSpec, HighlightSpec)
 from backend.dom_highlight import (  # noqa: E402
     COLOR_CLICK,
     COLOR_FIND,
@@ -59,21 +61,14 @@ class JsCheck(unittest.TestCase):
 class TestBuildProbes(JsCheck):
 
     def test_find_probe_survives_hostile_captions_and_selectors(self):
-        expr = build_find_probe(
-            selector='div.i[title="it’s"]',
-            label_selector='.t"q',
-            match_text='line1\nline2 \\ "x',
-            caption='FÜND "红"',
-        )
+        expr = build_find_probe(selector='div.i[title="it’s"]', spec=FindProbeSpec(label_selector='.t"q', match_text='line1\nline2 \\ "x', caption='FÜND "红"'))
         self.check_valid_js(expr)
         self.assertIn(STASH_KEY, expr,
                      "the find phase must stash the element")
 
     def test_click_probe_stages_then_clicks(self):
-        staged = build_click_probe(click_selector="button.go",
-                                   highlight=True, highlight_ms=900,
-                                   do_click=False)
-        click = build_click_probe(highlight=False, do_click=True)
+        staged = build_click_probe("button.go", ClickProbeSpec(highlight=True, highlight_ms=900, do_click=False))
+        click = build_click_probe(spec=ClickProbeSpec(highlight=False, do_click=True))
         self.check_valid_js(staged)
         self.check_valid_js(click)
         # the real switch is the doClick flag (the click() call itself is
@@ -84,9 +79,7 @@ class TestBuildProbes(JsCheck):
                       "the click probe must click")
 
     def test_highlight_probe_never_clicks_or_touches_the_stash(self):
-        expr = build_highlight_probe("div.x", color=COLOR_CLICK,
-                                     caption="COLLECT", highlight_ms=800,
-                                     clear_first=True)
+        expr = build_highlight_probe("div.x", HighlightSpec(color=COLOR_CLICK, caption="COLLECT", highlight_ms=800, clear_first=True))
         self.check_valid_js(expr)
         self.assertNotIn(".click()", expr)
         self.assertIn(COLOR_CLICK, expr, "custom colour must be used")
@@ -97,7 +90,7 @@ class TestBuildProbes(JsCheck):
         self.check_valid_js(expr)       # trivially valid, no interpolation
 
     def test_highlight_expiry_is_encoded(self):
-        expr = build_find_probe("div", highlight=True, highlight_ms=1500)
+        expr = build_find_probe("div", FindProbeSpec(highlight=True, highlight_ms=1500))
         self.assertIn("1500", expr)
 
 

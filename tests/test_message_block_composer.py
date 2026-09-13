@@ -26,6 +26,7 @@ import actions.type_message as type_message_mod  # noqa: E402
 from actions.base_action import ActionResult  # noqa: E402
 from actions.type_message import TypeMessage  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 import backend.message_injector as injector  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.cdp_client import CDPClient  # noqa: E402
@@ -189,8 +190,7 @@ class TestComposerMirror(unittest.TestCase):
                 try:
                     cfg = ConfigManager(os.path.join(tmp, "cfg.json"))
                     cdp = CDPClient()
-                    eng = ActionEngine(cdp=cdp, memory=mem,
-                                       criteria=CriteriaEngine())
+                    eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=CriteriaEngine()))
                     br = Bridge(cdp=cdp, memory=mem, criteria=CriteriaEngine(),
                                 engine=eng, config=cfg)
                     br.save_message("Hello from the window")

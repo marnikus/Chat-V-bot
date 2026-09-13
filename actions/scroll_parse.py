@@ -22,7 +22,8 @@ The people it collects become the engine's messaging queue, which STEP 4
 """
 
 import logging
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
@@ -87,6 +88,37 @@ _KNOB_CASTS = (
 _RETIRED_KNOBS = ("use_panel_filters", "skip_if_backlog", "backlog_threshold")
 
 
+@dataclass(frozen=True, slots=True)
+class ScrollCallbacks:
+    """The four hooks of one scroll run (Round G step 4).
+
+    `to_scroll_options`/`build_parser` take this instead of threading four
+    callback keywords; every field may stay None — the engine fills what the
+    caller left out (`_hooks`).
+    """
+
+    log_cb: Any = None
+    on_collect: Any = None
+    on_reject: Any = None
+    should_stop: Any = None
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineRun:
+    """One `run_pipeline` request: who drives it and over what scope.
+
+    The fields are the old keyword parameters verbatim, in their old order;
+    `None` everywhere means "normal collection, hooks from the engine".
+    """
+
+    engine: Any = None
+    #: accepted for call-compatibility and ignored (see `build_filter`)
+    panel_criteria: Any = None
+    known_messaged: Any = None
+    seek_nicks: Any = None
+    cbs: Optional[ScrollCallbacks] = None
+
+
 class ScrollParse(BaseAction):
     block_id = "SCROLL_PARSE"
     name = "Scroll & Parse Users"
@@ -112,7 +144,7 @@ class ScrollParse(BaseAction):
     filter_guest: str
     filter_anonymous: str
 
-    def __init__(self, max_scrolls: int = 50, scroll_pause_ms: int = 800,  # pylint: disable=unused-argument
+    def __init__(self, max_scrolls: int = 50, scroll_pause_ms: int = 800,  # pylint: disable=unused-argument  # quality-override: params=20 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  scroll_delta_y: int = 300,
                  viewport_selector: str =
                  "cdk-virtual-scroll-viewport.users-list-viewport",
@@ -159,9 +191,8 @@ class ScrollParse(BaseAction):
             panel_criteria=None,
         )
 
-    def to_scroll_options(self, panel_criteria=None, log_cb=None,
-                          on_collect=None, on_reject=None,
-                          should_stop=None) -> ScrollOptions:
+    def to_scroll_options(self, panel_criteria=None,
+                          cbs: Optional[ScrollCallbacks] = None) -> ScrollOptions:
         """This block's settings, as the backend's own options value.
 
         A SCROLL_PARSE block IS a scroll run's configuration, so the
@@ -170,6 +201,7 @@ class ScrollParse(BaseAction):
         here. `panel_criteria` is accepted and ignored, exactly as in
         `build_filter`.
         """
+        cbs = cbs or ScrollCallbacks()
         return ScrollOptions(
             viewport_sel=self.viewport_selector,
             scroll_dy=self.scroll_delta_y,
@@ -183,22 +215,18 @@ class ScrollParse(BaseAction):
             highlight_enabled=self.highlight_enabled,
             highlight_ms=self.highlight_ms,
             confirm_pause_ms=self.confirm_pause_ms,
-            on_collect=on_collect,
+            on_collect=cbs.on_collect,
             # RULE 6: only a purge that is switched on may destroy records
-            on_reject=on_reject if self.purge_rejected else None,
-            should_stop=should_stop,
-            log_cb=log_cb,
+            on_reject=cbs.on_reject if self.purge_rejected else None,
+            should_stop=cbs.should_stop,
+            log_cb=cbs.log_cb,
         )
 
     def build_parser(self, cdp: CDPClient, panel_criteria=None,
-                     log_cb=None, on_collect=None, on_reject=None,
-                     should_stop=None) -> ScrollParser:
+                     cbs: Optional[ScrollCallbacks] = None) -> ScrollParser:
         return ScrollParser.from_options(
             cdp,
-            self.to_scroll_options(panel_criteria=panel_criteria,
-                                   log_cb=log_cb, on_collect=on_collect,
-                                   on_reject=on_reject,
-                                   should_stop=should_stop))
+            self.to_scroll_options(panel_criteria=panel_criteria, cbs=cbs))
 
     @staticmethod
     async def _read_unmessaged(engine) -> set:
@@ -247,12 +275,8 @@ class ScrollParse(BaseAction):
                 should_stop = getattr(engine, "is_stopping", None)
         return on_collect, on_reject, should_stop
 
-    async def run_pipeline(self, cdp: CDPClient, engine: Optional[object] = None,
-                           panel_criteria=None,
-                           known_messaged: set | None = None,
-                           on_collect=None, on_reject=None,
-                           should_stop=None,
-                           seek_nicks: set | None = None) -> CollectResult:
+    async def run_pipeline(self, cdp: CDPClient,
+                           run: Optional[PipelineRun] = None) -> CollectResult:
         """Run scroll → filter → collect and return the ordered people.
 
         Three steps: decide the mode, let `ScrollParser` run the passes, report
@@ -260,18 +284,20 @@ class ScrollParse(BaseAction):
         `execute()` and a caller driving `run_pipeline()` directly always see
         the same story.
 
-        :param panel_criteria: accepted for call-compatibility and ignored.
-        :param seek_nicks: scroll-only targets. When omitted they are read
-            from the engine's People Memory.
+        :param run: the request value — engine, scope and callbacks
+            (`PipelineRun`); None means a plain engine-less collection.
+            `run.panel_criteria` is accepted for call-compatibility and
+            ignored; `run.seek_nicks` omitted are read from the engine's
+            People Memory.
         """
-        seek = await self._decide_mode(engine, seek_nicks)
-        self._say(engine, f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
-                         f"(max {self.max_scrolls} scrolls, "
-                         f"{self.scroll_pause_ms} ms pause)", "info")
-        result = await self._collect(cdp, engine, panel_criteria,
-                                     known_messaged, seek, on_collect,
-                                     on_reject, should_stop)
-        self._report_result(engine, result, seek)
+        run = run or PipelineRun()
+        seek = await self._decide_mode(run.engine, run.seek_nicks)
+        self._say(run.engine,
+                  f"📜 STEP 1 — scrolling '{self.viewport_selector}' "
+                  f"(max {self.max_scrolls} scrolls, "
+                  f"{self.scroll_pause_ms} ms pause)", "info")
+        result = await self._collect(cdp, run, seek)
+        self._report_result(run.engine, result, seek)
         return result
 
     async def _decide_mode(self, engine, seek_nicks):
@@ -296,17 +322,17 @@ class ScrollParse(BaseAction):
                           "list — collecting new people as usual", "info")
         return None
 
-    async def _collect(self, cdp, engine, panel_criteria, known_messaged,
-                       seek, on_collect, on_reject, should_stop) -> CollectResult:
+    async def _collect(self, cdp, run: PipelineRun, seek) -> CollectResult:
+        cbs = run.cbs or ScrollCallbacks()
         on_collect, on_reject, should_stop = self._hooks(
-            engine, on_collect, on_reject, should_stop)
-        parser = self.build_parser(cdp, panel_criteria,
-                                   log_cb=self._binder(engine),
-                                   on_collect=on_collect,
-                                   on_reject=on_reject,
-                                   should_stop=should_stop)
+            run.engine, cbs.on_collect, cbs.on_reject, cbs.should_stop)
+        parser = self.build_parser(
+            cdp, run.panel_criteria,
+            ScrollCallbacks(log_cb=self._binder(run.engine),
+                            on_collect=on_collect, on_reject=on_reject,
+                            should_stop=should_stop))
         result = await parser.collect(min_new_users=self.min_new_users,
-                                      known_messaged=known_messaged or set(),
+                                      known_messaged=run.known_messaged or set(),
                                       seek_nicks=seek)
         self.last_result = result
         return result
@@ -336,7 +362,7 @@ class ScrollParse(BaseAction):
                       engine: Optional[object] = None) -> str:
         await self.pre_delay()
         panel = getattr(engine, "criteria", None) if engine else None
-        result = await self.run_pipeline(cdp, engine, panel_criteria=panel)
+        result = await self.run_pipeline(cdp, PipelineRun(engine=engine, panel_criteria=panel))
         if result.seeking and not result.collected:
             if engine:
                 engine.report("⚠ Scroll-only: no un-messaged person from the "

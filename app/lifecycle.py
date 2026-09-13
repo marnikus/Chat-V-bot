@@ -2,18 +2,36 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 log = logging.getLogger("chatbot")
 
 
+@dataclass(frozen=True, slots=True)
+class AppDeps:
+    """The six collaborators one application lifecycle binds together.
+
+    The fields are the old constructor parameters verbatim, in their old
+    order (Round G step 4); `main.py` and the lifecycle tests build this.
+    """
+
+    app: Any
+    cdp: Any
+    memory: Any
+    engine: Any
+    history: Any
+    bridge: Any
+
+
 class ApplicationLifecycle:
-    def __init__(self, app, cdp, memory, engine, history, bridge):
-        self.app = app
-        self.cdp = cdp
-        self.memory = memory
-        self.engine = engine
-        self.history = history
-        self.bridge = bridge
+    def __init__(self, deps: AppDeps):
+        self.app = deps.app
+        self.cdp = deps.cdp
+        self.memory = deps.memory
+        self.engine = deps.engine
+        self.history = deps.history
+        self.bridge = deps.bridge
         self._shutdown_started = False
 
     def bind(self, window) -> None:

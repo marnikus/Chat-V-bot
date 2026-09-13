@@ -182,7 +182,7 @@ def _router_method(fn_or_name=None, **kwargs):
 
 
 @_router_method
-def __init__(self, cdp=None, memory=None, criteria=None, engine=None,
+def __init__(self, cdp=None, memory=None, criteria=None, engine=None,  # quality-override: params=8 reason=Qt compat facade: **_legacy absorbs the pre-Router boot keyword set
              config=None, presets=None, parent=None, **_legacy):
     QObject.__init__(self, parent)
     if presets is None and config is not None:

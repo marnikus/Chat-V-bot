@@ -15,6 +15,7 @@ import tempfile
 
 from actions.base_action import ActionResult, ActionRegistry, BaseAction
 from services.run import RunCoordinator
+from services.run import RunDeps  # noqa: E402
 from stores.user_memory import UserRecord
 
 try:
@@ -291,9 +292,7 @@ class EngineHarness:
             kwargs["hooks"] = self._hooks
         if self._retry is not None:
             kwargs["retry_policy"] = self._retry
-        self.engine = RunCoordinator(
-            cdp=None, memory=self.memory, criteria=None, **kwargs
-        )
+        self.engine = RunCoordinator(RunDeps(cdp=None, memory=self.memory, criteria=None, **kwargs))
         self.engine.log_msg.connect(lambda m: self.logs.append(m))
         self.engine.debug_msg.connect(lambda m, l: self.debug.append((m, l)))
         self.engine.user_complete.connect(

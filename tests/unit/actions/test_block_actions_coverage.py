@@ -455,18 +455,19 @@ class TestAttachImageBlock(unittest.TestCase):
         mod.attach_image = self._spy
         self.addCleanup(lambda: setattr(mod, "attach_image", self._orig))
 
-    async def _spy(self, cdp, folder_path, file_pattern, mode, simulate_dialog,
-                   verify_timeout_ms, highlight_enabled, confirm_pause_ms,
-                   report):
-        self.args = dict(cdp=cdp, folder_path=folder_path,
-                         file_pattern=file_pattern, mode=mode,
-                         simulate_dialog=simulate_dialog,
-                         verify_timeout_ms=verify_timeout_ms,
-                         highlight_enabled=highlight_enabled,
-                         confirm_pause_ms=confirm_pause_ms, report=report)
+    async def _spy(self, cdp, folder_path="", options=None, **legacy):
+        from backend.media_handler import AttachOptions
+        opts = options or AttachOptions(folder_path=folder_path, **legacy)
+        self.args = dict(cdp=cdp, folder_path=opts.folder_path,
+                         file_pattern=opts.file_pattern, mode=opts.mode,
+                         simulate_dialog=opts.simulate_dialog,
+                         verify_timeout_ms=opts.verify_timeout_ms,
+                         highlight_enabled=opts.highlight_enabled,
+                         confirm_pause_ms=opts.confirm_pause_ms,
+                         report=opts.report)
         return self.result
 
-    def test_all_settings_reach_the_pipeline_positionally(self):
+    def test_all_settings_reach_the_pipeline_as_one_options_value(self):
         from backend.media_handler import DEFAULT_FILE_PATTERN
         engine = Recorder()
         block = AttachImage(folder_path="/tmp/x", file_pattern="",

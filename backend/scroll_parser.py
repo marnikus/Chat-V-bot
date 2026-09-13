@@ -40,7 +40,6 @@ import dataclasses
 import logging
 
 from backend.cdp_client import CDPClient
-from backend.person_filter import PersonFilter
 from backend.scroll_parser_dom import ScrollDom
 from backend.scroll_parser_judge import PersonJudge
 from backend.scroll_parser_loop import ScrollLoop
@@ -60,46 +59,25 @@ __all__ = ["STOPPED", "CollectResult", "PassState", "ScrollOptions",
 class ScrollParser:
     """Scroll through the virtual user list, filtering and collecting people."""
 
-    # The 16 knob arguments are consumed BY NAME (the `locals()` snapshot
-    # below), which pylint cannot see — hence the targeted disable. The
-    # knob↔field parity is pinned by test_scroll_parser_options.py
-    # (SP#1: every constructor knob must exist as a ScrollOptions field with
-    # the same default), so the comprehension cannot silently drop a knob.
-    def __init__(self, cdp: CDPClient, criteria=None,  # pylint: disable=unused-argument
-                 viewport_sel: str = "cdk-virtual-scroll-viewport.users-list-viewport",
-                 scroll_dy: int = 300, pause_ms: int = 800,
-                 stall_threshold: int = 3, max_scrolls: int = 50,
-                 load_timeout_ms: int = 2500, poll_ms: int = 150,
-                 person_filter: PersonFilter | None = None,
-                 person_selector: str = "user-item",
-                 nick_selector: str = ".primary-text",
-                 highlight_enabled: bool = True,
-                 highlight_ms: int = 900,
-                 confirm_pause_ms: int = 500,
-                 on_collect=None,
-                 on_reject=None,
-                 should_stop=None,
-                 log_cb=None):
-        # The parity test pins every constructor knob to a ScrollOptions
-        # field of the same name and default, so the options object is built
-        # straight from the wire values — one source, no hand-threading.
-        values = locals()
-        self.options = ScrollOptions(
-            **{f.name: values[f.name] for f in dataclasses.fields(ScrollOptions)})
+    def __init__(self, cdp: CDPClient, options: ScrollOptions | None = None,
+                 criteria=None):
+        # One configuration surface (Round G step 4): the 19-knob constructor
+        # the G2 split kept is retired — every knob travels inside
+        # `ScrollOptions`, so there is no second default list left to drift
+        # and the parity test that policed it is obsolete by construction.
+        self.options = options or ScrollOptions()
         self._cdp = cdp
         self._criteria = criteria
-        self._filter = person_filter
-        self._log_cb = log_cb                  # reassignable: set_log_cb()
+        self._filter = self.options.person_filter
+        self._log_cb = self.options.log_cb     # reassignable: set_log_cb()
         self.known_nicks: set[str] = set()
         self._dom, self._judge = ScrollDom(self), PersonJudge(self)
 
     @classmethod
     def from_options(cls, cdp: CDPClient, options: ScrollOptions,
                      criteria=None) -> "ScrollParser":
-        """The constructor new code should use: one config value, not 19."""
-        return cls(cdp, criteria, **{
-            f.name: getattr(options, f.name)
-            for f in dataclasses.fields(options)})
+        """G2-era alias: the constructor itself is options-first now."""
+        return cls(cdp, options, criteria)
 
     # ── the knobs the run reads (see `ScrollOptions`) ────────────
     @property

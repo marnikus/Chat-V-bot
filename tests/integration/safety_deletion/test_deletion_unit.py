@@ -13,9 +13,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
 from services.db_deletion import (  # noqa: E402
-    DeletionOutcome, build_deletion_inventory, canonical,
-    classify_candidate, collect_discovered_files, is_same_file, is_within,
-    plan_deletion, prune_empty_dirs, unlink_one)
+    CandidateContext, DeletionOutcome, DeletionSpec,
+    build_deletion_inventory, canonical, classify_candidate,
+    collect_discovered_files, is_same_file, is_within, plan_deletion,
+    prune_empty_dirs, unlink_one)
 
 
 def write(path, data=b"x"):
@@ -241,88 +242,47 @@ class TestClassify(unittest.TestCase):
             os.symlink(a, link)
         except OSError:
             self.skipTest("no symlink")
-        v = classify_candidate(candidate_abs=link, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=link, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:symlink")
 
     def test_outside_root(self):
         outside = write(os.path.join(self.tmp, "out.jpg"))
-        v = classify_candidate(candidate_abs=outside, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=outside, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:outside_root")
 
     def test_root_itself(self):
-        v = classify_candidate(candidate_abs=self.base, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=self.base, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:root")
 
     def test_other_world_folder(self):
         keep = write(os.path.join(self.of, "k.jpg"))
-        v = classify_candidate(candidate_abs=keep, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset([self.of]),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=keep, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset([self.of])), is_discovered=False)
         self.assertEqual(v, "retain:other_world_folder")
         # exact folder match
-        v2 = classify_candidate(candidate_abs=self.of, base_abs=self.base,
-                                victim_folder_abs=self.vf,
-                                folder_exclusive=True, keep=frozenset(),
-                                other_world_folders=frozenset([self.of]),
-                                is_discovered=False)
+        v2 = classify_candidate(candidate_abs=self.of, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset([self.of])), is_discovered=False)
         self.assertEqual(v2, "retain:other_world_folder")
 
     def test_shared(self):
         a = write(os.path.join(self.vf, "a.jpg"))
-        v = classify_candidate(candidate_abs=a, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True,
-                               keep=frozenset([os.path.abspath(a)]),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset([os.path.abspath(a)]), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:shared")
 
     def test_ambiguous_discovered(self):
         a = write(os.path.join(self.vf, "a.jpg"))
-        v = classify_candidate(candidate_abs=a, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=False, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=True)
+        v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=False, keep=frozenset(), other_world_folders=frozenset()), is_discovered=True)
         self.assertEqual(v, "retain:ambiguous_folder")
 
     def test_missing_and_not_file(self):
         missing = os.path.join(self.vf, "gone.jpg")
-        v = classify_candidate(candidate_abs=missing, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=missing, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:missing")
         # dir itself
-        v2 = classify_candidate(candidate_abs=self.vf, base_abs=self.base,
-                                victim_folder_abs=self.vf,
-                                folder_exclusive=True, keep=frozenset(),
-                                other_world_folders=frozenset(),
-                                is_discovered=False)
+        v2 = classify_candidate(candidate_abs=self.vf, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v2, "retain:not_file")
 
     def test_remove(self):
         a = write(os.path.join(self.vf, "a.jpg"))
-        v = classify_candidate(candidate_abs=a, base_abs=self.base,
-                               victim_folder_abs=self.vf,
-                               folder_exclusive=True, keep=frozenset(),
-                               other_world_folders=frozenset(),
-                               is_discovered=False)
+        v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "remove")
 
 
@@ -336,12 +296,7 @@ class TestPlan(unittest.TestCase):
         b = write(os.path.join(vf, "b.jpg"))
         shared = write(os.path.join(base, "s.jpg"))
         inv = types.SimpleNamespace(worlds=[], complete=True)
-        plan = plan_deletion(victim_abs="/tmp/v.db",
-                             victim_folder_abs=vf, media_base_abs=base,
-                             footprint_files={a, shared},
-                             discovered_files={b},
-                             keep={shared}, folder_exclusive=True,
-                             other_world_folders=set(), inventory=inv)
+        plan = plan_deletion(DeletionSpec(victim_abs="/tmp/v.db", victim_folder_abs=vf, media_base_abs=base, footprint_files={a, shared}, discovered_files={b}, keep={shared}, folder_exclusive=True, other_world_folders=set(), inventory=inv))
         self.assertIn(os.path.abspath(a), plan.candidates)
         self.assertIn(os.path.abspath(b), plan.candidates)
         self.assertIn(os.path.abspath(shared), plan.retained)

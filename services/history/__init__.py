@@ -6,6 +6,7 @@ from typing import Optional
 from backend.chat_parser import ChatParser
 from backend.history_query import HistoryQuery
 from services.collector_service import Collector, DEFAULTS as COLLECTOR_DEFAULTS
+from services.collector_states import CollectorDeps
 from stores.history_db import HistoryDB
 from stores.history_repo import HistoryRepo
 from stores.media_store import MediaStore
@@ -15,19 +16,20 @@ from .export import HistoryExportService
 from .mutate import HistoryMutateService
 from .query import (HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT, OLD_MAX_FILE_MB,
                     HistoryQueryService, _db_stem, _merge)
+from .requests import HistoryDeps
 
 
 class HistoryService(HistoryQueryService, HistoryMutateService, HistoryExportService):
-    def __init__(self, cdp, config=None, db_path: Optional[str] = None,
-                 session_id: str = "", memory=None, labels=None):
+    def __init__(self, deps: HistoryDeps):
+        cdp = deps.cdp
         self.cdp = cdp
-        self.config = config
-        self.session_id = session_id or ""
-        self.memory = memory
-        self._labels = labels
+        self.config = deps.config
+        self.session_id = deps.session_id or ""
+        self.memory = deps.memory
+        self._labels = deps.labels
         self._settings = _merge(HISTORY_DEFAULTS, self._stored("history"))
-        if db_path:
-            self._settings["db_path"] = db_path
+        if deps.db_path:
+            self._settings["db_path"] = deps.db_path
         self._migrate_media_cap()
         self.db = HistoryDB(self._settings["db_path"], use_fts=bool(self._settings["use_fts"]))
         media = self._settings["media"]
@@ -36,7 +38,7 @@ class HistoryService(HistoryQueryService, HistoryMutateService, HistoryExportSer
         self.query = HistoryQuery(self.db)
         collector = _merge(COLLECTOR_DEFAULTS, self._stored("collector"))
         self.parser = ChatParser(cdp, chunk_size=int(collector.get("chunk_size", 80)), chunk_pause_ms=int(collector.get("chunk_pause_ms", 40)))
-        self.collector = Collector(cdp=cdp, repo=self.repo, parser=self.parser, media=self.media, settings=collector, lease=getattr(cdp, "lease", None), memory=self.memory)
+        self.collector = Collector(CollectorDeps(cdp=cdp, repo=self.repo, parser=self.parser, media=self.media, settings=collector, lease=getattr(cdp, "lease", None), memory=self.memory))
         self._task: Optional[asyncio.Task] = None
         self._binding = False
         self._detached_running = None

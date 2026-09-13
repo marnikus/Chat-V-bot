@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from backend.chat_sync_options import SyncOptions
+from backend.parser_requests import PrivateQuery, SettleSpec
 from backend.chat_sync_persist import SyncPersister, merge_live
 from backend.chat_sync_plan import ReadPlan, SyncPlanner
 from stores.history_models import SyncResult
@@ -54,8 +55,8 @@ class SyncViewport:
         wait = max(float(self.s.options.backfill_wait_s or 2.0), 4.0)
         try:
             state = await self.s.parser.settle_after_top(
-                self.s.state, wait_ms=300, stable_polls=3, max_wait_s=wait,
-                minimum_count=self.s.before_count)
+                self.s.state, SettleSpec(max_wait_s=wait,
+                                         minimum_count=self.s.before_count))
         except Exception:                            # noqa: BLE001
             state = await self.s.parser.state()
         self.s.state = state if isinstance(state, dict) else self.s.state
@@ -220,7 +221,7 @@ class SyncSession:
             if norm(state.get("partner")) != norm(self.nick):
                 return self._refuse("partner_mismatch")
             check = verify_private(state, self.nick, options.my_nick,
-                                   require_private=options.require_private)
+                                   PrivateQuery(require_private=options.require_private))
             if not check.ok:
                 return self._refuse(check.reason)
         return True

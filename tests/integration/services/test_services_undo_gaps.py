@@ -58,8 +58,8 @@ import services.undo_db as undo_db                        # noqa: E402
 from backend.config_manager import ConfigManager          # noqa: E402
 from core.events import (DbChanged, EventBus, LogMessage,  # noqa: E402
                          UserDbChanged)
-from services.people_service import PeopleService         # noqa: E402
-from services.undo_service import UndoService             # noqa: E402
+from services.people_service import PeopleDeps, PeopleService  # noqa: E402
+from services.undo_service import UndoDeps, UndoService   # noqa: E402
 from stores.user_memory import UserMemory                 # noqa: E402
 
 
@@ -132,7 +132,7 @@ class DbConnCase(unittest.IsolatedAsyncioTestCase):
         self.bus.subscribe(UserDbChanged,
                            lambda e: self.user_db_changed.append(e))
         self.dbs = FakeDbs(self.RESULT)
-        self.undo = UndoService(config=self.cfg, dbs=self.dbs, bus=self.bus)
+        self.undo = UndoService(config=self.cfg, deps=UndoDeps(dbs=self.dbs, bus=self.bus))
         self.pylogs = []
         logger = logging.getLogger("chatbot")
         handler = _Capture(self.pylogs)
@@ -157,7 +157,7 @@ class DbConnCase(unittest.IsolatedAsyncioTestCase):
         original = undo_db.restart_world
         calls = self.restarts
 
-        async def fake_restart(_memory, _archive, _labels, _undo, _bus, op):
+        async def fake_restart(_deps, op):
             calls.append(op)
 
         undo_db.restart_world = fake_restart
@@ -602,8 +602,8 @@ class PeopleUndoCase(unittest.IsolatedAsyncioTestCase):
         self.bus.subscribe(LogMessage,
                            lambda e: self.logs.append((e.level, e.message)))
         cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
-        self.people = PeopleService(memory=self.memory, bus=self.bus)
-        self.undo = UndoService(config=cfg, people=self.people, bus=self.bus)
+        self.people = PeopleService(PeopleDeps(memory=self.memory, bus=self.bus))
+        self.undo = UndoService(config=cfg, deps=UndoDeps(people=self.people, bus=self.bus))
 
     async def asyncTearDown(self):
         try:

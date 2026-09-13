@@ -20,6 +20,7 @@ from services.run_service import (  # noqa: E402
     STANDALONE_NICK, USER_SCOPED_BLOCKS, RETIRED_BLOCK_KEYS,
     RunCoordinator, RunTracer, norm_level, normalize_blocks,
 )
+from services.run import RunDeps  # noqa: E402
 
 
 class TestRunServicePaths(unittest.TestCase):
@@ -84,7 +85,7 @@ class TestRunCoordinatorLoadStack(unittest.TestCase):
     """P0-1 pin: load_stack must resolve registered action classes."""
 
     def _engine(self):
-        return RunCoordinator(cdp=None, memory=None, criteria=None)
+        return RunCoordinator(RunDeps(cdp=None, memory=None, criteria=None))
 
     def test_load_stack_instantiates_registered_block(self):
         engine = self._engine()

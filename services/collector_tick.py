@@ -27,6 +27,7 @@ from typing import Optional
 log = logging.getLogger("chatbot")
 
 from services.collector_service import CollectorState  # noqa: E402
+from services.collector_states import TailSigs, TickIdent  # noqa: E402
 
 
 class TickPhase(str, Enum):
@@ -216,28 +217,26 @@ class CollectorArchive:
         gate → cursor check / sync → terminal status."""
         host = self._host
         raw = probe.state
-        head_sig = self._signature(raw.get("head"))
-        tail_sig = self._signature(raw.get("tail"))
-        head_any = self._signature(raw.get("head_any"))
-        tail_any = self._signature(raw.get("tail_any"))
+        sigs = TailSigs(head_sig=self._signature(raw.get("head")),
+                        tail_sig=self._signature(raw.get("tail")),
+                        head_any=self._signature(raw.get("head_any")),
+                        tail_any=self._signature(raw.get("tail_any")))
         if host._nick and nick != host._nick:
-            await self.maybe_rename(nick, probe, head_sig, tail_sig,
-                                    head_any, tail_any)
+            await self.maybe_rename(nick, probe, sigs)
         person_id = await self.open_person(nick, probe)
         refused = self.verify_gate(probe, nick)
         if refused is not None:
             return refused
-        return await self.cursor_check(person_id, probe, nick, my_nick,
-                                       head_sig, tail_sig)
+        return await self.cursor_check(person_id, probe,
+                                       TickIdent(nick, my_nick), sigs)
 
-    async def maybe_rename(self, nick: str, probe: Probe, head_sig: str,
-                           tail_sig: str, head_any: str,
-                           tail_any: str) -> None:
+    async def maybe_rename(self, nick: str, probe: Probe,
+                           sigs: TailSigs) -> None:
         host = self._host
         try:
             if await host.repo.rename_if_same_conversation(
-                    host._nick, nick, head_sig, tail_sig,
-                    head_any=head_any, tail_any=tail_any,
+                    host._nick, nick, sigs.head_sig, sigs.tail_sig,
+                    head_any=sigs.head_any, tail_any=sigs.tail_any,
                     dom_count=probe.count,
                     pane_same=bool(probe.state.get("pane_same"))):
                 host._log(f"Partner “{host._nick}” is now “{nick}” — "
@@ -279,17 +278,16 @@ class CollectorArchive:
             host._added = 0
         return None
 
-    async def cursor_check(self, person_id: int, probe: Probe, nick: str,
-                           my_nick: str, head_sig: str,
-                           tail_sig: str) -> Outcome:
+    async def cursor_check(self, person_id: int, probe: Probe,
+                           ident: TickIdent, sigs: TailSigs) -> Outcome:
         """Unchanged cursor → NO_NEW (media drains still run); otherwise
         plan the backfill, sync the conversation and finish."""
         host = self._host
         cursor = await host.repo.get_cursor(person_id)
         count = probe.count
         unchanged = (cursor["bootstrapped"] and count == cursor["dom_count"]
-                     and tail_sig and tail_sig == cursor["tail_sig"]
-                     and head_sig == cursor["head_sig"])
+                     and sigs.tail_sig and sigs.tail_sig == cursor["tail_sig"]
+                     and sigs.head_sig == cursor["head_sig"])
         person = await host.repo.get_person_by_id(person_id) or {}
         host._total = int(person.get("message_count") or 0)
         if unchanged:
@@ -298,10 +296,10 @@ class CollectorArchive:
         host._force_backfill = False
         host._set(CollectorState.BOOTSTRAPPING if bootstrap
                   else CollectorState.COLLECTING,
-                  f"Collecting from {nick}…")
-        result = await host._sync(nick, my_nick, bootstrap,
+                  f"Collecting from {ident.nick}…")
+        result = await host._sync(ident.nick, ident.my_nick, bootstrap,
                                   backfill_older=want_backfill)
-        return await self.finish(result, nick)
+        return await self.finish(result, ident.nick)
 
     def plan_backfill(self, cursor: dict) -> tuple[bool, bool]:
         """(bootstrap, want_backfill) — the scroll-to-top planning flags."""

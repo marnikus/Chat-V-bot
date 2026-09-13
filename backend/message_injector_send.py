@@ -12,6 +12,7 @@ from typing import Callable, Optional
 
 from backend.cdp_client import CDPClient
 from backend.dom_probe import build_probe
+from backend.probe_requests import ProbeSpec
 from backend.message_injector_field import _rep
 
 log = logging.getLogger("chatbot")
@@ -51,8 +52,8 @@ async def _probe_send_button(cdp: CDPClient,
                              report: Optional[Callable]) -> Optional[dict]:
     """The structured probe of the real send button (None when it raised)."""
     try:
-        raw = await cdp.evaluate(build_probe(selector=SEND_SELECTOR, click=True,
-                                             click_root=True))
+        raw = await cdp.evaluate(build_probe(
+            SEND_SELECTOR, ProbeSpec(click=True, click_root=True)))
         return json.loads(raw) if raw else None
     except Exception as exc:                         # noqa: BLE001
         _rep(report, f"❌ Probe error: {exc}", "error")

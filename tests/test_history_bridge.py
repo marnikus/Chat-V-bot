@@ -30,6 +30,7 @@ from PySide6.QtCore import QObject  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
@@ -78,9 +79,7 @@ class BridgeCase(unittest.IsolatedAsyncioTestCase):
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         self.page = ConnectedPage([raw(f"m{i}", idx=i) for i in range(8)])
-        self.service = HistoryService(
-            cdp=self.page, config=self.cfg,
-            db_path=os.path.join(self.dir, "history.db"))
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=os.path.join(self.dir, "history.db")))
         await self.service.init()
         self.service.collector.configure(my_nick="Me")
         br = Bridge.__new__(Bridge)

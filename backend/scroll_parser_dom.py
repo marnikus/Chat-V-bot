@@ -11,8 +11,8 @@ import asyncio
 import json
 import logging
 
-from backend.dom_highlight import COLOR_COLLECT, build_highlight_probe
-from backend.dom_probe import MATCH_EXACT
+from backend.dom_highlight import build_highlight_probe
+from backend.probe_requests import HighlightSpec
 from backend.scroll_parser_model import STOPPED
 from stores.user_memory import UserRecord
 
@@ -107,14 +107,10 @@ class ScrollDom:
             return False
         try:
             raw = await self.p._cdp.evaluate(build_highlight_probe(
-                selector=options.person_selector,
-                label_selector=options.nick_selector or None,
-                match_text=nick,
-                match_mode=MATCH_EXACT,
-                color=COLOR_COLLECT,
-                caption="MATCH",
-                highlight_ms=options.highlight_ms,
-            ))
+                options.person_selector,
+                HighlightSpec(label_selector=options.nick_selector or None,
+                              match_text=nick,
+                              highlight_ms=options.highlight_ms)))
         except Exception as exc:
             log.warning("Highlight probe failed for %s: %s", nick, exc)
             return False
