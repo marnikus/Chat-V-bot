@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════════════
+   bot-chat.css — the AI Bot Chat window and the Grok Prompt Editor
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── AI Bot Chat ──────────────────────────────────────────────── */
+.botchat-panel { display: flex; flex-direction: column; min-height: 0; }
+.bot-person {
+  font-size: var(--font-size-xs); font-weight: 600;
+  color: var(--text-secondary); margin-right: 6px;
+}
+.bot-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px; margin-bottom: var(--gap-sm);
+}
+.bot-labels { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.bot-label {
+  padding: 2px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--text-muted); background: transparent;
+  color: var(--text-primary); font-size: 11px; font-weight: 600;
+}
+.bot-label:hover { filter: brightness(1.2); }
+.bot-label.active { color: var(--text-inverse); }
+
+.bot-chat-box {
+  flex: 1; min-height: 80px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 6px; border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.bot-msg { max-width: 82%; padding: 4px 8px; border-radius: var(--radius-sm); }
+.bot-msg.in  { align-self: flex-start; background: var(--bg-card); }
+.bot-msg.out { align-self: flex-end;   background: var(--accent-dim); }
+.bot-msg-who { display: block; font-size: 10px; color: var(--text-muted); }
+.bot-msg-text { font-size: var(--font-size-sm); white-space: pre-wrap; }
+
+.bot-card {
+  border: 1px dashed var(--accent); border-radius: var(--radius-sm);
+  padding: 6px 8px; background: var(--bg-card);
+}
+.bot-card.approved  { border-style: solid; border-color: #00c853; }
+.bot-card.confirmed { border-style: solid; border-color: #00c853; }
+.bot-card.rejected  { border-color: #ff3b30; opacity: .75; }
+.bot-card.reaction-positive  { border-left: 4px solid #00c853; }
+.bot-card.reaction-negative  { border-left: 4px solid #ff3b30; }
+.bot-card.reaction-uncertain { border-left: 4px solid #ffcc00; }
+.bot-card-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.bot-card-text { font-size: var(--font-size-sm); white-space: pre-wrap; }
+.bot-verify { display: flex; gap: 6px; margin-top: 5px; }
+
+.bot-approved { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.bot-hint { font-size: var(--font-size-xs); color: var(--text-muted); }
+.bot-direct { display: flex; gap: 6px; margin-top: 6px; }
+.bot-direct textarea {
+  flex: 1; resize: vertical; min-height: 34px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
+  padding: 4px 6px; font-size: var(--font-size-sm);
+}
+.bot-status {
+  margin-top: 4px; font-size: var(--font-size-xs); color: var(--text-secondary);
+}
+
+/* ── Grok Prompt Editor ───────────────────────────────────────── */
+.botprompt-panel { display: flex; flex-direction: column; min-height: 0; }
+.bot-prompt-tabs { display: flex; gap: 5px; margin-bottom: 5px; }
+.bot-prompt-tab {
+  padding: 3px 9px; border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid var(--accent-dim); background: transparent;
+  color: var(--text-secondary); font-size: 11px;
+}
+.bot-prompt-tab.active {
+  background: var(--accent-dim); color: var(--text-primary); font-weight: 600;
+}
+.bot-prompt-text {
+  flex: 1; min-height: 90px; resize: vertical;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
+  padding: 6px; font-family: monospace; font-size: var(--font-size-sm);
+}
+.bot-prompt-actions {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+}
+.bot-prompt-preview {
+  margin-top: 6px; max-height: 40%; overflow: auto; white-space: pre-wrap;
+  background: var(--bg-input); border-radius: var(--radius-sm);
+  padding: 6px; font-size: var(--font-size-xs); color: var(--text-secondary);
+}

@@ -273,6 +273,7 @@ const PANEL_IDS = {
   people: 'winPeople', log: 'winLog',
   history: 'winHistory', userdb: 'winUserDb', collector: 'winCollector',
   labels: 'winLabels', dbconn: 'winDbconn',
+  botchat: 'winBotChat', botprompt: 'winBotPrompt',
 };
 
 const windowsMenu = register('windowsMenu', mkEl('div', 'layout-menu windows-menu hidden'));

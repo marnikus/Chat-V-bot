@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="css/composer.css">
 <link rel="stylesheet" href="css/history.css">
 <link rel="stylesheet" href="css/labels.css">
+<link rel="stylesheet" href="css/bot-chat.css">
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
@@ -387,6 +388,63 @@
       </div>
     </div>
 
+    <!-- AI BOT CHAT — today's messages, Grok suggestions, reaction labels -->
+    <div class="panel botchat-panel" id="winBotChat" data-window="botchat">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">smart_toy</span> AI Bot Chat
+        <span class="spacer"></span>
+        <span id="botChatPerson" class="bot-person" title="The person this window works on">no person</span>
+        <button id="botReloadBtn" class="btn-icon-sm" title="Reload today's messages"><span class="material-icons">refresh</span></button>
+      </h3>
+      <div class="bot-toolbar">
+        <button id="botSuggestBtn" class="btn-small btn-primary" type="button"
+                title="Ask Grok for a reply that fits today's conversation">🤖 Suggest reply</button>
+        <button id="botSuggestEditBtn" class="btn-small" type="button"
+                data-template="suggest_reply"
+                title="Edit this prompt in the Prompt Editor window">edit</button>
+        <button id="botAnalyzeBtn" class="btn-small" type="button"
+                title="Ask Grok to classify the person's last answer">🔍 Analyze reaction</button>
+        <button id="botAnalyzeEditBtn" class="btn-small" type="button"
+                data-template="analyze_reaction"
+                title="Edit this prompt in the Prompt Editor window">edit</button>
+      </div>
+      <div class="bot-labels" id="botReactionLabels"
+           title="Only one reaction label is active; clicking another one replaces it"></div>
+      <div class="bot-chat-box" id="botChatBox"></div>
+      <div class="bot-approved" id="botApprovedRow">
+        <button id="botSendApprovedBtn" class="btn-success" type="button" disabled
+                title="Deliver the approved AI message to the person">Send to Person</button>
+        <span id="botApprovedHint" class="bot-hint">Approve a suggestion (✅) to enable sending</span>
+      </div>
+      <div class="bot-direct">
+        <textarea id="botDirectInput" maxlength="1000" rows="2"
+                  placeholder="Write your own message — sent as-is, no AI involved…"></textarea>
+        <button id="botSendDirectBtn" class="btn-small" type="button"
+                title="Send this text to the person immediately">Send Direct</button>
+      </div>
+      <div class="bot-status" id="botChatStatus" aria-live="polite"></div>
+    </div>
+
+    <!-- GROK PROMPT EDITOR — a separate window, never embedded in Bot Chat -->
+    <div class="panel botprompt-panel" id="winBotPrompt" data-window="botprompt">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">edit_note</span> Grok Prompt Editor
+        <span class="spacer"></span>
+        <button id="botPromptPreviewBtn" class="btn-small" type="button"
+                title="Show exactly what would be sent to Grok for the current person">Preview</button>
+      </h3>
+      <div class="bot-prompt-tabs" id="botPromptTabs"></div>
+      <textarea id="botPromptText" class="bot-prompt-text" spellcheck="false"
+                placeholder="Prompt template — use {nick}, {conversation} and {last_message}"></textarea>
+      <div class="bot-prompt-actions">
+        <button id="botPromptSaveBtn" class="btn-success" type="button">Save</button>
+        <button id="botPromptCancelBtn" class="btn-small" type="button">Cancel</button>
+        <button id="botPromptResetBtn" class="btn-small" type="button"
+                title="Forget my edit and use the shipped template again">Reset to default</button>
+        <span class="spacer"></span>
+        <span id="botPromptStatus" class="bot-hint" aria-live="polite"></span>
+      </div>
+      <pre id="botPromptPreview" class="bot-prompt-preview hidden"></pre>
+    </div>
+
   </main>
 </div>
 
@@ -526,5 +584,7 @@
 <script src="js/color-picker.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/db-panel.js"></script>
+<script src="js/bot-chat.js"></script>
+<script src="js/bot-prompt.js"></script>
 </body>
 </html>
