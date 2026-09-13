@@ -1062,10 +1062,10 @@ class TestLegacySettingsBecomeAConnection(unittest.TestCase):
 
     def test_an_old_grok_key_is_adopted_as_a_connection(self):
         store = ConnectionStore(self.config())
-        connections = store.all()
-        self.assertEqual(len(connections), 1)
-        self.assertEqual(connections[0].api_key, "xai-legacy-key-1")
-        self.assertEqual(connections[0].model, "grok-legacy")
+        keyed = [c for c in store.all() if c.api_key]
+        self.assertEqual(len(keyed), 1)
+        self.assertEqual(keyed[0].api_key, "xai-legacy-key-1")
+        self.assertEqual(keyed[0].model, "grok-legacy")
 
     def test_the_adopted_connection_is_what_the_client_uses(self):
         cfg = self.config()
@@ -1073,19 +1073,74 @@ class TestLegacySettingsBecomeAConnection(unittest.TestCase):
 
     def test_adoption_does_not_run_twice(self):
         cfg = self.config()
-        ConnectionStore(cfg).all()
+        before = len(ConnectionStore(cfg).all())
         store = ConnectionStore(cfg)
         store.save("", {"title": "Mine", "provider": "google",
                         "api_key": "AIza-k"})
-        self.assertEqual(len(ConnectionStore(cfg).all()), 2)
+        self.assertEqual(len(ConnectionStore(cfg).all()), before + 1)
 
-    def test_a_fresh_install_has_no_connections_and_does_not_crash(self):
+    def test_a_fresh_install_is_seeded_but_still_refuses_to_send(self):
+        """Seeded rows exist so every provider is SELECTABLE; none of them
+        has a key, so nothing can be sent until the user adds one."""
         blank = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
         store = ConnectionStore(blank)
-        self.assertEqual(store.all(), [])
-        self.assertIsNone(store.active())
+        self.assertTrue(store.all())
+        self.assertFalse(any(c.api_key for c in store.all()))
         self.assertEqual(run(client_for(blank).complete("hi")).code,
                          "grok_no_key")
+
+
+class TestConnectionsAreSeededPerProvider(unittest.TestCase):
+    """Every provider must be reachable from the connections window.
+
+    The bug: the window offered Grok alone, because a connection is created
+    by the user and a fresh install had none — Google was a provider the app
+    supported and the UI could not reach. Seeding one keyless row per
+    provider is what makes "add a Google key" a thing you can DO.
+    """
+
+    def config(self):
+        return ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+
+    def test_every_provider_has_a_row_on_a_fresh_install(self):
+        listed = {c.provider for c in ConnectionStore(self.config()).all()}
+        self.assertEqual(listed, set(bot_providers.PROVIDERS))
+
+    def test_a_seeded_row_is_usable_once_a_key_is_added(self):
+        store = ConnectionStore(self.config())
+        google = [c for c in store.all() if c.provider == "google"][0]
+        self.assertEqual(google.problem(), "no API key")
+        store.save(google.id, {"title": google.title, "provider": "google",
+                               "api_key": "AIza-typed", "model": ""})
+        self.assertEqual(store.get(google.id).problem(), "")
+
+    def test_seeding_never_overwrites_a_configured_connection(self):
+        cfg = self.config()
+        store = ConnectionStore(cfg)
+        ident = store.save("", {"title": "My Grok", "provider": "grok",
+                                "api_key": "xai-mine", "model": "grok-4.3"})
+        again = ConnectionStore(cfg)
+        self.assertEqual(again.get(ident).api_key, "xai-mine")
+        self.assertEqual(again.get(ident).model, "grok-4.3")
+
+    def test_a_provider_that_already_has_one_is_not_seeded_again(self):
+        """Otherwise every restart would add another blank Grok row."""
+        cfg = self.config()
+        ConnectionStore(cfg).all()
+        first = len(ConnectionStore(cfg).all())
+        self.assertEqual(len(ConnectionStore(cfg).all()), first)
+
+    def test_a_legacy_install_is_not_given_a_duplicate_grok(self):
+        cfg = self.config()
+        cfg.set("grok", "api_key", "xai-legacy")
+        cfg.save()
+        groks = [c for c in ConnectionStore(cfg).all()
+                 if c.provider == "grok"]
+        self.assertEqual(len(groks), 1, "adoption and seeding both fired")
+        self.assertEqual(groks[0].api_key, "xai-legacy")
+
+    def test_seeding_needs_a_config_and_survives_without_one(self):
+        self.assertEqual(ConnectionStore(None).all(), [])
 
 
 class TestConnectionsWithoutAConfig(unittest.TestCase):

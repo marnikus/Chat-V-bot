@@ -28,7 +28,6 @@ from PySide6.QtCore import Signal, Slot
 
 from bridge.bot_bridge import BotSideBridge, schedule
 from services import bot_variables
-from services.bot_connections import ConnectionStore
 from services.bot_presets import PresetLibrary
 
 log = logging.getLogger("chatbot")
@@ -118,23 +117,3 @@ class BotPromptBridge(BotSideBridge):
     def bot_delete_preset(self, ident):
         """Delete one preset. Touches no connection and no API key (I-30)."""
         return bool(self._presets.delete(ident))
-
-    # ── which connection runs the prompt ─────────────────────────
-    @Slot(result=str)
-    def bot_prompt_connections(self):
-        """The connections the editor's dropdown offers, and the active one.
-
-        Read-only here: configuring one is the AI Connections window's job.
-        An unusable connection is listed WITH its problem rather than
-        hidden, so choosing it explains itself instead of doing nothing.
-        """
-        store = ConnectionStore(self.ctx.config)
-        active = store.active()
-        return json.dumps({"active": active.id if active else "",
-                           "connections": [c.state() for c in store.all()]},
-                          ensure_ascii=False)
-
-    @Slot(str, result=bool)
-    def bot_use_connection_for_prompts(self, ident):
-        """Run prompts through this connection from now on."""
-        return bool(ConnectionStore(self.ctx.config).use(ident))

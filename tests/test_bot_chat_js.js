@@ -75,6 +75,7 @@ function mkEl(tag) {
 function matches(node, sel) {
   const s = String(sel).trim();
   if (s.startsWith('.')) return node.classList.contains(s.slice(1));
+  if (s.startsWith('#')) return node.id === s.slice(1);
   return node.tagName === s.toUpperCase();
 }
 function walk(el, out) {
@@ -84,6 +85,23 @@ function walk(el, out) {
 }
 function findAll(el, sel) {
   return walk(el).filter((n) => matches(n, String(sel).trim().split(/\s+/).pop()));
+}
+
+/* Build the element the way the PAGE declares it — id and class attributes
+   included. A stub that handed every module a bare <div> could not tell a
+   popup that reuses the Bookmarks panel from one that merely looks like it,
+   and `closest('#id')` would never match. */
+function realEl(id) {
+  const el = mkEl('div');
+  el.id = id;
+  const tag = new RegExp('<([a-zA-Z]+)([^>]*\\sid="' + id + '"[^>]*)>')
+    .exec(html);
+  if (tag) {
+    el.tagName = tag[1].toUpperCase();
+    const cls = /\sclass="([^"]*)"/.exec(tag[2]);
+    if (cls) el.className = cls[1];
+  }
+  return el;
 }
 
 const byId = {};
@@ -98,10 +116,20 @@ global.document = {
   },
   getElementById(id) {
     if (!(id in byId)) byId[id] = html.includes('id="' + id + '"')
-      ? mkEl('div') : null;
+      ? realEl(id) : null;
     return byId[id];
   },
-  addEventListener() {},
+  // Real, not a no-op: the popups dismiss themselves through a
+  // document-level click handler, which a swallowed listener would hide.
+  _listeners: {},
+  addEventListener(ev, fn) {
+    (this._listeners[ev] = this._listeners[ev] || []).push(fn);
+  },
+  fire(ev, extra) {
+    (this._listeners[ev] || []).forEach((fn) => fn(Object.assign(
+      { target: null, preventDefault() {}, stopPropagation() {} },
+      extra || {})));
+  },
 };
 global.window = global;
 // The scope checkbox remembers itself here, exactly as the sash grid does.
@@ -140,8 +168,12 @@ const VARIABLES = [
    express, and the reason the UI keys everything by connection id. */
 const CONN_STATE = {
   active: 'c-grok-main',
-  providers: [{ id: 'grok', title: 'Grok (xAI)' },
-              { id: 'google', title: 'Google Gemini' }],
+  // the shape bot_providers.catalog() really sends
+  providers: [
+    { id: 'grok', title: 'Grok (xAI)', model: 'grok-2-latest',
+      url: 'https://api.x.ai/v1/chat/completions' },
+    { id: 'google', title: 'Google Gemini', model: 'gemini-2.0-flash',
+      url: 'https://g/v1beta/models/{model}:generateContent' }],
   connections: [
     { id: 'c-grok-main', title: 'Grok — work', provider: 'grok',
       model: 'grok-2-latest', url: 'https://api.x.ai/v1/chat/completions',
@@ -223,8 +255,8 @@ global.App = {
         (c) => c.id !== id);
       cb(CONN_STATE.connections.length < before);
     },
-    bot_use_connection_for_prompts: (id, cb) => {
-      calls.push({ name: 'bot_use_connection_for_prompts', args: [id] });
+    bot_use_connection: (id, cb) => {
+      calls.push({ name: 'bot_use_connection', args: [id] });
       CONN_STATE.active = id;
       cb(true);
     },
@@ -281,6 +313,7 @@ const load = (file, name) =>
 // stubbing them — a stub would pass no matter which renderer ran.
 global.HistoryModel = require('../ui/js/history-model.js');
 global.HistoryView = load('js/history-view.js', 'HistoryView');
+global.DarkSelect = load('js/dark-select.js', 'DarkSelect');
 global.BotMessages = load('js/bot-messages.js', 'BotMessages');
 global.BotSettings = load('js/bot-settings.js', 'BotSettings');
 global.BotChat = load('js/bot-chat.js', 'BotChat');
@@ -722,12 +755,38 @@ t('the choice survives a restart', () => {
 
 // ── prompt presets (saved wordings, in the editor) ───────────────
 
+const presetRows = () =>
+  findAll($('botPresetSelect'), '.dark-select-option');
+
 t('presets of the open template are listed, current template first', () => {
   BotPrompt.open('analyze_reaction', 'Anna');
   eq(lastCall('bot_get_presets').args[0], 'analyze_reaction');
-  const options = $('botPresetSelect').children;
-  eq(options[0].value, '');
-  ok(options.some((o) => o.textContent === 'Strict'));
+  const rows = presetRows();
+  eq(rows[0].dataset.value, '');
+  ok(rows.some((r) => r.textContent.indexOf('Strict') >= 0));
+});
+
+t('the preset chooser is a dark menu, not a native select', () => {
+  ok(!$('botPresetSelect').querySelector('OPTION'),
+     'a native <option> list is drawn by the OS and cannot be themed');
+  ok($('botPresetSelect').querySelector('.dark-select-trigger'));
+});
+
+t('the preset menu is built from the Bookmarks panel classes', () => {
+  const menu = $('botPresetSelect').querySelector('.dark-select-menu');
+  ok(menu.classList.contains('layout-menu'),
+     'it must BE the Bookmarks panel, not a second copy of its styling');
+  ok(presetRows().some((r) => r.querySelector('.lm-sub')),
+     'rows carry the Bookmarks subtitle class');
+});
+
+t('picking from the menu applies that preset and closes it', () => {
+  const box = BotPrompt._presetBox;
+  box.open();
+  const row = presetRows().find((r) => r.dataset.value === 'p-strict');
+  row.fire('click');
+  eq($('botPromptText').value, 'judge {last_message} strictly');
+  ok(!box.isOpen(), 'the menu must close after a choice');
 });
 
 t('applying a preset only FILLS the editor — it never saves by itself', () => {
@@ -769,37 +828,23 @@ t('deleting a selected preset removes only that one', () => {
   ok(!BotPrompt.presets.some((p) => p.id === 'p-strict'));
 });
 
-// ── which connection runs the prompt (editor dropdown) ───────────
+// ── the editor holds NO api configuration ───────────────────────
 
-t('the editor lists connections and marks the active one', () => {
-  BotPrompt.loadConnections();
-  const options = $('botConnSelect').children;
-  eq(options.length, 3);
-  eq($('botConnSelect').value, 'c-grok-main');
-});
-
-t('two connections of the same provider are both offered', () => {
-  const titles = $('botConnSelect').children.map((o) => o.textContent);
-  ok(titles.indexOf('Grok — work') >= 0 && titles.indexOf('Grok — cheap') >= 0,
-     'a provider-keyed list could not show both: ' + titles.join(', '));
-});
-
-t('a broken connection is listed WITH its problem, never hidden', () => {
-  BotPrompt.useConnection('c-gem');
-  ok(/no API key/.test($('botConnWarn').textContent),
-     $('botConnWarn').textContent);
-});
-
-t('choosing a connection is remembered by the backend', () => {
-  BotPrompt.useConnection('c-grok-cheap');
-  eq(lastCall('bot_use_connection_for_prompts').args[0], 'c-grok-cheap');
-  eq($('botConnWarn').textContent, '');
-});
-
-t('the editor holds no key, model or endpoint field', () => {
-  ['botApiKeyInput', 'botModelInput', 'botConnSaveBtn'].forEach((id) =>
+t('the editor holds no key, model, endpoint or connection control', () => {
+  ['botApiKeyInput', 'botModelInput', 'botConnSaveBtn',
+   'botConnSelect', 'botConnWarn'].forEach((id) =>
     ok(!html.includes('id="' + id + '"'),
        id + ' still lives in the Prompt Editor markup'));
+});
+
+t('the editor cannot change which AI runs — that is the popup\'s job', () => {
+  ok(!BotPrompt.useConnection, 'a second way to switch connection');
+  ok(!BotPrompt.loadConnections);
+  const before = calls.length;
+  BotPrompt.open('suggest_reply', 'Anna');
+  eq(calls.slice(before).filter(
+    (c) => c.name.indexOf('connection') >= 0).length, 0,
+     'opening the editor must not touch connection state');
 });
 
 // ── AI Connections window ────────────────────────────────────────
@@ -807,7 +852,8 @@ t('the editor holds no key, model or endpoint field', () => {
 BotSettings.init();          // once, exactly as the page does it
 
 function openSettings() {
-  $('botPromptSettingsBtn').fire('click');
+  // the ⚙ TOGGLES, like the Grid view button — make sure we end up open
+  if (!BotSettings.isOpen()) $('botPromptSettingsBtn').fire('click');
 }
 
 function clickConnection(id) {
@@ -815,6 +861,38 @@ function clickConnection(id) {
     .find((r) => r.dataset.provider === id);
   $('botProviderList').fire('click', { target: row });
 }
+
+t('the ⚙ toggles the popup rather than only opening it', () => {
+  BotSettings.close();
+  $('botPromptSettingsBtn').fire('click');
+  ok(BotSettings.isOpen());
+  $('botPromptSettingsBtn').fire('click');
+  ok(!BotSettings.isOpen());
+});
+
+t('a click outside dismisses it, like the Bookmarks menu', () => {
+  openSettings();
+  document.fire('click', { target: document.body });
+  ok(!BotSettings.isOpen(), 'an anchored popup closes on an outside click');
+});
+
+t('a click inside does NOT dismiss it', () => {
+  openSettings();
+  // the page nests the list inside the popup; the stub builds elements
+  // by id alone, so attach it the way index.html does before asserting
+  const inside = $('botProviderList');
+  if (inside.parentNode !== $('botSettingsBackdrop'))
+    $('botSettingsBackdrop').appendChild(inside);
+  document.fire('click', { target: inside });
+  ok(BotSettings.isOpen(), 'editing a field must not close the popup');
+});
+
+t('it is anchored under the button, not centred as a modal', () => {
+  openSettings();
+  ok($('botSettingsBackdrop').classList.contains('layout-menu'),
+     'the popup must reuse the Bookmarks panel styling');
+  ok(!html.includes('aria-modal="true"'), 'it is a popup, not a modal');
+});
 
 t('the connections window opens from the prompt editor title bar', () => {
   openSettings();
@@ -836,6 +914,43 @@ t('a stored key is shown masked and NEVER filled into the field', () => {
   clickConnection('c-grok-main');
   eq($('botProviderKey').value, '', 'the secret is never echoed into the DOM');
   ok(/xai-…mnop/.test($('botProviderKeyState').textContent));
+});
+
+const providerRows = () =>
+  findAll($('botConnProvider'), '.dark-select-option');
+
+t('the provider chooser is a dark menu listing every provider', () => {
+  openSettings();
+  eq(providerRows().map((r) => r.dataset.value), ['grok', 'google']);
+  ok(!$('botConnProvider').querySelector('OPTION'),
+     'a native select cannot be themed — that was the reported bug');
+});
+
+t('picking a provider fills in its default model and endpoint', () => {
+  openSettings();
+  BotSettings.addNew();
+  const google = providerRows().find((r) => r.dataset.value === 'google');
+  google.fire('click');
+  eq(BotSettings.providerId(), 'google');
+  ok(/gemini/.test($('botProviderModel').value),
+     'the form must reveal what this provider will actually use');
+});
+
+t('"use for prompts" routes prompts through the selected connection', () => {
+  openSettings();
+  clickConnection('c-grok-main');
+  $('botConnUseBtn').fire('click');
+  eq(lastCall('bot_use_connection').args[0], 'c-grok-main');
+  ok(/prompts now run/i.test($('botSettingsStatus').textContent));
+});
+
+t('"use for prompts" with nothing selected says so instead of guessing', () => {
+  openSettings();
+  BotSettings.selected = '';
+  const before = calls.filter((c) => c.name === 'bot_use_connection').length;
+  $('botConnUseBtn').fire('click');
+  eq(calls.filter((c) => c.name === 'bot_use_connection').length, before);
+  ok(/select a connection/i.test($('botSettingsStatus').textContent));
 });
 
 t('selecting a connection shows ITS model and endpoint', () => {

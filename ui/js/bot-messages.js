@@ -16,7 +16,7 @@
    Nodes are built with createElement/textContent only: a message is user
    (or model) text and must never become markup.
 
-   ideal-size: 71 lines reason=deliberately small. It is the one seam that
+   ideal-size: 75 lines reason=deliberately small. It is the one seam that
    was genuinely separable from bot-chat.js's verification flow; growing it
    to a "nicer" size would mean pulling that flow back in.
    ═══════════════════════════════════════════════════════════════ */

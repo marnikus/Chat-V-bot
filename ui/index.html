@@ -430,11 +430,14 @@
       <div class="bot-status" id="botChatStatus" aria-live="polite"></div>
     </div>
 
-    <!-- AI CONNECTIONS — a modal dialog, opened by the ⚙ in the Grok Prompt
-         Editor title bar. Connection details live HERE and nowhere else:
-         the Prompt Editor holds prompt controls only. -->
-    <div class="bot-settings-backdrop hidden" id="botSettingsBackdrop">
-      <div class="bot-settings" role="dialog" aria-modal="true"
+    <!-- AI CONNECTIONS — an anchored popup, opened by the ⚙ in the Grok
+         Prompt Editor title bar and dismissed by a click outside, exactly
+         like the Grid view / Bookmarks menu. API keys, models and endpoints
+         live HERE and nowhere else: the Prompt Editor holds prompt controls
+         only, and prompts run on whichever connection is marked in use. -->
+    <div class="bot-settings-backdrop layout-menu hidden"
+         id="botSettingsBackdrop">
+      <div class="bot-settings" role="dialog"
            aria-labelledby="botSettingsTitle">
         <h3 id="botSettingsTitle">AI connections
           <span class="spacer"></span>
@@ -448,7 +451,7 @@
             <input id="botConnTitle" type="text" spellcheck="false"
                    placeholder="e.g. Grok — grok-4.3">
             <label for="botConnProvider">Provider</label>
-            <select id="botConnProvider"></select>
+            <div id="botConnProvider" class="dark-select-host"></div>
             <label for="botProviderKey">API key</label>
             <input id="botProviderKey" type="password" spellcheck="false"
                    autocomplete="off"
@@ -467,6 +470,8 @@
                   title="Add another connection">+ New</button>
           <button id="botTestConnBtn" class="btn-small" type="button"
                   title="Send one tiny request with these settings">Test connection</button>
+          <button id="botConnUseBtn" class="btn-small" type="button"
+                  title="Run prompts through this connection">Use for prompts</button>
           <button id="botConnDeleteBtn" class="btn-small btn-danger" type="button"
                   title="Delete this connection">Delete</button>
           <span class="spacer"></span>
@@ -489,18 +494,14 @@
       <div class="bot-prompt-tabs" id="botPromptTabs"></div>
       <div class="bot-prompt-bar">
         <label for="botPresetSelect">Preset</label>
-        <select id="botPresetSelect" title="Saved versions of this prompt"></select>
+        <div id="botPresetSelect" class="dark-select-host"
+             title="Saved versions of this prompt"></div>
         <button id="botPresetSaveBtn" class="btn-small" type="button"
                 title="Save the editor text as a new preset">Save as…</button>
         <button id="botPresetUpdateBtn" class="btn-small" type="button"
                 title="Overwrite the selected preset with the editor text">Update</button>
         <button id="botPresetDeleteBtn" class="btn-small btn-danger" type="button"
                 title="Delete the selected preset">Delete</button>
-      </div>
-      <div class="bot-prompt-bar">
-        <label for="botConnSelect">AI connection</label>
-        <select id="botConnSelect" title="Which configured connection runs this prompt"></select>
-        <span id="botConnWarn" class="bot-hint"></span>
       </div>
       <textarea id="botPromptText" class="bot-prompt-text" spellcheck="false"
                 placeholder="Prompt template — click a variable below to insert it"></textarea>
@@ -659,6 +660,7 @@
 <script src="js/color-picker.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/db-panel.js"></script>
+<script src="js/dark-select.js"></script>
 <script src="js/bot-messages.js"></script>
 <script src="js/bot-chat.js"></script>
 <script src="js/bot-settings.js"></script>

@@ -141,15 +141,14 @@
 }
 
 /* ── AI provider settings dialog ──────────────────────────────── */
-.bot-settings-backdrop {
-  position: fixed; inset: 0; z-index: 60; display: flex;
-  align-items: center; justify-content: center; background: rgba(0, 0, 0, .55);
-}
+/* An anchored popup, not a modal: `.layout-menu` (in sash-layout.css) already
+   supplies the fixed position, dark panel, border, radius and shadow that the
+   Grid view / Bookmarks menu uses. Only the width differs — the connection
+   form needs more room than a list of layouts. */
+.bot-settings-backdrop { width: min(560px, 92vw); padding: 0; }
 .bot-settings-backdrop.hidden { display: none; }
 .bot-settings {
-  width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 10px 12px;
-  border: 1px solid var(--border, #2c2f36); border-radius: 8px;
-  background: var(--panel, #14171c);
+  max-height: 78vh; overflow: auto; padding: 10px 12px;
 }
 .bot-settings h3 { display: flex; align-items: center; margin: 0 0 8px; }
 .bot-settings-body { display: flex; gap: 10px; }
@@ -189,3 +188,44 @@
 .bot-prompt-bar label { color: var(--muted, #8a8f98); }
 .bot-prompt-bar select { flex: 0 1 220px; min-width: 120px; }
 .bot-prompt-bar .bot-hint { color: #ffcc00; }
+
+
+/* ── dark dropdown (dark-select.js) ──────────────────────────────
+   The trigger is styled here; the OPEN list is a `.layout-menu`, so it is
+   the Bookmarks panel by inheritance rather than by duplicated rules. */
+.dark-select { position: relative; display: inline-block; }
+.dark-select-host { flex: 0 1 240px; min-width: 140px; }
+.dark-select-trigger {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 4px 8px; text-align: left;
+  border: 1px solid var(--border, #2c2f36);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-input, #12141c);
+  color: var(--text-primary, #e8eaf0);
+  font-size: var(--font-size-sm, 12px);
+}
+.dark-select-trigger:hover { background: var(--bg-card-hover, #252a40); }
+.dark-select-trigger[aria-expanded="true"] {
+  border-color: var(--border-focus, #6c8cff);
+}
+.dark-select-label {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dark-select-caret { color: var(--text-muted, #5a5f73); font-size: 10px; }
+.dark-select.warn .dark-select-trigger { border-color: var(--yellow, #fbbf24); }
+
+/* The menu: positioned under its own trigger, otherwise pure `.layout-menu`. */
+.dark-select-menu {
+  position: absolute; left: 0; top: calc(100% + 4px);
+  min-width: 100%; max-height: 320px; overflow: auto; z-index: 210;
+}
+.dark-select-menu.hidden { display: none; }
+.dark-select-option.selected {
+  background: var(--bg-card-hover, #252a40);
+  box-shadow: inset 2px 0 0 var(--accent, #6c8cff);
+}
+.dark-select-option.warn .lm-sub { color: var(--yellow, #fbbf24); }
+.dark-select-empty {
+  padding: 7px 10px; color: var(--text-muted, #5a5f73);
+  font-size: var(--font-size-sm, 12px);
+}
