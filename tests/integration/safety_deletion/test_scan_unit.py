@@ -1,4 +1,4 @@
-"""Unit coverage for services.db_media_scan (strict scan + URI)."""
+"""Unit coverage for services.db_deletion.media (strict scan + URI)."""
 
 import os
 import sqlite3
@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
-from services.db_media_scan import (  # noqa: E402
+from services.db_deletion import (  # noqa: E402
     MediaScanResult, scan_world_media, sqlite_ro_uri)
 
 

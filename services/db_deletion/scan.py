@@ -6,8 +6,12 @@ classifies the footprint and builds the `DeletionPlan` plus the snapshots
 the executor revalidates against. Any unverifiable world or unplannable
 target raises `_PhaseRefusal` (deletion refused, nothing touched).
 
-The mutating phases live in `services.db_deletion_flow`, which calls
+The mutating phases live in `services.db_deletion.flow`, which calls
 :func:`run_scan` as phase 2.
+
+Patch seam: `build_deletion_inventory` and the path/policy helpers are
+called through the package (`db_deletion.*`), so the safety tests that patch
+`services.db_deletion.build_deletion_inventory` land on this code.
 """
 
 from __future__ import annotations
@@ -17,14 +21,10 @@ import logging
 import os
 
 from services import db_deletion
-from services.db_deletion_flow import (
-    _Fail,
-    _DeleteState,
-    abspath_or_none,
-    raise_refusal,
-    same_canonical,
-)
-from services.db_media_scan import scan_world_media
+
+from .media import scan_world_media
+from .paths import abspath_or_none, same_canonical
+from .state import _DeleteState, _Fail, raise_refusal
 
 log = logging.getLogger("chatbot")
 

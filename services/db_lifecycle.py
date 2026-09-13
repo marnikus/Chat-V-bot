@@ -178,14 +178,14 @@ class DbLifecycle:
         from partial; active_path observed; removed/retained/failed exact;
         media_files_removed counts actual unlinks.
 
-        The read-only scan phase lives in `services.db_deletion_scan` and
-        the mutating phases in `services.db_deletion_flow` (one small
+        The read-only scan phase lives in `services.db_deletion.scan` and
+        the mutating phases in `services.db_deletion.flow` (one small
         function per phase); this delegate stays thin so the irreversible
         path is not one large, untestable method.
         """
         # function-local import: keeps the module import graph identical to
         # the previous inline version (db_service imports lifecycle lazily).
-        from services.db_deletion_flow import delete_world
+        from services.db_deletion import delete_world
         return await delete_world(self, path)
 
     def _forget(self, path: str) -> None:

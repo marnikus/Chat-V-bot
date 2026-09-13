@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **78 archived ones**. That is
+This repository has **three current docs** and **86 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 78 archived docs
+    ├── README.md                    ← index of all 86 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -24,7 +24,10 @@ docs/
     ├── 2026-09-10-quality-gates/
     ├── 2026-09-10-history-push-and-sort/
     ├── 2026-09-10-agent-rules-v1/
-    └── 2026-09-11-db-undo-restore/   ← the write gate + verified undo (newest)
+    ├── 2026-09-11-cc-tail/
+    ├── 2026-09-11-db-undo-restore/   ← the write gate + verified undo
+    ├── 2026-09-11-rules-appendices/
+    └── 2026-09-12-god-classes/       ← god-class & size-debt round (newest)
 ```
 
 Also in the repo, not under `docs/`:

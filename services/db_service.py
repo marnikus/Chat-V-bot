@@ -86,7 +86,7 @@ async def _media_references(path: str) -> set[str]:
     Legacy best-effort wrapper (kept for existing info/clean callers):
     a world file that cannot be opened contributes no references. This
     fail-open shape MUST NOT be used for destructive deletion — deletion
-    uses `services.db_media_scan.scan_world_media` with an explicit
+    uses `services.db_deletion.scan_world_media` with an explicit
     completeness flag and refuses when any required scan is incomplete.
     """
     refs: set[str] = set()

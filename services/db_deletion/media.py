@@ -2,10 +2,12 @@
 
 Legacy `services.db_service._media_references(path) -> set` is best-effort:
 any failure returns an empty set, which a deleter cannot distinguish from
-“no references”. Destructive deletion must use this strict scan instead.
+"no references". Destructive deletion must use this strict scan instead.
 
 A corrupt / locked / unsupported world is NOT empty: `complete` is False
 and the caller must refuse deletion before any switch/unlink.
+
+Imports nothing from the package (leaf).
 """
 
 from __future__ import annotations

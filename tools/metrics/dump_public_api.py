@@ -72,8 +72,13 @@ def module_names(package: str):
     pkg = __import__(package, fromlist=["__path__"])
     for info in pkgutil.iter_modules(pkg.__path__):
         if info.ispkg:
-            continue
-        yield f"{package}.{info.name}"
+            # A sub-package (e.g. `backend/chat_sync/` after the RULE 18 §18.3
+            # promotion) owns its public names in its own modules, so recurse
+            # rather than skip — skipping would silently drop the package's
+            # whole surface from the golden file.
+            yield from module_names(f"{package}.{info.name}")
+        else:
+            yield f"{package}.{info.name}"
 
 
 def dump_module(qualname: str) -> dict:

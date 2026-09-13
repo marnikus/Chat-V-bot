@@ -260,7 +260,13 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # re-export compatibility facade (`from stores.preset_store import
         # PresetStore`) that arrived with merge f82007c — a facade, not an
         # area being forced to edit an import.
-        self.assertEqual(count, 40,                         "stores/ must be refactored without touching a single "
+        # 2026-09-12 (god-class round, step 1): +2 for the chat_sync
+        # sub-package split (docs/archive/2026-09-12-god-classes/). The one
+        # module `backend/chat_sync.py` held two `from stores` imports
+        # (history_models, history_repo); promoting it to `backend/chat_sync/`
+        # spread them across four leaves (merge.py, session.py, sync.py,
+        # aligner.py) — a relocation, not another area growing the surface.
+        self.assertEqual(count, 42,                         "stores/ must be refactored without touching a single "
                          "import in another area (integrated baseline: 38)")
 
 

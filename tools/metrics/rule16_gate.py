@@ -100,6 +100,12 @@ CLONE_BASELINE = frozenset({
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),
+    # Maintenance 2026-09-12 (god-class round, step 2): splitting the deletion
+    # family into `services/db_deletion/` left `flow.py` and `scan.py` with the
+    # identical 5-statement header (`from __future__ / asyncio / logging / os /
+    # from services import db_deletion`) — both phases genuinely use all five.
+    # Same kind of noise as the query/undo_service entry above: no logic copied.
+    ("services/db_deletion/flow.py", "services/db_deletion/scan.py"),
 })
 
 

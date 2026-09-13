@@ -48,7 +48,7 @@ collector** archives whatever private conversation is on screen.
 |---|---|---|---|
 | **Action stack** | 16 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
 | **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/test_visual_click_contract.py`, `tests/test_find_click_visual.py` |
-| **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
+| **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser/`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
 | **Passive collector** | Heartbeat probe per tick; archives only when the conversation changed; never blocks the UI; throttled (not paused) during a run | `services/collector_service.py`, `services/collector_tick.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
 | **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person; every writer of the world file serializes on one gate | `stores/history_*`, `stores/world_lock.py`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
@@ -58,7 +58,7 @@ collector** archives whatever private conversation is on screen.
 | **Boot / world ready** | The page boots before the world is open, so the backend **announces the live world** once `startup` finished opening it — the People list, the Full User Database, the DB Connection window and the label pills load by themselves. No refresh button is ever needed, at boot or after a switch | `app/lifecycle.py` (`startup` → `_announce_world_ready`), `services/world_events.py`, `bridge/router.py` (`announce_world_ready`) | `tests/unit/app/test_app_lifecycle.py`, `tests/unit/services/test_world_events.py`, `tests/unit/bridge_safety/test_world_ready.py`, `tests/test_userdb_refresh.js` |
 | **Delete safety (DB window)** | Removing a person or a chat happens **at once — no dialog**; the delete is soft and Ctrl+Z restores both halves. The trash is **session-sized**: it is erased when the step leaves the undo history (cap / redo-branch truncation) or when a new app run opens the world | `ui/js/history-db.js`, `services/history/trash.py` (`begin_session`, `open_world`, `purge_tokens`), `services/undo_timeline.py` | `tests/test_userdb_refresh.js`, `tests/test_world_write_gate.py`, `tests/test_history_repo_lifecycle.py` |
 | **Grid layout** | Any window in any cell; sashes draggable; layout validated before it is stored | `services/layout_service.py`, `bridge/layout_bridge.py`, `ui/js/sash-*.js` | `tests/test_grid_persistence.py`, `tests/integration/services/test_services_layout.py`, `tests/test_sash_webengine.py` |
-| **Database worlds** | One `.db` file = one complete world; create / load / switch / clean / **permanent delete** | `services/db_service.py`, `services/db_lifecycle.py`, `services/db_deletion*.py` | `tests/test_db_manager*.py`, `tests/test_db_unified_world.py`, `tests/integration/safety_deletion/` |
+| **Database worlds** | One `.db` file = one complete world; create / load / switch / clean / **permanent delete** | `services/db_service.py`, `services/db_lifecycle.py`, `services/db_deletion/` | `tests/test_db_manager*.py`, `tests/test_db_unified_world.py`, `tests/integration/safety_deletion/` |
 | **Logging** | UI log console + file log + JSONL run trace | `backend/logger.py`, `ui/js/log-console.js`, `services/service_log.py` | `tests/unit/backend/test_logger_setup.py` |
 
 ---
@@ -124,14 +124,15 @@ Not in private tab now`.
 
 ### 3.3 Deleting a world (the only irreversible path)
 
-`services/db_deletion_flow.delete_world()` — a fail-closed pipeline; a phase
-that cannot verify stops the run and reports instead of guessing:
+`services.db_deletion.delete_world()` (in `services/db_deletion/flow.py`) — a
+fail-closed pipeline; a phase that cannot verify stops the run and reports
+instead of guessing:
 
 ```
 validate → scan → switch → detach → database → media → finalize
 ```
 
-* **scan** (`services/db_deletion_scan.py`) builds the inventory: victim
+* **scan** (`services/db_deletion/scan.py`) builds the inventory: victim
   directory, remembered in-root `.db` paths, active folder. Anything outside
   that boundary is *not scanned and not protected* (`SUPPORTED_BOUNDARY`).
 * **database** removes the SQLite file group main-first and stops at the first
@@ -160,14 +161,14 @@ Each one is enforced in code and pinned by a test. Rule numbers refer to
 | **I-6** | A stop request is honoured inside inner waits, not just the outer loop; "stopped" ≠ "failed" | `actions/cancellation.py` (RULE 7) |
 | **I-7** | A guard that skips its own work never stalls the phases after it, and counting failures fail **open** | `_run_collect_phase` (RULE 9) |
 | **I-8** | One decision, one control — no hidden second filter | block config (RULE 10) |
-| **I-9** | A seek writes nothing: scroll-only mode neither collects, rejects nor purges | `backend/scroll_parser.py` (RULE 11) |
+| **I-9** | A seek writes nothing: scroll-only mode neither collects, rejects nor purges | `backend/scroll_parser/` (RULE 11) |
 | **I-10** | One chronological undo timeline for every editable surface; automatic side-effects are never recorded | `services/undo_service.py` (RULE 12) |
 | **I-11** | State that cannot be read back is never persisted (grid layout is validated and rejected, not repaired) | `services/layout_service.py` (RULE 13) |
 | **I-12** | The archive is not the queue: filters, purges, undo and People-list edits never delete archived messages; collectors never add to the queue | `stores/history_repo*`, `stores/user_memory.py` (RULE 14) |
 | **I-13** | Nothing is archived without the two-step private gate, re-applied on every write path; the gate fails **closed** | `backend/chat_parser.verify_private()` (RULE 15) |
 | **I-14** | Media bytes are filed under the conversation they belong to, never in a global pile | `stores/media_layout.py` (RULE 15) |
-| **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion_flow.py`, `services/db_lifecycle.py` |
-| **I-16** | No `os.unlink` happens before scan + plan + switch + detach + revalidate | `services/db_deletion_flow.py` |
+| **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion/flow.py`, `services/db_lifecycle.py` |
+| **I-16** | No `os.unlink` happens before scan + plan + switch + detach + revalidate | `services/db_deletion/flow.py` |
 | **I-17** | One writer per world file: the People queue (`UserMemory`) and the archive (`HistoryDB`) take the SAME gate from their first write until the transaction ends, so no interleaving can fail with `database is locked`; reads never wait, and the wait is fail-open after 15 s rather than unbounded | `stores/world_lock.py` (`WorldGate` / `WriteTurn` / `world_write`), `stores/history_db.py`, `stores/user_memory.py` |
 | **I-18** | An archive undo/redo reports only what the database now shows: both halves (people list + rows) are applied, the result is read back, and a refusal logs an ERROR, restores the list half, keeps the timeline entry retryable and emits `userdb_changed(failed)` — “archive restored” can no longer appear over a still-deleted person | `services/undo_archive.py`, `services/undo_service.py`, `bridge/history_bridge.py` |
 | **I-19** | Deleted data lives exactly as long as the undo step that can restore it: a delete is soft and instant (no confirmation dialog anywhere), and the hidden rows are destroyed the moment the step leaves the timeline (cap / new edit after an undo) or the next app run opens the world (`begin_session` stamps the world with a per-run token; a different token means the trash belongs to a closed session) | `services/history/trash.py`, `services/undo_timeline.py` (`commit` → `purge_tokens`) |

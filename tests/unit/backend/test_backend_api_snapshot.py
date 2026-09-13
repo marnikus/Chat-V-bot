@@ -51,7 +51,8 @@ class TestPublicApiSnapshot(unittest.TestCase):
     def test_snapshot_covers_both_packages(self):
         modules = set(self.expected["public_api"])
         self.assertIn("backend.chat_parser", modules)
-        self.assertIn("backend.scroll_parser", modules)
+        self.assertIn("backend.scroll_parser.parser", modules)
+        self.assertIn("backend.scroll_parser.result", modules)
         self.assertIn("actions.base", modules)
         self.assertGreaterEqual(len(modules), 45,
                                 "the snapshot must cover every module of "
