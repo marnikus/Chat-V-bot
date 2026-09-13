@@ -14,8 +14,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from stores.history_models import MessageRecord
-from stores.history_repo_identity import _as_record
+from stores.history.history_models import MessageRecord
+from stores.history.history_repo_identity import _as_record
 
 log = logging.getLogger("chatbot")
 

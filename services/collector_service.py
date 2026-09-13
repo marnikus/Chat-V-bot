@@ -35,7 +35,7 @@ from services.collector_push import PushPath
 from services.collector_report import Reporter
 from services.collector_settings import TuningKnobs
 from services.collector_states import CollectorState, DEFAULTS
-from stores.history_repo import HistoryRepo
+from stores.history.history_repo import HistoryRepo
 
 log = logging.getLogger("chatbot")
 

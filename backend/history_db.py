@@ -1,6 +1,6 @@
 """Compatibility shim — the SQLite engine lives in stores/history_db.py."""
 
-from stores.history_db import (  # noqa: F401
+from stores.history.history_db import (  # noqa: F401
     HistoryDB, SCHEMA_VERSION, TABLE_COLUMNS,
 )
 

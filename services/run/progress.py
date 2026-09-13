@@ -18,6 +18,20 @@ except Exception:
 log = logging.getLogger("chatbot")
 
 
+# ideal-size: 248 lines reason=RunQueueMixin is a 180-line mixin that is
+# co-located with RunProgress (65 lines) because they share the same consumer
+# (services/run/coordinator.py) and the mixin's methods (label_allows,
+# filter_by_labels, queue_order, etc.) are called directly from the coordinator
+# in the same tight loop. Splitting would add an import hop without reducing
+# coupling. The low maintainability index (27.8) comes from the mixin's many
+# small helper methods (worst CC is 6), not from complexity concentration.
+# Structure:
+#   RunProgress: 65 LOC — counters + ETA calculation, emits RunProgressChanged events
+#   RunQueueMixin: 183 LOC — label filtering, queue ordering, single-target guards,
+#     pause handling, and take-phase logic. All methods are called from
+#     coordinator.py in a single _run_take_phase / _run_single_target_cycle flow.
+
+
 @dataclass(frozen=True, slots=True)
 class RunProgressChanged(Event):
     done: int = 0

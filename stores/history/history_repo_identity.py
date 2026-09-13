@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
-from stores.history_models import (Alignment, MessageRecord, dedupe_key,
+from stores.history.history_models import (Alignment, MessageRecord, dedupe_key,
                                    fingerprint)
 
 log = logging.getLogger("chatbot")

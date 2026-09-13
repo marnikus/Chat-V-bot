@@ -23,7 +23,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
-from stores.history_models import (  # noqa: E402
+from stores.history.history_models import (  # noqa: E402
     MAX_LIVE_ITEMS,
     Alignment,
     AppendResult,

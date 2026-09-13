@@ -24,7 +24,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stores.history_db import HistoryDB  # noqa: E402
+from stores.history.history_db import HistoryDB  # noqa: E402
 
 
 class DbCase(unittest.IsolatedAsyncioTestCase):

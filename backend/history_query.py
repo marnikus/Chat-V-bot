@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from stores.history_db import HistoryDB
+from stores.history.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
 

@@ -82,9 +82,10 @@ class TestFileSize(unittest.TestCase):
         # leaf (no Qt, no `backend/` or `services/` import) and it belongs
         # beside the two stores it serializes (`history_db`, `user_memory`),
         # so this is a new cohesive file, not a decomposition fragment.
-        # RULE 18.3 counts the prefix families as the real modules here:
-        # `history_*` 9, `label_*` 6, `media_*` 4.
-        self.assertLessEqual(len(py_files()), 37)
+        # 37 -> 28 (2026-09-13, Round F step F8): history_* family (9 files)
+        # promoted to stores/history/ sub-package. RULE 18.3 counts prefix families
+        # and sub-packages as modules; now: stores/history/ 1, `label_*` 7, `media_*` 4.
+        self.assertLessEqual(len(py_files()), 28)
         self.assertGreaterEqual(len(py_files()), 17)
 
 
@@ -93,10 +94,10 @@ class TestClassSize(unittest.TestCase):
     #: public surface to a facade, and `HistoryRepo` stays under the plan's
     #: 30-method gate
     MAX_PUBLIC = {
-        "stores.history_repo": ("HistoryRepo", 22),
+        "stores.history.history_repo": ("HistoryRepo", 22),
         "stores.media_store": ("MediaStore", 15),
         "stores.label_store": ("LabelStore", 25),
-        "stores.history_db": ("HistoryDB", 14),
+        "stores.history.history_db": ("HistoryDB", 14),
         "stores.user_memory": ("UserMemory", 17),
         "stores.preset_store": ("PresetStore", 15),
     }
@@ -138,9 +139,8 @@ class TestClassSize(unittest.TestCase):
     SPLIT_FILES = ("history_repo", "history_repo_append",
                    "history_repo_identity", "history_repo_media",
                    "history_repo_lifecycle", "media_store", "media_layout",
-                   "media_fetch", "media_cache", "history_db",
-                   "history_schema", "history_schema_repair", "label_store",
-                   "label_state", "label_world", "label_assignments",
+                   "media_fetch", "media_cache",
+                   "label_store", "label_state", "label_world", "label_assignments",
                    "label_filter", "label_rules",
                    "user_memory", "user_query", "preset_store",
                    "preset_migration")
@@ -204,19 +204,19 @@ class TestComposition(unittest.TestCase):
     """
 
     COLLABORATORS = {
-        "stores.history_repo": ("HistoryRepo", {
-            "identity": "stores.history_repo_identity",
-            "planner": "stores.history_repo_append",
-            "media": "stores.history_repo_media",
-            "lifecycle": "stores.history_repo_lifecycle",
+        "stores.history.history_repo": ("HistoryRepo", {
+            "identity": "stores.history.history_repo_identity",
+            "planner": "stores.history.history_repo_append",
+            "media": "stores.history.history_repo_media",
+            "lifecycle": "stores.history.history_repo_lifecycle",
         }),
         "stores.media_store": ("MediaStore", {
             "layout": "stores.media_layout",
             "fetcher": "stores.media_fetch",
             "policy": "stores.media_cache",
         }),
-        "stores.history_db": ("HistoryDB", {
-            "migrator": "stores.history_schema_repair",
+        "stores.history.history_db": ("HistoryDB", {
+            "migrator": "stores.history.history_schema_repair",
         }),
         # the four part-objects live on PRIVATE names: `LabelStore` already
         # owns public `state()` / `assignments()` / `filter()` methods, and a

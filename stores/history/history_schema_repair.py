@@ -21,7 +21,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from stores.history_schema import (
+from stores.history.history_schema import (
     FTS_SCHEMA,
     LEGACY_MESSAGES_CONSTRAINT,
     SCHEMA_VERSION,
@@ -222,7 +222,7 @@ class SchemaMigrator:
     async def _stamp_legacy_identity(self, row_id, row: dict,
                                       nick: str) -> None:
         """The `dup_key` a pre-dedupe row never had, from its own payload."""
-        from stores.history_models import dedupe_key  # local: avoid cycles
+        from stores.history.history_models import dedupe_key  # local: avoid cycles
         payload = row.get("text") or ""
         if row.get("media_id"):
             url = await self._owner.fetchone(
@@ -386,7 +386,7 @@ class SchemaMigrator:
         await self._owner.commit()
 
     async def _backfill_dup_keys(self) -> None:
-        from stores.history_models import dedupe_key  # local: avoid cycles
+        from stores.history.history_models import dedupe_key  # local: avoid cycles
         rows = await self._owner.fetchall(
             "SELECT m.id, m.person_id, m.direction, m.from_nick, m.kind, "
             "m.text, m.ts_display, COALESCE(md.url, '') AS media_url "

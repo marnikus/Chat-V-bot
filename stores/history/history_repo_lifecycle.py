@@ -14,8 +14,8 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from stores.history_models import dedupe_key
-from stores.history_repo_identity import TAIL_FP_LIMIT
+from stores.history.history_models import dedupe_key
+from stores.history.history_repo_identity import TAIL_FP_LIMIT
 
 log = logging.getLogger("chatbot")
 
