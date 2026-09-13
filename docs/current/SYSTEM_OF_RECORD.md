@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-12 (this checkout) |
-| Test suite | `2707 passed, 6 skipped, 1 deselected, 1 xfailed, 777 subtests passed` + 26 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **91.43%** · branch **86.32%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-13 (this checkout) |
+| Test suite | `2829 passed, 6 skipped, 1 deselected, 1 xfailed, 894 subtests passed` + 27 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **91.83%** · branch **87.02%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -46,7 +46,7 @@ collector** archives whatever private conversation is on screen.
 
 | Surface | What it does today | Implementation | Pinned by |
 |---|---|---|---|
-| **Action stack** | 16 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
+| **Action stack** | 17 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` `SPEED_MULTIPLIER` (one coefficient scaling every wait of the run; last enabled SPEED block wins, resolved at run start) | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
 | **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/test_visual_click_contract.py`, `tests/test_find_click_visual.py` |
 | **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
@@ -223,7 +223,7 @@ non-destructive).
 | Layer | Package | Responsibility |
 |---|---|---|
 | Contracts | `core/` (5 files) | DI container, EventBus, interfaces, `Result` — no Qt, no I/O |
-| Blocks | `actions/` (23) | The 16 action blocks + `BaseAction`, registry, cancellation |
+| Blocks | `actions/` (25) | The 17 action blocks + `BaseAction`, registry, cancellation, wait-speed scaling |
 | Page-facing | `backend/` (30) | CDP client, DOM probes, chat parser + private gate, chat sync, scroll parser, visual click, media handler; **compatibility shims** for the pre-split names |
 | Wire | `bridge/` (14) | `bridge/router.py` — ONE QObject on the QWebChannel, assembled from eleven domain bridges: cdp · stack · people · history · label · db · collector · undo · layout · file · window-preset |
 | Orchestration | `services/` (55) | `run/` (engine), `history/` (service + `trash.py` session-sized trash + `migrate.py` install migration), collector (the `collector_*` family), db lifecycle + deletion (the `db_deletion_*` family), layout, people, undo (the `undo_*` family: `undo_service.py` facade + `undo_history.py` / `undo_apply.py` / `undo_db.py` / `undo_world.py` + `undo_archive.py` verified archive commands + `undo_timeline.py` timeline commit + `undo_support.py`) + `world_events.py` (the world's clock: wait for it, announce it live) |
@@ -241,11 +241,11 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2707 tests + 777 subtests)
+# Python (2829 tests + 894 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (26 Node harness files)
+# Front-end (27 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)
@@ -286,7 +286,7 @@ dict, and the collector status strings.
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC **10** (no function over the gate), mean 3.09 · cognitive > 15 only on the two frozen exemptions · nesting max 4 |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.43% / 86.32%** |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.83% / 87.02%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (63.6% in band) · median file 142 lines — RULE 18, re-measured 2026-09-12, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
@@ -297,6 +297,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |
 | 2026-09-10 | [`_delete_unlocked` decomposition](../archive/2026-09-10-safety-refactor/DELETE_FLOW_EXTRACTION_DESIGN_2026-09-10.md) · [CC tail extraction](../archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md) · [remaining tail](../archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md) | How the worst hotspots were split without changing behaviour |
@@ -324,5 +325,6 @@ dict, and the collector status strings.
 | Why the grid behaves like this (autosave, controls, reset)? | [Sash layout](../archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-05.md) + [grid window controls](../archive/2026-09-07-labels-and-collector/GRID_WINDOW_CONTROLS_DESIGN_2026-09-07.md) |
 | Why did media recovery need a root-cause fix? | [Backfill media recovery](../archive/2026-09-07-labels-and-collector/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md) |
 | Why do labels live in the world? | [Person labels & DB management](../archive/2026-09-07-labels-and-collector/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md) |
+| Why does one coefficient scale every wait of a run? | [Speed multiplier design](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) |
 | What did the original architecture propose? | [Architecture v1.0.0 (design phase)](../archive/2026-09-04-foundation/ARCHITECTURE.md) — *superseded by this file* |
 | Which DOM selectors are real? | [DOM selectors](DOM_SELECTORS.md) — still current, verified against the saved HTML |

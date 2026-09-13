@@ -20,6 +20,7 @@ Settings (see docs/archive/2026-09-06-collector-and-history/EXTRA_PAUSE_STATUS_A
 import logging
 from typing import Optional
 from actions.base_action import BaseAction, ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.media_handler import attach_image, DEFAULT_FILE_PATTERN
 
@@ -47,13 +48,14 @@ class AttachImage(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         report = engine.report if engine else None
         ok = await attach_image(cdp, self.folder_path, self.file_pattern,
                                 self.rotation_mode, self.simulate_dialog,
-                                self.verify_timeout_ms,
+                                scale_ms(self.verify_timeout_ms, engine),
                                 self.highlight_enabled,
-                                self.confirm_pause_ms, report)
+                                scale_ms(self.confirm_pause_ms, engine),
+                                report)
         return ActionResult.OK if ok else ActionResult.FAIL
 
     def config_schema(self) -> dict:

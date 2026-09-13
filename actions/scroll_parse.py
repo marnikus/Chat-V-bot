@@ -21,15 +21,28 @@ The people it collects become the engine's messaging queue, which STEP 4
 (`CLICK_USER`) then works through.
 """
 
+import dataclasses
 import logging
 from typing import Optional
 
 from actions.base_action import BaseAction, ActionResult
+from actions.speed import read_multiplier, scale_ms
 from backend.cdp_client import CDPClient
 from backend.person_filter import ANY, NO, YES, PersonFilter, normalize
 from backend.scroll_parser import CollectResult, ScrollOptions, ScrollParser
 
 log = logging.getLogger("chatbot")
+
+
+def _with_run_speed(options, engine):
+    """This pass's pacing knobs, scaled by the run's wait-speed rate."""
+    if read_multiplier(engine) == 1.0:
+        return options
+    return dataclasses.replace(
+        options,
+        pause_ms=scale_ms(options.pause_ms, engine),
+        load_timeout_ms=scale_ms(options.load_timeout_ms, engine),
+        confirm_pause_ms=scale_ms(options.confirm_pause_ms, engine))
 
 
 class ScrollParse(BaseAction):
@@ -250,6 +263,7 @@ class ScrollParse(BaseAction):
                                    on_collect=on_collect,
                                    on_reject=on_reject,
                                    should_stop=should_stop)
+        parser.options = _with_run_speed(parser.options, engine)
         result = await parser.collect(min_new_users=self.min_new_users,
                                       known_messaged=known_messaged or set(),
                                       seek_nicks=seek)
@@ -279,7 +293,7 @@ class ScrollParse(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         panel = getattr(engine, "criteria", None) if engine else None
         result = await self.run_pipeline(cdp, engine, panel_criteria=panel)
         if result.seeking and not result.collected:

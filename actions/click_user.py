@@ -13,6 +13,7 @@ import logging
 from typing import Optional
 
 from actions.base_action import BaseAction, ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.visual_click import find_and_click_exact
 
@@ -97,7 +98,7 @@ class ClickUser(BaseAction):
         and the "did the page react?" check is what makes this block refuse
         rather than report a click nobody can see.
         """
-        await self.pre_delay()
+        await self.pre_delay(engine)
         nick = self._resolve_nick(user_nick, engine)
         if nick is None:
             return ActionResult.FAIL
@@ -200,9 +201,10 @@ class ClickUser(BaseAction):
         """The configured pause that gives a new tab time to open."""
         if not self.tab_pause_ms:
             return
-        self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
+        wait_ms = scale_ms(self.tab_pause_ms, engine)
+        self._say(engine, f"⏸ Waiting {wait_ms} ms for the new "
                           "tab…", "info")
-        await asyncio.sleep(self.tab_pause_ms / 1000.0)
+        await asyncio.sleep(wait_ms / 1000.0)
 
     @staticmethod
     def _tab_evidence(before: Optional[dict], after: dict) -> tuple:

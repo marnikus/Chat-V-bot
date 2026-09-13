@@ -40,6 +40,7 @@ class RunLifecycleMixin:
             + f"_{self._run_seq}"
         self._tracer = RunTracer(run_id)
         self.selected_nick = ""
+        self.speed_multiplier = self._resolve_run_speed()
         self.log_msg.emit(f"▶▶ Run #{run_id} started")
         self.debug_msg.emit(
             f"📄 Trace file: {self._tracer.path}", "info")
@@ -48,6 +49,17 @@ class RunLifecycleMixin:
             "blocks": [b.block_id for b in self._stack],
         })
         return self._repeat_cycles()
+
+    def _resolve_run_speed(self) -> float:
+        """The run's wait-speed rate: last enabled SPEED block wins (×1.0 default)."""
+        # Local import: keeps "import services.run" light (actions/__init__
+        # scans every block module); same as error_recovery's stop helpers.
+        from actions.speed import describe, resolve_stack_multiplier
+        value = resolve_stack_multiplier(self._stack)
+        if value != 1.0:
+            self.debug_msg.emit(f"⏩ Global wait speed {describe(value)}",
+                                "info")
+        return value
 
     def _announce_repeat(self, cycles: int) -> None:
         if cycles > 1:
