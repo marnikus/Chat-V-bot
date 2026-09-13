@@ -15,7 +15,7 @@ The overlay is a separate ``div`` with ``pointer-events:none`` and a transparent
 background, so it can never intercept the click nor affect page layout.
 """
 
-# ideal-size: 534 lines reason=scheduled debt, not a frozen contract — the
+# ideal-size: 514 lines reason=scheduled debt, not a frozen contract — the
 # AREA-D snapshot freeze this note used to cite was lifted by owner ruling
 # 2026-09-13 (docs/archive/2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md
 # §1c). The split is tracked in that plan's §4 as step G7 backlog.
