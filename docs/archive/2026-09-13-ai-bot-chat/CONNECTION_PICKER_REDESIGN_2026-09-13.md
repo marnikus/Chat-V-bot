@@ -227,3 +227,23 @@ editors use, so matching the app is a consequence of sharing the palette.
 pre-existing failure; RULE 16 gate clean; RULE 18 re-checked — controller 310
 code lines, view 184, no function over 20. §6.1 and §6.3 were each proved by
 reverting the fix and watching the new test fail.
+
+
+### 6.5 The close cross floated and resized
+
+The header is a flex row holding a text block and the ✕. The text block had
+no flex sizing, so its width was content-driven — it grew and shrank with
+however the title and subtitle happened to wrap — and the cross was pushed
+right with `margin-left: auto`, which positions it relative to that moving
+box. The button was also a plain flex item, so its neighbour could squeeze
+it, and `.ui-btn--icon` set a width but no height while the header's
+`align-items: flex-start` declined to stretch it. Hence: floating *and*
+resizing.
+
+The fix inverts which element absorbs the slack. The headings get
+`flex: 1 1 auto; min-width: 0` and the button `flex: none`, so the cross is
+pinned by the layout rather than pushed by a margin, and a long title
+ellipsizes inside its own box instead of shoving the button off the edge.
+`.ui-btn--icon` now states `height: 28px` so it is square and matches the
+shared button height in every context. The key-reveal button, the popup's
+other icon button, gets the same pin.

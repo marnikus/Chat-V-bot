@@ -935,6 +935,35 @@ t('it reuses the Bookmarks panel styling', () => {
      'the popup must reuse the Bookmarks panel styling');
 });
 
+t('the close button is pinned right and cannot be resized by the title', () => {
+  /* The reported drift: the header is a flex row whose text block had no
+     flex sizing, so its width followed the wrapping of the title and
+     subtitle. `margin-left:auto` pushes the button right relative to THAT
+     moving box, and a flex item with no flex-none shrinks besides — so the
+     cross floated and changed size as the heading reflowed. The text block
+     must absorb the free space and the button must be rigid. */
+  const css = readUi('css/bot-chat.css');
+  const text = /\.bot-settings-headings[^{]*\{([^}]*)\}/.exec(css);
+  ok(text, 'the heading block needs a class of its own to be sized');
+  ok(/flex:\s*1/.test(text[1]),
+     'the text block must take the slack, so the button stops moving');
+  ok(/min-width:\s*0/.test(text[1]),
+     'without min-width:0 a long title pushes the button off instead');
+
+  const btn = /\.bot-settings-head\s+\.ui-btn[^{]*\{([^}]*)\}/.exec(css);
+  ok(btn, 'the close button must be pinned explicitly');
+  ok(/flex:\s*none/.test(btn[1]),
+     'a flex item with no flex:none is resized by its neighbours');
+});
+
+t('the close button keeps the shared button metrics', () => {
+  const css = readUi('css/bot-chat.css');
+  const icon = /\.ui-btn--icon\s*\{([^}]*)\}/.exec(css)[1];
+  ok(/width:\s*28px/.test(icon), 'square, matching the 28px button height');
+  ok(/height:\s*28px/.test(icon),
+     'height must be stated too — flex-start would otherwise shrink it');
+});
+
 t('every field in the popup is dark, like the rest of the app', () => {
   /* The reported "white elements". This app has NO global input rule —
      each window styles its own fields by id or class — so a bare <input>

@@ -193,19 +193,30 @@
 .ui-btn--danger:hover:not(:disabled) {
   background: var(--red-dim); border-color: var(--red);
 }
-.ui-btn--icon { width: 28px; padding: 0; font-size: 13px; }
+.ui-btn--icon { width: 28px; height: 28px; padding: 0; font-size: 13px; }
 .ui-btn--block { width: 100%; }
 
-/* header */
+/* header
+   The close button is pinned to the right by making the HEADINGS take all
+   the slack (flex:1) and the button rigid (flex:none) — not by pushing the
+   button with margin-left:auto, which only positions it relative to a text
+   block whose width follows however the title happens to wrap. That is why
+   the cross used to float and resize as the heading reflowed.
+   min-width:0 lets a long title ellipsize inside its own box instead of
+   widening it and shoving the button off the edge. */
 .bot-settings-head {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
 }
-.bot-settings-head h3 { margin: 0; font-size: 14px; }
+.bot-settings-headings { flex: 1 1 auto; min-width: 0; }
+.bot-settings-head h3 {
+  margin: 0; font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .bot-settings-sub {
   margin: 3px 0 0; font-size: var(--font-size-xs); color: var(--text-muted);
 }
-.bot-settings-head .ui-btn { margin-left: auto; }
+.bot-settings-head .ui-btn { flex: none; }
 
 /* body: fixed rail + fluid detail */
 .bot-settings-body {
@@ -329,8 +340,9 @@
 .bot-settings input:focus {
   outline: none; border-color: var(--border-focus);
 }
-.bot-key-row { display: flex; gap: 5px; }
+.bot-key-row { display: flex; gap: 5px; align-items: center; }
 .bot-key-row input { flex: 1 1 auto; min-width: 0; }
+.bot-key-row .ui-btn { flex: none; }   /* same pin as the header cross */
 
 /* footer — always visible while the detail pane scrolls */
 .bot-settings-actions {
