@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import logging
 
+from services import bot_variables
+
 log = logging.getLogger("chatbot")
 
 #: template id → (title, default text). The ids are the wire contract the UI
@@ -37,6 +39,8 @@ DEFAULTS: dict[str, tuple[str, str]] = {
         "positive - they answered warmly and asked a question back."),
 }
 
+#: the original three names. Kept because templates users already saved
+#: contain them; `bot_variables.ALIASES` maps them onto the current names.
 PLACEHOLDERS = ("conversation", "last_message", "nick")
 
 
@@ -51,14 +55,15 @@ def title_of(template_id: str) -> str:
 
 
 def is_usable(text: str) -> bool:
-    """A stored template is used only when it is text with a known shape."""
-    if not isinstance(text, str) or not text.strip():
-        return False
-    try:
-        text.format(**{key: "" for key in PLACEHOLDERS})
-    except (KeyError, IndexError, ValueError):
-        return False
-    return True
+    """A stored template is used only when it is text.
+
+    It used to also reject any unknown placeholder, which meant that typing
+    `{tone}` threw the user's whole template away and silently restored the
+    default. Unknown placeholders are now left in the prompt and surfaced as
+    a warning by `bot_variables.validate`, so the user can see and fix them.
+    Only genuinely empty text falls back.
+    """
+    return isinstance(text, str) and bool(text.strip())
 
 
 class PromptLibrary:
@@ -110,8 +115,4 @@ class PromptLibrary:
 
     def render(self, template_id: str, values: dict) -> str:
         """The exact text that will be sent to Grok, placeholders filled."""
-        filled = {key: str(values.get(key, "") or "") for key in PLACEHOLDERS}
-        try:
-            return self.text(template_id).format(**filled)
-        except (KeyError, IndexError, ValueError):
-            return default_text(template_id).format(**filled)
+        return bot_variables.fill(self.text(template_id), values)

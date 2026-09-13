@@ -1,4 +1,11 @@
-"""GrokClient — the ONE place that talks to the Grok completions API.
+"""GrokClient — the ONE place that talks to an AI completions API.
+
+Named for Grok because that is the provider it shipped with, but it is now
+the generic transport: WHICH provider it talks to is a `ProviderSpec` from
+`bot_providers`, and only the request shaping and reply parsing vary. The
+timeout, the empty-prompt and missing-key guards and the
+exception-to-`Result` funnel are identical for every provider, so there is
+one of each.
 
 A domain failure (no API key, HTTP error, unparseable body) is a typed
 `Result`, never an exception: the AI Bot Chat window must be able to say
@@ -15,23 +22,61 @@ import logging
 from typing import Any, Optional
 
 from core.result import Err, Ok, Result
+from services import bot_providers
 
 log = logging.getLogger("chatbot")
 
-DEFAULT_URL = "https://api.x.ai/v1/chat/completions"
-DEFAULT_MODEL = "grok-2-latest"
 DEFAULT_TIMEOUT_S = 30
 
 
-class GrokSettings:
-    """The connection half of the `grok` config section."""
+def mask(api_key: str) -> str:
+    """A key as the dialog may show it: proof it is stored, not the secret."""
+    key = str(api_key or "")
+    return f"{key[:4]}…{key[-4:]}" if len(key) > 12 else ("set" if key else "")
 
-    def __init__(self, config=None) -> None:
+
+class GrokSettings:
+    """The connection settings of ONE provider, inside the `grok` section.
+
+    Layout, and why: the provider that shipped first keeps the original flat
+    keys (`grok.api_key`, `grok.model`, `grok.url`), so an existing install
+    keeps working untouched. Any other provider lives under
+    `grok.providers.<id>`. Per-provider storage is what makes switching
+    providers non-destructive — the acceptance criterion is that changing
+    provider must not lose anything, and keys share that requirement with
+    the templates, which live in `grok.prompts` and are never read here.
+    """
+
+    def __init__(self, config=None, provider: str = "") -> None:
         self._config = config
+        self.provider = str(provider or "") or self.active_id(config)
+        self.spec = bot_providers.spec_of(self.provider)
+
+    @staticmethod
+    def active_id(config) -> str:
+        """Which provider the app is currently set to use."""
+        if config is None:
+            return bot_providers.DEFAULT_PROVIDER
+        value = config.get("grok", "provider",
+                           default=bot_providers.DEFAULT_PROVIDER)
+        return str(value or bot_providers.DEFAULT_PROVIDER)
+
+    def _bucket(self) -> dict:
+        """This provider's stored settings; the first provider is flat."""
+        if self._config is None:
+            return {}
+        if self.provider == bot_providers.DEFAULT_PROVIDER:
+            return {}
+        buckets = self._config.get("grok", "providers", default={})
+        bucket = (buckets or {}).get(self.provider)
+        return bucket if isinstance(bucket, dict) else {}
 
     def _read(self, key: str, default: Any) -> Any:
         if self._config is None:
             return default
+        if self.provider != bot_providers.DEFAULT_PROVIDER:
+            value = self._bucket().get(key)
+            return default if value in (None, "") else value
         value = self._config.get("grok", key, default=default)
         return default if value in (None, "") else value
 
@@ -41,11 +86,17 @@ class GrokSettings:
 
     @property
     def url(self) -> str:
-        return str(self._read("url", DEFAULT_URL)).strip() or DEFAULT_URL
+        return str(self._read("url", self.spec.url)).strip() or self.spec.url
 
     @property
     def model(self) -> str:
-        return str(self._read("model", DEFAULT_MODEL)).strip() or DEFAULT_MODEL
+        return (str(self._read("model", self.spec.model)).strip()
+                or self.spec.model)
+
+    @property
+    def endpoint(self) -> str:
+        """The URL actually posted to (Gemini needs the model in the path)."""
+        return bot_providers.endpoint(self.spec, self.url, self.model)
 
     @property
     def timeout_s(self) -> int:
@@ -54,66 +105,76 @@ class GrokSettings:
         except (TypeError, ValueError):
             return DEFAULT_TIMEOUT_S
 
-    def save(self, api_key: str, model: str = "") -> bool:
-        """Store the connection settings the Prompt Editor window collects.
+    def save(self, api_key: str, model: str = "", url: str = "") -> bool:
+        """Store this provider's settings from the AI Settings dialog.
 
-        Without this the key was reachable only by hand-editing
-        settings.json, which made the whole feature unusable out of the box.
         A blank field leaves the stored value alone, so re-saving the model
-        does not wipe a key the password input never echoes back.
+        does not wipe a key the password input never echoes back. Writes
+        only this provider's keys — never another provider's, and never
+        `grok.prompts`.
         """
         if self._config is None:
             return False
-        if str(api_key or "").strip():
-            self._config.set("grok", "api_key", str(api_key).strip())
-        if str(model or "").strip():
-            self._config.set("grok", "model", str(model).strip())
+        fields = {"api_key": api_key, "model": model, "url": url}
+        given = {k: str(v).strip() for k, v in fields.items()
+                 if str(v or "").strip()}
+        if given:
+            self._write(given)
+        self._config.save()
+        return True
+
+    def _write(self, given: dict) -> None:
+        if self.provider == bot_providers.DEFAULT_PROVIDER:
+            for key, value in given.items():
+                self._config.set("grok", key, value)
+            return
+        buckets = dict(self._config.get("grok", "providers", default={}) or {})
+        bucket = dict(buckets.get(self.provider) or {})
+        bucket.update(given)
+        buckets[self.provider] = bucket
+        self._config.set("grok", "providers", buckets)
+
+    def use(self, provider: str) -> bool:
+        """Make `provider` the active one. Touches no key and no template."""
+        if self._config is None or provider not in bot_providers.PROVIDERS:
+            return False
+        self._config.set("grok", "provider", provider)
         self._config.save()
         return True
 
     def state(self) -> dict:
-        """What the editor shows: never the key itself, only whether it is set."""
-        return {"has_key": bool(self.api_key), "model": self.model,
-                "url": self.url}
+        """What the dialog shows: a MASKED key, never the key itself."""
+        return {"provider": self.provider, "title": self.spec.title,
+                "has_key": bool(self.api_key), "masked": mask(self.api_key),
+                "model": self.model, "url": self.url,
+                "endpoint": self.endpoint}
 
 
-def first_choice(body: dict) -> Any:
-    """The first choice of a completions body, or None when there is none."""
-    choices = body.get("choices")
-    return choices[0] if isinstance(choices, list) and choices else None
-
-
-
-def reply_text(body: Any) -> Result[str]:
-    """The assistant text of a completions response, or a typed error.
+def reply_text(body: Any, provider: str = "") -> Result[str]:
+    """The assistant text of a response, or a typed error.
 
     Each failure keeps its own code because the window shows them to the
     user: "the endpoint is not speaking JSON" and "the model had nothing to
     say" are different problems with different fixes.
     """
-    if not isinstance(body, dict):
-        return Err("grok_bad_body", "the API answered with a non-object")
-    choice = first_choice(body)
-    if choice is None:
-        return Err("grok_no_choices", str(body.get("error") or body)[:200])
-    text = str(((choice or {}).get("message") or {}).get("content")
-               or "").strip()
-    return Ok(text) if text else Err("grok_empty",
-                                     "the model returned an empty message")
+    return bot_providers.reply_of(bot_providers.spec_of(provider), body)
 
 
 class GrokClient:
-    """One `complete(prompt)` call against the configured Grok endpoint."""
+    """One `complete(prompt)` call against the configured AI endpoint."""
 
-    def __init__(self, config=None, session_factory=None) -> None:
-        self.settings = GrokSettings(config)
+    def __init__(self, config=None, session_factory=None,
+                 provider: str = "") -> None:
+        self.settings = GrokSettings(config, provider)
         #: injected in tests; the default builds an `aiohttp.ClientSession`
         self._session_factory = session_factory
 
+    @property
+    def spec(self):
+        return self.settings.spec
+
     def _payload(self, prompt: str) -> dict:
-        return {"model": self.settings.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False}
+        return bot_providers.body_of(self.spec, self.settings.model, prompt)
 
     def _session(self):
         if self._session_factory is not None:
@@ -123,15 +184,16 @@ class GrokClient:
             timeout=aiohttp.ClientTimeout(total=self.settings.timeout_s))
 
     async def _post(self, prompt: str) -> Result[str]:
-        headers = {"Authorization": f"Bearer {self.settings.api_key}",
-                   "Content-Type": "application/json"}
+        headers = bot_providers.headers_of(self.spec, self.settings.api_key)
         async with self._session() as session:
-            async with session.post(self.settings.url, json=self._payload(prompt),
+            async with session.post(self.settings.endpoint,
+                                    json=self._payload(prompt),
                                     headers=headers) as response:
                 if int(getattr(response, "status", 0)) != 200:
                     return Err("grok_http",
                                f"HTTP {getattr(response, 'status', '?')}")
-                return reply_text(await response.json())
+                return bot_providers.reply_of(self.spec,
+                                              await response.json())
 
     async def complete(self, prompt: str) -> Result[str]:
         """Ask Grok once. Every failure comes back as `Err`, never raised."""
@@ -139,8 +201,9 @@ class GrokClient:
             return Err("grok_no_prompt", "the prompt is empty")
         if not self.settings.api_key:
             return Err("grok_no_key",
-                       "no Grok API key — set one in the Grok Prompt Editor "
-                       "window, under “Grok API key”")
+                       f"no {self.spec.title} API key — set one in the AI "
+                       f"Settings dialog (the ⚙ button in the AI Bot Chat "
+                       f"window)")
         try:
             return await self._post(prompt)
         except Exception as exc:                            # noqa: BLE001
@@ -148,6 +211,8 @@ class GrokClient:
             return Err("grok_unreachable", str(exc)[:200])
 
 
-def client_for(config, session_factory: Optional[Any] = None) -> GrokClient:
+def client_for(config, session_factory: Optional[Any] = None,
+               provider: str = "") -> GrokClient:
     """Factory kept next to the client so callers need one import."""
-    return GrokClient(config=config, session_factory=session_factory)
+    return GrokClient(config=config, session_factory=session_factory,
+                      provider=provider)

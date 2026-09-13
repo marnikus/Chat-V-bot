@@ -394,6 +394,7 @@
         <span class="spacer"></span>
         <span id="botChatPerson" class="bot-person" title="The person this window works on">no person</span>
         <button id="botReloadBtn" class="btn-icon-sm" title="Reload today's messages"><span class="material-icons">refresh</span></button>
+        <button id="botSettingsBtn" class="btn-icon-sm" title="AI provider settings — API key, model, endpoint"><span class="material-icons">settings</span></button>
       </h3>
       <div class="bot-toolbar">
         <button id="botSuggestBtn" class="btn-small btn-primary" type="button"
@@ -424,6 +425,46 @@
       <div class="bot-status" id="botChatStatus" aria-live="polite"></div>
     </div>
 
+    <!-- AI SETTINGS — a modal dialog, opened by the ⚙ in the AI Bot Chat
+         title bar. Not a grid window: it is opened rarely and closed again,
+         and the spec calls it a dialog. -->
+    <div class="bot-settings-backdrop hidden" id="botSettingsBackdrop">
+      <div class="bot-settings" role="dialog" aria-modal="true"
+           aria-labelledby="botSettingsTitle">
+        <h3 id="botSettingsTitle">AI provider settings
+          <span class="spacer"></span>
+          <button id="botSettingsCloseBtn" class="btn-icon-sm" type="button"
+                  title="Close without saving">✕</button>
+        </h3>
+        <div class="bot-settings-body">
+          <div class="bot-provider-list" id="botProviderList"></div>
+          <div class="bot-provider-form">
+            <label for="botProviderKey">API key</label>
+            <input id="botProviderKey" type="password" spellcheck="false"
+                   autocomplete="off"
+                   placeholder="stored on this machine — leave blank to keep the saved one">
+            <span id="botProviderKeyState" class="bot-hint"></span>
+            <label for="botProviderModel">Model</label>
+            <input id="botProviderModel" type="text" spellcheck="false"
+                   list="botProviderModels">
+            <label for="botProviderUrl">Endpoint</label>
+            <input id="botProviderUrl" type="text" spellcheck="false">
+            <span class="bot-hint">Leave the endpoint as it is unless you use a proxy.</span>
+          </div>
+        </div>
+        <div class="bot-settings-actions">
+          <button id="botTestConnBtn" class="btn-small" type="button"
+                  title="Send one tiny request with these settings">Test connection</button>
+          <button id="botUseProviderBtn" class="btn-small" type="button"
+                  title="Make this the provider the AI Bot Chat uses">Use this provider</button>
+          <span class="spacer"></span>
+          <button id="botSettingsSaveBtn" class="btn-success" type="button">Save</button>
+          <button id="botSettingsCancelBtn" class="btn-small" type="button">Cancel</button>
+        </div>
+        <div id="botSettingsStatus" class="bot-status" aria-live="polite"></div>
+      </div>
+    </div>
+
     <!-- GROK PROMPT EDITOR — a separate window, never embedded in Bot Chat -->
     <div class="panel botprompt-panel" id="winBotPrompt" data-window="botprompt">
       <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">edit_note</span> Grok Prompt Editor
@@ -433,7 +474,12 @@
       </h3>
       <div class="bot-prompt-tabs" id="botPromptTabs"></div>
       <textarea id="botPromptText" class="bot-prompt-text" spellcheck="false"
-                placeholder="Prompt template — use {nick}, {conversation} and {last_message}"></textarea>
+                placeholder="Prompt template — click a variable below to insert it"></textarea>
+      <div id="botPromptWarn" class="bot-prompt-warn hidden" aria-live="polite"></div>
+      <details class="bot-vars" id="botVarsBox" open>
+        <summary>Variables — click one to insert it at the cursor</summary>
+        <div class="bot-vars-list" id="botVarsList"></div>
+      </details>
       <div class="bot-prompt-actions">
         <button id="botPromptSaveBtn" class="btn-success" type="button">Save</button>
         <button id="botPromptCancelBtn" class="btn-small" type="button">Cancel</button>
@@ -596,6 +642,7 @@
 <script src="js/labels.js"></script>
 <script src="js/db-panel.js"></script>
 <script src="js/bot-chat.js"></script>
+<script src="js/bot-settings.js"></script>
 <script src="js/bot-prompt.js"></script>
 </body>
 </html>

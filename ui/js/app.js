@@ -189,6 +189,7 @@ function initApp() {
   if (typeof DbPanel !== 'undefined') DbPanel.init();
   // AI Bot Chat + Grok Prompt Editor windows.
   if (typeof BotChat !== 'undefined') BotChat.init();
+  if (typeof BotSettings !== 'undefined') BotSettings.init();
   if (typeof BotPrompt !== 'undefined') BotPrompt.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {

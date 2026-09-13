@@ -28,10 +28,13 @@ if ROOT not in sys.path:
 
 from backend.config_manager import ConfigManager            # noqa: E402
 from services import bot_chat                                # noqa: E402
+from services import bot_providers                         # noqa: E402
+from services import bot_variables                          # noqa: E402
 from services.bot_chat import BotChatService, as_transcript, last_inbound  # noqa: E402
 from services.bot_grok import (GrokClient, GrokSettings,      # noqa: E402
-                               first_choice, reply_text)
+                               mask, reply_text)
 from services.bot_prompts import PromptLibrary, is_usable    # noqa: E402
+from backend.history_query import HistoryQuery               # noqa: E402
 from stores.history_db import HistoryDB                      # noqa: E402
 
 TODAY = date.today().isoformat()
@@ -55,17 +58,22 @@ class FakeGrok:
 
 
 class FakeArchive:
-    """Only what the service may read off the archive: the database.
+    """What the service may read off the archive: the db and the query.
 
-    Notably NOT a `labels` attribute — the real `HistoryService` has none
-    (it keeps the store as the private `_labels`), and a double that invents
-    one is how the label write came to be dead in the app while green in the
-    suite. The store is injected instead; `TestRealArchiveInterface` holds
-    the line against the real class.
+    `query` is the REAL `HistoryQuery` over the same handle, not a stub —
+    reading the archive through it (instead of through a second hand-written
+    SELECT) is what makes media reach the window at all, so a double that
+    faked it would hide exactly the bug this shape fixes.
+
+    Notably NOT a `labels` attribute: the real `HistoryService` has none (it
+    keeps the store as the private `_labels`), and a double that invents one
+    is how the label write came to be dead in the app while green in the
+    suite. The store is injected instead.
     """
 
     def __init__(self, db=None):
         self.db = db
+        self.query = HistoryQuery(db) if db is not None else None
 
 
 async def make_db(rows):
@@ -139,6 +147,101 @@ class TestTodaysMessages(unittest.TestCase):
         run(db.commit())
         svc = BotChatService(archive=FakeArchive(db), config=None)
         self.assertTrue(run(svc.today("Anna"))["empty"])
+
+
+async def add_media_message(db, url, kind, cache_path, ordinal):
+    """A media-only message (no text) — a GIF, exactly as the collector files it."""
+    await db.execute(
+        "INSERT INTO media (url, kind, state, cache_path) VALUES (?,?,?,?)",
+        (url, kind, "cached" if cache_path else "pending", cache_path))
+    mid = await db.scalar("SELECT id FROM media WHERE url=?", (url,))
+    pid = await db.scalar("SELECT id FROM persons WHERE nick='Anna'")
+    await db.execute(
+        "INSERT INTO messages (person_id, ord, direction, from_nick, text, "
+        "kind, media_id, day, ts_display) VALUES (?,?,?,?,?,?,?,?,?)",
+        (pid, ordinal, "in", "Anna", "", kind, mid, TODAY, "12:30"))
+    await db.commit()
+    return mid
+
+
+class TestMediaReachesTheWindow(unittest.TestCase):
+    """The GIF bug: a media message used to arrive with no media at all.
+
+    `today()` hand-wrote its own four-column SELECT with no `media` join, so
+    a GIF row reached the window as an empty message. The renderer was never
+    the problem. Reading through `HistoryQuery.page` — the archive's ONE read,
+    the same one the DB window uses — is what fixes it, so these tests assert
+    the item shape the DB window's renderer already knows how to draw.
+    """
+
+    def service(self, cache_path=""):
+        db = run(make_db([("in", "Anna", "look at this", TODAY)]))
+        path = cache_path
+        if path == "auto":
+            handle, path = tempfile.mkstemp(suffix=".gif")
+            os.close(handle)
+        run(add_media_message(db, "http://x/a.gif", "gif", path, 2))
+        return BotChatService(archive=FakeArchive(db), config=None,
+                              grok=FakeGrok(None)), path
+
+    def test_a_gif_message_carries_its_media_block(self):
+        svc, path = self.service("auto")
+        items = run(svc.today("Anna"))["items"]
+        self.assertEqual(len(items), 2, "the media message must be there")
+        media = items[-1]["media"]
+        self.assertEqual(media["kind"], "gif")
+        self.assertEqual(media["url"], "http://x/a.gif")
+        self.assertEqual(media["path"], path, "the cached file the UI loads")
+        self.assertEqual(media["state"], "cached")
+
+    def test_a_media_file_that_vanished_is_reported_missing_not_broken(self):
+        """The DB view downgrades it so the UI shows "click to restore"
+        instead of a broken <img>. Bot Chat inherits that for free."""
+        svc, _ = self.service("/nope/gone.gif")
+        media = run(svc.today("Anna"))["items"][-1]["media"]
+        self.assertEqual(media["state"], "missing")
+        self.assertEqual(media["path"], "")
+
+    def test_the_items_keep_the_shape_the_db_renderer_expects(self):
+        svc, _ = self.service("auto")
+        item = run(svc.today("Anna"))["items"][-1]
+        for key in ("dir", "from", "text", "time", "day", "kind", "media"):
+            self.assertIn(key, item, key)
+
+    def test_a_media_only_message_is_not_dropped_from_the_ai_context(self):
+        """A day of nothing but stickers must not reach Grok as an empty
+        transcript — the model would be answering about nothing."""
+        svc, _ = self.service("auto")
+        page = run(svc.today("Anna"))
+        transcript = bot_chat.as_transcript(page["items"])
+        self.assertIn("[gif]", transcript)
+        self.assertIn("look at this", transcript)
+
+    def test_a_media_only_answer_is_the_last_message(self):
+        svc, _ = self.service("auto")
+        page = run(svc.today("Anna"))
+        self.assertEqual(bot_chat.item_text(
+            bot_chat.last_inbound(page["items"])), "[gif]")
+
+
+class TestItemText(unittest.TestCase):
+    def test_text_wins_media_fills_in_and_plain_empty_stays_empty(self):
+        self.assertEqual(bot_chat.item_text({"text": " hi "}), "hi")
+        self.assertEqual(bot_chat.item_text(
+            {"text": "", "media": {"kind": "gif"}}), "[gif]")
+        self.assertEqual(bot_chat.item_text(
+            {"text": "", "kind": "image", "media": {}}), "[image]")
+        self.assertEqual(bot_chat.item_text({"text": "", "kind": "text"}), "")
+        self.assertEqual(bot_chat.item_text({}), "")
+
+
+class TestItemsOfDay(unittest.TestCase):
+    def test_it_keeps_only_the_named_day(self):
+        items = [{"day": TODAY, "text": "a"}, {"day": YESTERDAY, "text": "b"},
+                 {"text": "c"}]
+        self.assertEqual([i["text"] for i in
+                          bot_chat.items_of_day(items, TODAY)], ["a"])
+        self.assertEqual(bot_chat.items_of_day(None, TODAY), [])
 
 
 class TestTranscriptHelpers(unittest.TestCase):
@@ -420,14 +523,151 @@ class TestGrokClient(unittest.TestCase):
             "grok_empty")
 
 
-class TestFirstChoice(unittest.TestCase):
-    def test_it_picks_the_first_choice_or_says_there_is_none(self):
-        self.assertEqual(first_choice({"choices": [{"a": 1}, {"b": 2}]}),
-                         {"a": 1})
-        for body in ({"choices": []}, {"choices": "nope"}, {}):
-            self.assertIsNone(first_choice(body), body)
-        self.assertIsNone(first_choice({"choices": [None]}),
-                          "an empty first choice is no choice")
+class TestTheGoogleCallEndToEnd(unittest.TestCase):
+    """The whole transport against a fake session — not just the parsers.
+
+    Unit-testing the four differing functions would pass even if the client
+    never called them, which is exactly the kind of green-but-dead test this
+    codebase has been bitten by before.
+    """
+
+    def client(self, response):
+        cfg = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+        cfg.set("grok", "provider", "google")
+        cfg.set("grok", "providers",
+                {"google": {"api_key": "AIza-test-key",
+                            "model": "gemini-test"}})
+        session = FakeSession(response)
+        return GrokClient(config=cfg, session_factory=lambda: session), session
+
+    def test_a_google_call_uses_googles_url_header_and_body(self):
+        body = {"candidates": [{"content": {"parts": [{"text": " hi "}]},
+                                "finishReason": "STOP"}]}
+        client, session = self.client(FakeResponse(200, body))
+        self.assertEqual(run(client.complete("say hi")).value, "hi")
+        call = session.calls[0]
+        self.assertIn("gemini-test:generateContent", call["url"])
+        self.assertEqual(call["headers"]["x-goog-api-key"], "AIza-test-key")
+        self.assertNotIn("Authorization", call["headers"])
+        self.assertEqual(call["json"]["contents"][0]["parts"][0]["text"],
+                         "say hi")
+
+    def test_the_key_is_never_put_in_the_url(self):
+        client, session = self.client(FakeResponse(200, {"candidates": []}))
+        run(client.complete("hi"))
+        self.assertNotIn("AIza-test-key", session.calls[0]["url"])
+
+    def test_an_http_error_is_typed_not_raised(self):
+        client, _ = self.client(FakeResponse(403, {}))
+        self.assertEqual(run(client.complete("hi")).code, "grok_http")
+
+    def test_switching_provider_switches_the_wire_format(self):
+        """The same client class, two completely different requests."""
+        cfg = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
+        cfg.set("grok", "api_key", "xai-key")
+        session = FakeSession(FakeResponse(
+            200, {"choices": [{"message": {"content": "ok"}}]}))
+        grok = GrokClient(config=cfg, session_factory=lambda: session)
+        run(grok.complete("hi"))
+        self.assertIn("messages", session.calls[0]["json"])
+        self.assertIn("api.x.ai", session.calls[0]["url"])
+
+
+class TestGoogleProvider(unittest.TestCase):
+    """Gemini's wire format, which agrees with Grok's about nothing."""
+
+    SPEC = bot_providers.spec_of("google")
+
+    def test_the_key_goes_in_the_header_not_the_url(self):
+        """Putting an API key in a query string leaks it into every proxy
+        log and browser history along the way."""
+        headers = bot_providers.headers_of(self.SPEC, "SECRET")
+        self.assertEqual(headers["x-goog-api-key"], "SECRET")
+        self.assertNotIn("Authorization", headers)
+        self.assertNotIn("SECRET", bot_providers.endpoint(
+            self.SPEC, self.SPEC.url, "gemini-2.0-flash"))
+
+    def test_the_model_goes_in_the_path(self):
+        self.assertEqual(
+            bot_providers.endpoint(self.SPEC, self.SPEC.url, "gemini-x"),
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-x:generateContent")
+
+    def test_the_body_is_contents_and_parts(self):
+        body = bot_providers.body_of(self.SPEC, "m", "hello")
+        self.assertEqual(body["contents"][0]["parts"][0]["text"], "hello")
+        self.assertNotIn("messages", body)
+
+    def test_it_reads_the_reply_out_of_candidates(self):
+        body = {"candidates": [{"content": {"parts": [{"text": "hi "},
+                                                      {"text": "there"}]},
+                                "finishReason": "STOP"}]}
+        self.assertEqual(bot_providers.reply_of(self.SPEC, body).value,
+                         "hi there")
+
+    def test_a_safety_refusal_is_named_not_called_empty(self):
+        """A blocked prompt returns a candidate with no text. Reporting
+        that as "empty answer" sends the user hunting the wrong bug."""
+        body = {"candidates": [{"content": {"parts": []},
+                                "finishReason": "SAFETY"}]}
+        result = bot_providers.reply_of(self.SPEC, body)
+        self.assertEqual(result.code, "grok_refused")
+        self.assertIn("safety", result.detail)
+
+    def test_a_blocked_prompt_is_reported(self):
+        body = {"promptFeedback": {"blockReason": "SAFETY"}}
+        self.assertEqual(bot_providers.reply_of(self.SPEC, body).code,
+                         "grok_refused")
+
+    def test_a_truncated_answer_is_still_an_answer(self):
+        body = {"candidates": [{"content": {"parts": [{"text": "half a sen"}]},
+                                "finishReason": "MAX_TOKENS"}]}
+        self.assertEqual(bot_providers.reply_of(self.SPEC, body).value,
+                         "half a sen")
+
+    def test_no_candidates_and_a_non_object_are_typed_errors(self):
+        self.assertEqual(bot_providers.reply_of(self.SPEC, {}).code,
+                         "grok_no_choices")
+        self.assertEqual(bot_providers.reply_of(self.SPEC, "nope").code,
+                         "grok_bad_body")
+        self.assertEqual(
+            bot_providers.reply_of(self.SPEC,
+                                   {"candidates": [{"content": {}}]}).code,
+            "grok_empty")
+
+
+class TestProviderCatalog(unittest.TestCase):
+    def test_both_providers_are_offered_with_a_title(self):
+        ids = [p["id"] for p in bot_providers.catalog()]
+        self.assertIn("grok", ids)
+        self.assertIn("google", ids)
+        for entry in bot_providers.catalog():
+            self.assertTrue(entry["title"])
+            self.assertTrue(entry["model"])
+
+    def test_an_unknown_provider_falls_back_instead_of_raising(self):
+        self.assertEqual(bot_providers.spec_of("nope").id, "grok")
+        self.assertEqual(bot_providers.spec_of("").id, "grok")
+
+    def test_adding_a_provider_is_a_table_entry(self):
+        """Every provider must be complete — a half-filled spec would fail
+        at request time, in front of the user."""
+        for spec in bot_providers.PROVIDERS.values():
+            self.assertTrue(spec.url.startswith("https://"))
+            self.assertIn(spec.auth, ("bearer", "x-goog-api-key"))
+            self.assertIn(spec.shape, ("openai", "gemini"))
+
+
+class TestMaskedKeys(unittest.TestCase):
+    def test_a_key_is_shown_as_proof_not_as_a_secret(self):
+        masked = mask("xai-abcdefghijklmnop")
+        self.assertNotIn("efghij", masked)
+        self.assertTrue(masked.startswith("xai-"))
+        self.assertTrue(masked.endswith("mnop"))
+
+    def test_a_short_key_is_never_partly_revealed(self):
+        self.assertEqual(mask("tiny"), "set")
+        self.assertEqual(mask(""), "")
 
 
 class TestGrokConnectionSettings(unittest.TestCase):
@@ -472,12 +712,123 @@ class TestGrokConnectionSettings(unittest.TestCase):
     def test_the_missing_key_error_names_a_place_that_exists(self):
         client = GrokClient(config=self.cfg, session_factory=None)
         detail = run(client.complete("hi")).detail
-        self.assertIn("Prompt Editor", detail)
+        self.assertIn("AI Settings", detail)
         repo = os.path.dirname(ROOT)
         html = open(os.path.join(repo, "ui", "index.html"),
                     encoding="utf-8").read()
-        self.assertIn('id="botApiKeyInput"', html,
-                      "the error sends the user to a field that must exist")
+        for element in ('id="botSettingsBtn"', 'id="botProviderKey"'):
+            self.assertIn(element, html,
+                          "the error sends the user somewhere that exists")
+
+    def test_the_missing_key_error_names_the_provider_that_needs_one(self):
+        """"No API key" is useless when two providers are configurable."""
+        self.cfg.set("grok", "provider", "google")
+        detail = run(GrokClient(config=self.cfg).complete("hi")).detail
+        self.assertIn("Google", detail)
+
+
+class TestVariableLibrary(unittest.TestCase):
+    """The placeholders the Prompt Editor offers and how they resolve."""
+
+    CTX = {"person_name": "Anna", "last_msg": "yes!", "msg": "custom text",
+           "all_msg": "Anna: one\nme: two\nAnna: three\nme: four",
+           "reaction_label": "Positive first reaction"}
+
+    def test_every_advertised_variable_actually_resolves(self):
+        """The library is a promise: if the editor lists it, it must work."""
+        for spec in bot_variables.catalog():
+            filled = bot_variables.fill(spec["token"], self.CTX)
+            self.assertNotEqual(filled, spec["token"],
+                                spec["token"] + " was not resolved")
+
+    def test_the_six_documented_variables_are_offered(self):
+        names = [spec["name"] for spec in bot_variables.catalog()]
+        self.assertEqual(names, ["msg", "last_msg", "all_msg",
+                                 "last_x_messages", "person_name",
+                                 "reaction_label"])
+
+    def test_each_variable_is_documented_with_an_example(self):
+        for spec in bot_variables.catalog():
+            self.assertTrue(spec["description"].strip(), spec["name"])
+            self.assertTrue(spec["example"].strip(), spec["name"])
+
+    def test_a_counted_variable_takes_that_many_messages(self):
+        self.assertEqual(bot_variables.fill("{last_2_messages}", self.CTX),
+                         "Anna: three\nme: four")
+        self.assertEqual(bot_variables.fill("{last_1_messages}", self.CTX),
+                         "me: four")
+
+    def test_a_counted_variable_cannot_ask_for_the_whole_archive(self):
+        self.assertEqual(bot_variables.count_of("last_9999_messages"),
+                         bot_variables.MAX_COUNT)
+        self.assertEqual(bot_variables.count_of("last_0_messages"), 1)
+
+    def test_the_literal_x_form_has_a_sane_default(self):
+        self.assertEqual(bot_variables.count_of("last_x_messages"),
+                         bot_variables.DEFAULT_COUNT)
+
+    def test_an_unknown_placeholder_survives_instead_of_exploding(self):
+        self.assertEqual(bot_variables.fill("a {nope} b", self.CTX),
+                         "a {nope} b")
+
+    def test_validate_separates_known_unknown_and_malformed(self):
+        report = bot_variables.validate("{person_name} {nope} {Bad Name}")
+        self.assertEqual(report["used"], ["person_name"])
+        self.assertEqual(report["unknown"], ["nope"])
+        self.assertIn("{Bad Name}", report["malformed"])
+        self.assertFalse(report["ok"])
+
+    def test_validate_flags_an_unclosed_brace(self):
+        self.assertIn("unbalanced braces",
+                      bot_variables.validate("hi {person_name")["malformed"])
+
+    def test_a_clean_template_validates(self):
+        report = bot_variables.validate("Hi {person_name}, re: {last_msg}")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["used"], ["last_msg", "person_name"])
+
+    def test_an_unknown_name_is_reported_once_in_order(self):
+        self.assertEqual(
+            bot_variables.validate("{a} {b} {a}")["unknown"], ["a", "b"])
+
+    def test_empty_text_is_not_an_error(self):
+        self.assertEqual(bot_variables.fill("", self.CTX), "")
+        self.assertTrue(bot_variables.validate("")["ok"])
+
+    def test_a_missing_context_value_becomes_empty_not_a_crash(self):
+        self.assertEqual(bot_variables.fill("[{reaction_label}]", {}), "[]")
+
+
+class TestPromptContext(unittest.TestCase):
+    """What the variables are resolved against — and what they cannot see."""
+
+    def service(self):
+        db = run(make_db([("in", "Anna", "hello there", TODAY)]))
+        return BotChatService(archive=FakeArchive(db), config=None,
+                              grok=FakeGrok(None))
+
+    def test_the_context_carries_every_variable_the_editor_offers(self):
+        svc = self.service()
+        page = run(svc.today("Anna"))
+        ctx = svc.context_of("Anna", page)
+        for name in ("person_name", "last_msg", "all_msg", "msg",
+                     "reaction_label"):
+            self.assertIn(name, ctx, name)
+
+    def test_msg_is_the_custom_text_when_there_is_one(self):
+        svc = self.service()
+        page = run(svc.today("Anna"))
+        self.assertEqual(svc.context_of("Anna", page, "typed")["msg"], "typed")
+        self.assertEqual(svc.context_of("Anna", page)["msg"], "hello there")
+
+    def test_the_context_holds_no_private_or_system_data(self):
+        """A prompt can only ever contain this conversation. Nothing reaches
+        the config, the API key, the filesystem or another person, because
+        the resolver is never handed them."""
+        svc = self.service()
+        ctx = svc.context_of("Anna", run(svc.today("Anna")))
+        self.assertEqual(sorted(ctx), ["all_msg", "last_msg", "msg",
+                                       "person_name", "reaction_label"])
 
 
 class TestPromptLibrary(unittest.TestCase):
@@ -496,17 +847,24 @@ class TestPromptLibrary(unittest.TestCase):
         self.assertEqual(reopened.text("suggest_reply"), "Say hi to {nick}")
         self.assertTrue(reopened.all()[0]["edited"])
 
-    def test_an_unusable_template_is_refused_and_never_stored(self):
+    def test_an_empty_template_is_refused_and_never_stored(self):
         self.assertFalse(self.lib.save("suggest_reply", "   "))
-        self.assertFalse(self.lib.save("suggest_reply", "hi {unknown}"))
         self.assertFalse(self.lib.save("no_such_template", "hi"))
         self.assertEqual(self.lib.text("suggest_reply"),
                          self.lib.all()[0]["default"])
 
-    def test_a_stored_template_that_broke_falls_back_to_the_default(self):
-        self.cfg.set("grok", "prompts", {"suggest_reply": "{boom}"})
-        self.assertEqual(PromptLibrary(self.cfg).text("suggest_reply"),
-                         self.lib.all()[0]["default"])
+    def test_an_unknown_placeholder_no_longer_destroys_the_template(self):
+        """It used to: `{tone}` made the template "unusable", so the user's
+        work was silently replaced by the shipped default. Now the template
+        is kept, the unknown placeholder survives into the prompt visibly,
+        and `validate` is what tells the user about it."""
+        self.assertTrue(self.lib.save("suggest_reply", "hi {tone} {nick}"))
+        self.assertEqual(self.lib.text("suggest_reply"), "hi {tone} {nick}")
+        self.assertEqual(
+            self.lib.render("suggest_reply", {"person_name": "Anna"}),
+            "hi {tone} Anna")
+        self.assertEqual(bot_variables.validate("hi {tone}")["unknown"],
+                         ["tone"])
 
     def test_reset_forgets_the_edit(self):
         self.lib.save("analyze_reaction", "judge {last_message}")
@@ -515,16 +873,27 @@ class TestPromptLibrary(unittest.TestCase):
         self.assertIn("{last_message}", self.lib.text("analyze_reaction"))
 
     def test_render_fills_every_placeholder(self):
+        self.lib.save("suggest_reply", "{person_name}|{all_msg}|{last_msg}")
+        self.assertEqual(
+            self.lib.render("suggest_reply",
+                            {"person_name": "Anna", "all_msg": "c",
+                             "last_msg": "l"}),
+            "Anna|c|l")
+
+    def test_templates_saved_with_the_old_names_still_render(self):
+        """`{nick}` etc. shipped first and are sitting in users' configs.
+        Renaming without aliasing them would be data loss, not a rename."""
         self.lib.save("suggest_reply", "{nick}|{conversation}|{last_message}")
         self.assertEqual(
             self.lib.render("suggest_reply",
-                            {"nick": "Anna", "conversation": "c",
-                             "last_message": "l"}),
+                            {"person_name": "Anna", "all_msg": "c",
+                             "last_msg": "l"}),
             "Anna|c|l")
 
-    def test_is_usable_rejects_non_text_and_unknown_fields(self):
+    def test_is_usable_rejects_only_non_text(self):
         self.assertFalse(is_usable(None))
-        self.assertFalse(is_usable("{oops}"))
+        self.assertFalse(is_usable("   "))
+        self.assertTrue(is_usable("{oops}"), "unknown is not broken")
         self.assertTrue(is_usable("plain text"))
 
 

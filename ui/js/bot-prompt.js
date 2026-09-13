@@ -12,6 +12,7 @@
 
 const BotPrompt = {
   templates: [],
+  variables: [],
   current: '',
   nick: '',
   _seq: 0,
@@ -27,10 +28,12 @@ const BotPrompt = {
       reset: $('botPromptResetBtn'),
       apiKey: $('botApiKeyInput'), model: $('botModelInput'),
       connSave: $('botConnSaveBtn'),
+      vars: $('botVarsList'), warn: $('botPromptWarn'),
     };
     if (!this._els.text) return;
     this._wire();
     this.load();
+    this.loadVariables();
     this.loadConnection();
   },
 
@@ -41,6 +44,17 @@ const BotPrompt = {
     on(this._els.reset, () => this.reset());
     on(this._els.previewBtn, () => this.preview());
     on(this._els.connSave, () => this.saveConnection());
+    if (this._els.text) {
+      ['input', 'keyup', 'click'].forEach((ev) =>
+        this._els.text.addEventListener(ev, () => this.checkVariables()));
+    }
+    if (this._els.vars) {
+      this._els.vars.addEventListener('click', (event) => {
+        const chip = event.target && event.target.closest
+          ? event.target.closest('.bot-var') : null;
+        if (chip && chip.dataset.token) this.insert(chip.dataset.token);
+      });
+    }
     if (this._els.tabs) {
       this._els.tabs.addEventListener('click', (event) => {
         const tab = event.target && event.target.closest
@@ -53,6 +67,81 @@ const BotPrompt = {
   load() {
     if (!App.bridge || !App.bridge.bot_get_prompts) return;
     App.bridge.bot_get_prompts((json) => this.setTemplates(json));
+  },
+
+  /* ── the variable library ─────────────────────────────────────
+     The list comes from the backend, which is also what resolves the
+     variables — so the editor cannot advertise a placeholder that does
+     not work, which is the whole point of having a library. */
+
+  loadVariables() {
+    if (!App.bridge || !App.bridge.bot_get_variables) return;
+    App.bridge.bot_get_variables((json) => this.setVariables(json));
+  },
+
+  setVariables(json) {
+    let list = [];
+    try { list = JSON.parse(json || '[]'); } catch (err) { list = []; }
+    this.variables = Array.isArray(list) ? list : [];
+    this._renderVariables();
+  },
+
+  _renderVariables() {
+    const host = this._els.vars;
+    if (!host) return;
+    host.textContent = '';
+    this.variables.forEach((spec) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'bot-var';
+      chip.dataset.token = spec.token;
+      const name = document.createElement('span');
+      name.className = 'bot-var-token';
+      name.textContent = spec.token;
+      const desc = document.createElement('span');
+      desc.className = 'bot-var-desc';
+      desc.textContent = spec.description || '';
+      chip.appendChild(name);
+      chip.appendChild(desc);
+      chip.title = 'Example → ' + (spec.example || '');
+      host.appendChild(chip);
+    });
+  },
+
+  /** Put a variable where the cursor is — not at the end of the text. */
+  insert(token) {
+    const box = this._els.text;
+    if (!box) return;
+    const value = String(box.value || '');
+    const at = typeof box.selectionStart === 'number'
+      ? box.selectionStart : value.length;
+    const end = typeof box.selectionEnd === 'number' ? box.selectionEnd : at;
+    box.value = value.slice(0, at) + token + value.slice(end);
+    const caret = at + token.length;
+    if (typeof box.setSelectionRange === 'function')
+      box.setSelectionRange(caret, caret);
+    if (typeof box.focus === 'function') box.focus();
+    this.checkVariables();
+  },
+
+  /** Warn about placeholders the app cannot resolve. Never blocks saving. */
+  checkVariables() {
+    if (!App.bridge || !App.bridge.bot_check_prompt || !this._els.text) return;
+    App.bridge.bot_check_prompt(String(this._els.text.value || ''),
+                                (json) => this.showWarnings(json));
+  },
+
+  showWarnings(json) {
+    let report = null;
+    try { report = JSON.parse(json || 'null'); } catch (err) { report = null; }
+    const box = this._els.warn;
+    if (!box) return;
+    const notes = report
+      ? (report.unknown || []).map((n) => 'unknown variable {' + n + '}')
+        .concat((report.malformed || []).map((m) => 'malformed: ' + m))
+      : [];
+    box.textContent = notes.join(' · ');
+    box.classList.toggle('hidden', !notes.length);
   },
 
   /* ── the Grok connection ──────────────────────────────────────
