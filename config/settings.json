@@ -1,0 +1,20 @@
+{
+  "history": {
+    "enabled": true,
+    "db_path": "D:\\Google Drive\\Chat V Bot\\Chat V bot\\v.db",
+    "use_fts": true,
+    "media": {
+      "enabled": true,
+      "download": true,
+      "cache_dir": "saved_media",
+      "max_file_mb": 25,
+      "max_cache_mb": 200
+    },
+    "preview": {
+      "preload_rows": 40,
+      "page_size": 50,
+      "max_rows": 400,
+      "show_images": true
+    }
+  }
+}

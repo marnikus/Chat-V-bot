@@ -1,0 +1,295 @@
+{
+  "window_presets": {
+    "gride1": {
+      "format": "chat-v-bot.window-preset",
+      "schema_version": 1,
+      "app_version": "0.1.0",
+      "name": "gride1",
+      "created_at": "2026-09-10T23:29:12.398Z",
+      "updated_at": "2026-09-10T23:29:12.398Z",
+      "grid": {
+        "type": "sash-tree",
+        "version": 3,
+        "window_count": 12,
+        "sizes_unit": "percent",
+        "tree": {
+          "t": "split",
+          "dir": "col",
+          "children": [
+            {
+              "t": "split",
+              "dir": "row",
+              "children": [
+                {
+                  "t": "split",
+                  "dir": "col",
+                  "children": [
+                    {
+                      "t": "leaf",
+                      "id": "stats"
+                    },
+                    {
+                      "t": "split",
+                      "dir": "col",
+                      "children": [
+                        {
+                          "t": "leaf",
+                          "id": "composer"
+                        },
+                        {
+                          "t": "leaf",
+                          "id": "labels"
+                        }
+                      ],
+                      "sizes": [
+                        33.96485825061182,
+                        66.03514174938819
+                      ]
+                    },
+                    {
+                      "t": "leaf",
+                      "id": "filters"
+                    }
+                  ],
+                  "sizes": [
+                    35,
+                    32.5,
+                    32.5
+                  ]
+                },
+                {
+                  "t": "split",
+                  "dir": "row",
+                  "children": [
+                    {
+                      "t": "leaf",
+                      "id": "stack"
+                    },
+                    {
+                      "t": "leaf",
+                      "id": "config"
+                    }
+                  ],
+                  "sizes": [
+                    63.829787234042556,
+                    36.17021276595745
+                  ]
+                }
+              ],
+              "sizes": [
+                35.35630383711825,
+                64.64369616288175
+              ]
+            },
+            {
+              "t": "split",
+              "dir": "row",
+              "children": [
+                {
+                  "t": "leaf",
+                  "id": "people"
+                },
+                {
+                  "t": "leaf",
+                  "id": "log"
+                }
+              ],
+              "sizes": [
+                70,
+                30
+              ]
+            },
+            {
+              "t": "split",
+              "dir": "row",
+              "children": [
+                {
+                  "t": "leaf",
+                  "id": "history"
+                },
+                {
+                  "t": "leaf",
+                  "id": "userdb"
+                },
+                {
+                  "t": "split",
+                  "dir": "row",
+                  "children": [
+                    {
+                      "t": "leaf",
+                      "id": "collector"
+                    },
+                    {
+                      "t": "leaf",
+                      "id": "dbconn"
+                    }
+                  ],
+                  "sizes": [
+                    51.967709384460136,
+                    48.03229061553986
+                  ]
+                }
+              ],
+              "sizes": [
+                19.85871271585557,
+                33.63422291993721,
+                46.507064364207224
+              ]
+            }
+          ],
+          "sizes": [
+            45.17973052714398,
+            20.280536978756885,
+            34.539732494099134
+          ]
+        }
+      },
+      "windows": [
+        {
+          "id": "stats",
+          "title": "Stats",
+          "state": "closed",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        {
+          "id": "filters",
+          "title": "Filters",
+          "state": "closed",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        {
+          "id": "stack",
+          "title": "Action Stack",
+          "state": "open",
+          "bounds": {
+            "x": 0.355078,
+            "y": 0,
+            "width": 0.410156,
+            "height": 0.447458
+          }
+        },
+        {
+          "id": "config",
+          "title": "Block Config",
+          "state": "open",
+          "bounds": {
+            "x": 0.767578,
+            "y": 0,
+            "width": 0.232422,
+            "height": 0.447458
+          }
+        },
+        {
+          "id": "composer",
+          "title": "Message Composer",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0.352734,
+            "height": 0.150345
+          }
+        },
+        {
+          "id": "people",
+          "title": "User Memory",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.452262,
+            "width": 0.698358,
+            "height": 0.200861
+          }
+        },
+        {
+          "id": "log",
+          "title": "Log Console",
+          "state": "open",
+          "bounds": {
+            "x": 0.700702,
+            "y": 0.452262,
+            "width": 0.299298,
+            "height": 0.200861
+          }
+        },
+        {
+          "id": "history",
+          "title": "Person History",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.657926,
+            "width": 0.197656,
+            "height": 0.342074
+          }
+        },
+        {
+          "id": "userdb",
+          "title": "Full User Database",
+          "state": "open",
+          "bounds": {
+            "x": 0.2,
+            "y": 0.657926,
+            "width": 0.334766,
+            "height": 0.342074
+          }
+        },
+        {
+          "id": "collector",
+          "title": "Chat Message Collector",
+          "state": "open",
+          "bounds": {
+            "x": 0.537109,
+            "y": 0.657926,
+            "width": 0.239337,
+            "height": 0.342074
+          }
+        },
+        {
+          "id": "labels",
+          "title": "Label Manager",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.155149,
+            "width": 0.352734,
+            "height": 0.292309
+          }
+        },
+        {
+          "id": "dbconn",
+          "title": "DB Connection",
+          "state": "open",
+          "bounds": {
+            "x": 0.77879,
+            "y": 0.657926,
+            "width": 0.22121,
+            "height": 0.342074
+          }
+        }
+      ],
+      "window_states": {
+        "closed": [
+          "filters",
+          "stats"
+        ],
+        "minimized": []
+      },
+      "screen": {
+        "width": 2560,
+        "height": 1377,
+        "device_pixel_ratio": 1
+      }
+    }
+  }
+}

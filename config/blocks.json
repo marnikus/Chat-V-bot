@@ -1,0 +1,22 @@
+{
+  "custom_blocks": [
+    {
+      "name": "Custom Klicer win",
+      "block": {
+        "custom_name": "Custom Klicer win",
+        "selector": "div[role='tab'].tab-item",
+        "label_selector": "p.chat-title",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": "",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
+      },
+      "updated_at": "2026-09-11T11:49:07"
+    }
+  ]
+}
