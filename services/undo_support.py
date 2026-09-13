@@ -16,7 +16,6 @@ tests that read `UndoService._undo_pendings` keep working unchanged.
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 from typing import Any, Callable, Optional
 
