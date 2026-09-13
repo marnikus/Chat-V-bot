@@ -31,3 +31,25 @@ def setup_logger(log_dir: str = "logs", level: int = logging.INFO) -> logging.Lo
 
     logger.info("Logger initialized → %s", log_file)
     return logger
+
+
+def report_and_log(report: "Callable | None", message: str,
+                   level: str = "info") -> None:
+    """Say it in the run console AND in the log file.
+
+    RULE 5's shape: the user sees progress in the console, the log keeps the
+    record. A `report` callback that raises is swallowed on purpose — a UI
+    error must never abort the backend operation that was merely narrating
+    itself — but the log line is still written, so nothing is lost silently.
+
+    `backend/media_handler.py` and `backend/message_injector.py` each carried a
+    byte-identical private copy of this (clone group, span 7); it lives here
+    because this module owns logging for the backend.
+    """
+    if report:
+        try:
+            report(message, level)
+        except Exception:           # noqa: BLE001 — see docstring
+            pass
+    logging.getLogger("chatbot").log(
+        getattr(logging, level.upper(), logging.INFO), "%s", message)

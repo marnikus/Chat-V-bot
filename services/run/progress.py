@@ -1,3 +1,34 @@
+"""services/run/progress — the run's counters, its ETA, and its work queue.
+
+Owns two independent things that both answer "how far along are we":
+
+  * `RunProgress` / `RunProgressChanged` — done / total / skipped / failed and
+    the derived ETA, published on the event bus. The UI progress bar reads
+    nothing else.
+  * `RunQueueMixin` — the label-filtering half of the coordinator: which people
+    are actually going to be worked on, and what the console is told about the
+    ones that were filtered out.
+
+Imports point one way: `coordinator` imports this; this imports only `core`.
+
+Three rules here are contractual and must not be "tidied":
+
+* only `ok` / `skip` / `fail` move a counter (AREA C1 wire contract). A
+  cooperative stop is accounted as `fail` at the cycle call sites — stop
+  identity lives in the outcome, the trace and `user_complete`, never in a new
+  counter, because the UI reads these four numbers positionally.
+* an unknown status still EMITS, it just does not increment. Silence would
+  freeze the progress bar on an unrecognised status; a repeat of the last
+  numbers is the honest answer.
+* `eta_seconds` distinguishes `None` (cannot know yet — nothing has finished,
+  or the total is not trustworthy) from `0.0` (finished). Collapsing the two
+  makes a run that has not started look complete.
+
+A label filter that raises is logged and treated as "allow". A broken filter
+must not silently empty the queue — the user would see a run that did nothing
+and no reason why.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -16,6 +47,22 @@ except Exception:
         messaged: bool = False
 
 log = logging.getLogger("chatbot")
+
+
+def _newest_first(users: list) -> list:
+    """Newest `first_seen` first, ties broken A–Z by nick.
+
+    Two passes rather than one tuple key because the two fields sort in
+    OPPOSITE directions: the stable inner sort establishes the alphabetical
+    tie-break, the outer reverse sort puts the newest on top without
+    disturbing it. A single `key=` with `reverse=True` would also reverse the
+    alphabetical order within each timestamp.
+    """
+    by_nick = sorted(users,
+                     key=lambda u: str(getattr(u, "nick", "")).casefold())
+    return sorted(by_nick,
+                  key=lambda u: str(getattr(u, "first_seen", "") or ""),
+                  reverse=True)
 
 
 # F7 (ROUND_F_DESIGN_2026-09-12.md §6) names this file for an MI of 27.85 that is
@@ -123,20 +170,43 @@ class RunQueueMixin:
         self.debug_msg.emit(f"🏷 Label filter skipped {len(skipped)} person(s): "
                             + ", ".join(samples) + more, "info")
 
+    def _enabled_block(self, block_id: str):
+        """The first enabled block with this id, or None. A DISABLED block must
+        read as absent everywhere — that is what the checkbox means."""
+        return next((b for b in self._stack
+                     if b.block_id == block_id and getattr(b, "enabled", True)),
+                    None)
+
     def queue_order(self, users: list) -> list[str]:
-        block = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
-        users = self.filter_by_labels([u for u in users if not getattr(u, "messaged", False)])
-        if block is not None:
+        """The nicks to work, in the order they will be worked.
+
+        Already-messaged people are dropped first, then the label filter, then
+        the ordering — which depends on whether the stack collects:
+
+        * with SCROLL_PARSE, `sort_people` owns the order (it interleaves
+          newly-found people the way the collector expects);
+        * without it, newest-first by `first_seen`, ties broken A-Z by nick.
+        """
+        users = self.filter_by_labels(
+            [u for u in users if not getattr(u, "messaged", False)])
+        if self._enabled_block("SCROLL_PARSE") is not None:
             from backend.person_filter import sort_people
             users = sort_people(users)
         else:
-            users = sorted(sorted(users, key=lambda u: str(getattr(u, "nick", "")).casefold()), key=lambda u: str(getattr(u, "first_seen", "") or ""), reverse=True)
+            users = _newest_first(users)
         return [getattr(u, "nick", "") for u in users]
 
     def _repeat_cycles(self) -> int:
-        block = next((b for b in self._stack if b.block_id == "REPEAT_LOOP" and getattr(b, "enabled", True)), None)
+        """How many times REPEAT_LOOP asks for the queue; always at least 1.
+
+        A missing, disabled or unparsable count means one pass — never zero,
+        which would look to the user like the run silently did nothing.
+        """
+        block = self._enabled_block("REPEAT_LOOP")
+        if block is None:
+            return 1
         try:
-            return max(1, int(getattr(block, "repeat_count", 1))) if block else 1
+            return max(1, int(getattr(block, "repeat_count", 1)))
         except (TypeError, ValueError):
             return 1
 

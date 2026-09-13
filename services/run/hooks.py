@@ -1,3 +1,30 @@
+"""services/run/hooks — what the run coordinator tells the world it is doing.
+
+Owns the run's *outward* surface, as opposed to its control flow (`coordinator`)
+or its counters (`progress`):
+
+  * `RunTracer`   — the per-run JSONL trace file in `logs/`, one line per event;
+  * `RunHooks`    — the no-op extension point a caller subclasses to observe a
+                    run without the coordinator knowing who is watching;
+  * `RunHooksMixin` — the reporting half of the coordinator: `report`,
+                    `person_collected`, `unmessaged_nicks` and friends, mixed in
+                    rather than inherited so the coordinator stays one class;
+  * the two normalisers, `normalize_blocks` and `norm_level`.
+
+Imports point one way: this module is imported BY `coordinator`, and imports
+nothing from `services/run/` itself.
+
+Two behaviours here are deliberate and look like bugs if you do not know:
+
+* every observation is wrapped in a `try` that logs and continues. Tracing,
+  upserting a collected person, reading un-messaged nicks — none of it may
+  abort the run. A run that dies because its *logging* failed is strictly
+  worse than a run with a gap in its log.
+* `RunTracer.note` flushes on every line. Traces are read while the run is
+  still going (that is their purpose), and a crashed run must leave the events
+  that led up to the crash on disk.
+"""
+
 from __future__ import annotations
 
 import inspect

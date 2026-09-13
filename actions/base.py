@@ -293,6 +293,38 @@ class FindClickBlock(DeclaredSettings):
         return outcome
 
 
+def tab_fields() -> tuple:
+    """The five fields every "click a chat-room tab by its text" block declares.
+
+    ClickMainTab and ClickBack chase the same DOM shape — a tab element, a
+    child that holds the visible title, the title to match, and the two
+    confirmation-outline settings RULE 1 gives every find-and-click block. The
+    tuple was written out twice and was the largest clone in the tree (span 15).
+
+    It is a function rather than a module constant so each class still gets its
+    own tuple object: FIELDS is read per-class, and sharing one instance would
+    make two blocks' declarations indistinguishable by identity.
+
+    Note what is NOT here: the constructor. Those defaults differ per block
+    (ClickBack waits 800 ms, ClickMainTab 500 ms) and each `__init__` signature
+    is part of the AREA D public-API snapshot, so the blocks keep their own.
+    """
+    return (
+        BlockField("selector", "text", "Tab element selector",
+                   request="selector"),
+        BlockField("child_selector", "text", "Child text selector",
+                   request="label_selector"),
+        BlockField("tab_name", "text",
+                   "Tab name (text match) — {{nick}} = selected user",
+                   request="match_text"),
+        BlockField("highlight_enabled", "checkbox",
+                   "Draw confirmation outlines",
+                   clean=bool, request="highlight_enabled"),
+        BlockField("confirm_pause_ms", "number", "Pause after found (ms)",
+                   clean=ms_floor, request="confirm_pause_ms"),
+    )
+
+
 class MarkerBlock(DeclaredSettings):
     """A block the engine drives itself: it is in the stack to be read, not run.
 

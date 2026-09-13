@@ -17,6 +17,7 @@ import logging
 from typing import Callable, Optional
 from backend.cdp_client import CDPClient
 from backend.dom_probe import build_probe, interpret_wait
+from backend.logger import report_and_log
 
 log = logging.getLogger("chatbot")
 
@@ -95,13 +96,10 @@ _FOCUS_STATE_JS = """(function(){
 })()"""
 
 
-def _rep(report: Optional[Callable], message: str, level: str = "info") -> None:
-    if report:
-        try:
-            report(message, level)
-        except Exception:
-            pass
-    log.log(getattr(logging, level.upper(), logging.INFO), "%s", message)
+#: the shared report-and-log helper; `_rep` stays as this module's spelling
+#: because it is called dozens of times here and at every call site the short
+#: name reads better than the import path.
+_rep = report_and_log
 
 
 def _js(text: str) -> str:

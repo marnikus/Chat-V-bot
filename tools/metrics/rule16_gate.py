@@ -168,8 +168,13 @@ SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py"]
 # span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
 # situation as the F1 pair below and the two F2 pairs above.
 CLONE_BASELINE = frozenset({
-    ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("backend/media_handler.py", "backend/message_injector.py"),
+    # G7 removed the two REAL clones that used to sit here:
+    #   actions/click_back.py | actions/click_main_tab.py  (span 15) ->
+    #     actions.base.tab_fields()
+    #   backend/media_handler.py | backend/message_injector.py (span 7) ->
+    #     backend.logger.report_and_log()
+    # They are deleted rather than re-baselined: a baseline entry is a promise
+    # that a group is understood and accepted, not a way to silence one.
     ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
