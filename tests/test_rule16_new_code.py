@@ -50,7 +50,7 @@ LIMITS, OWNED, RATCHET, OVERRIDES = (gate.LIMITS, gate.OWNED, gate.RATCHET,
 # A real function in this repo that is over the limit (53 LOC at the time of
 # writing). Used to prove the measurement detects a breach, so a green gate
 # cannot simply be a gate that measures nothing.
-CANARY = ("backend/history_query.py", "HistoryQuery", "page")
+CANARY = ("backend/history_query/query.py", "HistoryQuery", "page")
 
 
 class TestTheGateIsNotVacuous(unittest.TestCase):
@@ -132,7 +132,7 @@ class TestRequestObjectIsSmall(unittest.TestCase):
     """The new class must itself be inside the class limits."""
 
     def test_person_page_request_fits(self):
-        info = gate.classes("backend/history_query.py").get("PersonPageRequest")
+        info = gate.classes("backend/history_query/request.py").get("PersonPageRequest")
         self.assertIsNotNone(info, "PersonPageRequest does not exist")
         self.assertLessEqual(info["loc"], gate.CLASS_LIMITS["loc"],
                              f"PersonPageRequest is {info['loc']} LOC")
@@ -158,7 +158,7 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
 
     def test_the_owned_request_object_is_reported_and_clean(self):
         rows = {r["target"]: r for r in gate.run()["class_rows"]}
-        key = "backend/history_query.py::PersonPageRequest"
+        key = "backend/history_query/request.py::PersonPageRequest"
         self.assertIn(key, rows, "class enforcement did not scan the owned file")
         self.assertEqual(rows[key]["violations"], [])
 

@@ -1,298 +1,38 @@
-"""Read path of the message archive.
+"""`HistoryQuery` — every read the UI performs against the archive.
 
-Feeds the two new windows: chronological paging that stays stable while the
-collector appends underneath, search inside one conversation and across the
-whole archive, the master person list and the header counters.
+Owns the class itself: paging that stays stable while the collector appends
+underneath, search inside one conversation and across the whole archive, the
+master person list, and the header counters.
 
-Search has two interchangeable back-ends: FTS5 when SQLite offers it, a
-`text_lc LIKE` scan when it does not. Both fold case for Cyrillic — the
-`text_lc` column is lower-cased in Python, because SQLite's own LIKE folds
-ASCII only.
+The class is NOT split further, deliberately. Its fourteen methods all read
+`self.db` and share the `_SELECT` / `_COUNT_ALIVE` fragments — the LCOM is low
+because the cohesion is real, and breaking it up by line count would raise
+coupling to lower a number. What moved out is everything that does NOT touch
+the database: the constants, the text escaping, the request object and the row
+shaping, each now importable and testable on its own.
 """
-
-# ideal-size: 596 lines reason=the frozen AREA D public-API snapshot
-# (tests/unit/backend/test_backend_api_snapshot.py, built by
-# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
-# only when this module owns it, so neither promoting this file to a package nor
-# thinning it into a re-export shim survives the contract. The size is a known,
-# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
 
 from __future__ import annotations
 
 import logging
 import os
-import re
-from dataclasses import dataclass
 from typing import Optional
 
+from backend.history_query.request import PersonPageRequest
+from backend.history_query.rows import (_FIELD_SPECS, _FIELD_SPECS_TAIL,
+                                        _apply_specs, _day_bounds, _item_media,
+                                        _person_item, _stat_int)
+from backend.history_query.sorting import DEFAULT_LIMIT, MAX_LIMIT
+from backend.history_query.sqltext import _fts_query, _like_escape, _snippet
 from stores.history_db import HistoryDB
 
 log = logging.getLogger("chatbot")
 
-DEFAULT_LIMIT = 50
-MAX_LIMIT = 500
-SNIPPET_RADIUS = 40
-
-#: The Full User Database's sortable columns — key → the columns it orders
-#: by, each with its **natural** direction: what a first click on that header
-#: gives, and what every caller that sends no `dir` gets.
-#:
-#: This dict IS the whitelist. A `sort` that is not a key here falls back to
-#: ``DEFAULT_SORT``, so no request text can ever reach `ORDER BY` — the same
-#: discipline `_like_escape` / `_fts_query` apply to the search paths.
-#:
-#: `my_nicks` is a JSON array stored as text (`'["Me","Me2"]'`) and the column
-#: shows it joined. Ordering the stored text needs no JSON1 extension (FTS5 is
-#: already treated as optional here) and cannot fail on a hand-edited row; for
-#: the common one-identity case it is exactly the displayed order. Known
-#: wrinkle, pinned by a test: `["Me", "Old"]` sorts before `["Me"]`, because
-#: `","` < `"]"`.
-SORT_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
-    "nick": (("nick_lc", "ASC"),),
-    "msgs": (("message_count", "DESC"), ("last_seen", "DESC")),
-    "media": (("media_count", "DESC"), ("last_seen", "DESC")),
-    "first": (("first_seen", "ASC"),),
-    "last": (("last_seen", "DESC"), ("message_count", "DESC")),
-    "my_nick": (("my_nicks", "ASC"),),
-    # historical spellings, kept so payloads written before the header sort
-    # existed keep meaning exactly what they meant
-    "messages": (("message_count", "DESC"), ("last_seen", "DESC")),
-    "recent": (("last_seen", "DESC"), ("message_count", "DESC")),
-}
-DEFAULT_SORT = "recent"
-
-#: Appended to every order. `LIMIT ? OFFSET ?` over a *partial* order lets
-#: SQLite re-shuffle the ties between two queries, so a person could be served
-#: twice or never while the user scrolls. `nick` is unique, which makes the
-#: resulting order total.
-SORT_TIEBREAK: tuple[str, ...] = ("nick_lc", "id")
-
-
-def _like_escape(text: str) -> str:
-    return (text.replace("\\", "\\\\").replace("%", "\\%")
-                .replace("_", "\\_"))
-
-
-def _fts_query(raw: str) -> str:
-    """Turn user input into a safe FTS5 MATCH expression.
-
-    Every token is quoted, so `AND`, `*`, quotes and stray punctuation are
-    data, never syntax.
-    """
-    tokens = [t for t in re.split(r"[^\w\u0400-\u04FF]+", raw or "") if t]
-    if not tokens:
-        return ""
-    return " ".join('"%s"' % t.replace('"', '""') for t in tokens)
-
-
-def _snippet(text: str, needle: str, radius: int = SNIPPET_RADIUS) -> str:
-    body = text or ""
-    if not needle:
-        return body[: radius * 2]
-    pos = body.lower().find(needle.lower())
-    if pos < 0:
-        return body[: radius * 2]
-    start = max(0, pos - radius)
-    end = min(len(body), pos + len(needle) + radius)
-    return ("…" if start else "") + body[start:end] + ("…" if end < len(body)
-                                                       else "")
-
-
-@dataclass(frozen=True)
-class PersonPageRequest:
-    """One request for a page of the Full User Database.
-
-    The UI sends these six options together in a single JSON blob, so they
-    travel together: one frozen value instead of six parameters. Freezing it
-    also means a request cannot be mutated between the bridge and the
-    database, which makes a mismatched page impossible to explain away.
-
-    The methods here own the SQL fragments, and none of them is built from
-    request text — columns and directions are looked up in `SORT_COLUMNS`, and
-    the nick is always a bound parameter.
-    """
-
-    q: str = ""
-    limit: int = DEFAULT_LIMIT
-    offset: int = 0
-    sort: str = DEFAULT_SORT
-    dir: str = ""
-    include_deleted: bool = False
-
-    # ── the pieces the caller asks about ────────────────────────
-
-    def needle(self) -> str:
-        """The lower-cased, trimmed search text — empty means 'no filter'."""
-        return str(self.q or "").strip().lower()
-
-    def spec(self) -> tuple[tuple[str, str], ...]:
-        """The whitelisted columns for this key (the default if unknown)."""
-        return SORT_COLUMNS.get(str(self.sort or ""),
-                                SORT_COLUMNS[DEFAULT_SORT])
-
-    def resolved_dir(self) -> str:
-        """`"asc"` / `"desc"` — the direction actually applied.
-
-        An empty (or unrecognised) `dir` means *the key's natural direction*,
-        the direction of its first column. Reporting the resolved value back
-        is what lets the header show the right arrow without duplicating
-        `SORT_COLUMNS` in JavaScript.
-        """
-        asked = self._asked_dir()
-        if asked:
-            return asked
-        return self.spec()[0][1].lower()
-
-    # ── the SQL fragments ───────────────────────────────────────
-
-    def where(self) -> tuple[str, list]:
-        """The row filter and its parameters (nick bound, wildcards escaped)."""
-        clause = "1=1" if self.include_deleted else "deleted_at IS NULL"
-        needle = self.needle()
-        if not needle:
-            return clause, []
-        return (clause + " AND nick_lc LIKE ? ESCAPE '\\'",
-                ["%" + _like_escape(needle) + "%"])
-
-    def order(self) -> tuple[str, list]:
-        """The `ORDER BY` body and its parameters.
-
-        While searching, relevance stays outermost: an exact prefix outranks a
-        longer nick that merely contains the needle, and among equally good
-        matches the shorter nick wins. Inside a tier the chosen column
-        decides.
-
-        The prefix-boost `LIKE` is a literal prefix, so its parameter differs
-        from the `where()` one — callers bind this list *after* the where
-        parameters.
-        """
-        body = self.columns()
-        needle = self.needle()
-        if not needle:
-            return body, []
-        return ("(nick_lc LIKE ? ESCAPE '\\') DESC, "
-                f"LENGTH(nick_lc) ASC, {body}",
-                [_like_escape(needle) + "%"])
-
-    # ── internals ───────────────────────────────────────────────
-
-    def _asked_dir(self) -> str:
-        """The requested direction when it is a usable one, else `""`."""
-        asked = str(self.dir or "").strip().lower()
-        return asked if asked in ("asc", "desc") else ""
-
-    def columns(self) -> str:
-        """The `ORDER BY` column list — whitelist only, tiebreaker included.
-
-        An explicit direction flips **every** column of the key, so the
-        secondary column stays consistent with the primary one (`msgs`
-        descending = busiest first, and among equals the *oldest* activity
-        last).
-        """
-        asked = self._asked_dir()
-        parts = [f"{column} {asked.upper() if asked else natural}"
-                 for column, natural in self.spec()]
-        used = {column for column, _ in self.spec()}
-        parts += [f"{column} ASC"
-                  for column in SORT_TIEBREAK if column not in used]
-        return ", ".join(parts)
-
-
-def _person_item(row, my_nicks: list) -> dict:
-    """One person row, as the Full User Database shows it.
-
-    A module function rather than a method: the mapping is a pure projection
-    of one row, and `HistoryQuery` is already over its size budget.
-    """
-    data = dict(row)
-    return {
-        "id": int(data["id"]),
-        "nick": data["nick"],
-        "message_count": int(data.get("message_count") or 0),
-        "in_count": int(data.get("in_count") or 0),
-        "out_count": int(data.get("out_count") or 0),
-        "media_count": int(data.get("media_count") or 0),
-        "first_seen": data.get("first_seen") or "",
-        "last_seen": data.get("last_seen") or "",
-        "my_nicks": my_nicks,
-        "deleted": bool(data.get("deleted_at")),
-    }
-
-
-#: (output keys, source key, default, as_int) — the row→UI-item field map.
-#: Alias pairs share one source so the legacy and current spellings can never
-#: disagree (UI contract; see backend_api_snapshot.json).
-_FIELD_SPECS = (
-    (("id",), "id", 0, True),
-    (("ord",), "ord", 0, True),
-    (("fp",), "fp", "", False),
-    (("dir", "direction"), "direction", "in", False),
-    (("from", "from_nick"), "from_nick", "", False),
-    (("my_nick",), "my_nick", "", False),
-    (("kind",), "kind", "text", False),
-    (("text",), "text", "", False),
-)
-#: The fields after `media`, which the UI contract places between `text` and
-#: `time` — two tables so that position survives the loop.
-_FIELD_SPECS_TAIL = (
-    (("time", "ts_display"), "ts_display", "", False),
-    (("ts_resolved",), "ts_resolved", "", False),
-    (("day",), "day", "", False),
-    (("occ",), "occ", 0, True),
-)
-
-
-def _apply_specs(data: dict, specs) -> dict:
-    """One group of the UI item, coalesced and aliased per a field spec."""
-    out = {}
-    for keys, source, default, as_int in specs:
-        value = data.get(source) or default
-        for key in keys:
-            out[key] = int(value) if as_int else value
-    return out
-
-
-def _item_media(data: dict) -> dict | None:
-    """The joined media block for one message row, or None."""
-    if not data.get("media_id"):
-        return None
-    path = data.get("cache_path") or ""
-    state = data.get("media_state") or "pending"
-    # A cached row whose file vanished must not render as a broken
-    # <img> from a dead local path: report it as missing so the UI
-    # shows a "click to restore" marker instead.
-    if path and not os.path.exists(path):
-        state = "missing"
-        path = ""
-    return {"id": data.get("media_id"), "url": data.get("media_url"),
-            "kind": data.get("media_kind") or data.get("kind"),
-            "state": state, "path": path}
-
-
-def _stat_int(data: dict, key: str) -> int:
-    """One counter of a person row, tolerating NULL/absent."""
-    return int(data.get(key) or 0)
-
-
-async def _day_bounds(db, pid: int) -> tuple[str, str, int]:
-    """(first_day, last_day, distinct days) over the visible messages.
-
-    Module-level on purpose: `HistoryQuery` is already at the RULE 16
-    method cap (enforced by tests/test_rule16_new_code.py through
-    tools/metrics/rule16_gate.py), and this is a pure read over a db
-    handle — it needs nothing from the instance.
-    """
-    row = await db.fetchone(
-        "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
-        "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
-        "AND deleted_at=''", (pid,))
-    if not row:
-        return "", "", 0
-    return (row["first_day"] or ""), (row["last_day"] or ""), int(row["days"] or 0)
-
-
 class HistoryQuery:
-    """Every read the UI performs against the archive."""
+    """
+
+from __future__ import annotations
+Every read the UI performs against the archive."""
 
     def __init__(self, db: HistoryDB):
         self.db = db
