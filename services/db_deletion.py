@@ -33,7 +33,7 @@ from services.db_deletion_paths import (  # noqa: F401
 from services.db_deletion_plan import (  # noqa: F401
     DeletionPlan, collect_discovered_files)
 from services.db_deletion_policy import (  # noqa: F401
-    classify_candidate, plan_deletion)
+    ScanFindings, classify_candidate, plan_deletion)
 
 #: SQLite file group members removed on delete. `SUFFIXES` in db_service
 #: stays ("","-wal","-shm") for size/compat; deletion also best-effort
@@ -51,5 +51,5 @@ __all__ = [
     "DeletionInventory", "DeletionOutcome", "DeletionPlan",
     "build_deletion_inventory", "canonical", "classify_candidate",
     "collect_discovered_files", "is_same_file", "is_within",
-    "plan_deletion", "prune_empty_dirs", "unlink_one",
+    "ScanFindings", "plan_deletion", "prune_empty_dirs", "unlink_one",
 ]

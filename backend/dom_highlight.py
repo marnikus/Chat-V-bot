@@ -23,6 +23,7 @@ background, so it can never intercept the click nor affect page layout.
 # justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
 
 import json
+from dataclasses import dataclass
 from typing import Optional
 
 from backend.dom_probe import MATCH_CONTAINS, MATCH_EXACT, _js_str  # noqa: F401
@@ -335,6 +336,58 @@ _CLICK_BODY = """
 
 
 
+@dataclass(frozen=True, slots=True)
+class ElementMatch:
+    """WHICH element a probe is looking for.
+
+    One CSS selector finds candidate nodes; `label_selector` optionally points
+    at a child holding the visible text, and `match_text` is compared against
+    it. This is the half of a probe that says *what*, as opposed to `Overlay`
+    which says *how it looks*. Both find-style builders take exactly these
+    four, which is why they are one value and not eight parameters.
+    """
+
+    selector: str
+    label_selector: Optional[str] = None
+    match_text: Optional[str] = None
+    match_mode: str = MATCH_CONTAINS
+
+    def as_js(self) -> dict:
+        """The four values as JS literals, ready for a probe template."""
+        return {
+            "selector": _js_str(self.selector),
+            "label_selector": (_js_str(self.label_selector)
+                               if self.label_selector else "null"),
+            "match_text": (_js_str(self.match_text)
+                           if self.match_text else "null"),
+            "exact": "true" if self.match_mode == MATCH_EXACT else "false",
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Overlay:
+    """HOW the outline drawn on a matched element looks.
+
+    Colour and caption are what the user reads to tell the two phases apart
+    (RULE 1: red FOUND, orange CLICK), and `ms` is how long it stays. Each
+    builder supplies its own defaults for these — they are the phase's
+    identity, not a caller's choice.
+    """
+
+    color: str
+    caption: str
+    ms: int = 1200
+    enabled: bool = True
+
+    def as_js(self) -> dict:
+        return {
+            "color": _js_str(self.color),
+            "caption": _js_str(self.caption),
+            "hms": int(self.ms),
+            "highlight": "true" if self.enabled else "false",
+        }
+
+
 def build_find_probe(
     selector: str,
     label_selector: Optional[str] = None,
@@ -350,19 +403,16 @@ def build_find_probe(
 
     The matched node is stashed on ``window.__cfStash`` so the click phase can
     act on the exact same element instead of re-querying the DOM.
+
+    The keyword signature stays — `backend/visual_click.py` and the probe
+    contract tests call it by name — but the body now builds the two domain
+    values, so a new probe style composes them instead of copying nine
+    parameters again.
     """
-    return _probe(_FIND_BODY,
-                  selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  highlight="true" if highlight else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms),
-                  stash=STASH_KEY,
-                  maxcand=int(max_candidates))
+    match = ElementMatch(selector, label_selector, match_text, match_mode)
+    overlay = Overlay(color, caption, highlight_ms, highlight)
+    return _probe(_FIND_BODY, **match.as_js(), **overlay.as_js(),
+                  stash=STASH_KEY, maxcand=int(max_candidates))
 
 
 def build_click_probe(
@@ -406,16 +456,12 @@ def build_highlight_probe(
     ``scrollIntoView``: moving the viewport mid-scroll would corrupt the
     parser's position tracking.
     """
-    return _probe(_HIGHLIGHT_BODY,
-                  selector=_js_str(selector),
-                  label_selector=(_js_str(label_selector) if label_selector
-                                  else "null"),
-                  match_text=(_js_str(match_text) if match_text else "null"),
-                  exact="true" if match_mode == MATCH_EXACT else "false",
-                  clear="true" if clear_first else "false",
-                  color=_js_str(color),
-                  caption=_js_str(caption),
-                  hms=int(highlight_ms))
+    match = ElementMatch(selector, label_selector, match_text, match_mode)
+    overlay = Overlay(color, caption, highlight_ms)
+    js = {**match.as_js(), **overlay.as_js()}
+    js.pop("highlight")        # this probe ONLY highlights; there is no toggle
+    return _probe(_HIGHLIGHT_BODY, **js,
+                  clear="true" if clear_first else "false")
 
 
 def build_clear_probe() -> str:

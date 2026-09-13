@@ -203,6 +203,35 @@ class CollectorProbe:
                 {o.lower() for o in outs if o})
 
 
+@dataclass(frozen=True, slots=True)
+class PaneSignatures:
+    """The four content fingerprints of one chat pane, as one value.
+
+    `head`/`tail` are the first and last *countable* messages; `head_any`/
+    `tail_any` include the ones that do not count (system lines, unrendered
+    nodes). Both pairs are needed and for different jobs: the strict pair
+    decides whether the cursor moved, the loose pair identifies the same
+    conversation after the partner renames.
+
+    They are computed together from one probe and travel together everywhere,
+    which is why they are a value rather than four adjacent `str` parameters —
+    adjacent same-typed arguments are where transpositions hide.
+    """
+
+    head: str = ""
+    tail: str = ""
+    head_any: str = ""
+    tail_any: str = ""
+
+    @classmethod
+    def of(cls, raw: dict, signature) -> "PaneSignatures":
+        """Fingerprint a probe's raw state with the caller's hash function."""
+        return cls(head=signature(raw.get("head")),
+                   tail=signature(raw.get("tail")),
+                   head_any=signature(raw.get("head_any")),
+                   tail_any=signature(raw.get("tail_any")))
+
+
 class CollectorArchive:
     """Phase ARCHIVE (the write half of one tick)."""
 
@@ -215,29 +244,22 @@ class CollectorArchive:
         """Phase ARCHIVE: rename continuation → person rows → the two-step
         gate → cursor check / sync → terminal status."""
         host = self._host
-        raw = probe.state
-        head_sig = self._signature(raw.get("head"))
-        tail_sig = self._signature(raw.get("tail"))
-        head_any = self._signature(raw.get("head_any"))
-        tail_any = self._signature(raw.get("tail_any"))
+        sigs = PaneSignatures.of(probe.state, self._signature)
         if host._nick and nick != host._nick:
-            await self.maybe_rename(nick, probe, head_sig, tail_sig,
-                                    head_any, tail_any)
+            await self.maybe_rename(nick, probe, sigs)
         person_id = await self.open_person(nick, probe)
         refused = self.verify_gate(probe, nick)
         if refused is not None:
             return refused
-        return await self.cursor_check(person_id, probe, nick, my_nick,
-                                       head_sig, tail_sig)
+        return await self.cursor_check(person_id, probe, nick, my_nick, sigs)
 
-    async def maybe_rename(self, nick: str, probe: Probe, head_sig: str,
-                           tail_sig: str, head_any: str,
-                           tail_any: str) -> None:
+    async def maybe_rename(self, nick: str, probe: Probe,
+                           sigs: PaneSignatures) -> None:
         host = self._host
         try:
             if await host.repo.rename_if_same_conversation(
-                    host._nick, nick, head_sig, tail_sig,
-                    head_any=head_any, tail_any=tail_any,
+                    host._nick, nick, sigs.head, sigs.tail,
+                    head_any=sigs.head_any, tail_any=sigs.tail_any,
                     dom_count=probe.count,
                     pane_same=bool(probe.state.get("pane_same"))):
                 host._log(f"Partner “{host._nick}” is now “{nick}” — "
@@ -280,16 +302,15 @@ class CollectorArchive:
         return None
 
     async def cursor_check(self, person_id: int, probe: Probe, nick: str,
-                           my_nick: str, head_sig: str,
-                           tail_sig: str) -> Outcome:
+                           my_nick: str, sigs: PaneSignatures) -> Outcome:
         """Unchanged cursor → NO_NEW (media drains still run); otherwise
         plan the backfill, sync the conversation and finish."""
         host = self._host
         cursor = await host.repo.get_cursor(person_id)
         count = probe.count
         unchanged = (cursor["bootstrapped"] and count == cursor["dom_count"]
-                     and tail_sig and tail_sig == cursor["tail_sig"]
-                     and head_sig == cursor["head_sig"])
+                     and sigs.tail and sigs.tail == cursor["tail_sig"]
+                     and sigs.head == cursor["head_sig"])
         person = await host.repo.get_person_by_id(person_id) or {}
         host._total = int(person.get("message_count") or 0)
         if unchanged:

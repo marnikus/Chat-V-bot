@@ -176,28 +176,55 @@ def _classify_file_group(group, is_discovered: bool,
         buckets.sort(ap, policy.verdict(ap, is_discovered))
 
 
-def plan_deletion(*, victim_abs: str, victim_folder_abs: str,
-                  media_base_abs: str, footprint_files: set[str],
-                  discovered_files: set[str], keep: set[str],
-                  folder_exclusive: bool,
-                  other_world_folders: set[str],
-                  inventory) -> DeletionPlan:
-    """Combine footprint + discovered − keep through the path policy."""
-    base = os.path.abspath(str(media_base_abs or ""))
-    vfolder = os.path.abspath(str(victim_folder_abs or ""))
+@dataclass(frozen=True, slots=True)
+class ScanFindings:
+    """Everything the media scan learned, before any policy is applied.
+
+    The INPUT to planning, as `DeletionPlan` is the output. Grouping the nine
+    arguments here is not cosmetic: the scan produces all of them together and
+    they are only ever meaningful together — a footprint without the keep set
+    is not a partial answer, it is a dangerous one.
+
+    Three paths (where the world lives), three sets (what was found, what is
+    referenced elsewhere), and two facts about the folder.
+    """
+
+    victim_abs: str
+    victim_folder_abs: str
+    media_base_abs: str
+    footprint_files: set
+    discovered_files: set
+    keep: set
+    folder_exclusive: bool
+    other_world_folders: set
+    inventory: object = None
+
+
+def plan_deletion(findings: "ScanFindings | None" = None, **legacy
+                  ) -> DeletionPlan:
+    """Combine footprint + discovered − keep through the path policy.
+
+    Takes a `ScanFindings`. The keyword form is still accepted because the
+    deletion safety tests call it that way and those tests are the contract
+    for the most destructive operation in the app — they are not worth
+    rewriting to move a parameter count.
+    """
+    f = findings if findings is not None else ScanFindings(**legacy)
+    base = os.path.abspath(str(f.media_base_abs or ""))
+    vfolder = os.path.abspath(str(f.victim_folder_abs or ""))
     policy = _PathPolicy(
-        base=base, vfolder=vfolder, exclusive=bool(folder_exclusive),
-        keep=_frozen_abspaths(keep),
-        others=_frozen_abspaths(other_world_folders))
+        base=base, vfolder=vfolder, exclusive=bool(f.folder_exclusive),
+        keep=_frozen_abspaths(f.keep),
+        others=_frozen_abspaths(f.other_world_folders))
     buckets = _PolicyBuckets()
-    _classify_file_group(footprint_files, False, policy, buckets)
-    _classify_file_group(discovered_files, True, policy, buckets)
+    _classify_file_group(f.footprint_files, False, policy, buckets)
+    _classify_file_group(f.discovered_files, True, policy, buckets)
     return DeletionPlan(
-        victim_abs=os.path.abspath(str(victim_abs or "")),
+        victim_abs=os.path.abspath(str(f.victim_abs or "")),
         victim_folder_abs=vfolder, media_base_abs=base,
-        footprint_files=_frozen_abspaths(footprint_files),
-        discovered_files=_frozen_abspaths(discovered_files),
+        footprint_files=_frozen_abspaths(f.footprint_files),
+        discovered_files=_frozen_abspaths(f.discovered_files),
         keep=policy.keep, candidates=frozenset(buckets.candidates),
         retained=frozenset(buckets.retained),
-        folder_exclusive=bool(folder_exclusive),
-        inventory=inventory, other_world_folders=policy.others)
+        folder_exclusive=bool(f.folder_exclusive),
+        inventory=f.inventory, other_world_folders=policy.others)

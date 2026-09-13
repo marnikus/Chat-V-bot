@@ -103,20 +103,19 @@ class UndoService:
     # ── wiring (main.py / attach_history) ────────────────────────
     def attach(self, archive=None, people=None, labels=None, dbs=None,
                memory=None, engine=None, bus=None) -> None:
-        if archive is not None:
-            self._archive = archive
-        if people is not None:
-            self._people = people
-        if labels is not None:
-            self._labels = labels
-        if dbs is not None:
-            self._dbs = dbs
-        if memory is not None:
-            self._memory = memory
-        if engine is not None:
-            self._engine = engine
-        if bus is not None:
-            self._bus = bus
+        """Wire in collaborators; `None` means "leave this one alone".
+
+        The seven keywords are the point, not a smell: callers attach what they
+        have as they build it, so the arguments ARE the partial update and a
+        parameter object would need the same seven optional slots. Nothing can
+        be *detached*, since None is the sentinel (G4).
+        """
+        for name, value in (("archive", archive), ("people", people),
+                            ("labels", labels), ("dbs", dbs),
+                            ("memory", memory), ("engine", engine),
+                            ("bus", bus)):
+            if value is not None:
+                setattr(self, f"_{name}", value)
 
     def _log(self, message: str, level: str = "info") -> None:
         emit_log(self._bus, message, level)
