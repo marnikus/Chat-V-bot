@@ -203,5 +203,21 @@
       "updated_at": "2026-09-11T11:49:07"
     }
   },
-  "template_presets": {}
+  "template_presets": {},
+  "ai_connections": {
+    "grok": {
+      "title": "Grok (xAI) — grok-4.3",
+      "provider": "grok",
+      "api_key": "xai-V9ZXvKN44AnM2J18YOhyVBjU5o0tvlKhtr0OjgqjqIHhVIaGlrEtK8CWRKSzWS7EXjd3McUmSRL2f668",
+      "model": "grok-4.3",
+      "url": "https://api.x.ai/v1/chat/completions"
+    }
+  },
+  "prompt_presets": {
+    "suggest_reply:all-msg": {
+      "title": "all msg",
+      "template": "suggest_reply",
+      "text": "You are helping to continue a private chat with {nick}.\nHere is the conversation so far, oldest first:\n\n{all_msg}{last_msg}\n\nWrite ONE short next message that fits this conversation, in the same language the other person uses. Reply with the message text only — no quotes, no explanation. гз ещ 10 words max."
+    }
+  }
 }
