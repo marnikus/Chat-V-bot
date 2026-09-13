@@ -17,12 +17,8 @@ import logging
 import os
 
 from services import db_deletion
-from services.db_deletion_flow import (
-    _Fail,
-    _DeleteState,
-    abspath_or_none,
-    raise_refusal,
-    same_canonical,
+from services.db_deletion_state import (
+    _DeleteState, _Fail, abspath_or_none, raise_refusal, same_canonical,
 )
 from services.db_media_scan import scan_world_media
 

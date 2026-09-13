@@ -181,6 +181,9 @@ CLONE_BASELINE = frozenset({
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
+    # H2 split the deletion pipeline at its irreversible boundary; the two
+    # halves necessarily open with the same stdlib + db_deletion header.
+    ("services/db_deletion_remove.py", "services/db_deletion_scan.py"),
     ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/queue.py"),

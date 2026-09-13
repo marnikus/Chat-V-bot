@@ -22,11 +22,17 @@ from unittest import mock
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from services import db_deletion_flow as flow  # noqa: E402
+# Round H (H2) split the pipeline at its irreversible boundary. This guard is
+# a pre-boundary phase, so it moved to `db_deletion_pre`; the shared state and
+# refusal types stayed in `db_deletion_state`. The test follows the code to the
+# module that OWNS each name rather than patching a re-export -- monkeypatching
+# a name on a package that merely re-exports it does nothing to the call site.
+from services import db_deletion_pre as flow  # noqa: E402
+from services import db_deletion_state as state  # noqa: E402
 
 
 def _state(candidates, keep_snapshot=()):
-    return flow._DeleteState(
+    return state._DeleteState(
         path="/w/victim.db",
         registry=SimpleNamespace(active_path=lambda: None),
         target="/w/victim.db",
@@ -43,7 +49,7 @@ class TestRejectNewSharing(unittest.TestCase):
         doomed = os.path.abspath("/w/media/pic.jpg")
         st = _state(candidates=[doomed], keep_snapshot=[])
 
-        with self.assertRaises(flow._PhaseRefusal) as caught:
+        with self.assertRaises(state._PhaseRefusal) as caught:
             flow._reject_new_sharing(st, [doomed])
 
         self.assertIn("media references changed",
@@ -72,7 +78,7 @@ class TestRejectNewSharing(unittest.TestCase):
         st = _state(candidates=[doomed])
         with mock.patch.object(flow.db_deletion, "canonical",
                                side_effect=lambda p: doomed):
-            with self.assertRaises(flow._PhaseRefusal):
+            with self.assertRaises(state._PhaseRefusal):
                 flow._reject_new_sharing(st, ["/w/./media/../media/pic.jpg"])
 
     def test_an_unresolvable_reference_is_treated_as_dangerous(self):
