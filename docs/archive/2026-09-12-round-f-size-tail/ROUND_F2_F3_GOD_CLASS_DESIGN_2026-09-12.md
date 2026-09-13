@@ -700,3 +700,348 @@ evidence shows actually occurring. Fixing `WriteTurn` properly means a nesting
 count per task, which changes an 817-line pinned contract
 (`tests/test_world_write_gate.py` asserts `turn.held` as a boolean), so it is
 recorded as **F3c** instead of being bundled into a flake fix.
+
+### 8.11 F3 executed — `UndoService` → facade + 4 collaborators
+
+Same method as F2 and the same rule that made F2 safe: state stays on the
+aggregate, a part takes `owner` and nothing else, every name stays reachable on
+the facade, and the move is *proven* rather than assumed from a green suite.
+
+#### 8.11.1 Numbers
+
+| | §4 target | achieved |
+|---|---|---|
+| `services/undo_service.py` | ≈240 lines | **241** (was 573) |
+| `UndoService` class | ≈190 LOC | **179** LOC / 28 methods (was 418 / 29) |
+| facade MI | up from 24.1 | **56.25**, grade A (was 24.08) |
+| `undo_history.py` · `HistoryProjection` | ≈61 | **109 lines**, 77 LOC, 10 methods |
+| `undo_apply.py` · `ApplyCommand` + 6 helpers | ≈128 + 45 | **241 lines**, 143 LOC, 7 methods |
+| `undo_db.py` · `DbCommands` | ≈68 | **101 lines**, 77 LOC, 5 methods |
+| `undo_world.py` · `WorldSync` + 2 module funcs | ≈49 + 31 | **126 lines**, 42 LOC, 3 methods |
+
+Repo-wide, measured on F2's basis (product `.py`, excluding `tests/` and
+`tools/`), HEAD being `0b61302`:
+
+| | HEAD | after F3 |
+|---|---|---|
+| files | 166 | **170** |
+| median lines | 137 | **134** |
+| files over 500 lines | 8 | **7** |
+| SLOC (non-blank) | 24,442 | **24,624** (+182) |
+| mean MI | 65.95 | **66.11** |
+
+The HEAD column reproduces F2's recorded 166 / 137 / 8 exactly, which is the
+check that the two steps are being measured the same way. Its mean MI reads
+65.95 rather than the 65.93 F2 recorded because the flake fix `0b61302` touched
+`services/undo_support.py` in between; the median *fell* (137 → 134) because all
+four new modules sit between 101 and 241 lines.
+
+Suite and gates: **2726 passed / 0 failed / 894 subtests** (was 2718 / 854 — the
++8 tests and +40 subtests are the new guard, no behaviour test was added or
+removed). Line coverage **91.51%** (14,114/15,423) against a 91.50% baseline;
+branch **86.36%** (3,228/3,738) against 86.36%. `rule16_gate.py --with-clones`
+rc=0 with 0 new and 0 stale clone groups. `vulture --min-confidence 90` is
+silent on all five files.
+
+#### 8.11.2 LCOM\*, and why the parts' score means nothing
+
+Under the convention this doc has used throughout — Henderson-Sellers over every
+`self.X` a class references, which is the variant that yields the "34
+attributes" F2 §6 quotes — the facade reads:
+
+| | methods | attributes | LCOM\* |
+|---|---|---|---|
+| HEAD `UndoService` | 28 | 35 | **0.9323** |
+| F3 `UndoService` | 28 | 25 | **0.9541** |
+| each of the four parts | 3–10 | **1** | 0.0000 |
+
+The facade's rise is the same structural effect F2 §8.3 recorded and not a loss
+of cohesion: a delegation shell references every attribute it forwards plus the
+four part handles, while each attribute is now touched by *fewer* methods
+because the methods that touched it moved out together.
+
+The parts' 0.0000 is **degenerate, and reporting it as "perfect cohesion" would
+be a lie**. Each part owns exactly one attribute, `_o`; with a single attribute
+every method touches it and the formula returns 0 by construction, whatever the
+code does. The parts' cohesion argument is the responsibility split and the
+disjointness of their method groups — the timeline and its projections, applying
+one entry, reversing a DB-connection entry, rebuilding after a world change —
+not the metric. This is F2's "LCOM\* on its own is a poor god-class detector"
+finding again, now with a concrete failure mode named: **the metric saturates at
+0 for any collaborator built on the `owner` convention this repo uses**, so it
+cannot be used to compare a facade with its parts.
+
+#### 8.11.3 Deviations from the §4 plan
+
+1. **`_history_entry` stayed on the facade**; §4 listed it among
+   `HistoryProjection`'s ten moves, so nine moved. Three concrete reasons, all
+   found by grep before the move rather than by a red suite afterwards:
+   `bridge/router.py:159` does `ns["_history_entry"] =
+   staticmethod(UndoService._history_entry)`, pulling it off the *class* by
+   attribute; `router.py:456` calls `ctx.undo._history_entry(kind, value)`; and
+   `undo_service.py:93` constructs the pre-existing
+   `UndoProjection(self._history_entry)` from the **bound** method inside
+   `__init__`, so it must exist on the facade before any part is built.
+   `HistoryProjection` reaches it as `self._o._history_entry` at two call sites.
+2. **§4's method counts excluded `__init__`.** Each part has one, so the achieved
+   counts read 10 / 7 / 5 / 3 against the planned 10 / 6 / 4 / 2.
+3. **`undo_apply.py` landed at 241 lines against ≈173 planned, and
+   `undo_world.py` at 126 against ≈80.** Composition measured rather than
+   guessed: `undo_apply.py` is 158 code + 45 docstring + 32 blank + 6 comment;
+   `undo_world.py` is 78 + 29 + 17 + 2. §4's estimates were code-shaped and did
+   not carry §18.2's required module docstring (what the file owns, which way
+   its imports point). Both files stay inside §18.2's 150–300 band and no logic
+   was padded to fill it. `undo_db.py` (101) and `undo_history.py` (109) are
+   *under* 150, which §18.2 allows for a single-responsibility leaf; growing
+   them to the band floor would have been the dishonest reduction.
+4. **`__init__` grew 19 → 24 LOC**, a §16.5 deviation on a legacy offender
+   (`__init__` was already over at 8 params). The growth is four part
+   constructions plus one comment line and is irreducible — the facade has to
+   build its parts somewhere — and the comment was cut from three lines to one
+   for exactly that reason, the same move F2 made cutting `Collector.__init__`'s
+   comment. `__init__`'s param count is unchanged at 8.
+5. **A docstring made `push` a new offender, and was removed.** The first draft
+   added five lines to `push`'s docstring explaining why the body must stay in
+   this module. `push` was 30 physical LOC — exactly at the limit, not over —
+   and became **35**, a new >30 violation. The note duplicated the module
+   docstring, which already says it (lines 21–24), so it was deleted and `push`
+   is now byte-identical to HEAD. Recorded rather than left silent because
+   moving prose to satisfy a physical-LOC count is precisely what §18.5 watches
+   for: here it was *also* the better placement on the merits (why a body lives
+   in a module is a module-level fact, not an implementation detail of `push`),
+   and it restored exact equivalence for all five retained bodies. Had the note
+   been load-bearing and unique, the honest outcome would have been to keep it
+   and record a §16.5 deviation, as item 4 does.
+
+#### 8.11.4 The misses, stated plainly
+
+* **LCOM\* rose** 0.9323 → 0.9541 on the facade (§8.11.2), and the parts' score
+  is meaningless rather than good.
+* **The pylint message profile got worse in three counts.** Family (5 files)
+  against HEAD's single file, `--disable=E0611` for the PySide6 stub
+  false-positive, message types rather than a score:
+
+  | message | HEAD | F3 family | why |
+  |---|---|---|---|
+  | `protected-access` | 9 | **91** | every `self._x` in a moved body became `self._o._x` |
+  | `missing-function-docstring` | 5 | **17** | the 12 *public* delegators carry no docstring; pylint exempts `_`-prefixed names, so the 9 private ones do not count |
+  | `too-few-public-methods` | 0 | **2** | two of the four part classes |
+  | `unused-import` | 2 | **0** | improved — the re-exports are named in `__all__` |
+  | `broad-exception-caught` | 4 | 4 | unchanged |
+  | `too-many-arguments` / `-positional-` | 3 / 3 | 3 / 3 | unchanged |
+  | `unused-argument`, `too-many-instance-attributes`, `superfluous-parens`, `import-outside-toplevel` | 1 each | 1 each | unchanged |
+
+  **No complexity message moved at all**, which is what a pure move should look
+  like: the three increases are the structural cost of the delegation pattern,
+  not of new logic. F2's already-accepted parts carry the same shape (72
+  `protected-access` across three `collector_*` modules), so this is the house
+  pattern's known price rather than a regression F3 introduced. Delegator
+  docstrings were *not* added to buy the count back: 12 one-line "forwards to X"
+  docstrings would be noise the module docstring already covers.
+* **Net size grew**: +182 SLOC and +4 files, to take one file off the >500 list
+  and lift its MI from 24.08 to 56.25. The same trade F2 made, and the reason
+  §18.2 measures a band rather than a total.
+* **`services/undo_db.py` is 45.68% covered** — see §8.11.8, which treats it as
+  the finding it is rather than as a rounding error.
+
+#### 8.11.5 The five frozen contracts this touched
+
+Each was found by grep *before* the move, and each is now an assertion in the
+guard rather than a comment:
+
+1. **`push` must stay a real body in `services/undo_service.py`.**
+   `tests/test_world_write_gate.py:709-738` monkeypatches the module global
+   `undo_service.MAX_STACK_HISTORY` to shrink the cap; `push` is its only
+   reader. Moving `push` would leave that patch silently vacuous with the test
+   still green — the exact trap F1 fell into with the re-export shim (§8.1) and
+   the same shape as F2's `_sync`.
+2. **`emit_db_change`, `restart_world` and `_values_equal` are re-exported** with
+   `__all__`, and the guard asserts they are the **same objects** (`assertIs`),
+   not copies. `tests/unit/bridge_safety/test_bridge_results.py` patches
+   `bridge.db_bridge.restart_world`, so a re-definition in the facade would
+   break it while a re-export does not.
+3. **`UndoService.push` is patched on the class** at
+   `tests/unit/bridge_safety/test_undo_wire.py:259`, so it has to remain a real
+   method on the facade, not a delegator.
+4. **`svc.push_stack` is patched on the instance**, which a delegator survives —
+   instance patches resolve through the instance, so this one needed no special
+   handling and is recorded to show the two cases were distinguished rather than
+   treated alike.
+5. **`bridge/router.py:159` pulls `staticmethod(UndoService._history_entry)` off
+   the class** (§8.11.3 item 1).
+
+#### 8.11.6 New guard, and the hole the negative check found in it
+
+`tests/unit/services/test_undo_structure.py` — **8 tests, 40 subtests**:
+
+1. every collaborator module exists and exports its public class;
+2. the facade's `__init__` builds each part from `self`;
+3. each part's `__init__` takes `(self, owner)` and nothing else;
+4. the 21 moved names are **bare one-statement delegators**, with async-ness
+   matching the target (a delegator that quietly became `async` or quietly
+   stopped being `async` would change the call graph);
+5. `push` is still a real body and still resolves `MAX_STACK_HISTORY` in *this*
+   module;
+6. the three re-exports are identical objects;
+7. **no collaborator imports the facade** (cycle guard);
+8. the facade stays inside the size band — ≤300 lines (the §18.2 ceiling, left
+   loose so prose can still be added) and ≤**179** class LOC, ratcheted at the
+   measured value rather than the planned one. Docstrings inside the class count
+   against the 179 deliberately; §8.11.3 item 5 is what happens otherwise.
+
+The cycle guard had a hole, and the negative check found it rather than a
+reading of the code: it collected module names from `import X` and
+`from X import Y` but not from the `from services import undo_world` form, so a
+part written that way would have passed a gate whose whole job is to fail. Fixed
+by expanding dotted aliases into the checked set before the assertion.
+
+**Negative check** (`/home/user/f3_negative.py`, mutation-based, restores the
+tree and re-verifies the baseline afterwards): **5 of 5 mutations caught**, each
+failing with the culprit named — delete a delegator; re-inline `history`'s logic
+into the facade; turn `push` into a delegator (loses the `MAX_STACK_HISTORY`
+patch target); shadow `restart_world` with a local copy instead of re-exporting
+it; make a collaborator import the facade.
+
+#### 8.11.7 Equivalence evidence stronger than "the tests pass"
+
+* **AST comparison, HEAD against the family: all 21 moved methods and all 8
+  module-level functions are AST-identical** after normalising `self._o` back to
+  `self`. No body was edited during the move (`/home/user/f3_verify.py`).
+* **Method count 28 before → 28 after**; nothing lost, nothing added, no name
+  quietly renamed. The gate's own class counter reads 29 → 28 for the very same
+  fact, because `classes()` walks nested defs as well: `_apply_db_command`'s
+  inner `async def work()` moved to `undo_db.py` with its method, so the facade
+  no longer contains a nested function. Recorded so that a future reader does not
+  mistake the counter's drop for a vanished method.
+* **The five bodies that stayed are byte-identical line-for-line to HEAD**:
+  `push` (30 lines), `attach` (16), `_clean_history` (5), `_clean_blocks` (3),
+  `_history_entry` (2). Only `__init__` differs, by the four constructions and
+  one comment (§8.11.3 item 4).
+* Every delegator was AST-shape-checked as a single forwarding statement, so no
+  logic can hide in the facade between the delegators.
+* No behaviour test was added, removed or edited — the suite delta is exactly the
+  new guard's 8 tests / 40 subtests. With bodies AST-identical and the test set
+  a strict superset of HEAD's, per-body coverage can only be ≥ HEAD's.
+* Full suite as the equivalence gate: 2726 passed / 0 failed / 894 subtests,
+  line 91.51%, branch 86.36%.
+
+#### 8.11.8 A finding F3 exposed: the DB delete undo/redo path has no test
+
+Per-module coverage of the family: `undo_service.py` 91.93%, `undo_apply.py`
+87.82%, `undo_history.py` 85.71%, `undo_world.py` 84.34%, **`undo_db.py`
+45.68%** (29/55 statements).
+
+This is **not** coverage F3 lost. All four bodies are AST-identical to HEAD's, no
+test was touched, and nothing outside the method bodies is uncovered — the same
+statements were equally uncovered inside the 573-line file, where they were
+diluted below visibility by the other 500 lines scoring 92%. Splitting the file
+made an existing gap measurable, which is the useful direction of that trade.
+
+What is actually untested, line by line:
+
+| body | uncovered | what it means |
+|---|---|---|
+| `_db_delete_op` | **37–49, the entire body** | both halves of DB-delete undo/redo: the forward re-delete (including the "nothing to re-delete, the file is already gone" warning) and the reverse restore-from-backup (including the "database deletions are permanent, no backup exists" warning) |
+| `_db_op_forward` | **53–57, the entire body** | the re-do half of `create` / `load` / `clean`, and the unknown-op `None` |
+| `_apply_db_command` | 83–91, 94 | the `op == "delete"` branch end-to-end (`restart_world` on success, `emit_db_change`, the `None` early return) and the unknown-op early return. The *switch* branch (92, 95–99) **is** covered |
+
+So the DB-connection **delete** path — the one half of the DB-undo-restore
+feature that destroys and restores a world file — is exercised by no test at any
+level, while its sibling switch path is. F3 deliberately did not write those
+tests: adding behaviour tests inside a behaviour-preservation commit spends the
+equivalence evidence that makes the move trustworthy (§8.11.7), which is the
+same scope discipline F1 applied to `_append_db_files` and F2 to `_sync`. It is
+recorded here as the next named target, and it is cheap — 26 statements, four
+call paths, and `tests/integration/services/test_undo_support_contract.py`
+already builds the fixture shape they need.
+
+#### 8.11.9 RULE 16 and RULE 18 recheck
+
+Every function in the five-file family (61 of them) re-measured with the gate's
+own `measure_function`, `nesting`, `params` and `classes`, not with a separate
+tool that might disagree.
+
+| | HEAD | F3 family |
+|---|---|---|
+| function-level violations | 3 | **3** |
+| class-level violations | 1 | **1** |
+| max CC | 9 | **9** (`ApplyCommand.undo`) |
+| max cognitive | 14 | **14** (`DbCommands._apply_db_command`) |
+| max nesting | 3 | **3** (`ApplyCommand._apply_entry`) |
+| max params | 8 | **8** (`UndoService.__init__`) |
+| max function LOC | 32 | **32** (`restart_world`) |
+
+The four remaining violations are the *same four* HEAD had, none of them new:
+`UndoService` at 179 LOC / 28 methods (was 418 / 29 — improved, still over both
+caps because a facade that keeps 28 names is over 15 by construction);
+`__init__` at 8 params; `attach` at 7 params; `restart_world` at 32 LOC / 6
+params, relocated verbatim. §16.5's "never grow a legacy offender" holds
+everywhere except `__init__`'s five lines, recorded as a deviation in §8.11.3
+item 4 with F2's `Collector.__init__` as the precedent.
+
+### §16.7 acceptance checklist
+
+| Item | Result |
+|---|---|
+| No new function > 30 physical LOC | ✅ none; `push` briefly became one via a docstring and was restored byte-identical (§8.11.3 item 5) |
+| No new class > 150 LOC or > 15 methods | ✅ largest part is `ApplyCommand` at 143 / 7; the facade at 179 / 28 is the pre-existing offender, halved |
+| No new function with > 4 params (excl. `self`/`cls`) | ✅ none new; the two widest are HEAD's `__init__` (8) and `attach` (7), unchanged |
+| radon CC ≤ 10, cognitive ≤ 15, nesting ≤ 4 | ✅ maxima 9 / 14 / 3 — all three unchanged from HEAD |
+| Line coverage ≥ 80% and not below baseline; branch ≥ 75% | ✅ line **91.51%** vs 91.50%; branch **86.36%** vs 86.36%. ⚠️ one module at 45.68%, a pre-existing gap now visible — §8.11.8 |
+| Every new function has a test that would fail if deleted | ✅ no function is new; the 21 moved ones are covered by the 8-test guard plus the existing undo suites, and the guard was negative-checked 5/5 (§8.11.6) |
+| No new vulture findings | ✅ `--min-confidence 90` silent on all five files; `unused-import` went 2 → 0 |
+| No new duplication groups | ⚠️ one, baselined with a recorded reason, and one stale entry deleted (§8.11.10) |
+| Quality-override comments used | ✅ none — no `ideal-size:` or metric override was needed anywhere in the family |
+| Metrics not gamed | ✅ §8.11.2 refuses to report the parts' degenerate LCOM\* 0.0000 as cohesion; §8.11.3 item 5 records a prose move that *raised* a measured number back into line instead of hiding it; §8.11.4 reports a pylint profile that got worse; §8.11.8 reports a 45.68% module in the family F3 created |
+| RULE 18 ideals | ✅ see below |
+| RULE 19 order respected | ✅ nesting (3), CC (9) and cognitive (14) were already inside the limits; size was taken last, as §19 prescribes |
+| Current docs updated (RULE 17) | ✅ `AGENT_RULES.md` §18.2 and §18.3 measured notes, `SYSTEM_OF_RECORD.md`'s Undo/redo row, `docs/archive/README.md` |
+
+### RULE 18.2 and 18.3
+
+* **Files.** All five are ≤ 300 lines: 241, 241, 126, 109, 101. Two are under
+  150, which §18.2 treats as normal for a single-responsibility leaf
+  (`undo_db.py` reverses exactly one kind of entry, `undo_history.py` owns the
+  timeline and its three projections). Every file's docstring names what it owns
+  and which way its imports point — the sentence §18.2 says keeps a split from
+  rotting back: no part imports the facade, no part imports another part, and all
+  four import only `stores`/`backend`/`core` leaves plus the module-level helpers
+  that moved with them.
+* **Modules.** The `undo_*` prefix family in `services/` is now **8 files**
+  (`undo_service`, `undo_history`, `undo_apply`, `undo_db`, `undo_world`,
+  `undo_timeline`, `undo_support`, `undo_archive`), inside §18.3's 5–15 band and
+  cohesive by the same test F2 applied to `collector_*`: all eight share the
+  timeline-entry vocabulary and the `owner` protocol, and they change together.
+  Top-level `services/` is 37 files, still over the band and still held by
+  prefix families, now including `undo_*` 8 alongside `history_*` 9,
+  `collector_*` 9 and `db_deletion_*` 8.
+* **§16.5's landmine list in `AGENT_RULES.md` still names `UndoService`, and F3
+  left it there deliberately.** The god class is gone, but the family still
+  contains three pre-existing offenders (`__init__`, `attach`, `restart_world`)
+  and five frozen contracts that a casual edit can break silently (§8.11.5) —
+  which is what "landmine" means operationally. F2 left `Collector` on the same
+  list for the same reason; removing either would need the list's meaning
+  changed first, and that is a rules decision, not a refactor's.
+
+#### 8.11.10 The clone baseline, moved rather than dodged
+
+One entry deleted, one added, both recorded in `rule16_gate.py` with their
+evidence:
+
+* **Deleted** `('services/history/query.py', 'services/undo_service.py')`. The
+  facade's header went with the code that used it — `json`, `os` and `logging`
+  all left for `undo_apply.py` and `undo_world.py` — so the shared window no
+  longer exists. The gate reported it stale; deleting it is the ratchet working
+  *down*, which is the direction §18.5 exists to protect.
+* **Added** `('services/history/query.py', 'services/undo_world.py')`, span 6 at
+  `query.py:1` and `undo_world.py:17`: `from __future__ import annotations` /
+  `copy` / `json` / `logging` / `os`, with `log = logging.getLogger("chatbot")`
+  immediately below in both. No logic is copied — it is the standard header of a
+  leaf service module. All five names are genuinely used in `undo_world.py`
+  (`copy.deepcopy` in `sync_world_state`, `json.dumps` in `emit_db_change`,
+  `logging` for the module logger, `os.path.abspath` / `os.path.basename` in
+  `restart_world`, `annotations` for the `Result[None]` / `list[dict]` hints),
+  and vulture reports nothing in that file at any confidence, so there is no
+  unused import whose honest removal would dissolve the window. Reordering or
+  splitting the imports to break the span was rejected: it is the cosmetic
+  span-shrinking §18.5 forbids and it would reintroduce pylint C0411.

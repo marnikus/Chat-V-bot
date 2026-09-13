@@ -130,6 +130,30 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # forbids. This is the same situation as the F1 pair
 # ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py')
 # directly below.
+#
+# ── Round F step F3 (UndoService → the undo_* family) ────────────────
+#
+# DISSOLVED — ('services/history/query.py', 'services/undo_service.py').
+# undo_service.py went from 573 lines to 248 and its import header went with
+# the code that used it: `json`, `os` and `logging` all left for
+# undo_apply.py / undo_world.py, so the shared window no longer exists. The
+# gate reported it stale and it is deleted here — the ratchet working down
+# rather than rotting into fiction.
+#
+# ADDED — ('services/history/query.py', 'services/undo_world.py'), span 6 at
+# query.py:1 and undo_world.py:17: `from __future__ import annotations` /
+# `import copy` / `import json` / `import logging` / `import os`, with
+# `log = logging.getLogger("chatbot")` immediately below in both. No logic is
+# copied — it is the standard header of a leaf service module. Every name is
+# genuinely used in undo_world.py: `copy.deepcopy` in sync_world_state,
+# `json.dumps` in emit_db_change, `logging` for the module logger,
+# `os.path.abspath` / `os.path.basename` in restart_world, and `annotations`
+# for the `Result[None]` / `list[dict]` hints. vulture reports NOTHING in
+# undo_world.py at any confidence, so there is no unused import whose removal
+# would dissolve the window honestly. Tried and rejected: reordering or
+# splitting the imports to break the span is exactly the cosmetic
+# span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
+# situation as the F1 pair below and the two F2 pairs above.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector.py"),
@@ -139,7 +163,7 @@ CLONE_BASELINE = frozenset({
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
-    ("services/history/query.py", "services/undo_service.py"),
+    ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
