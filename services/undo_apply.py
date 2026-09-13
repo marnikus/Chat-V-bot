@@ -69,7 +69,8 @@ def _apply_people_command(host, value: dict, forward: bool) -> bool:
     rows = value.get("after" if forward else "before")
     if rows is None or host._people is None:
         return False
-    host._timeline_commit.spawn("people restore", host._people.apply(rows))
+    host._timeline_commit.spawn("people restore", host._people.apply(rows,
+                                                                     forward))
     return True
 
 
@@ -86,17 +87,28 @@ def _apply_labels_command(host, value: dict, forward: bool) -> bool:
     return True
 
 
-def _log_command(host, entry: dict, forward: bool) -> None:
-    """Announce a command entry — except the two that verify themselves.
+#: The only command kind that applies SYNCHRONOUSLY — `_apply_labels_command`
+#: restores the snapshot, emits and returns inside this call — so the only one
+#: whose intent is its outcome. Every other kind reports itself from what it
+#: verified: `people_service.apply` (the count the store says landed),
+#: `undo_archive._report` (the rows read back), `undo_db._announce` (the
+#: DbManager's result). A new kind joins this tuple ONLY if it applies inside
+#: the call; the default is silence, because a missing line is recoverable and
+#: a false one is the bug this list exists to prevent.
+_ANNOUNCED_FROM_INTENT = ("labels",)
 
-    `archive` and `dbconn` report later, from the state the database actually
-    ended up in: `services/undo_archive.py::_report` and
-    `services/undo_db.py::_announce`. Announcing here instead is the bug of
-    2026-09-11 — the timeline moves and the log says "restored" before the work
-    has run, so a refusal reads to the user as a success.
+
+def _log_command(host, entry: dict, forward: bool) -> None:
+    """Announce a command entry that already happened by the time we speak.
+
+    Announcing the others here is the bug of 2026-09-11 — the timeline moves
+    and the log says "restored" before the work has run, so a refusal reads to
+    the user as a success. It was found three times running (archive, then
+    dbconn, then people), which is why the test is a whitelist rather than a
+    list of kinds to skip.
     """
     kind = entry.get("kind")
-    if kind in ("archive", "dbconn"):
+    if kind not in _ANNOUNCED_FROM_INTENT:
         return
     host._log(f"{'↪ Redo' if forward else '↩ Undo'} — "
               + host.UNDO_LABELS.get(kind, kind + " restored"), "info")
@@ -164,20 +176,20 @@ class ApplyCommand:
 
     # ── apply one entry's state (walk onto a snapshot entry) ──────
     def _apply_entry(self, entry) -> None:
-        """Apply the state a history entry represents."""
+        """Replay a FULL-STATE entry: `grid`, or the stack `else`.
+
+        The command kinds are not this function's business. `undo()` and
+        `redo()` reach it only when `entry["kind"] not in COMMAND_KINDS`, and
+        `HISTORY_KINDS` is `("stack", "grid") + COMMAND_KINDS`, so the
+        delegation and the people spawn this function used to carry could never
+        run — they were also the two blocks no test could cover (§8.12.5 lists
+        them as `undo_apply.py` 164-165 and 170-173). Removing them takes the
+        reader's context budget back without changing any reachable behaviour.
+        """
         kind = entry.get("kind")
-        if kind in ("labels", "archive", "dbconn"):
-            self._o.apply_command(entry, forward=True)
-            return
         if kind == "grid":
             self._o._config.set_state(grid_layout=entry["value"])
             self._o._bus.emit(GridLayoutChanged(payload=entry["value"]))
-        elif kind == "people":
-            value = entry.get("value")
-            rows = value.get("after") if isinstance(value, dict) else None
-            if rows is not None and self._o._people is not None:
-                self._o._timeline_commit.spawn(
-                    "people restore", self._o._people.apply(rows))
         else:
             blocks = self._o._clean_blocks(entry["value"])
             self._o._config.set_state(last_stack=blocks, last_stack_preset="")

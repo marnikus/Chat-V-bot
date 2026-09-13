@@ -244,7 +244,7 @@ class TestArchiveFacts(unittest.IsolatedAsyncioTestCase):
         service = types.SimpleNamespace(
             _archive=None, _bus=bus, _log=lambda *a, **k: logged.append(a))
 
-        async def slow_apply(rows):
+        async def slow_apply(rows, forward=False):
             await asyncio.sleep(0.5)
             return None
 
@@ -462,6 +462,10 @@ class TestUndoProvesItself(WorldCase):
         self.assertTrue(any("is back in the database" in m
                             for m in self.messages()),
                         f"the log must state the verified state: {self.logs}")
+        self.assertTrue(any(m.startswith("↩ People list restored")
+                            for m in self.messages()),
+                        "the queue half of an undo says undo: it is the only "
+                        f"line the list gets (I-22): {self.logs}")
 
     async def test_redo_hides_them_again_and_says_so(self):
         await self.seed(count=4)
@@ -475,6 +479,11 @@ class TestUndoProvesItself(WorldCase):
         self.assertEqual(await self.visible(), [])
         self.assertTrue(any("is hidden again" in m for m in self.messages()),
                         f"the log must state the verified state: {self.logs}")
+        self.assertTrue(any(m.startswith("↪ People list restored")
+                            for m in self.messages()),
+                        "…and the queue half of a redo says redo, which it "
+                        f"could not before `apply` knew the direction: "
+                        f"{self.logs}")
 
     async def test_clear_history_undo_reports_the_messages_it_restored(self):
         await self.seed(count=3)
@@ -564,7 +573,7 @@ class TestUndoProvesItself(WorldCase):
         people = undo._people
         real = people.apply
 
-        async def refuse(rows):
+        async def refuse(rows, forward=False):
             return Err("restore_failed", "boom")
 
         people.apply = refuse

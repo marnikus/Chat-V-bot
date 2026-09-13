@@ -53,11 +53,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 sys.path.insert(0, ROOT)
 
 import services.undo_apply as undo_apply                  # noqa: E402
+import services.undo_archive as undo_archive              # noqa: E402
 import services.undo_db as undo_db                        # noqa: E402
 from backend.config_manager import ConfigManager          # noqa: E402
 from core.events import (DbChanged, EventBus, LogMessage,  # noqa: E402
                          UserDbChanged)
+from services.people_service import PeopleService         # noqa: E402
 from services.undo_service import UndoService             # noqa: E402
+from stores.user_memory import UserMemory                 # noqa: E402
 
 
 async def wait_for(box, timeout=3.0):
@@ -293,7 +296,7 @@ class TestApplyDbCommandDeleteBranch(DbConnCase):
     async def test_a_delete_that_cannot_run_is_silent_on_the_bus(self):
         self.undo._apply_db_command(
             {"op": "delete", "path": self.absent("gone.db")}, forward=True)
-        await wait_for(self.warnings())
+        await wait_for(self.logs)
         await asyncio.sleep(0.05)          # let any stray emit land
         self.assertEqual(self.dbs.calls, [])
         self.assertEqual(self.restarts, [])
@@ -472,7 +475,7 @@ class TestTheOutcomeAnnouncement(DbConnCase):
                                           backup="")], 0)
         result = self.undo.undo()
         self.assertTrue(result.is_ok, "the timeline still moves")
-        await wait_for(self.warnings())
+        await wait_for(self.logs)
         self.assertIn("permanent", self.warnings()[0])
         self.assertEqual([m for m in self.infos() if "restored" in m], [],
                          "a permanent delete must not announce a restore")
@@ -525,45 +528,200 @@ class TestTheOutcomeAnnouncement(DbConnCase):
 # ═════════════════════════════════════════════════════════════════
 # _log_command — which kinds are left to announce themselves
 # ═════════════════════════════════════════════════════════════════
-class TestLogCommandSkipsTheSelfReportingKinds(DbConnCase):
-    """The suppression half of I-21 — and the half of I-18 nothing had pinned.
+class TestWhatLogCommandAnnounces(DbConnCase):
+    """Which command kinds may be announced from the intent: exactly one.
 
-    `_log_command` announces every command kind EXCEPT the two that report
-    themselves from their own outcome. Dropping either name silently restores
-    the 2026-09-11 bug for that kind, and the negative check for this step
-    found that removing `archive` from the tuple failed no test at all.
+    `_log_command` speaks only for a kind that has already finished by the time
+    it is called. `labels` is that kind — `_apply_labels_command` restores the
+    snapshot, emits and returns — so its intent is its outcome. `people`,
+    `archive` and `dbconn` each report themselves from what they verified
+    (`people_service.apply`'s count, `undo_archive._report`'s rows read back,
+    `undo_db._announce`'s DbManager result), so a line here would be a second
+    claim, and over a refusal a false one.
+
+    The whitelist is the point. This bug was found three times running — I-18
+    archive, I-21 dbconn, I-22 people — each time as one more name added to a
+    skip list after the fact, so the list now names the one kind that MAY be
+    announced and a kind nobody has declared synchronous gets no line at all.
     """
 
-    def test_archive_and_dbconn_say_nothing_here(self):
-        """Neither self-reporting kind may be announced from the intent.
+    def test_the_synchronous_kind_is_announced_in_both_directions(self):
+        """Skipping three kinds must not have silenced the announcement."""
+        undo_apply._log_command(self.undo, {"kind": "labels"}, False)
+        self.assertEqual(self.infos(), ["↩ Undo — labels restored"],
+                         "the label table still drives the wording")
+        self.logs.clear()
+        undo_apply._log_command(self.undo, {"kind": "labels"}, True)
+        self.assertEqual(self.infos(), ["↪ Redo — labels restored"],
+                         "and the arrow still follows the direction")
 
-        Removing `archive` from the tuple is what the 2026-09-11 bug was, and
-        until this step no test in the repo failed when it was removed.
+    def test_the_three_self_reporting_kinds_say_nothing_here(self):
+        """Removing any one of them is the 2026-09-11 bug, back again.
+
+        The negative check for the dbconn fix found that dropping `archive`
+        from the old skip list failed no test anywhere in the repo.
         """
-        for kind in ("archive", "dbconn"):
+        for kind in ("people", "archive", "dbconn"):
             self.logs.clear()
             undo_apply._log_command(self.undo, {"kind": kind}, False)
             self.assertEqual(self.logs, [],
-                             f"{kind} reports itself, from its outcome")
+                             f"{kind} reports itself, from what it verified")
 
-    def test_every_other_command_kind_is_announced_from_its_label(self):
-        """Skipping two kinds must not have silenced the announcement itself.
+    def test_an_undeclared_kind_is_silent_instead_of_claiming_a_restore(self):
+        """The fail-safe the whitelist buys.
 
-        `labels` is applied synchronously — `_apply_labels_command` restores the
-        snapshot, emits and returns — so for it the intent *is* the outcome.
-        `people` is not: its branch spawns `people_service.apply`, which logs
-        its own verified line ("↩ People list restored — N person(s)") or an
-        error, so the intent line written here is a second, earlier claim. That
-        is the dbconn shape again, recorded as open in §8.13.3 rather than fixed
-        in this step; these assertions pin today's wording, which is exactly
-        what such a fix would have to change on purpose.
+        A new command kind gets no intent line until someone states here that it
+        applies synchronously. A missing line is recoverable and visible; an
+        intent line over an async kind is a lie the user reads as a success.
         """
-        undo_apply._log_command(self.undo, {"kind": "labels"}, False)
-        undo_apply._log_command(self.undo, {"kind": "people"}, True)
-        self.assertEqual(self.infos(), ["↩ Undo — labels restored",
-                                        "↪ Redo — people list restored"],
-                         "the label table still drives the wording, and the "
-                         "arrow still follows the direction")
+        undo_apply._log_command(self.undo, {"kind": "media"}, False)
+        self.assertEqual(self.logs, [])
+
+
+# ═════════════════════════════════════════════════════════════════
+# the people announcement — SYSTEM_OF_RECORD I-22
+# ═════════════════════════════════════════════════════════════════
+class PeopleUndoCase(unittest.IsolatedAsyncioTestCase):
+    """A real UndoService and a real PeopleService over a real UserMemory.
+
+    The double line was found by reading, not by a field report: `_log_command`
+    announced "people list restored" from the intent while the restore was still
+    a spawned task, and `people_service.apply` then wrote the verified line — so
+    a successful undo said the same thing twice and a FAILED one said
+    "restored" ahead of its own ❌. Nothing here is faked: the queue is a real
+    SQLite file and the work travels the shipped path (push → undo() → spawn →
+    apply → replace_all).
+    """
+
+    async def asyncSetUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.memory = UserMemory(os.path.join(self._tmp.name, "users.db"))
+        await self.memory.init()
+        self.bus = EventBus()
+        self.logs = []
+        self.bus.subscribe(LogMessage,
+                           lambda e: self.logs.append((e.level, e.message)))
+        cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
+        self.people = PeopleService(memory=self.memory, bus=self.bus)
+        self.undo = UndoService(config=cfg, people=self.people, bus=self.bus)
+
+    async def asyncTearDown(self):
+        try:
+            await self.memory.close()
+        except Exception:                               # noqa: BLE001
+            pass                    # the failure test closes it on purpose
+        self._tmp.cleanup()
+
+    # ── helpers ──────────────────────────────────────────────────
+    def infos(self):
+        return [m for lvl, m in self.logs if lvl == "info"]
+
+    def errors(self):
+        return [m for lvl, m in self.logs if lvl == "error"]
+
+    async def nicks(self):
+        return sorted(r.nick for r in await self.memory.get_all())
+
+    def push_an_edit(self):
+        """One people entry: the queue went from two names down to one."""
+        return self.undo.push("people", {"before": [{"nick": "Anna"},
+                                                    {"nick": "Bella"}],
+                                         "after": [{"nick": "Anna"}]})
+
+
+class TestThePeopleAnnouncement(PeopleUndoCase):
+    async def test_a_people_undo_writes_one_line_and_it_is_the_verified_one(self):
+        await self.memory.replace_all([{"nick": "Anna"}])
+        self.assertTrue(self.push_an_edit().is_ok)
+        self.logs.clear()
+        result = self.undo.undo()
+        self.assertTrue(result.is_ok, "the timeline moves; the work is spawned")
+        self.assertEqual(self.logs, [], "and nothing is claimed before it runs")
+        await wait_for(self.logs)
+        self.assertEqual(self.infos(), ["↩ People list restored — 2 person(s)"],
+                         f"ONE line, worded by the count the store reports: "
+                         f"{self.logs}")
+        self.assertEqual(await self.nicks(), ["Anna", "Bella"],
+                         "the queue really changed")
+
+    async def test_a_people_redo_says_redo(self):
+        """`apply`'s line is the only one now, so its arrow has to carry the
+        direction — before the fix it read ↩ even for a Ctrl+Y."""
+        await self.memory.replace_all([{"nick": "Anna"}])
+        self.push_an_edit()
+        self.undo.undo()
+        await wait_for(self.logs)
+        self.logs.clear()
+        self.assertTrue(self.undo.redo().is_ok)
+        await wait_for(self.logs)
+        self.assertEqual(self.infos(), ["↪ People list restored — 1 person(s)"],
+                         f"the redo says redo: {self.logs}")
+        self.assertEqual(await self.nicks(), ["Anna"])
+
+    async def test_a_failed_restore_reports_the_error_and_claims_nothing(self):
+        """The worst case the double line produced: "restored" ahead of ❌.
+
+        The table is dropped under the restore, so `replace_all` fails on a real
+        SQLite error inside its one transaction. A CLOSED world would fail too —
+        that is how the boot race does it — but it first spends the write gate's
+        15 s patience, and what this test pins is the logging, not the cause.
+        """
+        await self.memory.replace_all([{"nick": "Anna"}])
+        self.push_an_edit()
+        await self.memory._db.execute("DROP TABLE users")
+        self.logs.clear()
+        self.undo.undo()
+        await wait_for(self.logs)
+        self.assertEqual(self.infos(), [],
+                         f"no line may claim a restore: {self.logs}")
+        self.assertTrue(any("People-list restore failed" in m
+                            for m in self.errors()),
+                        f"the failure is the only thing said: {self.errors()}")
+
+
+# ═════════════════════════════════════════════════════════════════
+# the archive flow's queue half — which way did it go?
+# ═════════════════════════════════════════════════════════════════
+class TestTheArchiveHalfsDirection(PeopleUndoCase):
+    """`_people_half` says which direction the queue moved.
+
+    It gained the direction when `apply` became the only line a people restore
+    writes, and nothing pinned either call site: flipping the one in `run()` or
+    the one in `_put_people_back` failed no test in the repo (two of the three
+    misses this step's negative check found). These drive the real
+    `ArchiveCommands` over the real PeopleService; no archive is needed because
+    the queue half touches only `host._people`.
+    """
+
+    def commands(self):
+        return undo_archive.ArchiveCommands(self.undo)
+
+    async def test_the_queue_half_reports_the_direction_it_was_given(self):
+        for forward, arrow in ((False, "↩"), (True, "↪")):
+            await self.memory.replace_all([{"nick": "Anna"}])
+            self.logs.clear()
+            await self.commands()._people_half([{"nick": "Anna"},
+                                                {"nick": "Bella"}], forward)
+            self.assertEqual(self.infos(),
+                             [f"{arrow} People list restored — 2 person(s)"],
+                             f"forward={forward} must read {arrow}: {self.logs}")
+
+    async def test_a_refused_command_puts_the_queue_back_the_other_way(self):
+        """The repair applies the OPPOSITE snapshot and says so.
+
+        A redo that was refused leaves the rows untouched, so the queue has to
+        go back to `before` — with a ↩, because putting it back is backwards
+        relative to the redo the user asked for.
+        """
+        await self.memory.replace_all([{"nick": "Anna"}])
+        value = {"people": {"before": [{"nick": "Anna"}, {"nick": "Bella"}],
+                            "after": [{"nick": "Anna"}]}}
+        self.logs.clear()
+        await self.commands()._put_people_back(value, True)
+        self.assertEqual(self.infos(), ["↩ People list restored — 2 person(s)"],
+                         f"the put-back went backwards: {self.logs}")
+        self.assertEqual(await self.nicks(), ["Anna", "Bella"],
+                         "and it restored the snapshot it named")
 
 
 if __name__ == "__main__":

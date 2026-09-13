@@ -162,7 +162,7 @@ class ArchiveCommands:
         rows = _rows(value, forward)
         before = await _state(archive, nick)
         try:
-            await self._people_half(rows)
+            await self._people_half(rows, forward)
             await self._archive_half(archive, value, forward)
         except asyncio.CancelledError:
             raise
@@ -177,11 +177,16 @@ class ArchiveCommands:
             return
         self._report(value, forward, after)
 
-    async def _people_half(self, rows) -> None:
-        """Apply the People half — first, so a failure costs nothing."""
+    async def _people_half(self, rows, forward: bool) -> None:
+        """Apply the People half — first, so a failure costs nothing.
+
+        `forward` only decides the arrow on the line `apply` writes, which is
+        the only line the queue half gets: the refusal path puts the list back
+        the other way, and says so.
+        """
         if rows is None or self._host._people is None:
             return
-        result = await self._host._people.apply(rows)
+        result = await self._host._people.apply(rows, forward)
         if result is not None and getattr(result, "is_err", False):
             raise RuntimeError("the people list refused it: "
                                + _refusal(result))
@@ -211,7 +216,7 @@ class ArchiveCommands:
     async def _put_people_back(self, value: dict, forward: bool) -> None:
         """Undo the People half so the list matches the untouched rows."""
         try:
-            await self._people_half(_rows(value, not forward))
+            await self._people_half(_rows(value, not forward), not forward)
         except Exception as exc:                        # noqa: BLE001
             log.warning("people list could not be put back: %s", exc)
 

@@ -1151,6 +1151,10 @@ without someone reading the reason.
    `dbconn`/`delete` entries when a world loads (a migration decision, and it
    would silently rewrite a persisted timeline) or documenting that pre-D4 worlds
    keep one undoable delete. **Not decided here; it needs the owner.**
+   **RESOLVED 2026-09-13 — the owner ruled that the functionality is fine as it
+   works today**: no migration drops those entries, and a pre-D4 world keeping
+   its one undoable delete is intended behaviour rather than a contradiction of
+   D4. Recorded in SYSTEM_OF_RECORD §3.3 and in §8.16 below.
 2. **`dbconn` announces success from the intent.** `_apply_db_command` returns
    `True` after spawning, so `_log_command` writes "↩ Undo — database restored"
    synchronously and the op runs afterwards. `_log_command` suppresses exactly
@@ -1275,7 +1279,8 @@ Two decisions worth recording, both reached by reading rather than assuming:
   lie.
 * **Decision 1, the D4 tension, is still open.** Undoing a legacy delete entry
   still restores the deleted world from its backup. This step only stops the log
-  claiming that before it happens.
+  claiming that before it happens. *(Resolved the same day — the owner ruled the
+  behaviour correct as it stands; see §8.16.)*
 * **`people` announces from the intent too — found while writing the test that
   pins the surviving announcement.** `_apply_entry`'s people branch does not
   restore anything itself; it spawns `people_service.apply`, which logs its own
@@ -1293,6 +1298,9 @@ Two decisions worth recording, both reached by reading rather than assuming:
   (`_apply_labels_command` restores, emits and returns), so its intent line is
   accurate. `TestLogCommandSkipsTheSelfReportingKinds` pins today's wording for
   both, which is what a future fix would have to change deliberately.
+  **Done in §8.15 (F3f)** — and that fix is also why the class named in the last
+  sentence no longer exists: it pinned wording that is no longer today's, which
+  is exactly what it said it was for.
 
 ### 8.13.4 RULE 16 / RULE 18
 
@@ -1314,7 +1322,7 @@ Two decisions worth recording, both reached by reading rather than assuming:
   and `_log_command` did not register as a clone.
 * **RULE 18** — `services/undo_db.py` 101 → **124** lines, still under 150,
   which §18.2 calls "normal and good for leaves"; `services/undo_apply.py`
-  241 → **247**, inside the 150–300 band. The test file 452 → **554** gets no
+  241 → **247**, inside the 150–300 band. The test file 452 → **570** gets no
   `ideal-size:` note, per §18.5 and the reasoning already recorded in §8.12.5.
 * `vulture --min-confidence 90` is silent on all three touched files. `pylint`
   emits **nothing at all** for `undo_db.py`, and for `undo_apply.py` only the
@@ -1400,3 +1408,280 @@ is not evidence.
 * §8.12.4 decision 2 marked **RESOLVED** with a pointer here; decision 1 (the D4
   tension) remains open and still needs the owner.
 * Archive README — F3e row.
+
+---
+
+## §8.14 Reapplied from `arena/01a099fd-chat-v-bot`: the boot-wait fix (2026-09-13)
+
+The owner asked for an already-implemented fix from another Arena branch to be
+reapplied here. That branch is an **unrelated history** — 254 commits, and
+`git merge-base` between the two is empty — so nothing could be merged. The two
+commits were cherry-picked instead, which works because a cherry-pick applies a
+diff against the commit's own parent and needs no common ancestor.
+
+What was actually missing here was established by comparing blobs, not by reading
+commit subjects: `a0a8a65` (the boot broadcast, `announce_world_live`) was
+already in this tree via `main`; the two commits on top of it were not.
+
+| commit | what it does | reapplied as |
+|---|---|---|
+| `93ff3ca` | the first page request WAITS for the world and is answered — `wait_for_world_open` / `run_when_world_open` in `services/world_events.py`, `HistoryBridge._run_async` reduced to a 4-line call, `people_bridge._refresh_users_async` waits on `ctx.memory` | `1c83717` |
+| `7e9e80a` | the person list fills itself on start — `initApp` re-asks HistoryDb/DbPanel once the listeners exist, and `HistoryDb.onError` un-sticks the loader with a bounded retry | `35d164c` |
+
+Three conflicts, each resolved by keeping both sides' truths:
+
+* **`bridge/history_bridge.py`** — this tree has `_qt_clipboard` / `_copy_file_to`
+  (a media feature the other branch never saw) sitting in the region their commit
+  touched. Kept them, took the fix. Their commit also added a third blank line
+  before `class HistoryBridge`; that was dropped rather than propagated.
+* **`docs/current/SYSTEM_OF_RECORD.md`** — three regions. Kept this branch's
+  Undo / redo row (the F3 module family, I-21) and took their Boot / world-ready
+  row (the wait semantics); took their extended **I-20** ("never swallows a
+  request") and kept **I-21**; kept this branch's module counts (`bridge/` 14,
+  `services/` 55, `stores/` 37 — the other branch predates F1–F3 and says
+  12/36/36) while adopting their description of `world_events.py` as "the world's
+  clock: wait for it, announce it live".
+* **`ui/js/app.js`** — kept both their re-ask block and this tree's
+  `WindowPresets.refresh()` line.
+
+**The ratchet was then re-frozen (`dbbcc48`).** The fix moves `_run_async`'s
+guard out of the class, so `HistoryBridge` measures **467 LOC / 44 methods**
+here, down from the frozen 493/45 — and not the 482/44 their branch reported,
+because this tree's file also carries the clipboard helpers. RATCHET says "may
+shrink, may not grow", which lets a shrink pass silently, and a gain nobody
+re-freezes is a gain the next feature can spend. It also lowers F4's starting
+point: `bridge/history_bridge.py` is F4's named target and this ratchet is the
+constraint F4 has to respect (the file is now 539 lines, was 542).
+
+Evidence re-run here rather than trusted from the other branch: the fix's own
+**147 tests** pass (`tests/unit/bridge_safety/`, `test_world_events.py`,
+`test_app_lifecycle.py`), and **26 of the 27** runnable `tests/*.js` suites are
+green. The exception, `tests/js_harness.js`, is a stdin-driven DOM stub rather
+than a suite — it exits non-zero when run directly, and did so before these
+commits too.
+
+The reapplied code arrives fully covered by the tests that came with it:
+`services/world_events.py` measures **100% line (36/36) and 100% branch (10/10)**
+in this tree, so `wait_for_world_open` and `run_when_world_open` needed nothing
+written for them here.
+
+---
+
+## §8.15 F3f — the people double line: the third instance (2026-09-13)
+
+§8.13.3 found this and deliberately left it alone. The owner then asked for it,
+so this is that fix.
+
+### 8.15.1 What was wrong
+
+A people undo wrote **two** lines:
+
+1. `_log_command` — `↩ Undo — people list restored`, synchronously, from the
+   entry, before the restore had run;
+2. `people_service.apply` — `↩ People list restored — N person(s)`, from the
+   count `replace_all` says actually landed.
+
+So a success said the same thing twice, and a failure said "restored" and *then*
+`❌ People-list restore failed: …`. On a redo the two lines even disagreed about
+direction: line 1 read `↪ Redo`, line 2 always read `↩`, because `apply` had no
+idea which way it was being asked to go.
+
+### 8.15.2 The fix
+
+* **`undo_apply._log_command` is now a whitelist.**
+  `_ANNOUNCED_FROM_INTENT = ("labels",)` — the only command kind that applies
+  synchronously (`_apply_labels_command` restores, emits, returns), so the only
+  one whose intent is its outcome. `people`, `archive` and `dbconn` each report
+  themselves from what they verified. A kind nobody has declared synchronous gets
+  **no** line, and that is the point: this bug was found three times running
+  (I-18 archive, I-21 dbconn, I-22 people), each time as one more name added to a
+  skip list after the fact. A missing line is recoverable and visible; an intent
+  line over an async kind is a lie the user reads as a success.
+* **`people_service.apply(rows, forward=False)`** — the arrow follows the
+  direction, because this is now the only line. Wording, level and the count are
+  untouched, so it still matches `UNDO_LABELS` and `undo_db._announce`.
+* **Direction reaches it from every call site**: `_apply_people_command` passes
+  `forward`; `undo_archive._people_half(rows, forward)` takes it, so `run()`
+  passes the command's direction and `_put_people_back` passes `not forward` —
+  the repair genuinely goes the other way, and now says so.
+
+### 8.15.3 Two blocks of `_apply_entry` were unreachable, and are gone
+
+Wiring the direction through `_apply_entry`'s people branch produced a mutation
+no test could catch, and the reason is that the branch cannot run:
+
+* `_apply_entry` has exactly two callers, `undo()` and `redo()`;
+* both reach it only from their `else` path, i.e. when
+  `entry["kind"] not in COMMAND_KINDS`;
+* `COMMAND_KINDS = ("people", "labels", "archive", "dbconn")` and
+  `HISTORY_KINDS = ("stack", "grid") + COMMAND_KINDS`.
+
+So neither `if kind in ("labels", "archive", "dbconn")` nor `elif kind ==
+"people"` was reachable — and both were already on F3d's uncovered list (§8.12.5
+names them as `undo_apply.py` 164-165 and 170-173). `_apply_entry` is now `grid`
+or the stack `else`, which is every input that can reach it; an unknown kind
+still falls to the stack branch exactly as before. Deleting them rather than
+pinning them is also why the eighth mutation in §8.15.6 has no target.
+
+### 8.15.4 Tests
+
+`tests/integration/services/test_services_undo_gaps.py` 28 → **34**:
+
+* `TestLogCommandSkipsTheSelfReportingKinds` becomes `TestWhatLogCommandAnnounces`
+  — labels announced in both directions, the three self-reporting kinds silent,
+  and an undeclared kind (`media`) silent instead of claiming a restore. The old
+  class was written to pin wording a fix would have to change on purpose; this is
+  that fix, so it is gone.
+* `TestThePeopleAnnouncement` — a real `UndoService` + a real `PeopleService`
+  over a real `UserMemory` (a SQLite file, nothing faked in the path): one
+  Ctrl+Z writes exactly one line, `↩ People list restored — 2 person(s)`, and the
+  queue really changed; a Ctrl+Y writes `↪`; a restore that fails writes only
+  the ❌.
+* `TestTheArchiveHalfsDirection` — drives the real `ArchiveCommands` over the
+  real PeopleService, which needs no archive because the queue half touches only
+  `host._people`: the direction given is the direction reported, and a refused
+  redo puts the queue back with a ↩.
+
+Two tests outside that file changed as well, in `tests/test_world_write_gate.py`:
+its `slow_apply` and `refuse` doubles take the new `forward` parameter, and its
+real-flow delete/undo/redo pair now asserts the arrow the queue half reports
+(§8.15.6). That file is 817 → 826 lines; §18.5 gives test files no invented
+note, and it remains the repo's largest.
+
+### 8.15.5 Two things the new tests found about the old ones
+
+* **`wait_for` was being handed a computed list.** It polls the object it was
+  given, and `self.warnings()` / `self.errors()` build a *new* list per call, so
+  those waits could never observe anything: they always slept the full timeout,
+  and the assertions passed only because the real logs had reached `self.logs` in
+  the meantime. Three call sites, two of them committed in F3d. Every wait is now
+  on a stable list, and the file went from **27.5 s to 0.47 s** — the waits are
+  real, so they pin ordering instead of acting as a sleep.
+* **The failure test's first version cost 20.8 s**, because closing the world
+  makes `world_transaction` spend the write gate's 15 s patience before it fails.
+  What that test pins is the logging, not the cause, so the world stays open and
+  the `users` table is dropped instead: a real SQLite error, immediately.
+
+### 8.15.6 Negative check
+
+`/home/user/f3f_negative.py` — 7 mutations, **7 caught**, though the first run
+reported 6 and the seventh is the interesting one:
+
+| mutation | caught by |
+|---|---|
+| `people` announced from the intent again | `TestWhatLogCommandAnnounces`, `TestThePeopleAnnouncement` |
+| whitelist widened to all four kinds | the undeclared-kind test |
+| whitelist dropped entirely | the one-line assertions |
+| `apply`'s arrow hardcoded to ↩ | the redo test |
+| snapshot picked without regard to direction | the undo test (wrong count) |
+| refusal repair puts the list back the wrong way | `TestTheArchiveHalfsDirection` |
+| `run()`'s people half reports the wrong direction | the two arrow assertions in `test_world_write_gate.py` (added after the first run missed it — see below) |
+
+The miss is recorded rather than papered over — and so is the wrong explanation
+first written for it, because the correction is the useful part.
+
+That call site is inside `ArchiveCommands.run()`. The first draft of this section
+claimed **no test in the repo drives `run()` with a people service present**, on
+the evidence that `tests/test_archive_delete_undo.py`'s fixture wires
+`br._memory = None` — and concluded that I-18's two-half flow had never been
+integration-tested with both halves. **That claim was false.** One file had been
+checked and the answer generalised to the repo, which is precisely the §8.11.8
+failure mode.
+
+The suite disproved it within the hour: changing `apply`'s signature broke two
+tests in `tests/test_world_write_gate.py`, whose `TestUndoProvesItself` drives
+the real `history_delete_person` → `undo()` → `redo()` flow over a real
+`HistoryService`, a real `UserMemory` and a real `PeopleService` — the both-halves
+path, already integration-tested, in the file that pins I-17. What was missing
+was never the flow but one assertion: nobody had checked which *arrow* the queue
+half reports.
+
+So the fix is two assertions in the tests that were already there —
+`test_delete_then_undo_restores_person_and_history` now requires a
+`↩ People list restored` line, `test_redo_hides_them_again_and_says_so` a `↪`
+one — plus the two doubles in that file (`slow_apply`, `refuse`) updated to the
+new signature. Mutation 7 is caught, and the count is **7/7**.
+
+Two things to carry forward. A signature change is itself a probe for who depends
+on you, and it found a real integration path faster than reading did. And a claim
+about "no test anywhere" is only admissible after grepping the whole suite — the
+check that would have caught this is `grep -rn "ArchiveCommands\|history_delete_person" tests/`,
+which names `test_world_write_gate.py` immediately.
+
+An eighth mutation — flipping the direction in `_apply_entry`'s people replay —
+missed on the first run and led straight to §8.15.3: unreachable code was
+deleted instead of pinned.
+
+### 8.15.7 RULE 16 / RULE 18
+
+* `_log_command` 4 statements, cognitive 1, and `_ANNOUNCED_FROM_INTENT` is data
+  with the reasoning attached to it. `apply` 2 params / 17 LOC (inside §18.1's
+  4–20 band); `_people_half` 2 params; `_apply_entry` lost 7 lines and a branch.
+* `rule16_gate --with-clones` **rc=0**, breaches `[]`, clone scan 0 new / 0
+  stale, offenders unchanged at 10 function rows + 1 class row and still none in
+  the `undo_*` family.
+* Files: `undo_apply.py` 247 → **259**, `people_service.py` 220 → **226**,
+  `undo_archive.py` 230 → **235** — all inside §18.2's 150–300 band, and the
+  repo-wide figures re-measured after the deletions are unchanged at **170
+  files, median 134, 7 over 500**. The test file 570 → **728**: §18.5 gives it
+  no invented note, but it is now within 100 lines of the repo's largest test
+  file (`test_world_write_gate.py`, 826) and carries five concerns, so the split
+  points are visible if it grows again.
+* `vulture --min-confidence 90` reports nothing on the three product files. It
+  had flagged `people_service.py`'s unused `Any` import, which predates this
+  step; removing it exposed a second — `Optional` was unused on the same line,
+  hidden behind `Any` — so the whole `typing` import is gone and pylint now
+  reports no `unused-import` in that file (score 9.07/10). The two findings
+  vulture still makes in `tests/test_world_write_gate.py` (242, 245) are
+  pre-existing `**k` lambda parameters this step did not touch, and
+  `undo_archive.py`'s single `try-except-raise` (167) is the deliberate
+  `except asyncio.CancelledError: raise` that stops a cancellation being
+  reported as a refusal — also pre-existing, also correct.
+* Repo-wide §18.2 numbers re-measured and unchanged: **170 files, median 134,
+  7 over 500**.
+
+### 8.15.8 Verification
+
+* Suite: **2776 passed**, 0 failed, 3 skipped, 1 deselected, 1 xfailed, **894
+  subtests**, 8m09s. Against F3e's 2754 that is +22 — the 16 tests the
+  cherry-picked boot fix brought with it (§8.14) and 6 net new here.
+* Coverage, product-only: line **91.75%** (14164/15438, was 91.69%), branch
+  **86.96%** (3254/3742, was 86.82%). Both up, and the branch figure by more
+  than the line one, because what left the module was uncoverable.
+* `services/undo_apply.py` 89.93% → **93.94%** (124/132): the module lost seven
+  statements and every one was a statement no test could ever reach. The eight
+  lines still missing are exactly the ones §8.12.5 already attributed — minus the
+  two deleted `_apply_entry` blocks, which is the point — at their new line
+  numbers: `_values_equal`'s exception fallback (40-41), `_position_of`'s found
+  path (60), `_apply_labels_command`'s guard (81), `_apply_archive_command`'s two
+  refusal returns (151, 153), `rewind_after_failure`'s non-dict early return
+  (167) and `redo`'s "cannot re-apply" `Err` (244).
+* `services/people_service.py` **95.00%** line (133/140) / 96.43% branch,
+  `services/undo_archive.py` **98.37%** (unchanged by this step), and
+  `services/undo_db.py` still **100%** line and branch.
+
+---
+
+## §8.16 D4 ruled: the legacy delete entry stays undoable (2026-09-13)
+
+§8.12.4's first open decision is closed by the owner: **"the functionality is
+fine how it works right now."** No code changes. The record does change, because
+the tension has now been raised twice (§8.12.4 and §8.13.3) and a third reader
+should not have to re-derive it:
+
+* D4 (`DB_CREATION_DELETION_REDESIGN_DESIGN_2026-09-08.md`) makes deleting a
+  world permanent, and it is honoured: `bridge/db_bridge.py` guards its only
+  `dbconn` push with `if op != "delete"`, so **no delete made from now on is
+  undoable** — pinned by `test_a_delete_is_not_an_undo_step` and by
+  `test_nothing_in_the_product_records_a_delete_entry`.
+* A world whose `undo_history` table holds a delete entry from *before* that
+  guard keeps its one undoable delete: undone, it restores the file from the
+  entry's backup. Intended, not a contradiction — it honours an undo step a
+  pre-D4 world was once promised.
+* No migration drops those entries and none is planned.
+* The one thing that *was* wrong here is already fixed: the restore used to be
+  announced before it happened, and a backup-less delete announced a restore it
+  could never perform (§8.13, I-21).
+
+Recorded in SYSTEM_OF_RECORD §3.3, as a bullet under "Deleting a world (the only
+irreversible path)", next to the behaviour it qualifies.
