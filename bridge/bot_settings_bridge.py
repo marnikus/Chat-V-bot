@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 
-from PySide6.QtCore import Slot
+from PySide6 import QtCore
 
 from bridge.bot_bridge import BotSideBridge, schedule
 from services import bot_providers as providers
@@ -39,7 +39,7 @@ class BotSettingsBridge(BotSideBridge):
         """The named connections the user configured."""
         return ConnectionStore(self.ctx.config)
 
-    @Slot(result=str)
+    @QtCore.Slot(result=str)
     def bot_connections(self):
         """Every configured connection, plus the provider kinds to choose
         from. A key crosses this wire only MASKED (I-29)."""
@@ -51,7 +51,7 @@ class BotSettingsBridge(BotSideBridge):
              "providers": providers.catalog()},
             ensure_ascii=False)
 
-    @Slot(str, str, result=str)
+    @QtCore.Slot(str, str, result=str)
     def bot_save_connection(self, ident, fields_json):
         """Create or update one connection; returns its id ("" on refusal).
 
@@ -68,17 +68,17 @@ class BotSettingsBridge(BotSideBridge):
             return ""
         return str(self._connections().save(ident, fields))
 
-    @Slot(str, result=bool)
+    @QtCore.Slot(str, result=bool)
     def bot_delete_connection(self, ident):
         """Delete one connection. Never touches a prompt preset (I-30)."""
         return bool(self._connections().delete(ident))
 
-    @Slot(str, result=bool)
+    @QtCore.Slot(str, result=bool)
     def bot_use_connection(self, ident):
         """Make this the connection prompts run through."""
         return bool(self._connections().use(ident))
 
-    @Slot(str, str)
+    @QtCore.Slot(str, str)
     def bot_test_connection(self, req_id, ident):
         """One real request with the saved settings, reported as ok/why.
 

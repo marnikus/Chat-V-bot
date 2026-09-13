@@ -224,8 +224,7 @@ RATCHET = {
 #     deleted, so the hatch cannot become a dumping ground.
 OVERRIDES: dict[tuple, str] = {}
 
-SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py",
-               "services/bot_grok.py", "services/bot_prompts.py",
+SMELL_FILES = ["services/bot_grok.py", "services/bot_prompts.py",
                "services/bot_reactions.py", "services/bot_chat.py",
                "bridge/bot_bridge.py", "bridge/bot_prompt_bridge.py"]
 
