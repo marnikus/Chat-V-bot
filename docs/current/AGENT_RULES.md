@@ -578,28 +578,19 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* 2026-09-12, after Round F step F3 — 170 files, median **134** lines,
-  **7 files still over 500**. `services/db_deletion.py` (665, MI 20.5) became the
-  six-file `db_deletion_*` family, largest member 205 (step F1); then
-  `services/collector_service.py` (601, MI 27.2) became the seven-module
-  `collector_*` family plus a facade at **281** lines and MI **53.5**, with the
-  `Collector` class down from 526 to **239** LOC and all 40 of its names still on
-  the facade (step F2); then `services/undo_service.py` (573, MI 24.1) became four
-  more `undo_*` modules plus a facade at **241** lines and MI **56.25**, with
-  `UndoService` down from 418 to **179** class LOC and all 28 of its names still on
-  the facade (step F3). In F2 and F3 the god class itself, not just the file, was
-  the target; both are recorded against every number they aimed at in
+* *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
+  files move. 2026-09-13: **171 files, median 136, 7 still over 500**. Five of the
+  seven are `backend/` files the frozen AREA D snapshot forbids splitting; the
+  reason, and the decision it needs, are in
+  [`ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
+  §2 and §7. Of the other two, `bridge/history_bridge.py` carries step F4's §18.5
+  note naming its Qt slot contract, and `services/db_deletion_flow.py` sits inside
+  the F1 family — recorded as its next candidate rather than given a note, because
+  §18.5 wants a constraint named and only scope applies; the same reasoning parks
+  `services/collector_tick.py` inside the F2 family. How steps F1–F3 produced the
+  three families, recorded against every number they aimed at:
   [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
-  §8. Five of the remaining seven
-  are `backend/` files that the frozen AREA D API snapshot forbids splitting —
-  the reason, and the decision it needs, are in
-  [`docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
-  §2 and §7. Of the other two, `bridge/history_bridge.py` (542) is step F4's named
-  target, and `services/db_deletion_flow.py` (509) sits inside the F1 family —
-  recorded as its next candidate rather than given an `ideal-size:` note, because
-  §18.5 wants a constraint named and only scope applies. The same reasoning parks
-  `services/collector_tick.py` at 425 lines inside the F2 family. Known debt
-  (§16.5 landmines): do not grow them, extract when you next touch.
+  §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
@@ -610,13 +601,25 @@ reference implementation of that count is the AST walker in
   `services/history/`) or by a prefix family (`stores/label_*`,
   `stores/media_*`, `stores/history_*`). A family is a module in everything but
   the directory separator; treat it as one when counting.
-* *Measured:* 2026-09-12, after Round F step F3 — `core/` 6, `app/` 4, `bridge/` 14,
-  `services/history/` 7, `services/run/` 10 in band, and two prefix families are in
-  band and cohesive: `collector_*` **9** (all nine share the `CollectorState`
-  vocabulary and the `host.` protocol) and `undo_*` **8** (all eight share the
-  timeline-entry vocabulary and the `owner` protocol); `services/` 37, `stores/` 37,
-  `backend/` 30, `actions/` 23 over it, held by prefix families (`history_*` 9,
-  `collector_*` 9, `db_deletion_*` 8, `undo_*` 8, `label_*` 6, `media_*` 4).
+* *Measured:* re-measure rather than trusting numbers written here — directories
+  move. 2026-09-13: in band `core/`, `app/`, `bridge/`, `services/history/`,
+  `services/run/`; past 15 files and held only by prefix families `services/`,
+  `stores/`, `backend/`, `actions/`. Cohesion is what earns the counting and it is
+  testable, not taste: `collector_*` share the `CollectorState` vocabulary and the
+  `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
+  protocol, and `stores/`'s eight single-domain stores each import the JSON write
+  layer while importing none of each other — eight modules, not one family.
+* `stores/` is therefore 37 files counting as **15** modules (`history_*`,
+  `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
+  aggregate/collaborator pairs, eight single-domain stores). Its sub-package remedy
+  is closed by contract rather than effort — AREA B's baseline keys are dotted
+  module paths, so moving `stores/history_*` into `stores/history/` breaks plan
+  §7.3 rule 1 — and merging is closed because it undoes the AREA B2 splits and
+  lands outside §18.2's band. So count families: `tools/metrics/stores_modules.py`
+  measures and ratchets that count against the import graph, and a new loose file
+  fails the gate until someone says where it belongs;
+  `test_stores_module_families.py` enforces it in the suite. Why, with the merge
+  arithmetic: ROUND_F_DESIGN_2026-09-12.md §11.5.
 
 ### 18.4 Context files — 60–200 lines
 

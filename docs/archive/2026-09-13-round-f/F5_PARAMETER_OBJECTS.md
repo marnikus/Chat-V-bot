@@ -1,9 +1,9 @@
 # F5: Parameter Objects for Wide-Parameter Functions
 
 **Date:** 2026-09-13
-**Status:** Started for real — 1 of 70 migrated, metric 70 → 68
+**Status:** Complete to the floor the frozen contracts allow — 19 of 70 migrated, metric 70 → **51**
 **Design Reference:** ROUND_F_DESIGN_2026-09-12.md §6 (step F5), RULE 19 §19.4
-**Outcome record:** ROUND_F_DESIGN_2026-09-12.md §10
+**Outcome record:** ROUND_F_DESIGN_2026-09-12.md §10 (first pass) and §11 (completion)
 
 ## Overview
 
@@ -13,7 +13,9 @@ fields of one typed request, the way `PersonPageRequest` carries the six options
 `HistoryQuery.list_persons` used to take positionally.
 
 Baseline, measured 2026-09-13: **70 functions over 4 params, worst 20**
-(`actions/scroll_parse.py::__init__`). After this step: **68, worst 20**.
+(`actions/scroll_parse.py::__init__`). After the first pass: **68**. After the
+second pass (§11): **51, worst 20** — the worst is unchanged because it is
+outside `stores/` and §6 never assigned it to F5.
 
 ## What actually happened, and the correction that matters
 
@@ -47,7 +49,9 @@ Pick functions whose call sites are all inside one family first. `_after_write`
 was chosen because all five of its call sites are in `stores/`, so nothing
 outside the family — and no frozen contract — had to move.
 
-## Done
+## Done — 19 functions across two passes
+
+First pass (§10.4), `WriteContext` alone:
 
 | Function | Was | Now | Call sites updated |
 |---|---|---|---|
@@ -56,14 +60,34 @@ outside the family — and no frozen contract — had to move.
 
 The implementation went 41 → 40 LOC, so the legacy function improved rather than
 worsened (§16.0), and `history_repo.py` lost two over-long lines (54 → 52
-`line-too-long`). `WriteContext` is the only object in `history_requests.py`,
-which is why `stores/` gained exactly one file (37 → 38, justified in
-`tests/unit/stores/test_stores_structure.py`).
+`line-too-long`).
 
-## Remaining — 68 functions
+Second pass (§11.2), the remaining 17 — one object written per real consumer, in
+the order the migration reached them:
 
-**Do not** recreate the eight dropped dataclasses speculatively. Add one when its
-function is migrated, in the same commit.
+| Object | Functions migrated (params before → after) |
+|---|---|
+| `WriteContext` | `_touch_cursor` in lifecycle **and** facade 6→1; `_report_unchanged` 7→2 |
+| `PaneSignature` | `_same_conversation` 6→2; `ConversationIdentity.rename_if_same_conversation` 8→4 |
+| `PlacedRecord` | `_ui_record` in identity **and** facade 5→1; `_collect` 6→2; `_insert_message` 8→4 |
+| `SlotSearch` | `_take_empty_slot` in append **and** facade 5→3 |
+| `AlignSpec` | `_align` 5→1 |
+| `RowBatch` | `_write_rows` 8→2 |
+| `PrependRequest` | `_prepend` in append **and** facade 11→1 |
+| `MediaRecoveryRequest` | `MediaRecovery.recover_media` 6→1; `_RecoveryPass.__init__` 8→4 |
+
+`history_requests.py` now holds eight dataclasses at **191 lines**, inside
+§18.2's band; `stores/` is 38 files, the one it gained in the first pass, still
+justified in `tests/unit/stores/test_stores_structure.py`. Wide functions in
+`stores/` went **24 → 7**.
+
+## Remaining — 51 functions
+
+**Do not** recreate the dropped dataclasses speculatively. Add one when its
+function is migrated, in the same commit. Every object in
+`history_requests.py` is consumed by at least one production signature; that was
+checked by grep at word boundaries outside the module, because the abandoned
+version of this step wrote 230 lines nothing imported.
 
 `AppendRequest` in particular cannot be wired yet: `HistoryRepo.append` (13
 params) and `AppendPlanner.append` (13) have production callers in
@@ -71,27 +95,37 @@ params) and `AppendPlanner.append` (13) have production callers in
 coordinated change needing the §7 option (a) decision first — the same reasoning
 §9.6 applied to `list_persons`.
 
-### `stores/` (paths are `stores/*.py`; the `stores/history/` sub-package was reverted)
+### `stores/` — 7 left, every one blocked by a named contract
 
-* `history_repo_append.py` — `append` 13 (blocked, see above), `_prepend` 11,
-  `_write_rows` 8, `_insert_message` 8, `_report_unchanged` 7, `_collect` 6,
-  `_align` 5, `_take_empty_slot` 5
-* `history_repo.py` (facade twins of the above) — `append` 13, `_prepend` 11,
-  `rename_if_same_conversation` 8, `recover_media` 6, `_touch_cursor` 6,
-  `_ui_record` 5, `_take_empty_slot` 5
-* `history_repo_identity.py` — `rename_if_same_conversation` 8,
-  `_same_conversation` 6, `_ui_record` 5
-* `history_repo_lifecycle.py` — `_touch_cursor` 6
-* `history_repo_media.py` — `__init__` 8, `recover_media` 6
-* `history_models.py` — `fingerprint` 6, `dedupe_key` 5 (module-level functions,
-  so check for bare `fingerprint(` callers, not just `.fingerprint(`)
-* `media_store.py` — `__init__` 6
+Nothing in `stores/` is unmigrated for want of trying. Measured after the second
+pass:
 
-All five `_after_write`-class candidates with **zero callers outside `stores/`**
-are the safe next ones: `_write_rows`, `_insert_message`, `_report_unchanged`,
-`_same_conversation`, `_align`.
+| Function | Params | What blocks it |
+|---|---|---|
+| `history_repo_append.py::AppendPlanner.append` | 13 | AREA D snapshot frozen — production callers in `backend/chat_sync.py` cannot be rewritten |
+| `history_repo.py::HistoryRepo.append` | 13 | same, plus `api_baseline.json` freezes the public signature |
+| `history_repo.py::rename_if_same_conversation` | 8 | `api_baseline.json` — public. It *does* build a `PaneSignature` internally; the 8 parameters are the frozen contract, not an oversight |
+| `history_repo.py::recover_media` | 6 | `api_baseline.json` — public. Delegates to the migrated `MediaRecovery.recover_media` |
+| `media_store.py::MediaStore.__init__` | 6 | `api_baseline.json` records the signature |
+| `history_models.py::fingerprint` | 6 | module is FROZEN — "any change at all" fails AREA B |
+| `history_models.py::dedupe_key` | 5 | module is FROZEN |
 
-### Outside `stores/` (~36 functions, parallel-safe)
+Five of the seven are public API in a golden file whose purpose is proving the
+public surface did not move, and two are in a module frozen for that reason.
+Spending either guarantee is the owner's call (§7's reasoning for AREA D, applied
+to AREA B in §10.5), not the implementer's.
+
+The five `_after_write`-class candidates this section once named as "the safe next
+ones" — `_write_rows`, `_insert_message`, `_report_unchanged`,
+`_same_conversation`, `_align` — are all migrated, along with `_prepend`,
+`_collect`, `_take_empty_slot`, `_ui_record`, `_touch_cursor` and both media
+functions.
+
+### Outside `stores/` — 44 functions, parallel-safe
+
+Measured per directory: `actions/` 15, `backend/` 13, `services/` 13, `bridge/`
+2, `app/` 1. None of them shares a family with the `stores/` work, so they can be
+migrated independently of it and of each other.
 
 Worst first: `actions/scroll_parse.py::__init__` 20,
 `backend/scroll_parser.py::__init__` 19 (AREA D frozen),
@@ -100,12 +134,17 @@ Worst first: `actions/scroll_parse.py::__init__` 20,
 action block's wide `__init__` may be a documented constraint rather than a
 migration candidate — decide per block, do not assume.
 
+§6 scoped F5 to the wide-parameter *tail* and named `stores/` as the family to
+start with; these 44 are the continuation of the same step, not a new one, and
+they were deliberately left alone here because touching `actions/` and `backend/`
+means touching AREA D's frozen callers.
+
 ## Verification
 
 ```bash
 # the metric, before and after any F5 commit — walker lives in
-# ROUND_F_DESIGN_2026-09-12.md §10.4 and prints "wide=68 worst=..." here
-# (it printed wide=70 before WriteContext was wired)
+# ROUND_F_DESIGN_2026-09-12.md §10.4 and prints "wide=51 worst=..." here
+# (it printed wide=70 before WriteContext was wired, wide=68 after the first pass)
 
 # nothing dead was added: no unused import, and the repo-wide dead-code metric
 # stays at its 7 findings with WriteContext absent from them
@@ -119,9 +158,18 @@ python -m pytest tests/unit/stores tests/test_history_repo_conflicts.py \
 ```
 
 Expected: the wide count falls by exactly the number of functions migrated, and
-no dataclass exists that a signature does not consume. Verified 2026-09-13:
-`wide=68 worst=20`, no `W0611`, vulture 7 findings with `WriteContext` absent,
-**137 passed / 2 skipped / 709 subtests**.
+no dataclass exists that a signature does not consume.
+
+First pass, verified 2026-09-13: `wide=68 worst=20`, no `W0611`, vulture 7
+findings with `WriteContext` absent, **137 passed / 2 skipped / 709 subtests**.
+
+Second pass, verified 2026-09-13: `wide=51 worst=20` — the fall is exactly 17,
+the number of functions migrated; no `W0611`, pylint 9.82/10 with the single
+`R0902` on `WriteContext` explained below; vulture still exactly **7** findings,
+all pre-existing and none in `stores/history_requests.py`. Targeted suites
+**383 passed / 2 skipped / 1 xfailed / 756 subtests**, **633 passed**, **66
+passed**; full suite **2800 passed / 3 skipped / 1 deselected / 1 xfailed / 897
+subtests**, which is the 2788 baseline plus exactly the twelve new §18.3 tests.
 
 Two readings to get right, both of which mislead in the opposite direction:
 

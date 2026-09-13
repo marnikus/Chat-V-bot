@@ -20,6 +20,7 @@ from typing import Optional, Sequence
 
 from stores.history_models import (Alignment, MessageRecord, dedupe_key,
                                    fingerprint)
+from stores.history_requests import PaneSignature, PlacedRecord
 
 log = logging.getLogger("chatbot")
 
@@ -181,8 +182,7 @@ class ConversationIdentity:
                         "count": int(row["n"])})
         return out
 
-    async def _ui_record(self, rec: MessageRecord, ord_value: int, day: str,
-                         my_nick: str, media_id) -> dict:
+    async def _ui_record(self, placed: PlacedRecord) -> dict:
         """The row shape the History window expects, straight from the write.
 
         The page parser ships `rec` only; the UI needs `ord`, `day`, `time`
@@ -190,14 +190,16 @@ class ConversationIdentity:
         `history_appended` signal can deliver only the rows that changed
         instead of re-reading an entire page.
         """
-        media = await self._ui_media(media_id, rec) if media_id else None
-        item = {"ord": int(ord_value or 0)}
+        rec = placed.rec
+        media = (await self._ui_media(placed.media_id, rec)
+                 if placed.media_id else None)
+        item = {"ord": int(placed.ord_value or 0)}
         item.update(_record_fields(rec, _UI_HEAD_SPECS))
-        item["my_nick"] = my_nick or ""
+        item["my_nick"] = placed.my_nick or ""
         item.update(_record_fields(rec, _UI_BODY_SPECS))
         item["media"] = media
         item.update(_record_fields(rec, _UI_TAIL_SPECS))
-        item["day"] = day or ""
+        item["day"] = placed.day or ""
         item["occ"] = int(rec.occ or 0)
         return item
 
@@ -242,12 +244,8 @@ class ConversationIdentity:
                                      (rec.media_url,))
         return int(row[0]) if row else None
 
-    async def rename_if_same_conversation(self, old_nick: str,
-                                          new_nick: str, head_sig: str,
-                                          tail_sig: str,
-                                          head_any: str = "",
-                                          tail_any: str = "",
-                                          dom_count: int = -1,
+    async def rename_if_same_conversation(self, old_nick: str, new_nick: str,
+                                          pane: PaneSignature,
                                           pane_same: bool = False) -> bool:
         """Continue the previous person's archive under a changed nick.
 
@@ -283,14 +281,11 @@ class ConversationIdentity:
             return False                      # nick already known — not a rename
         pid = int(old["id"])
         cursor = await self._owner.get_cursor(pid)
-        if not self._same_conversation(cursor, head_sig, tail_sig, head_any,
-                                       tail_any, dom_count):
+        if not self._same_conversation(cursor, pane):
             return False
         return await self._apply_rename(pid, str(old["nick"]), clean)
 
-    def _same_conversation(self, cursor: dict, head_sig: str, tail_sig: str,
-                           head_any: str, tail_any: str,
-                           dom_count: int) -> bool:
+    def _same_conversation(self, cursor: dict, pane: PaneSignature) -> bool:
         """Whether the pane still shows the conversation the cursor ended on.
 
         Deliberately conservative: the previous sync has to have bootstrapped,
@@ -299,10 +294,10 @@ class ConversationIdentity:
         """
         if not cursor.get("bootstrapped"):
             return False
-        if dom_count >= 0 and int(cursor.get("dom_count") or -1) != dom_count:
+        if pane.dom_count >= 0 and int(cursor.get("dom_count") or -1) != pane.dom_count:
             return False
-        return (self._exact_match(cursor, head_sig, tail_sig)
-                or self._any_match(cursor, head_any, tail_any))
+        return (self._exact_match(cursor, pane.head_sig, pane.tail_sig)
+                or self._any_match(cursor, pane.head_any, pane.tail_any))
 
     @staticmethod
     def _exact_match(cursor: dict, head_sig: str, tail_sig: str) -> bool:

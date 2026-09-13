@@ -7,9 +7,11 @@
 # there is one implementation of the limits and no chance of the two
 # disagreeing. See docs/AGENT_RULES_CODE_QUALITY.md.
 #
-# One hook, not one per check: the gate already reports size, complexity,
-# duplication, dead code and stale overrides in a single pass, and splitting
-# it into several hooks would just run the same measurement repeatedly.
+# One hook for RULE 16, not one per RULE 16 check: the gate already reports
+# size, complexity, duplication, dead code and stale overrides in a single
+# pass, and splitting it into several hooks would just run the same
+# measurement repeatedly. RULE 18 §18.3 below is a different measurement
+# (module count, not function size), so it gets its own hook.
 #
 # It is repo-wide policy rather than a per-file lint — it measures the
 # functions in OWNED and the ratcheted classes whichever files you happen to
@@ -21,6 +23,18 @@ repos:
       - id: rule16-gate
         name: RULE 16 size, complexity & smell gate
         entry: python3 tools/metrics/rule16_gate.py
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      # RULE 18 §18.3 — how many modules `stores/` really has. Its sub-package
+      # remedy is closed by AREA B's frozen surface, so the count comes from
+      # prefix families, the JSON write layer and aggregate/collaborator pairs,
+      # each justified from the import graph. Fails on an undeclared loose file
+      # or a group that lost its evidence.
+      - id: stores-module-families
+        name: RULE 18 §18.3 stores/ module count
+        entry: python3 tools/metrics/stores_modules.py
         language: system
         always_run: true
         pass_filenames: false

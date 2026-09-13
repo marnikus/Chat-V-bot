@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from datetime import datetime
-from typing import Optional
 
 from stores.history_models import dedupe_key
 from stores.history_repo_identity import TAIL_FP_LIMIT
@@ -427,13 +427,15 @@ class PersonLifecycle:
              row["first_ts"], row["last_ts"], person_id))
         await self._owner.db.commit()
 
-    async def _touch_cursor(self, person_id: int, dom_count: int,
-                            head_sig: Optional[str],
-                            tail_sig: Optional[str],
-                            head_any: Optional[str] = None,
-                            tail_any: Optional[str] = None) -> None:
-        if not dom_count and head_sig is None and tail_sig is None:
+    async def _touch_cursor(self, ctx: WriteContext) -> None:
+        """Move the resume cursor, and nothing else.
+
+        `my_nick` and `bootstrapped` are forced to their inert values on the way
+        into `_after_write`, so no caller can change either by accident: a
+        cursor touch must not add a nick to the person's `my_nicks` list (that
+        is what `_recount` does with a non-empty nick), and must not claim the
+        person was bootstrapped — it keeps whatever the cursor already says.
+        """
+        if not ctx.dom_count and ctx.head_sig is None and ctx.tail_sig is None:
             return
-        await self._after_write(WriteContext(
-            person_id, "", dom_count, head_sig, tail_sig,
-            head_any=head_any, tail_any=tail_any))
+        await self._after_write(replace(ctx, my_nick="", bootstrapped=None))
