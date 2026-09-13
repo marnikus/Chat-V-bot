@@ -195,6 +195,10 @@ class UndoWorldStore:
 
     def __init__(self, host):
         self._host = host
+        #: the newest timeline waiting for the one save in flight (latest wins)
+        self._queued = None
+        #: the single save task, so two saves never share the connection
+        self._saving = None
 
     @property
     def _archive(self):
@@ -212,21 +216,57 @@ class UndoWorldStore:
         return app, world
 
     def schedule_save(self, entries: list) -> None:
-        """Persist the world half, tracking the task for `settle()`."""
+        """Persist the world half — ONE save at a time, newest wins.
+
+        Two saves used to be allowed in flight at once (`_undo_pendings` is a
+        list, and a push during a switch schedules a second save before the
+        first lands). That was two bugs on one connection:
+
+        * `save_world_undo` is DELETE-all-then-INSERT-all, so overlapping
+          saves interleave and can leave the table holding half of one
+          timeline and half of another;
+        * the connection's `WriteTurn` tracks "held" with ONE flag, so the
+          first save's commit cleared it while the second was still between
+          its statements. The second then re-entered the world gate
+          (depth 1 -> 2) and its own commit only decremented once, leaving
+          the writer turn held for good by a connection that was already
+          closed. Every later writer on that file then waited WAIT_S (15s)
+          and failed OPEN — writing without the exclusion the gate exists to
+          provide, which is the exact bug class the gate was added for
+          (2026-09-11: a Ctrl+Z reported success while the person stayed
+          deleted).
+
+        So a save requested while one is running is queued instead of started;
+        the running task picks the newest queue up before it finishes. There is
+        no await between that check and the task ending, so nothing can be
+        queued into a gap. `settle()` still waits for the queued write because
+        the task it gathers is the one that performs it.
+        """
         service = self._archive
         if service is None or not getattr(service.db, "is_open", False):
             return
+        self._queued = entries
+        task = self._saving
+        if task is not None and not task.done():
+            return
+        self._start_save(service)
+
+    def _start_save(self, service) -> None:
+        """Run the queued saves to completion, tracking the task for settle()."""
 
         async def runner():
-            try:
-                await service.save_world_undo(entries)
-            except Exception as exc:                   # noqa: BLE001
-                log.warning("world undo save failed: %s", exc)
+            while self._queued is not None:
+                entries, self._queued = self._queued, None
+                try:
+                    await service.save_world_undo(entries)
+                except Exception as exc:                   # noqa: BLE001
+                    log.warning("world undo save failed: %s", exc)
 
         try:
             task = asyncio.ensure_future(runner())
         except RuntimeError:
             return
+        self._saving = task
         pendings = self._host._undo_pendings
         pendings.append(task)
         task.add_done_callback(pendings.remove)

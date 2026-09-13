@@ -99,6 +99,12 @@ and gets the same treatment for consistency.
 * `_values_equal` being imported cross-module while private is the same boundary
   smell F1 found in `db_deletion._append_db_files`. Recorded as **F3b**, not fixed
   inside the move, for the same reason: keep the refactor behaviour-preserving.
+* `WriteTurn.held` (stores/world_lock.py) is one flag per connection, so two
+  concurrent writers on one `HistoryDB` can desynchronise it from the gate's
+  depth and leak the writer turn — the mechanism behind the flake settled in
+  §8.10. Fixing it means a nesting count per task, which changes the boolean
+  `turn.held` that `tests/test_world_write_gate.py` (817 lines) pins. Recorded as
+  **F3c**, not bundled into the flake fix.
 * `services/undo_service.py` is in a `CLONE_BASELINE` group with
   `services/history/query.py`; same stale-entry caveat as F2.
 
@@ -600,3 +606,97 @@ traceback captured. Two things follow from that:
   timeline). F3 will touch exactly this code, so the flake must be settled there
   — capture the assertion, and if it reproduces on a pre-F3 baseline, fix the
   test's timing rather than the code under test.
+
+**Settled in §8.10 — and the prediction above was wrong.** It was not test
+timing and not pre-existing fragility in the test: it was a product bug, a
+leaked world write gate, and the fix is in `services/undo_support.py`.
+
+### 8.10 Settled: the flake was a leaked write gate, not test timing
+
+**Reproduction.** Sequential full-suite runs are a poor sampler — one sample of
+this test per five minutes. Three clean runs (2717 passed each) produced
+nothing, so the test was run repeatedly inside ONE process instead: the
+condition a long suite creates (accumulated module state, asyncio churn, Qt
+allocation, GC pressure) sampled every few seconds. It failed **3 times in 37
+iterations (~8%)**, always with the same traceback:
+
+```
+tests/test_db_switch_restart.py:291  await self.bridge_load(self.db_path)
+tests/test_db_switch_restart.py:266  self.assertTrue(self.changes, "a world switch must signal the UI")
+AssertionError: [] is not true
+```
+
+Always the third switch, always `changes == []`: `db_changed` never arrived
+inside the test's 300 × 10 ms budget.
+
+**Diagnosis, in four probes, each ruling out a guess.**
+
+| Probe | Finding |
+|---|---|
+| pending tasks at the timeout | `DbBridge._run_async.<locals>.guarded` still running, plus a task parked in `Lock.acquire`. `_undo_pendings` was empty, so there was nothing to settle — the wait was not the test's `drain_world_undo` |
+| the gate table (`stores/world_lock._GATES`) | `history.db depth=1 locked=True waiters=1 holder=HistoryDB@36624 is_open=False` — a **closed** connection still holding the world's writer turn, plus three more gates leaked by earlier iterations |
+| `WAIT_S` | 15.0. The gate deliberately fails **open** after 15 s; the test waits 3 s. The switch was never lost, only late |
+| an enter/leave journal with call stacks | the unmatched enter, below |
+
+The journal is the proof. For one token on `history.db`:
+
+```
+LEAVE depth=1->0  commit     mutate.py:294 _write_world_undo
+LEAVE depth=0->0  commit     mutate.py:294 _write_world_undo   <- a second, concurrent save
+ENTER depth=1     execute    mutate.py:288 _write_world_undo
+ENTER depth=2     executemany mutate.py:289                    <- re-entered: `held` was already clear
+LEAVE depth=2->1  commit     mutate.py:294                     <- never returns to 0
+```
+
+ENTER and LEAVE counts balance (23/23) while depth ends at 1 — one LEAVE was a
+no-op and one ENTER was extra. An earlier probe had already ruled out the
+obvious suspect: `_closed()`'s unguarded `turn.drop()` after `await
+conn.close()`, which never raised in 61 iterations.
+
+**Root cause.** `UndoWorldStore.schedule_save` appended a task per save, so two
+saves could be in flight on ONE connection — routine, because a push during a
+switch schedules a second save before the first lands. Two consequences:
+
+* `save_world_undo` is DELETE-all-then-INSERT-all, so overlapping saves can
+  leave the table holding half of one timeline and half of another;
+* `WriteTurn` tracks "held" with a **single flag per connection**. The first
+  save's `commit()` cleared it while the second was still between statements, so
+  the second re-entered the gate (depth 1→2) and its own commit decremented only
+  once. The turn stayed held for good, owned by a connection already closed.
+
+Every later writer on that file then waited `WAIT_S` (15 s) and **failed open** —
+writing without the exclusion the gate exists to provide. That is the exact bug
+class the gate was added for (2026-09-11: a Ctrl+Z reported success while the
+person stayed deleted), reintroduced by a leak rather than by absence.
+
+So the test's 3 s budget being shorter than the product's documented 15 s
+fail-open is *why this looked like a flaky test* rather than a 15 s stall.
+Raising the timeout — the fix §8.9 predicted — would have hidden a real defect
+and left write exclusion silently off.
+
+**Fix.** `schedule_save` queues instead of starting a second save: newest
+timeline wins, the one task in flight picks it up before finishing, and
+`settle()` still waits for it because the task it gathers is the task that
+performs the write. There is no `await` between the queue check and the task
+ending, so nothing can be queued into a gap.
+
+**Negative check.** `test_two_saves_never_share_the_connection`
+(`tests/integration/services/test_undo_support_contract.py`) fails on the
+pre-fix file with `AssertionError: 2 != 1 : two saves must never be in flight on
+one connection`, and passes with the fix.
+
+**Result.** **0 failures in 200** in-process iterations after the fix (was 3/37);
+at the pre-fix rate P(0 in 200) ≈ 5×10⁻⁸. Full suite **2718 passed / 0 failed**
+(2717 + the new test), 854 subtests. Line coverage 91.50% (was 91.49%), branch
+86.36% (was 86.31%). RULE 16 gate rc=0; clone scan 0 new / 0 stale. The pylint
+message profile of both changed files is identical to HEAD's (no new messages)
+and vulture's findings are a subset of HEAD's.
+
+**Residual risk, deliberately not fixed here.** `WriteTurn.held` is still one
+flag per connection, so *any* two concurrent writers on one `HistoryDB` — a gaze
+save against a collector append, say — can desynchronise it from the gate's
+depth the same way. Removing the undo-save overlap removes the only source this
+evidence shows actually occurring. Fixing `WriteTurn` properly means a nesting
+count per task, which changes an 817-line pinned contract
+(`tests/test_world_write_gate.py` asserts `turn.held` as a boolean), so it is
+recorded as **F3c** instead of being bundled into a flake fix.

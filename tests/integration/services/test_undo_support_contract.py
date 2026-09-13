@@ -323,6 +323,51 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
         ], 0)
         await self.undo.sync_world_state()   # must settle without raising
 
+    async def test_two_saves_never_share_the_connection(self):
+        """One world save at a time — overlapping saves leaked the write gate.
+
+        A push during a world switch schedules a second save before the first
+        has landed, and `save_world_undo` is DELETE-all-then-INSERT-all on ONE
+        connection. Two at once therefore interleave their statements, and the
+        connection's `WriteTurn` tracks "held" with a single flag: the first
+        save's commit cleared it while the second was still between statements,
+        so the second re-entered the world gate (depth 1 -> 2) and its own
+        commit decremented only once. The writer turn stayed held for good, by
+        a connection that was already closed.
+
+        Every later writer on that file then waited WAIT_S (15s) and failed
+        OPEN — writing without the exclusion the gate exists to provide, which
+        is the bug class the gate was added for. The visible symptom was
+        `db_changed` arriving too late for a world switch: the test in
+        tests/test_db_switch_restart.py failed ~8% of runs (3 of 37) and 0 of
+        200 once saves were serialised.
+
+        Latest-wins is the point: a save rewrites the whole table, so a queued
+        timeline supersedes the one in flight rather than racing it.
+        """
+        live = {"now": 0, "max": 0}
+
+        async def slow_save(entries):
+            live["now"] += 1
+            live["max"] = max(live["max"], live["now"])
+            try:
+                await asyncio.sleep(0.01)   # the window the second save needs
+                self.archive.saved.append(entries)
+            finally:
+                live["now"] -= 1
+
+        self.archive.save_world_undo = slow_save
+        people = {"before": [], "after": []}
+        self.undo.set_history([{"kind": "people", "value": people, "seq": 1}], 0)
+        self.undo.set_history([{"kind": "people", "value": people, "seq": 2}], 1)
+        await self.undo.sync_world_state()   # settles the pending saves
+
+        self.assertEqual(live["max"], 1,
+                         "two saves must never be in flight on one connection")
+        self.assertTrue(self.archive.saved, "the newest timeline is still written")
+        self.assertEqual([e["seq"] for e in self.archive.saved[0]], [2],
+                         "a queued save supersedes the one it was queued behind")
+
     async def test_history_cleans_stack_blocks(self):
         self.cfg.set_state(undo_history=[
             {"kind": "stack",
