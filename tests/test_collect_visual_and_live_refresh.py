@@ -137,7 +137,11 @@ class TestCollectPauseAndOrder(unittest.TestCase):
                 order.append(("sleep", round(delay, 3)))
             await real_sleep(0)
 
-        import backend.scroll_parser as sp
+        # The confirmation hold lives in the module that owns the judging
+        # (Round G step G2 split `backend/scroll_parser.py` into a package);
+        # patching the package would patch nothing, because `judge` holds its
+        # own reference to `asyncio`.
+        import backend.scroll_parser.judge as sp
         sp.asyncio.sleep = spy
         try:
             parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,

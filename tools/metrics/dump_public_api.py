@@ -43,14 +43,38 @@ BLOCKS = os.path.join(ROOT, "tests", "unit", "actions",
                       "block_wire_snapshot.json")
 
 
+#: Packages whose internal file layout is their own business. An annotation
+#: rendered as `backend.scroll_parser.parser.ScrollParser` names the same class
+#: as `backend.scroll_parser.ScrollParser` — the symbol is re-exported from the
+#: package front door and every caller still imports it from there. Collapsing
+#: the submodule segment keeps the snapshot a statement about the PUBLIC name,
+#: which is what callers depend on, instead of about which file the class
+#: happens to live in today (Round G, step G2).
+_AREA_PACKAGES = ("backend", "actions")
+
+
+def _collapse_submodules(text: str) -> str:
+    """`backend.scroll_parser.parser.X` → `backend.scroll_parser.X`.
+
+    Only collapses inside the AREA D packages, and only the segments BETWEEN
+    the area package and the final symbol, so a genuine move to a different
+    area still shows up as drift.
+    """
+    pattern = (r"\b(" + "|".join(_AREA_PACKAGES) +
+               r")\.([A-Za-z_][A-Za-z0-9_]*)(?:\.[a-z_][A-Za-z0-9_]*)+"
+               r"\.([A-Z][A-Za-z0-9_]*)")
+    return re.sub(pattern, r"\1.\2.\3", text)
+
+
 def _sig(obj) -> str:
     """Signature string with object reprs stabilised (``0x7f…`` addresses
-    differ per process, which would make the golden file flap)."""
+    differ per process, which would make the golden file flap) and package
+    submodule segments collapsed (see :func:`_collapse_submodules`)."""
     try:
         text = str(inspect.signature(obj))
     except (TypeError, ValueError):
         return "<builtin>"
-    return re.sub(r"0x[0-9a-fA-F]+", "0xADDR", text)
+    return _collapse_submodules(re.sub(r"0x[0-9a-fA-F]+", "0xADDR", text))
 
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]{5,}")
