@@ -105,50 +105,6 @@ class GrokSettings:
         except (TypeError, ValueError):
             return DEFAULT_TIMEOUT_S
 
-    def save(self, api_key: str, model: str = "", url: str = "") -> bool:
-        """Store this provider's settings from the AI Settings dialog.
-
-        A blank field leaves the stored value alone, so re-saving the model
-        does not wipe a key the password input never echoes back. Writes
-        only this provider's keys — never another provider's, and never
-        `grok.prompts`.
-        """
-        if self._config is None:
-            return False
-        fields = {"api_key": api_key, "model": model, "url": url}
-        given = {k: str(v).strip() for k, v in fields.items()
-                 if str(v or "").strip()}
-        if given:
-            self._write(given)
-        self._config.save()
-        return True
-
-    def _write(self, given: dict) -> None:
-        if self.provider == bot_providers.DEFAULT_PROVIDER:
-            for key, value in given.items():
-                self._config.set("grok", key, value)
-            return
-        buckets = dict(self._config.get("grok", "providers", default={}) or {})
-        bucket = dict(buckets.get(self.provider) or {})
-        bucket.update(given)
-        buckets[self.provider] = bucket
-        self._config.set("grok", "providers", buckets)
-
-    def use(self, provider: str) -> bool:
-        """Make `provider` the active one. Touches no key and no template."""
-        if self._config is None or provider not in bot_providers.PROVIDERS:
-            return False
-        self._config.set("grok", "provider", provider)
-        self._config.save()
-        return True
-
-    def state(self) -> dict:
-        """What the dialog shows: a MASKED key, never the key itself."""
-        return {"provider": self.provider, "title": self.spec.title,
-                "has_key": bool(self.api_key), "masked": mask(self.api_key),
-                "model": self.model, "url": self.url,
-                "endpoint": self.endpoint}
-
 
 def reply_text(body: Any, provider: str = "") -> Result[str]:
     """The assistant text of a response, or a typed error.
@@ -161,11 +117,18 @@ def reply_text(body: Any, provider: str = "") -> Result[str]:
 
 
 class GrokClient:
-    """One `complete(prompt)` call against the configured AI endpoint."""
+    """One `complete(prompt)` call against the configured AI endpoint.
+
+    `settings` is anything exposing `spec`, `api_key`, `model` and
+    `endpoint` — either a `GrokSettings` (the legacy per-provider shape) or
+    a `Connection` (a named, user-created one). The transport does not care
+    which, because those four properties are the entire contract.
+    """
 
     def __init__(self, config=None, session_factory=None,
-                 provider: str = "") -> None:
-        self.settings = GrokSettings(config, provider)
+                 provider: str = "", settings=None) -> None:
+        self.settings = settings if settings is not None \
+            else GrokSettings(config, provider)
         #: injected in tests; the default builds an `aiohttp.ClientSession`
         self._session_factory = session_factory
 
@@ -196,14 +159,14 @@ class GrokClient:
                                               await response.json())
 
     async def complete(self, prompt: str) -> Result[str]:
-        """Ask Grok once. Every failure comes back as `Err`, never raised."""
+        """Ask the model once. Every failure is an `Err`, never raised."""
         if not str(prompt or "").strip():
             return Err("grok_no_prompt", "the prompt is empty")
         if not self.settings.api_key:
             return Err("grok_no_key",
-                       f"no {self.spec.title} API key — set one in the AI "
-                       f"Settings dialog (the ⚙ button in the AI Bot Chat "
-                       f"window)")
+                       f"no {self.spec.title} API key — add one in the AI "
+                       f"Connections window (the ⚙ button in the Grok "
+                       f"Prompt Editor)")
         try:
             return await self._post(prompt)
         except Exception as exc:                            # noqa: BLE001
@@ -212,7 +175,19 @@ class GrokClient:
 
 
 def client_for(config, session_factory: Optional[Any] = None,
-               provider: str = "") -> GrokClient:
-    """Factory kept next to the client so callers need one import."""
+               provider: str = "", connection: str = "") -> GrokClient:
+    """The client a prompt should run through.
+
+    Resolution order, and why: a NAMED connection if one is configured (the
+    thing the user picks in the Prompt Editor), otherwise the legacy
+    per-provider settings — so an install that never opens the new window
+    keeps working exactly as before.
+    """
+    from services.bot_connections import ConnectionStore
+    store = ConnectionStore(config)
+    chosen = store.get(connection) if connection else store.active()
+    if chosen is not None:
+        return GrokClient(config=config, session_factory=session_factory,
+                          settings=chosen)
     return GrokClient(config=config, session_factory=session_factory,
                       provider=provider)

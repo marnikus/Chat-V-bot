@@ -104,6 +104,13 @@ global.document = {
   addEventListener() {},
 };
 global.window = global;
+// The scope checkbox remembers itself here, exactly as the sash grid does.
+const STORE = {};
+global.localStorage = {
+  getItem(k) { return k in STORE ? STORE[k] : null; },
+  setItem(k, v) { STORE[k] = String(v); },
+  removeItem(k) { delete STORE[k]; },
+};
 
 // ── bridge stub ──────────────────────────────────────────────────
 
@@ -128,17 +135,29 @@ const VARIABLES = [
     example: 'Anna' },
 ];
 
-const PROVIDER_STATE = {
-  active: 'grok',
-  providers: [
-    { id: 'grok', title: 'Grok (xAI)', model: 'grok-2-latest',
-      url: 'https://api.x.ai/v1/chat/completions', has_key: true,
-      masked: 'xai-…mnop', active: true },
-    { id: 'google', title: 'Google Gemini', model: 'gemini-2.0-flash',
-      url: 'https://g/v1beta/models/{model}:generateContent',
-      has_key: false, masked: '', active: false },
+/* Named connections: several may share one provider, so the fixture has
+   two Grok ones — a shape the old "one row per provider" model could not
+   express, and the reason the UI keys everything by connection id. */
+const CONN_STATE = {
+  active: 'c-grok-main',
+  providers: [{ id: 'grok', title: 'Grok (xAI)' },
+              { id: 'google', title: 'Google Gemini' }],
+  connections: [
+    { id: 'c-grok-main', title: 'Grok — work', provider: 'grok',
+      model: 'grok-2-latest', url: 'https://api.x.ai/v1/chat/completions',
+      has_key: true, masked: 'xai-…mnop', ok: true, problem: '' },
+    { id: 'c-grok-cheap', title: 'Grok — cheap', provider: 'grok',
+      model: 'grok-2-mini', url: 'https://api.x.ai/v1/chat/completions',
+      has_key: true, masked: 'xai-…zzzz', ok: true, problem: '' },
+    { id: 'c-gem', title: 'Gemini — personal', provider: 'google',
+      model: 'gemini-2.0-flash',
+      url: 'https://g/v1beta/models/gemini-2.0-flash:generateContent',
+      has_key: false, masked: '', ok: false, problem: 'no API key' },
   ],
 };
+
+const PRESETS = { suggest_reply: [], analyze_reaction: [
+  { id: 'p-strict', title: 'Strict', text: 'judge {last_message} strictly' }] };
 
 const slot = (name) => (...args) => {
   calls.push({ name, args });
@@ -171,25 +190,70 @@ global.App = {
       calls.push({ name: 'bot_save_prompt', args: [id, text] });
       cb(true);
     },
-    bot_providers: (cb) => {
-      calls.push({ name: 'bot_providers', args: [] });
-      cb(JSON.stringify({ active: PROVIDER_STATE.active,
-                          providers: PROVIDER_STATE.providers }));
+    bot_connections: (cb) => {
+      calls.push({ name: 'bot_connections', args: [] });
+      cb(JSON.stringify(CONN_STATE));
     },
-    bot_save_provider: (id, key, model, url, cb) => {
-      calls.push({ name: 'bot_save_provider', args: [id, key, model, url] });
-      const entry = PROVIDER_STATE.providers.find((p) => p.id === id);
-      if (key) { entry.has_key = true; entry.masked = 'set'; }
+    bot_prompt_connections: (cb) => {
+      calls.push({ name: 'bot_prompt_connections', args: [] });
+      cb(JSON.stringify({ active: CONN_STATE.active,
+                          connections: CONN_STATE.connections }));
+    },
+    bot_save_connection: (id, fieldsJson, cb) => {
+      const f = JSON.parse(fieldsJson);
+      calls.push({ name: 'bot_save_connection', args: [id, f] });
+      const title = f.title, provider = f.provider, key = f.api_key,
+            model = f.model, url = f.url;
+      let entry = CONN_STATE.connections.find((c) => c.id === id);
+      if (!entry) {
+        entry = { id: 'c-new', title: title, provider: provider,
+                  has_key: false, masked: '', ok: true, problem: '' };
+        CONN_STATE.connections.push(entry);
+      }
+      entry.title = title || entry.title;
+      if (key) { entry.has_key = true; entry.masked = 'set'; entry.ok = true; }
       if (model) entry.model = model;
+      if (url) entry.url = url;
+      cb(entry.id);
+    },
+    bot_delete_connection: (id, cb) => {
+      calls.push({ name: 'bot_delete_connection', args: [id] });
+      const before = CONN_STATE.connections.length;
+      CONN_STATE.connections = CONN_STATE.connections.filter(
+        (c) => c.id !== id);
+      cb(CONN_STATE.connections.length < before);
+    },
+    bot_use_connection_for_prompts: (id, cb) => {
+      calls.push({ name: 'bot_use_connection_for_prompts', args: [id] });
+      CONN_STATE.active = id;
       cb(true);
     },
-    bot_use_provider: (id, cb) => {
-      calls.push({ name: 'bot_use_provider', args: [id] });
-      PROVIDER_STATE.active = id;
-      PROVIDER_STATE.providers.forEach((p) => { p.active = p.id === id; });
-      cb(true);
+    bot_test_connection: slot('bot_test_connection'),
+    bot_get_presets: (template, cb) => {
+      calls.push({ name: 'bot_get_presets', args: [template] });
+      cb(JSON.stringify(PRESETS[template] || []));
     },
-    bot_test_provider: slot('bot_test_provider'),
+    bot_save_preset: (template, title, text, ident, cb) => {
+      calls.push({ name: 'bot_save_preset',
+                   args: [template, title, text, ident] });
+      const list = PRESETS[template] = PRESETS[template] || [];
+      const found = list.filter((p) => p.id === ident)[0];
+      if (found) { found.text = text; found.title = title; cb(found.id); return; }
+      const made = { id: 'p-' + list.length + '-' + template, title: title,
+                     text: text };
+      list.push(made);
+      cb(made.id);
+    },
+    bot_delete_preset: (ident, cb) => {
+      calls.push({ name: 'bot_delete_preset', args: [ident] });
+      let gone = false;
+      Object.keys(PRESETS).forEach((k) => {
+        const kept = PRESETS[k].filter((p) => p.id !== ident);
+        if (kept.length !== PRESETS[k].length) gone = true;
+        PRESETS[k] = kept;
+      });
+      cb(gone);
+    },
     bot_get_variables: (cb) => {
       calls.push({ name: 'bot_get_variables', args: [] });
       cb(JSON.stringify(VARIABLES));
@@ -217,6 +281,7 @@ const load = (file, name) =>
 // stubbing them — a stub would pass no matter which renderer ran.
 global.HistoryModel = require('../ui/js/history-model.js');
 global.HistoryView = load('js/history-view.js', 'HistoryView');
+global.BotMessages = load('js/bot-messages.js', 'BotMessages');
 global.BotSettings = load('js/bot-settings.js', 'BotSettings');
 global.BotChat = load('js/bot-chat.js', 'BotChat');
 global.BotPrompt = load('js/bot-prompt.js', 'BotPrompt');
@@ -459,7 +524,7 @@ t('reset asks the backend to forget the edit', () => {
 t('preview shows exactly what would be sent to Grok', () => {
   $('botPromptPreviewBtn').fire('click');
   const call = lastCall('bot_preview_prompt');
-  eq(call.args.slice(1), ['Anna', 'analyze_reaction']);
+  eq(call.args.slice(1), ['Anna', 'analyze_reaction', 'today']);
   BotPrompt.onReply(call.args[0],
                     JSON.stringify({ prompt: 'judge hello you' }));
   eq($('botPromptPreview').textContent, 'judge hello you');
@@ -592,80 +657,252 @@ t('a warned template can still be saved — warnings never block', () => {
   eq(lastCall('bot_save_prompt').args[1], 'hi {nope}');
 });
 
-// ── AI provider settings dialog ──────────────────────────────────
+// ── which conversation the AI reads (today only / everything) ────
+
+t('the scope checkbox exists and starts on today', () => {
+  ok($('botScopeToday'), 'the scope checkbox is missing from index.html');
+  eq(BotChat.scope(), 'today');
+});
+
+t('every request carries the scope, not just the message list', () => {
+  BotChat.openPerson('Anna');
+  eq(lastCall('bot_load_today').args[2], 'today');
+  $('botSuggestBtn').fire('click');
+  eq(lastCall('bot_suggest_reply').args[2], 'today');
+  $('botAnalyzeBtn').fire('click');
+  eq(lastCall('bot_analyze_reaction').args[2], 'today');
+});
+
+t('unticking it asks for the whole conversation and reloads', () => {
+  $('botScopeToday').checked = false;
+  $('botScopeToday').fire('change');
+  eq(BotChat.scope(), 'all');
+  eq(lastCall('bot_load_today').args.slice(1), ['Anna', 'all'],
+     'the window must reload with the new scope, not wait for the next click');
+  $('botSuggestBtn').fire('click');
+  eq(lastCall('bot_suggest_reply').args[2], 'all');
+});
+
+t('the preview previews the scope that would actually be sent', () => {
+  $('botPromptPreviewBtn').fire('click');
+  eq(lastCall('bot_preview_prompt').args.slice(1),
+     ['Anna', 'analyze_reaction', 'all']);
+});
+
+t('a trimmed history admits it rather than shortening in silence', () => {
+  reply(lastCall('bot_load_today').args[0],
+        { nick: 'Anna', scope: 'all', empty: false, truncated: true,
+          total: 940, items: [{ dir: 'in', from: 'Anna', text: 'hello you' }] });
+  const note = $('botChatStatus').textContent;
+  ok(/940/.test(note), 'the real total must be visible: ' + note);
+  ok(/whole conversation/i.test(note), note);
+});
+
+t('an empty archive and an empty day read differently', () => {
+  BotChat.openPerson('Anna');
+  reply(lastCall('bot_load_today').args[0],
+        { nick: 'Anna', scope: 'all', empty: true, items: [] });
+  ok(/archive/i.test($('botChatStatus').textContent));
+  $('botScopeToday').checked = true;
+  $('botScopeToday').fire('change');
+  reply(lastCall('bot_load_today').args[0],
+        { nick: 'Anna', scope: 'today', empty: true, items: [] });
+  ok(/today/i.test($('botChatStatus').textContent));
+});
+
+t('the choice survives a restart', () => {
+  $('botScopeToday').checked = false;
+  $('botScopeToday').fire('change');
+  $('botScopeToday').checked = true;           // as a fresh page would be
+  BotChat._restoreScope();
+  eq(BotChat.scope(), 'all');
+  $('botScopeToday').checked = true;
+  $('botScopeToday').fire('change');
+});
+
+// ── prompt presets (saved wordings, in the editor) ───────────────
+
+t('presets of the open template are listed, current template first', () => {
+  BotPrompt.open('analyze_reaction', 'Anna');
+  eq(lastCall('bot_get_presets').args[0], 'analyze_reaction');
+  const options = $('botPresetSelect').children;
+  eq(options[0].value, '');
+  ok(options.some((o) => o.textContent === 'Strict'));
+});
+
+t('applying a preset only FILLS the editor — it never saves by itself', () => {
+  const before = calls.length;
+  BotPrompt.applyPreset('p-strict');
+  eq($('botPromptText').value, 'judge {last_message} strictly');
+  eq(calls.slice(before).filter((c) => c.name === 'bot_save_prompt').length, 0,
+     'browsing presets must not change what the app sends');
+});
+
+t('save-as stores a new preset under this template', () => {
+  global.window.prompt = () => 'Friendly';
+  $('botPromptText').value = 'be kind to {person_name}';
+  $('botPresetSaveBtn').fire('click');
+  eq(lastCall('bot_save_preset').args.slice(0, 3),
+     ['analyze_reaction', 'Friendly', 'be kind to {person_name}']);
+  eq(lastCall('bot_get_presets').args[0], 'analyze_reaction');
+});
+
+t('a preset needs a name — cancelling the prompt writes nothing', () => {
+  global.window.prompt = () => '';
+  const before = calls.filter((c) => c.name === 'bot_save_preset').length;
+  $('botPresetSaveBtn').fire('click');
+  eq(calls.filter((c) => c.name === 'bot_save_preset').length, before);
+});
+
+t('deleting with nothing selected explains itself instead of guessing', () => {
+  BotPrompt.preset = '';
+  const before = calls.filter((c) => c.name === 'bot_delete_preset').length;
+  $('botPresetDeleteBtn').fire('click');
+  eq(calls.filter((c) => c.name === 'bot_delete_preset').length, before);
+  ok(/select a preset/i.test($('botPromptStatus').textContent));
+});
+
+t('deleting a selected preset removes only that one', () => {
+  BotPrompt.applyPreset('p-strict');
+  $('botPresetDeleteBtn').fire('click');
+  eq(lastCall('bot_delete_preset').args[0], 'p-strict');
+  ok(!BotPrompt.presets.some((p) => p.id === 'p-strict'));
+});
+
+// ── which connection runs the prompt (editor dropdown) ───────────
+
+t('the editor lists connections and marks the active one', () => {
+  BotPrompt.loadConnections();
+  const options = $('botConnSelect').children;
+  eq(options.length, 3);
+  eq($('botConnSelect').value, 'c-grok-main');
+});
+
+t('two connections of the same provider are both offered', () => {
+  const titles = $('botConnSelect').children.map((o) => o.textContent);
+  ok(titles.indexOf('Grok — work') >= 0 && titles.indexOf('Grok — cheap') >= 0,
+     'a provider-keyed list could not show both: ' + titles.join(', '));
+});
+
+t('a broken connection is listed WITH its problem, never hidden', () => {
+  BotPrompt.useConnection('c-gem');
+  ok(/no API key/.test($('botConnWarn').textContent),
+     $('botConnWarn').textContent);
+});
+
+t('choosing a connection is remembered by the backend', () => {
+  BotPrompt.useConnection('c-grok-cheap');
+  eq(lastCall('bot_use_connection_for_prompts').args[0], 'c-grok-cheap');
+  eq($('botConnWarn').textContent, '');
+});
+
+t('the editor holds no key, model or endpoint field', () => {
+  ['botApiKeyInput', 'botModelInput', 'botConnSaveBtn'].forEach((id) =>
+    ok(!html.includes('id="' + id + '"'),
+       id + ' still lives in the Prompt Editor markup'));
+});
+
+// ── AI Connections window ────────────────────────────────────────
 
 BotSettings.init();          // once, exactly as the page does it
 
 function openSettings() {
-  $('botSettingsBtn').fire('click');
+  $('botPromptSettingsBtn').fire('click');
 }
 
-function clickProvider(id) {
+function clickConnection(id) {
   const row = findAll($('botProviderList'), '.bot-provider')
     .find((r) => r.dataset.provider === id);
   $('botProviderList').fire('click', { target: row });
 }
 
-t('the settings dialog opens from the bot chat title bar', () => {
+t('the connections window opens from the prompt editor title bar', () => {
   openSettings();
   ok(!$('botSettingsBackdrop').classList.contains('hidden'));
-  eq(findAll($('botProviderList'), '.bot-provider').length, 2);
+  eq(findAll($('botProviderList'), '.bot-provider').length,
+     CONN_STATE.connections.length);
 });
 
-t('the active provider is marked as in use', () => {
+t('the active connection is marked as in use', () => {
   openSettings();
   const rows = findAll($('botProviderList'), '.bot-provider');
-  const grok = rows.find((r) => r.dataset.provider === 'grok');
-  ok(grok.classList.contains('active'));
-  ok(/in use/.test(grok.textContent));
+  const row = rows.find((r) => r.dataset.provider === CONN_STATE.active);
+  ok(row.classList.contains('active'));
+  ok(/in use/.test(row.textContent));
 });
 
 t('a stored key is shown masked and NEVER filled into the field', () => {
   openSettings();
-  clickProvider('grok');
+  clickConnection('c-grok-main');
   eq($('botProviderKey').value, '', 'the secret is never echoed into the DOM');
   ok(/xai-…mnop/.test($('botProviderKeyState').textContent));
 });
 
-t('selecting a provider shows ITS model and endpoint', () => {
+t('selecting a connection shows ITS model and endpoint', () => {
   openSettings();
-  clickProvider('google');
+  clickConnection('c-gem');
   eq($('botProviderModel').value, 'gemini-2.0-flash');
   ok(/generativelanguage|\/v1beta\//.test($('botProviderUrl').value));
+  clickConnection('c-grok-cheap');
+  eq($('botProviderModel').value, 'grok-2-mini');
 });
 
-t('saving sends the selected provider its own fields', () => {
+t('saving sends the selected connection its own fields', () => {
   openSettings();
-  clickProvider('google');
+  clickConnection('c-gem');
   $('botProviderKey').value = 'AIza-typed-key';
   $('botSettingsSaveBtn').fire('click');
-  const call = lastCall('bot_save_provider');
-  eq(call.args[0], 'google');
-  eq(call.args[1], 'AIza-typed-key');
+  const call = lastCall('bot_save_connection');
+  eq(call.args[0], 'c-gem');
+  eq(call.args[1].api_key, 'AIza-typed-key');
+  eq(call.args[1].model, 'gemini-2.0-flash',
+     'the form must save THIS connection\'s fields, not the last one shown');
 });
 
-t('switching the active provider goes through the backend', () => {
+t('a connection must be named before it can be saved', () => {
   openSettings();
-  clickProvider('google');
-  $('botUseProviderBtn').fire('click');
-  eq(lastCall('bot_use_provider').args[0], 'google');
-  ok(/using this provider/i.test($('botSettingsStatus').textContent));
+  BotSettings.addNew();
+  $('botConnTitle').value = '';
+  const before = calls.filter((c) => c.name === 'bot_save_connection').length;
+  $('botSettingsSaveBtn').fire('click');
+  eq(calls.filter((c) => c.name === 'bot_save_connection').length, before);
+  ok(/name/i.test($('botSettingsStatus').textContent));
+});
+
+t('+ New starts a blank form without touching the stored ones', () => {
+  openSettings();
+  const before = CONN_STATE.connections.length;
+  $('botConnNewBtn').fire('click');
+  eq($('botConnTitle').value, '');
+  eq(BotSettings.selected, '');
+  eq(CONN_STATE.connections.length, before);
+});
+
+t('deleting removes that connection and only that one', () => {
+  openSettings();
+  clickConnection('c-grok-cheap');
+  $('botConnDeleteBtn').fire('click');
+  eq(lastCall('bot_delete_connection').args[0], 'c-grok-cheap');
+  ok(CONN_STATE.connections.some((c) => c.id === 'c-grok-main'),
+     'the other Grok connection must survive');
 });
 
 t('test connection reports success in words', () => {
   openSettings();
-  clickProvider('grok');
+  clickConnection('c-grok-main');
   $('botTestConnBtn').fire('click');
-  const req = lastCall('bot_test_provider').args[0];
-  BotSettings.onReply(req, JSON.stringify({ ok: true, detail: 'answered: ok' }));
+  const call = lastCall('bot_test_connection');
+  eq(call.args[1], 'c-grok-main');
+  BotSettings.onReply(call.args[0],
+                      JSON.stringify({ ok: true, detail: 'answered: ok' }));
   ok(/works/i.test($('botSettingsStatus').textContent));
 });
 
 t('a failed test says why, and does not look like success', () => {
   openSettings();
-  clickProvider('google');
+  clickConnection('c-gem');
   $('botTestConnBtn').fire('click');
-  const req = lastCall('bot_test_provider').args[0];
+  const req = lastCall('bot_test_connection').args[0];
   BotSettings.onReply(req, JSON.stringify(
     { ok: false, code: 'grok_no_key', detail: 'no Google Gemini API key' }));
   ok(/Failed/.test($('botSettingsStatus').textContent));
@@ -674,8 +911,9 @@ t('a failed test says why, and does not look like success', () => {
 
 t('a test answer never leaks into the chat window', () => {
   openSettings();
+  clickConnection('c-grok-main');
   $('botTestConnBtn').fire('click');
-  const req = lastCall('bot_test_provider').args[0];
+  const req = lastCall('bot_test_connection').args[0];
   const before = $('botChatStatus').textContent;
   BotChat.onReply(req, JSON.stringify({ ok: true, detail: 'fine' }));
   eq($('botChatStatus').textContent, before);

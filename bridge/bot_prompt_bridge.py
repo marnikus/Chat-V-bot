@@ -6,10 +6,13 @@ them, so the two wires are separated for the same reason the two windows are.
 It also keeps each class inside RULE 16's method budget, which one combined
 bridge no longer was.
 
-What it owns: the two editable templates, the variable library the editor
-lists, the live preview of exactly what would be sent, and the active
-provider's key/model shortcut. Choosing BETWEEN providers is the AI Settings
-dialog's job and lives in `BotSettingsBridge` — a third window, a third wire.
+What it owns: the two editable templates, their saved PRESETS, the variable
+library the editor lists, the live preview of exactly what would be sent, and
+which connection is selected.
+
+It owns no API key and no endpoint. Those moved to the AI Connections window
+(`BotSettingsBridge`) so the editor holds prompt controls only — the two
+slots that used to read and write the key here were deleted, not hidden.
 
 The API key travels ONE way. `bot_connection` reports whether a key is set
 and which model is used, never the key itself, so a saved secret is never
@@ -25,7 +28,8 @@ from PySide6.QtCore import Signal, Slot
 
 from bridge.bot_bridge import BotSideBridge, schedule
 from services import bot_variables
-from services.bot_grok import GrokSettings
+from services.bot_connections import ConnectionStore
+from services.bot_presets import PresetLibrary
 
 log = logging.getLogger("chatbot")
 
@@ -47,9 +51,9 @@ class BotPromptBridge(BotSideBridge):
         return self._chat_bridge().service.prompts
 
     @property
-    def _settings(self) -> GrokSettings:
-        """Read from the CONFIG: the connection outlives any one transport."""
-        return GrokSettings(self.ctx.config)
+    def _presets(self) -> PresetLibrary:
+        """The saved wordings of the templates."""
+        return PresetLibrary(self.ctx.config)
 
     # ── templates ────────────────────────────────────────────────
     @Slot(result=str)
@@ -72,11 +76,12 @@ class BotPromptBridge(BotSideBridge):
             self.bot_prompts_changed.emit(self.bot_get_prompts())
         return reset
 
-    @Slot(str, str, str)
-    def bot_preview_prompt(self, req_id, nick, template_id):
-        """Exactly what would be sent to Grok for this person, right now."""
+    @Slot(str, str, str, str)
+    def bot_preview_prompt(self, req_id, nick, template_id, scope):
+        """Exactly what would be sent for this person, right now."""
         owner = self._chat_bridge()
-        schedule(owner, req_id, owner.service.preview(nick, template_id))
+        schedule(owner, req_id,
+                 owner.service.preview(nick, template_id, scope))
 
     # ── the variable library ─────────────────────────────────────
     @Slot(result=str)
@@ -97,13 +102,39 @@ class BotPromptBridge(BotSideBridge):
         """
         return json.dumps(bot_variables.validate(text), ensure_ascii=False)
 
-    # ── connection ───────────────────────────────────────────────
-    @Slot(result=str)
-    def bot_connection(self):
-        """Whether a key is set, and the model — never the key itself."""
-        return json.dumps(self._settings.state(), ensure_ascii=False)
+    # ── presets ──────────────────────────────────────────────────
+    @Slot(str, result=str)
+    def bot_get_presets(self, template_id):
+        """Every saved preset for one template."""
+        return json.dumps(self._presets.for_template(template_id),
+                          ensure_ascii=False)
 
-    @Slot(str, str, result=bool)
-    def bot_save_connection(self, api_key, model):
-        """Store the active provider's API key / model."""
-        return bool(self._settings.save(api_key, model))
+    @Slot(str, str, str, str, result=str)
+    def bot_save_preset(self, template_id, title, text, ident):
+        """Create a preset, or update `ident`. Returns the id ("" = refused)."""
+        return str(self._presets.save(template_id, title, text, ident))
+
+    @Slot(str, result=bool)
+    def bot_delete_preset(self, ident):
+        """Delete one preset. Touches no connection and no API key (I-30)."""
+        return bool(self._presets.delete(ident))
+
+    # ── which connection runs the prompt ─────────────────────────
+    @Slot(result=str)
+    def bot_prompt_connections(self):
+        """The connections the editor's dropdown offers, and the active one.
+
+        Read-only here: configuring one is the AI Connections window's job.
+        An unusable connection is listed WITH its problem rather than
+        hidden, so choosing it explains itself instead of doing nothing.
+        """
+        store = ConnectionStore(self.ctx.config)
+        active = store.active()
+        return json.dumps({"active": active.id if active else "",
+                           "connections": [c.state() for c in store.all()]},
+                          ensure_ascii=False)
+
+    @Slot(str, result=bool)
+    def bot_use_connection_for_prompts(self, ident):
+        """Run prompts through this connection from now on."""
+        return bool(ConnectionStore(self.ctx.config).use(ident))
