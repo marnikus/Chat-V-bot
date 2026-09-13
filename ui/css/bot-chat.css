@@ -140,39 +140,183 @@
   color: var(--muted, #8a8f98);
 }
 
-/* ── AI provider settings dialog ──────────────────────────────── */
+/* ── "Choose AI connection" popup ─────────────────────────────── */
 /* An anchored popup, not a modal: `.layout-menu` (in sash-layout.css) already
-   supplies the fixed position, dark panel, border, radius and shadow that the
-   Grid view / Bookmarks menu uses. Only the width differs — the connection
-   form needs more room than a list of layouts. */
-.bot-settings-backdrop { width: min(560px, 92vw); padding: 0; }
+   supplies the fixed position, dark panel, border, radius and shadow the
+   Grid view / Bookmarks menu uses, so this popup speaks the same visual
+   language by inheriting it rather than by re-describing it. Only the width
+   differs — a two-column master/detail needs more room than a layout list. */
+.bot-settings-backdrop { width: min(760px, 95vw); padding: 0; }
 .bot-settings-backdrop.hidden { display: none; }
 .bot-settings {
-  max-height: 78vh; overflow: auto; padding: 10px 12px;
+  display: flex; flex-direction: column;
+  max-height: 82vh; overflow: hidden;
 }
-.bot-settings h3 { display: flex; align-items: center; margin: 0 0 8px; }
-.bot-settings-body { display: flex; gap: 10px; }
+
+/* one button, three semantic colours
+   ----------------------------------
+   Every control in this popup is the same component: identical height,
+   radius, padding, font and focus ring, so a row of buttons reads as one
+   family and only COLOUR carries meaning (primary = commits, ghost =
+   reversible, danger = destroys). The older .btn-* classes elsewhere in the
+   app are deliberately left alone — restyling the whole app was not asked
+   for. */
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px;
+  font-size: var(--font-size-sm); font-weight: 500; line-height: 1;
+  border: 1px solid transparent; cursor: pointer;
+  background: transparent; color: var(--text-primary);
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
+}
+.ui-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ui-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ui-btn-ico { font-size: 14px; line-height: 1; }
+
+.ui-btn--primary {
+  background: var(--accent); color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.ui-btn--primary:hover:not(:disabled) { filter: brightness(1.1); }
+.ui-btn--ghost {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+.ui-btn--ghost:hover:not(:disabled) { background: var(--bg-card-hover); }
+.ui-btn--danger { background: transparent; color: var(--red); }
+.ui-btn--danger:hover:not(:disabled) {
+  background: var(--red-dim); border-color: var(--red);
+}
+.ui-btn--icon { width: 28px; padding: 0; font-size: 13px; }
+.ui-btn--block { width: 100%; }
+
+/* header */
+.bot-settings-head {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
+}
+.bot-settings-head h3 { margin: 0; font-size: 14px; }
+.bot-settings-sub {
+  margin: 3px 0 0; font-size: var(--font-size-xs); color: var(--text-muted);
+}
+.bot-settings-head .ui-btn { margin-left: auto; }
+
+/* body: fixed rail + fluid detail */
+.bot-settings-body {
+  display: grid; grid-template-columns: 210px 1fr;
+  flex: 1 1 auto; min-height: 0;
+}
+
+/* LEFT rail — darker than the detail pane so the eye reads it as the
+   index and the right side as the subject. */
+.bot-conn-rail {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; overflow: auto;
+  background: var(--bg-header);
+  border-right: 1px solid var(--border);
+}
+.bot-rail-head {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bot-rail-count { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .bot-provider-list {
-  display: flex; flex-direction: column; gap: 4px; min-width: 150px;
+  display: flex; flex-direction: column; gap: 4px;
+  flex: 1 1 auto; min-height: 0;
 }
 .bot-provider {
-  display: flex; flex-direction: column; gap: 1px; padding: 5px 7px;
+  display: flex; flex-direction: column; gap: 2px; padding: 7px 9px;
   cursor: pointer; text-align: left; font: inherit; color: inherit;
-  border: 1px solid var(--border, #2c2f36); border-radius: 5px;
-  background: var(--panel-2, #1b1e24);
+  border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg-card);
 }
-.bot-provider.selected { border-color: var(--accent, #4c8dff); }
-.bot-provider.active { background: rgba(76, 141, 255, .14); }
-.bot-provider-name { font-weight: 600; }
-.bot-provider-tag { font-size: 10px; color: var(--muted, #8a8f98); }
+.bot-provider:hover { background: var(--bg-card-hover); }
+/* "viewed" is the row the form is showing — NOT a commitment. It gets the
+   strong blue-violet fill and a visible border; "active" (the connection
+   prompts really run on) is marked by its tag instead, so the two states
+   can never be mistaken for one another. */
+.bot-provider.viewed {
+  background: var(--accent); border-color: var(--accent-hover);
+  color: var(--text-on-accent);
+}
+.bot-provider.viewed .bot-provider-tag { color: rgba(255, 255, 255, .85); }
+.bot-provider.error:not(.viewed) { border-color: var(--red); }
+.bot-provider:disabled { opacity: .45; cursor: not-allowed; }
+.bot-provider-name {
+  display: flex; align-items: center; gap: 5px; font-weight: 600;
+}
+.bot-provider-tag {
+  font-size: 10px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* status dots — semantic, never colour alone: each is paired with words */
+.bot-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  display: inline-block; background: var(--text-muted);
+}
+.bot-dot.ok { background: var(--green); }
+.bot-dot.warn { background: var(--yellow); }
+.bot-dot.bad { background: var(--red); }
+
+/* RIGHT detail pane */
+.bot-conn-detail {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; overflow: auto;
+}
+.bot-detail-head { display: flex; align-items: center; gap: 8px; }
+.bot-detail-head h4 {
+  margin: 0; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.bot-ready {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  font-size: var(--font-size-xs); color: var(--text-muted); white-space: nowrap;
+}
+
+/* preset card */
+.bot-preset-card {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 10px; border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-header);
+}
+.bot-preset-head {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bot-preset-options { display: flex; flex-wrap: wrap; gap: 5px; }
+.bot-preset-opt {
+  padding: 4px 10px; border-radius: 999px; cursor: pointer; font: inherit;
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-primary);
+}
+.bot-preset-opt:hover { background: var(--bg-card-hover); }
+.bot-preset-opt.chosen { border-color: var(--accent); color: var(--accent); }
+.bot-preset-opt.applied { background: var(--accent); color: var(--text-on-accent); }
+.bot-preset-desc { margin: 0; font-size: var(--font-size-xs); color: var(--text-muted); }
+.bot-preset-card .bot-hint { margin: 0; }
+
+/* form — a predictable two-column grid, so labels line up down the pane */
 .bot-provider-form {
-  display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px;
 }
-.bot-provider-form label { font-size: 11px; color: var(--muted, #8a8f98); }
+.bot-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bot-field--wide { grid-column: 1 / -1; }
+.bot-provider-form label { font-size: 11px; color: var(--text-muted); }
 .bot-provider-form input { width: 100%; }
+.bot-key-row { display: flex; gap: 5px; }
+.bot-key-row input { flex: 1 1 auto; min-width: 0; }
+
+/* footer — always visible while the detail pane scrolls */
 .bot-settings-actions {
-  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 10px 14px; border-top: 1px solid var(--border);
+  background: var(--bg-header);
 }
+.bot-settings-actions .bot-status { margin: 0 4px 0 0; }
 
 /* ── history scope toggle ─────────────────────────────────────── */
 .bot-scope {

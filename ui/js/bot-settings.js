@@ -1,28 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════
-   bot-settings.js — the AI Connections window
+   bot-settings.js — the "Choose AI connection" popup
 
-   An anchored popup under the ⚙ button in the Grok Prompt Editor title
-   bar — same placement and same outside-click dismissal as the Grid view /
-   Bookmarks menu, because that is the dropdown pattern this app already has.
+   An anchored popup under the ⚙ in the Grok Prompt Editor title bar —
+   same placement and outside-click dismissal as the Grid view / Bookmarks
+   menu. It lists the user's NAMED connections (several may share one
+   provider) and holds each one's key, model and endpoint. This is the ONLY
+   place connection details live AND the only place the active one is
+   chosen, so "which AI runs this?" has one answer and one home.
 
-   It lists the user's NAMED connections (several may share one provider)
-   and holds each one's key, model and endpoint. This is the ONLY place
-   connection details live AND the only place the active one is chosen:
-   the Prompt Editor holds prompt controls and nothing else, so "which AI
-   runs this?" has exactly one answer and one home.
+   BROWSING IS NOT CHOOSING. Two pieces of state, deliberately apart:
 
-   Every provider always has a row — the store seeds a keyless one — so
-   adding a Google key is something the user can reach on a fresh install.
-   An unusable connection is listed WITH its problem, never hidden.
+     viewed  — the connection the form is showing. Clicking a row moves
+               this and nothing else. No save, no activation, no close.
+     active  — the connection prompts actually run on. Only `select()`
+               moves it, and `select()` is the only action that closes.
 
-   The key is write-only here. The backend reports only a MASKED form
-   ("xai-…mnop"), so a stored secret is never echoed back into the DOM
-   — which also means a blank key field on Save means "keep the one
-   you have", not "erase it".
+   Conflating those two was the reported bug: a click meant to inspect a
+   connection was read by the app as a commitment to it.
+
+   Applying a preset is likewise not choosing. `applyPreset()` copies the
+   provider's recommended model and endpoint into the visible fields and
+   stops there — the popup stays open and every value stays editable, so
+   the user can see and correct what was written before committing.
+
+   The key is write-only. The backend reports only a MASKED form, so a
+   stored secret is never echoed into the DOM — which also means a blank
+   key field means "keep the one you have", not "erase it".
 
    ideal-size: 314 lines reason=one window = one controller, at the top of
-   RULE 18's band. The separable part already left: the dropdown itself is
-   `dark-select.js`, shared with the Prompt Editor's preset chooser.
+   RULE 18's band and level with bot-chat.js. The drawing half is
+   bot-connection-view.js and the dropdown is dark-select.js.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -31,7 +38,11 @@ const BotSettings = {
   connections: [],
   providers: [],
   active: '',
-  selected: '',
+  viewed: '',
+  testing: false,
+  dirty: false,
+  chosenPreset: '',
+  appliedPreset: '',
   _seq: 0,
   _els: {},
 
@@ -39,15 +50,18 @@ const BotSettings = {
     const $ = (id) => document.getElementById(id);
     this._els = {
       backdrop: $('botSettingsBackdrop'), list: $('botProviderList'),
-      openFromEditor: $('botPromptSettingsBtn'),
+      openFromEditor: $('botPromptSettingsBtn'), count: $('botConnCount'),
       key: $('botProviderKey'), keyState: $('botProviderKeyState'),
       model: $('botProviderModel'), url: $('botProviderUrl'),
       status: $('botSettingsStatus'), open: $('botSettingsBtn'),
-      save: $('botSettingsSaveBtn'), cancel: $('botSettingsCancelBtn'),
-      close: $('botSettingsCloseBtn'), test: $('botTestConnBtn'),
-      title: $('botConnTitle'), provider: $('botConnProvider'),
-      add: $('botConnNewBtn'), remove: $('botConnDeleteBtn'),
-      use: $('botConnUseBtn'),
+      cancel: $('botSettingsCancelBtn'), close: $('botSettingsCloseBtn'),
+      test: $('botTestConnBtn'), title: $('botConnTitle'),
+      provider: $('botConnProvider'), add: $('botConnNewBtn'),
+      remove: $('botConnDeleteBtn'), select: $('botConnSelectBtn'),
+      reveal: $('botKeyRevealBtn'), detailTitle: $('botDetailTitle'),
+      dot: $('botConnDot'), readyText: $('botConnReadyText'),
+      presetOptions: $('botPresetOptions'), presetDesc: $('botPresetDesc'),
+      apply: $('botApplyPresetBtn'),
     };
     if (!this._els.backdrop) return;
     this._providerBox = DarkSelect.attach(this._els.provider, {
@@ -57,22 +71,26 @@ const BotSettings = {
     this._wire();
   },
 
-  /** The provider decides the default model and endpoint, so show them
-   *  the moment it changes rather than after a save the user cannot judge. */
-  _onProviderPicked() {
-    const spec = this.providers.filter(
-      (p) => p.id === this.providerId())[0];
-    if (!spec) return;
-    if (this._els.model && !this._els.model.value)
-      this._els.model.value = spec.model || '';
-    if (this._els.url && !this._els.url.value)
-      this._els.url.value = spec.url || '';
-    this.setStatus('Provider: ' + spec.title);
+  /* ── state helpers ─────────────────────────────────────────── */
+
+  current() {
+    return this.connections.find((c) => c.id === this.viewed) || null;
   },
 
   providerId() {
     return this._providerBox ? this._providerBox.value : '';
   },
+
+  presetsFor(providerId) {
+    return BotConnView.presetsFor(this.providers, providerId);
+  },
+
+  chosen() {
+    return this.presetsFor(this.providerId())
+      .filter((p) => p.id === this.chosenPreset)[0] || null;
+  },
+
+  /* ── wiring ────────────────────────────────────────────────── */
 
   _wire() {
     const on = (el, fn) => { if (el) el.addEventListener('click', fn); };
@@ -85,23 +103,56 @@ const BotSettings = {
     };
     opener(this._els.open);
     opener(this._els.openFromEditor);
-    on(this._els.use, () => this.useForPrompts());
+    on(this._els.select, () => this.select());
     on(this._els.close, () => this.close());
     on(this._els.cancel, () => this.close());
-    on(this._els.save, () => this.save());
     on(this._els.test, () => this.test());
     on(this._els.add, () => this.addNew());
     on(this._els.remove, () => this.remove());
-    if (this._els.list) {
-      this._els.list.addEventListener('click', (event) => {
-        const row = event.target && event.target.closest
-          ? event.target.closest('.bot-provider') : null;
-        if (row && row.dataset.provider) this.select(row.dataset.provider);
-      });
-    }
+    on(this._els.apply, () => this.applyPreset());
+    on(this._els.reveal, () => this.toggleKey());
+    this._wireLists();
+    this._wireDirty();
   },
 
-  /** Open under the ⚙ that was clicked, like the Grid view / Bookmarks menu. */
+  _wireLists() {
+    const pick = (host, sel, attr, fn) => {
+      if (!host) return;
+      host.addEventListener('click', (event) => {
+        const hit = event.target && event.target.closest
+          ? event.target.closest(sel) : null;
+        if (hit && hit.dataset[attr]) fn(hit.dataset[attr]);
+      });
+    };
+    pick(this._els.list, '.bot-provider', 'provider',
+         (id) => this.view(id));
+    pick(this._els.presetOptions, '.bot-preset-opt', 'preset',
+         (id) => this.choosePreset(id));
+  },
+
+  /** Typing marks the form dirty so Cancel can warn — and only then. */
+  _wireDirty() {
+    [this._els.title, this._els.key, this._els.model, this._els.url]
+      .forEach((el) => {
+        if (el) el.addEventListener('input', () => { this.dirty = true; });
+      });
+  },
+
+  /** The provider decides the default model and endpoint, so show the
+   *  preset for the new provider the moment it changes. */
+  _onProviderPicked() {
+    const spec = this.providers.filter(
+      (p) => p.id === this.providerId())[0];
+    if (!spec) return;
+    this.dirty = true;
+    this.chosenPreset = '';
+    this.appliedPreset = '';
+    this._renderPresets();
+    this.setStatus('Provider: ' + spec.title);
+  },
+
+  /* ── opening and closing ───────────────────────────────────── */
+
   open(anchor) {
     if (!this._els.backdrop) return;
     this._els.backdrop.classList.remove('hidden');
@@ -110,9 +161,11 @@ const BotSettings = {
     this.load();
   },
 
+  /** Closing NEVER changes which connection is active. */
   close() {
     if (this._els.backdrop) this._els.backdrop.classList.add('hidden');
     if (this._els.key) this._els.key.value = '';   // never leave a typed key
+    this.dirty = false;
     if (typeof DarkSelect !== 'undefined') DarkSelect.closeAll(null);
   },
 
@@ -125,28 +178,11 @@ const BotSettings = {
       !this._els.backdrop.classList.contains('hidden');
   },
 
-  /** Same arithmetic the layout menu uses: right-aligned, clamped on screen. */
   _place(anchor) {
-    const panel = this._els.backdrop;
-    if (!anchor || !panel || !anchor.getBoundingClientRect) return;
-    const at = anchor.getBoundingClientRect();
-    const width = panel.offsetWidth || 520;
-    const left = Math.max(8, Math.min(at.right - width,
-                                      window.innerWidth - width - 8));
-    panel.style.left = left + 'px';
-    panel.style.top = (at.bottom + 6) + 'px';
+    BotConnView.place(this._els.backdrop, anchor);
   },
 
-  /** Run prompts through the selected connection from now on. */
-  useForPrompts() {
-    if (!this.selected) { this.setStatus('Select a connection first.'); return; }
-    if (!App.bridge || !App.bridge.bot_use_connection) return;
-    App.bridge.bot_use_connection(this.selected, (ok) => {
-      this.setStatus(ok ? 'Prompts now run on this connection.'
-                        : 'Could not switch connection.');
-      this.load();
-    });
-  },
+  /* ── loading ───────────────────────────────────────────────── */
 
   load() {
     if (!App.bridge || !App.bridge.bot_connections) return;
@@ -159,121 +195,169 @@ const BotSettings = {
     this.connections = (data && data.connections) || [];
     this.providers = (data && data.providers) || [];
     this.active = (data && data.active) || '';
-    if (!this.selected ||
-        !this.connections.some((c) => c.id === this.selected)) {
-      this.selected = this.active ||
+    if (!this.viewed ||
+        !this.connections.some((c) => c.id === this.viewed)) {
+      this.viewed = this.active ||
         (this.connections[0] ? this.connections[0].id : '');
     }
     this._renderProviderChoices();
-    this._renderList();
-    this._renderForm();
+    this._render();
   },
 
   _renderProviderChoices() {
     if (!this._providerBox) return;
-    const current = this._current() || {};
+    const current = this.current() || {};
     this._providerBox.setOptions(this.providers.map((spec) => ({
       value: spec.id, title: spec.title, sub: spec.model || '',
     })), current.provider || this.providerId());
   },
 
-  _renderList() {
-    const host = this._els.list;
-    if (!host) return;
-    host.textContent = '';
-    this.connections.forEach((entry) => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'bot-provider' +
-        (entry.id === this.selected ? ' selected' : '') +
-        (entry.id === this.active ? ' active' : '');
-      row.dataset.provider = entry.id;
-      const name = document.createElement('span');
-      name.className = 'bot-provider-name';
-      name.textContent = entry.title;
-      row.appendChild(name);
-      const tag = document.createElement('span');
-      tag.className = 'bot-provider-tag';
-      tag.textContent = entry.problem ? '⚠ ' + entry.problem
-        : (entry.id === this.active ? 'in use · ' + entry.model : entry.model);
-      row.appendChild(tag);
-      host.appendChild(row);
-    });
+  _render() {
+    BotConnView.rows(this._els.list, this);
+    if (this._els.count)
+      this._els.count.textContent = this.connections.length + ' saved';
+    this._renderForm();
+    this._renderPresets();
+    BotConnView.footer(this._els, this);
   },
 
-  _current() {
-    return this.connections.find((c) => c.id === this.selected) || null;
+  _renderPresets() {
+    BotConnView.presets(this._els, this.presetsFor(this.providerId()),
+                        this.chosen(), this.appliedPreset);
   },
 
   _renderForm() {
-    const entry = this._current() || {};
-    if (this._els.key) this._els.key.value = '';
-    if (this._els.title) this._els.title.value = entry.title || '';
+    const entry = this.current() || {};
+    BotConnView.fill(this._els, entry);
     if (this._providerBox && entry.provider)
       this._providerBox.select(entry.provider);
-    if (this._els.model) this._els.model.value = entry.model || '';
-    if (this._els.url) this._els.url.value = entry.url || '';
-    if (this._els.keyState) {
-      this._els.keyState.textContent = entry.has_key
-        ? 'A key is saved (' + (entry.masked || 'set') +
-          ') — leave blank to keep it'
-        : 'No key saved yet';
-    }
+  },
+
+  /* ── browsing (never commits) ──────────────────────────────── */
+
+  /** Load a connection into the form. Does NOT activate it, does NOT
+   *  save, does NOT close — the whole point of the redesign. */
+  view(ident) {
+    if (this.dirty && !this._confirmDiscard()) return;
+    this.viewed = ident;
+    this.dirty = false;
+    this.chosenPreset = '';
+    this.appliedPreset = '';
+    this._render();
+    this.setStatus('');
+  },
+
+  _confirmDiscard() {
+    if (typeof window === 'undefined' || !window.confirm) return true;
+    return window.confirm('Discard the unsaved changes to this connection?');
   },
 
   /** Start a blank form for an additional connection. */
   addNew() {
-    this.selected = '';
-    this._renderList();
-    this._renderForm();
+    this.viewed = '';
+    this.dirty = false;
+    this.chosenPreset = '';
+    this.appliedPreset = '';
+    this._render();
     if (this._els.title) this._els.title.value = '';
     this.setStatus('New connection — name it, pick a provider, add a key.');
   },
 
-  remove() {
-    if (!this.selected || !App.bridge || !App.bridge.bot_delete_connection) {
-      this.setStatus('Select a connection to delete.');
-      return;
-    }
-    App.bridge.bot_delete_connection(this.selected, (gone) => {
-      this.setStatus(gone ? 'Connection deleted.' : 'Could not delete it.');
-      if (gone) this.selected = '';
-      this.load();
-    });
+  toggleKey() {
+    const el = this._els.key;
+    if (!el) return;
+    el.type = el.type === 'password' ? 'text' : 'password';
   },
 
-  select(provider) {
-    this.selected = provider;
-    this._renderList();
-    this._renderForm();
-    this.setStatus('');
+  /* ── presets ───────────────────────────────────────────────── */
+
+  /** Highlight and describe a preset. Writes nothing. */
+  choosePreset(ident) {
+    this.chosenPreset = ident;
+    this._renderPresets();
+  },
+
+  /** Copy the preset's values into the visible fields. The popup stays
+   *  open and the fields stay editable: applying is not selecting. */
+  applyPreset() {
+    const preset = this.chosen();
+    if (!preset) { this.setStatus('Choose a preset first.'); return; }
+    if (this._els.model) this._els.model.value = preset.model;
+    if (this._els.url) this._els.url.value = preset.url;
+    this.dirty = true;
+    this.appliedPreset = preset.id;
+    this._renderPresets();
+    this.setStatus('Preset applied to the fields — review, then Select.');
+  },
+
+  /* ── committing ────────────────────────────────────────────── */
+
+  _fields() {
+    return BotConnView.read(this._els, this.providerId());
   },
 
   /** Save this connection. Never touches another connection, and never
    *  touches a prompt preset or template. */
-  save() {
+  save(then) {
     if (!App.bridge || !App.bridge.bot_save_connection) return;
-    const val = (el) => (el ? String(el.value || '') : '');
-    if (!val(this._els.title)) { this.setStatus('Give it a name first.'); return; }
+    const fields = this._fields();
+    if (!fields.title) { this.setStatus('Give it a name first.'); return; }
     App.bridge.bot_save_connection(
-      this.selected, JSON.stringify({
-        title: val(this._els.title), provider: this.providerId(),
-        api_key: val(this._els.key), model: val(this._els.model),
-        url: val(this._els.url) }),
-      (ident) => {
+      this.viewed, JSON.stringify(fields), (ident) => {
         this.setStatus(ident ? 'Saved.' : 'Could not save.');
-        if (ident) { this.selected = ident; this.load(); }
+        if (!ident) return;
+        this.viewed = ident;
+        this.dirty = false;
+        this.load();
+        if (then) then(ident);
       });
   },
 
-  /** One real request through the real transport — see the bridge. */
+  /** The ONLY action that confirms and closes: save what is on screen,
+   *  make it the connection prompts run on, then close. Saving first
+   *  matters — activating an unsaved edit would run prompts on values
+   *  the user cannot see. */
+  select() {
+    this.save((ident) => {
+      if (!App.bridge.bot_use_connection) { this.close(); return; }
+      App.bridge.bot_use_connection(ident, (ok) => {
+        if (!ok) { this.setStatus('Could not switch connection.'); return; }
+        this.active = ident;
+        this.close();
+      });
+    });
+  },
+
+  remove() {
+    if (!this.viewed || !App.bridge || !App.bridge.bot_delete_connection) {
+      this.setStatus('Select a connection to delete.');
+      return;
+    }
+    App.bridge.bot_delete_connection(this.viewed, (gone) => {
+      this.setStatus(gone ? 'Connection deleted.' : 'Could not delete it.');
+      if (gone) this.viewed = '';
+      this.load();
+    });
+  },
+
+  /* ── testing (never closes, never activates) ───────────────── */
+
   test() {
-    if (!this.selected || !App.bridge || !App.bridge.bot_test_connection) {
+    if (!this.viewed || !App.bridge || !App.bridge.bot_test_connection) {
       this.setStatus('Save the connection before testing it.');
       return;
     }
+    this.testing = true;
+    BotConnView.footer(this._els, this);
     this.setStatus('Testing …');
-    App.bridge.bot_test_connection('bot-test-' + (++this._seq), this.selected);
+    App.bridge.bot_test_connection('bot-test-' + (++this._seq), this.viewed);
+  },
+
+  _testDone(text) {
+    this.testing = false;
+    BotConnView.footer(this._els, this);
+    this.setStatus(text);
+    return true;
   },
 
   /** The test's answer arrives on the Bot Chat bridge, keyed by req_id. */
@@ -281,17 +365,15 @@ const BotSettings = {
     if (String(reqId || '').indexOf('bot-test-') !== 0) return false;
     let payload = null;
     try { payload = JSON.parse(json || 'null'); } catch (err) { payload = null; }
-    if (!payload) return this.setStatus('The test gave no answer.') || true;
-    this.setStatus(payload.ok
+    if (!payload) return this._testDone('The test gave no answer.');
+    return this._testDone(payload.ok
       ? 'Connection works — ' + (payload.detail || 'ok')
       : 'Failed: ' + (payload.detail || payload.code || 'unknown error'));
-    return true;
   },
 
   onError(reqId, code, detail) {
     if (String(reqId || '').indexOf('bot-test-') !== 0) return false;
-    this.setStatus('Failed: ' + (detail || code || 'unknown error'));
-    return true;
+    return this._testDone('Failed: ' + (detail || code || 'unknown error'));
   },
 
   setStatus(text) {

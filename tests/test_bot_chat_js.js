@@ -315,6 +315,7 @@ global.HistoryModel = require('../ui/js/history-model.js');
 global.HistoryView = load('js/history-view.js', 'HistoryView');
 global.DarkSelect = load('js/dark-select.js', 'DarkSelect');
 global.BotMessages = load('js/bot-messages.js', 'BotMessages');
+global.BotConnView = load('js/bot-connection-view.js', 'BotConnView');
 global.BotSettings = load('js/bot-settings.js', 'BotSettings');
 global.BotChat = load('js/bot-chat.js', 'BotChat');
 global.BotPrompt = load('js/bot-prompt.js', 'BotPrompt');
@@ -856,6 +857,14 @@ function openSettings() {
   if (!BotSettings.isOpen()) $('botPromptSettingsBtn').fire('click');
 }
 
+// the DOM stub does not bubble, so dispatch on the delegating host the
+// way a real bubbled click would reach it
+function clickPreset(n) {
+  const opt = findAll($('botPresetOptions'), '.bot-preset-opt')[n || 0];
+  $('botPresetOptions').fire('click', { target: opt });
+  return opt;
+}
+
 function clickConnection(id) {
   const row = findAll($('botProviderList'), '.bot-provider')
     .find((r) => r.dataset.provider === id);
@@ -924,7 +933,7 @@ t('the active connection is marked as in use', () => {
   const rows = findAll($('botProviderList'), '.bot-provider');
   const row = rows.find((r) => r.dataset.provider === CONN_STATE.active);
   ok(row.classList.contains('active'));
-  ok(/in use/.test(row.textContent));
+  ok(/In use/.test(row.textContent));
 });
 
 t('a stored key is shown masked and NEVER filled into the field', () => {
@@ -944,34 +953,115 @@ t('the provider chooser is a dark menu listing every provider', () => {
      'a native select cannot be themed — that was the reported bug');
 });
 
-t('picking a provider fills in its default model and endpoint', () => {
+t('picking a provider offers that provider\'s preset', () => {
   openSettings();
   BotSettings.addNew();
   const google = providerRows().find((r) => r.dataset.value === 'google');
   google.fire('click');
   eq(BotSettings.providerId(), 'google');
-  ok(/gemini/.test($('botProviderModel').value),
-     'the form must reveal what this provider will actually use');
+  const opts = findAll($('botPresetOptions'), '.bot-preset-opt');
+  ok(opts.length >= 1, 'the provider must offer a recommended preset');
+  ok(/gemini/.test($('botPresetDesc').textContent + opts[0].textContent) ||
+     /Google/.test(opts[0].textContent));
 });
 
-t('"use for prompts" routes prompts through the selected connection', () => {
+t('Select routes prompts through the viewed connection and closes', () => {
   openSettings();
   clickConnection('c-grok-main');
-  $('botConnUseBtn').fire('click');
+  $('botConnSelectBtn').fire('click');
   eq(lastCall('bot_use_connection').args[0], 'c-grok-main');
-  ok(/prompts now run/i.test($('botSettingsStatus').textContent));
+  ok(!BotSettings.isOpen(), 'Select is the action that confirms and closes');
 });
 
-t('"use for prompts" with nothing selected says so instead of guessing', () => {
+t('Select SAVES the visible edits before it activates', () => {
+  /* Activating an unsaved edit would run prompts on values the user
+     cannot see, so the order is save-then-use, not use-then-save. */
   openSettings();
-  BotSettings.selected = '';
-  const before = calls.filter((c) => c.name === 'bot_use_connection').length;
-  $('botConnUseBtn').fire('click');
-  eq(calls.filter((c) => c.name === 'bot_use_connection').length, before);
-  ok(/select a connection/i.test($('botSettingsStatus').textContent));
+  clickConnection('c-grok-main');
+  $('botProviderModel').value = 'grok-4.3-edited';
+  const before = calls.length;
+  $('botConnSelectBtn').fire('click');
+  const after = calls.slice(before).map((c) => c.name);
+  ok(after.indexOf('bot_save_connection') >= 0, 'it must save');
+  ok(after.indexOf('bot_save_connection') < after.indexOf('bot_use_connection'),
+     'the save must happen BEFORE the activation');
+  eq(lastCall('bot_save_connection').args[1].model, 'grok-4.3-edited');
 });
 
-t('selecting a connection shows ITS model and endpoint', () => {
+t('browsing rows never activates or closes anything', () => {
+  /* The reported bug: clicking a connection was read as choosing it.
+     A click may only load the row into the form. */
+  openSettings();
+  const before = calls.length;
+  clickConnection('c-gem');
+  clickConnection('c-grok-cheap');
+  const made = calls.slice(before).map((c) => c.name);
+  eq(made.filter((n) => n === 'bot_use_connection').length, 0,
+     'browsing must not activate');
+  eq(made.filter((n) => n === 'bot_save_connection').length, 0,
+     'browsing must not save');
+  ok(BotSettings.isOpen(), 'browsing must not close the popup');
+  eq(BotSettings.viewed, 'c-grok-cheap');
+});
+
+t('Cancel closes without changing the active connection', () => {
+  openSettings();
+  const wasActive = BotSettings.active;
+  clickConnection('c-gem');
+  const before = calls.length;
+  $('botSettingsCancelBtn').fire('click');
+  eq(calls.slice(before).filter(
+    (c) => c.name === 'bot_use_connection').length, 0);
+  eq(BotSettings.active, wasActive);
+  ok(!BotSettings.isOpen());
+});
+
+t('Apply Preset Settings fills the fields and keeps the popup OPEN', () => {
+  openSettings();
+  BotSettings.addNew();
+  providerRows().find((r) => r.dataset.value === 'google').fire('click');
+  clickPreset(0);
+  ok(!$('botApplyPresetBtn').disabled, 'choosing a preset enables Apply');
+  const before = calls.length;
+  $('botApplyPresetBtn').fire('click');
+  ok(/gemini/.test($('botProviderModel').value),
+     'Apply must write the preset into the visible field');
+  ok(BotSettings.isOpen(), 'applying a preset must not close the popup');
+  eq(calls.slice(before).filter(
+    (c) => c.name === 'bot_use_connection').length, 0,
+     'applying a preset is not selecting a connection');
+});
+
+t('choosing a preset alone writes nothing', () => {
+  openSettings();
+  BotSettings.addNew();
+  providerRows().find((r) => r.dataset.value === 'google').fire('click');
+  $('botProviderModel').value = 'hand-typed';
+  clickPreset(0);
+  eq($('botProviderModel').value, 'hand-typed',
+     'selecting a preset only describes it; Apply is what writes');
+});
+
+t('Apply is disabled until a preset is chosen', () => {
+  openSettings();
+  BotSettings.addNew();
+  ok($('botApplyPresetBtn').disabled);
+});
+
+t('the provider preset is NOT a prompt preset', () => {
+  /* Two different libraries share the word. Applying a connection preset
+     must never call the prompt-preset bridge. */
+  openSettings();
+  BotSettings.addNew();
+  providerRows().find((r) => r.dataset.value === 'google').fire('click');
+  clickPreset(0);
+  const before = calls.length;
+  $('botApplyPresetBtn').fire('click');
+  eq(calls.slice(before).filter(
+    (c) => /preset/.test(c.name)).length, 0);
+});
+
+t('viewing a connection shows ITS model and endpoint', () => {
   openSettings();
   clickConnection('c-gem');
   eq($('botProviderModel').value, 'gemini-2.0-flash');
@@ -980,11 +1070,11 @@ t('selecting a connection shows ITS model and endpoint', () => {
   eq($('botProviderModel').value, 'grok-2-mini');
 });
 
-t('saving sends the selected connection its own fields', () => {
+t('saving sends the viewed connection its own fields', () => {
   openSettings();
   clickConnection('c-gem');
   $('botProviderKey').value = 'AIza-typed-key';
-  $('botSettingsSaveBtn').fire('click');
+  $('botConnSelectBtn').fire('click');
   const call = lastCall('bot_save_connection');
   eq(call.args[0], 'c-gem');
   eq(call.args[1].api_key, 'AIza-typed-key');
@@ -997,7 +1087,7 @@ t('a connection must be named before it can be saved', () => {
   BotSettings.addNew();
   $('botConnTitle').value = '';
   const before = calls.filter((c) => c.name === 'bot_save_connection').length;
-  $('botSettingsSaveBtn').fire('click');
+  $('botConnSelectBtn').fire('click');
   eq(calls.filter((c) => c.name === 'bot_save_connection').length, before);
   ok(/name/i.test($('botSettingsStatus').textContent));
 });
@@ -1007,7 +1097,7 @@ t('+ New starts a blank form without touching the stored ones', () => {
   const before = CONN_STATE.connections.length;
   $('botConnNewBtn').fire('click');
   eq($('botConnTitle').value, '');
-  eq(BotSettings.selected, '');
+  eq(BotSettings.viewed, '');
   eq(CONN_STATE.connections.length, before);
 });
 
