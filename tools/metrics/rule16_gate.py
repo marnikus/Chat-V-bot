@@ -93,7 +93,6 @@ CLONE_BASELINE = frozenset({
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
-    ("bridge/stack_bridge.py", "services/collector_service.py"),
     ("services/history/query.py", "services/undo_service.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
     ("services/run/coordinator.py", "services/run/progress.py"),
@@ -107,6 +106,11 @@ CLONE_BASELINE = frozenset({
     # Same kind of noise as the query/undo_service entry above: no logic copied.
     ("services/db_deletion/flow.py", "services/db_deletion/scan.py"),
 })
+# Step 4 (2026-09-12) removed one stale entry: `("bridge/stack_bridge.py",
+# "services/collector_service.py")` — `collector_service.py` shrank to a
+# 14-line re-export shim, so it no longer shares the import-header window
+# with `stack_bridge.py`. The gate's `clone_stale` ratchet flagged it and the
+# entry is deleted (the baseline may only shrink, never silently rot).
 
 
 # ── measurement ───────────────────────────────────────────────────
