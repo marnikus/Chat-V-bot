@@ -247,5 +247,27 @@ t('a boot answer that arrives after the world opens still fills the table',
     eq(HistoryDb.loading, false, 'the table is ready for the next page');
   });
 
+// 10 — when the boot read FAILS outright (history_error: the world was still
+// closed, the answer was lost), the loader un-sticks and the window re-asks
+// by itself — the list appears with no manual ↻ (bug 2026-09-13).
+t('a failed boot read retries by itself and fills the table', () => {
+  reset();
+  HistoryDb._retries = 0;
+  HistoryDb._retryTimer = null;
+  HistoryDb.reload();                    // the boot request goes out…
+  eq(pages(), 1, 'the boot request went out');
+  HistoryDb.onError('userdb_page');      // …and the backend reports it failed
+  eq(HistoryDb.loading, false, 'the loader is un-stuck for the retry');
+  flushTimers();                         // the retry window passes…
+  eq(pages(), 2, 'the window re-asked by itself');
+  HistoryDb.onPage('u2', JSON.stringify({
+    items: [{ nick: 'Bea', messages: 5, media: 1 }],
+    total: 1, has_more: false, offset: 0,
+  }));
+  eq(HistoryDb.rows.map((r) => r.nick), ['Bea'], 'the row is loaded');
+  ok(byId.userdbBody.children.length >= 1, 'the row is on screen');
+  eq(HistoryDb._retries, 0, 'the good answer resets the budget');
+});
+
 console.log(failures ? 'FAILED ' + failures : 'all good');
 process.exit(failures ? 1 : 0);
