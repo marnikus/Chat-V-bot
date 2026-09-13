@@ -57,18 +57,30 @@ def authors_from_items(items) -> tuple:
     Accepts `MessageRecord`s and the agent's raw dicts — the gate runs on
     whichever shape the caller has to hand.
     """
-    from stores.history_models import MessageRecord      # local: avoid an
-    ins, outs = [], []                                   # import cycle risk
+    ins, outs = [], []
     for item in items or []:
-        if isinstance(item, MessageRecord):
-            direction, nick = item.direction, item.from_nick
-        elif isinstance(item, dict):
-            direction = item.get("dir") or item.get("direction") or "in"
-            nick = item.get("from") or item.get("from_nick") or ""
-        else:
+        pair = _direction_and_nick(item)
+        if pair is None:
             continue
+        direction, nick = pair
         (outs if direction == "out" else ins).append(nick)
     return distinct(ins), distinct(outs)
+
+
+def _direction_and_nick(item):
+    """(direction, nick) for one record, or None if it is neither shape.
+
+    Dicts carry two spellings of each field because the in-page agent and the
+    stored model disagree; `dir`/`from` is the agent's, `direction`/`from_nick`
+    the model's. Direction defaults to "in" — an unmarked message is inbound.
+    """
+    from stores.history_models import MessageRecord      # local: avoid an
+    if isinstance(item, MessageRecord):                  # import cycle risk
+        return item.direction, item.from_nick
+    if isinstance(item, dict):
+        return (item.get("dir") or item.get("direction") or "in",
+                item.get("from") or item.get("from_nick") or "")
+    return None
 
 
 def payload(result) -> list:

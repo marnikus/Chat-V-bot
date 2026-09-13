@@ -35,21 +35,39 @@ class Judge:
         The three modes are separate methods: a seek only looks, a stranger is
         rejected-and-purged, a match is confirmed and announced.
         """
-        for item in (run.snap or {}).get("users", []) or []:
-            nick = (item.get("nick") or "").strip()
-            if not nick:
-                continue
-            is_new = nick not in self.p.known_nicks
-            if is_new:
-                self.p.known_nicks.add(nick)
-                run.new_this_scroll += 1
+        for nick, item in self._named_users(run.snap):
+            is_new = self._register(nick, run)
             if run.seeking:
                 if await self._seek_hit(nick, item, run):
                     return
-                continue
-            if not is_new:
-                continue
-            await self._judge(nick, item, run)
+            elif is_new:
+                await self._judge(nick, item, run)
+
+    @staticmethod
+    def _named_users(snap):
+        """(nick, item) for every user in the snapshot that HAS a nick.
+
+        Tolerates a missing snapshot and a null `users` list — both happen when
+        a scroll races page navigation — and silently drops blank nicks, which
+        are DOM rows mid-render rather than people.
+        """
+        for item in (snap or {}).get("users", []) or []:
+            nick = (item.get("nick") or "").strip()
+            if nick:
+                yield nick, item
+
+    def _register(self, nick: str, run) -> bool:
+        """Record `nick` as seen; True if this scroll is the first sighting.
+
+        Counting happens for seek runs too, even though a seek ignores the
+        result — `new_this_scroll` is what the stall detector reads to decide
+        the list stopped growing, so skipping it here would hang the scroll.
+        """
+        if nick in self.p.known_nicks:
+            return False
+        self.p.known_nicks.add(nick)
+        run.new_this_scroll += 1
+        return True
 
     async def _seek_hit(self, nick: str, item: dict, run) -> bool:
         """Scroll-only mode: is this the person we are hunting for?

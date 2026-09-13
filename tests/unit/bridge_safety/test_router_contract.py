@@ -259,6 +259,33 @@ class TestRouterBuildGuards:
         br = Router()   # presets stays None → legacy import skipped
         assert isinstance(br, Router)
 
+    def test_each_bridge_is_probed_exactly_once(self, monkeypatch):
+        """G6: the build used to call `_meta_members` twice per bridge — once
+        for signals, once for slots — instantiating all ten domain bridges
+        twice at import. The two passes now read one cached capture.
+
+        This pins the count, not just the result, because a duplicate probe is
+        invisible in behaviour: it costs import time and constructs QObjects
+        nobody asked for, and the previous code looked correct.
+        """
+        import bridge.router as router_mod
+
+        calls = []
+        real = router_mod._meta_members
+
+        def counting(cls):
+            calls.append(cls.__name__)
+            return real(cls)
+
+        monkeypatch.setattr(router_mod, "_meta_members", counting)
+        monkeypatch.setattr(router_mod, "BRIDGE_SPECS", {})
+        router_mod._build_router_class()
+
+        assert calls, "the build probed no bridges at all"
+        assert len(calls) == len(set(calls)), (
+            f"a bridge was probed more than once: {sorted(calls)}")
+        assert set(calls) == {c.__name__ for c in router_mod.BRIDGE_CLASSES}
+
     def test_build_rejects_duplicate_signal_names(self, monkeypatch):
         import bridge.router as router_mod
 

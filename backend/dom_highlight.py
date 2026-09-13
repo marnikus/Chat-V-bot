@@ -499,6 +499,21 @@ def _outline_suffix(result: dict) -> str:
     return ""
 
 
+def _unclickable_reason(result) -> str:
+    """Why the probe refused to click, in the user's words.
+
+    Both causes can hold at once and both are reported — "not visible" alone
+    would send someone hunting for a CSS issue when the control is also
+    disabled.
+    """
+    why = []
+    if not result.get("visible"):
+        why.append("not visible (hidden/zero-size)")
+    if result.get("disabled"):
+        why.append("disabled or pointer-events:none")
+    return ", ".join(why) or "not interactive"
+
+
 def interpret_click(result, label: str = "element") -> tuple[str, str]:
     """Turn a CLICK-phase result into a (message, level) pair."""
     if not result:
@@ -507,13 +522,8 @@ def interpret_click(result, label: str = "element") -> tuple[str, str]:
         return f"❌ CLICK failed: {label} — {result['error']}", "error"
     target = result.get("target_desc") or "the found element"
     if not result.get("clickable"):
-        why = []
-        if not result.get("visible"):
-            why.append("not visible (hidden/zero-size)")
-        if result.get("disabled"):
-            why.append("disabled or pointer-events:none")
-        reason = ", ".join(why) or "not interactive"
-        return (f"❌ CLICK failed: {target} is NOT clickable — {reason}", "error")
+        return (f"❌ CLICK failed: {target} is NOT clickable "
+                f"— {_unclickable_reason(result)}", "error")
     if result.get("clicked"):
         return (f"✅ CLICK success: clicked {target} “"
                 f"{str(result.get('text', ''))[:40]}”", "success")

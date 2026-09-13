@@ -321,26 +321,34 @@ def _reject_new_sharing(st, re_keep_abs) -> None:
     """New references from other worlds onto our candidates refuse."""
     new_sharing = set(re_keep_abs) - set(st.keep_snapshot)
     try:
-        cand_set = set(st.plan.candidates or frozenset())
-        cand_canon = {
-            db_deletion.canonical(str(p)) for p in cand_set}
-        dangerous = set()
-        for new_ref in new_sharing:
-            try:
-                if os.path.abspath(str(new_ref)) in cand_set or \
-                        db_deletion.canonical(str(new_ref)) in cand_canon:
-                    dangerous.add(new_ref)
-            except Exception:  # noqa: BLE001
-                dangerous.add(new_ref)
-        if dangerous:
-            raise_refusal(
-                st, "database",
-                "media references changed during deletion; "
-                "stale plan refused, retry")
+        dangerous = _dangerous_refs(new_sharing, st.plan.candidates)
     except asyncio.CancelledError:
         raise
     except Exception:  # noqa: BLE001
-        pass
+        return          # cannot classify — treat as "nothing new", as before
+    if dangerous:
+        raise_refusal(
+            st, "database",
+            "media references changed during deletion; "
+            "stale plan refused, retry")
+
+
+def _dangerous_refs(new_sharing, candidates) -> set:
+    """Of the newly-appeared references, those pointing at a file we are about
+    to delete. A reference we cannot even resolve counts as dangerous —
+    when in doubt about a deletion, refuse it.
+    """
+    cand_set = set(candidates or frozenset())
+    cand_canon = {db_deletion.canonical(str(p)) for p in cand_set}
+    dangerous = set()
+    for new_ref in new_sharing:
+        try:
+            if (os.path.abspath(str(new_ref)) in cand_set
+                    or db_deletion.canonical(str(new_ref)) in cand_canon):
+                dangerous.add(new_ref)
+        except Exception:  # noqa: BLE001
+            dangerous.add(new_ref)
+    return dangerous
 
 
 # ── phase 6a: database group (main-first, stop at first failure) ────

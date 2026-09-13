@@ -51,6 +51,24 @@ class TestNormalize(unittest.TestCase):
 
 class TestCheck(unittest.TestCase):
 
+    def test_a_rejecting_verdict_is_falsy_but_is_still_a_verdict(self):
+        """G6 pin on a trap this refactor walked straight into.
+
+        FilterVerdict.__bool__ is `passed`, so a rejection is FALSY. Any
+        `first_reject(p) or fallback` style chain therefore discards every
+        rejection and passes everyone — a total filter bypass that reads as
+        correct. `check` must distinguish "no verdict" (None) from "a verdict
+        that says no".
+        """
+        reject = PersonFilter(female=YES, registered=ANY, guest=ANY,
+                              anonymous=ANY).check({"female": False})
+        self.assertFalse(bool(reject), "a rejection must stay falsy")
+        self.assertIsNotNone(reject)
+        self.assertFalse(reject.passed)
+        self.assertNotEqual(reject.reason, "matches all criteria",
+                            "the rejection reason was overwritten by the "
+                            "pass-through fallback")
+
     def test_required_rule_rejects_a_missing_key(self):
         f = PersonFilter(female=YES, registered=NO, guest=ANY, anonymous=ANY)
         verdict = f.check({"nick": "Ghost"})          # no 'female' key

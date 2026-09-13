@@ -30,26 +30,38 @@ class TypeMessage(BaseAction):
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
         await self.pre_delay()
-        if self.use_composer:
-            composer_text = getattr(engine, "composer_text", "") or ""
-            if not composer_text.strip():
-                report = engine.report if engine else None
-                if report:
-                    report("⚠ Type Message: “Use Message Composer” is on but "
-                           "the composer is empty — nothing typed", "warn")
-                return ActionResult.FAIL
-            text = composer_text
-        else:
-            text = self.message
-        # {{nick}} → the remembered selected user (Click User) of this run;
-        # falls back to the queued user of this step, as before.
-        nick = user_nick
-        if engine is not None:
-            nick = getattr(engine, "selected_nick", "") or user_nick
-        text = text.replace("{{nick}}", nick)
         report = engine.report if engine else None
+        text = self._source_text(engine, report)
+        if text is None:                      # composer on, composer empty
+            return ActionResult.FAIL
+        text = text.replace("{{nick}}", self._nick_for(user_nick, engine))
         ok = await type_message(cdp, text, self.typing_speed_ms, report)
         return ActionResult.OK if ok else ActionResult.FAIL
+
+    def _source_text(self, engine, report) -> Optional[str]:
+        """The text to type, or None meaning "fail this step".
+
+        None is only ever returned for the one case the user can see and fix:
+        "Use Message Composer" is on and the composer is empty. An empty
+        `self.message` is NOT an error — typing nothing is a legal step.
+        """
+        if not self.use_composer:
+            return self.message
+        composer_text = getattr(engine, "composer_text", "") or ""
+        if composer_text.strip():
+            return composer_text
+        if report:
+            report("⚠ Type Message: “Use Message Composer” is on but "
+                   "the composer is empty — nothing typed", "warn")
+        return None
+
+    @staticmethod
+    def _nick_for(user_nick: str, engine) -> str:
+        """{{nick}} → the run's remembered selected user (Click User), falling
+        back to the queued user of this step."""
+        if engine is None:
+            return user_nick
+        return getattr(engine, "selected_nick", "") or user_nick
 
     def config_schema(self) -> dict:
         s = super().config_schema()

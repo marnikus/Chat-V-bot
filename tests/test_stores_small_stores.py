@@ -237,6 +237,49 @@ class TestSettingsStore(StoreCase):
         # siblings absent from the file fall back to shipped defaults
         self.assertEqual(store.get("ui", "language"), "ru")
 
+    def test_a_scalar_blocking_the_path_does_not_fall_back(self):
+        """G6 pin: 'absent' and 'blocked' are different, and the difference is
+        the reason `get` carries two sentinels rather than one.
+
+        The user's overlay says `ui` is the string "dark". Asking for
+        ("ui", "theme") cannot be answered — but it must NOT be answered out of
+        SETTINGS_DEFAULTS either, because the user *did* write `ui` and a
+        shipped default silently overriding a written value is the bug this
+        guards. Contrast with the sibling test below, where `ui` is untouched
+        and the default is exactly the right answer.
+        """
+        store = SettingsStore(self.atomic)
+        store.set("ui", "dark")  # scalar where a dict is expected
+        self.assertEqual(store.get("ui", "theme", default="sentinel"),
+                         "sentinel")
+        self.assertEqual(store.get("ui", "language", default=None), None,
+                         "a blocked path must not reach SETTINGS_DEFAULTS")
+
+    def test_an_absent_key_does_fall_back(self):
+        store = SettingsStore(self.atomic)
+        self.assertEqual(store.get("ui", "language"), "ru")
+        self.assertEqual(store.get("ui", "nope", default="d"), "d")
+
+    def test_a_falsy_stored_value_is_returned_not_defaulted(self):
+        """`0`, `False` and `""` are values, not absences — a `.get(k, default)`
+        walk that tested truthiness would hand back the default here."""
+        store = SettingsStore(self.atomic)
+        store.set("chrome", "port", 0)
+        store.set("chrome", "auto_reconnect", False)
+        self.assertEqual(store.get("chrome", "port", default=9222), 0)
+        self.assertIs(store.get("chrome", "auto_reconnect", default=True),
+                      False)
+
+    def test_a_stored_none_is_returned_not_defaulted(self):
+        store = SettingsStore(self.atomic)
+        store.set("ui", "theme", None)
+        self.assertIsNone(store.get("ui", "theme", default="dark"))
+
+    def test_no_keys_returns_the_whole_overlay(self):
+        store = SettingsStore(self.atomic)
+        store.set("ui", "theme", "light")
+        self.assertEqual(store.get(), store.data())
+
     def test_get_copy_is_deep(self):  # SET-03
         store = SettingsStore(self.atomic)
         store.set("ui", {"theme": "dark"})
