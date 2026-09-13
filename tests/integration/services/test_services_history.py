@@ -410,7 +410,10 @@ class TestLifecycle(ServiceCase):
         self.assertEqual(self.page.binding_installs, ["__cvbPush"])
         # bindings for other names go to the collector only via __cvbPush
         self.assertIsNone(self.service._on_binding({"name": "other"}))
-        result = self.service._on_binding({"name": "__cvbPush", "payload": "[]"})
+        # the binding returns the collector coroutine for the CDP dispatcher
+        # to await — await it here so no "never awaited" warning is left behind
+        result = await self.service._on_binding(
+            {"name": "__cvbPush", "payload": "[]"})
         self.assertIsNotNone(result)
 
     async def test_reconnect_rebinds(self):
