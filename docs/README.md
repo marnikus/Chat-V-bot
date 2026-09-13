@@ -61,7 +61,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Run engine (plan → execute) | system of record §3.1 | [`2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md`](archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) |
 | Deletion / safety | system of record §3.3, invariant I-15/I-16 | [`2026-09-10-safety-refactor/`](archive/2026-09-10-safety-refactor/) |
 | Storage model (one DB = one world) | system of record §5 | [`2026-09-08-one-db-one-world/`](archive/2026-09-08-one-db-one-world/) |
-| Message archive + collector | system of record §2, §3.2 | [`2026-09-06-collector-and-history/`](archive/2026-09-06-collector-and-history/), [`2026-09-07-labels-and-collector/`](archive/2026-09-07-labels-and-collector/) |
+| Message archive + collector | system of record §2, §3.2; [delete/restore lock fix](../reports/PERSON_DELETE_RESTORE_LOCK_FIX_2026-09-13.md) | [`2026-09-06-collector-and-history/`](archive/2026-09-06-collector-and-history/), [`2026-09-07-labels-and-collector/`](archive/2026-09-07-labels-and-collector/) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
 | Refactoring round 4 | system of record §8; [steps 8–9 results](../reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md) | [Original queue](archive/2026-09-12-refactor-round4/ROUND4_DESIGN.md); [general gate](archive/2026-09-13-refactor-round4/CHANGED_CODE_GATE.md) and [next priorities](archive/2026-09-13-refactor-round4/FOLLOW_UP_PRIORITIES.md). Local work complete; hosted activation pending |
 | Tests | system of record §7 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/) |

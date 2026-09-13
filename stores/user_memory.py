@@ -1,10 +1,13 @@
 """SQLite-backed user memory: discovery, status tracking, CRUD."""
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 import aiosqlite
+
+from functools import wraps as _wraps
 
 log = logging.getLogger("chatbot")
 
@@ -53,6 +56,23 @@ class UserRecord:
     status: str = "new"
 
 
+def _serialized_write(method):
+    """Guard a primitive mutation, not a batch that calls guarded mutations."""
+    @_wraps(method)
+    async def write(store, *args, **kwargs):
+        async with store._write_lock:
+            connection = store._db
+            if connection is None:
+                raise RuntimeError("People database is not open")
+            try:
+                return await method(store, *args, **kwargs)
+            except BaseException:
+                # CancelledError also owns an unfinished SQLite transaction.
+                await connection.rollback()
+                raise
+    return write
+
+
 class UserMemory:
     """The People table: discovery, status tracking, CRUD.
 
@@ -67,6 +87,7 @@ class UserMemory:
         # are built by this one's `_row`, so importing it at module scope
         # would close a cycle
         self._db_path = db_path
+        self._write_lock = asyncio.Lock()
         self._db: Optional[aiosqlite.Connection] = None
         self.query = UserQuery(self)
 
@@ -121,22 +142,20 @@ class UserMemory:
             await self._db.close()
             self._db = None
 
+    @_serialized_write
     async def upsert_user(self, user: UserRecord) -> str:
         now = datetime.now().isoformat(timespec="seconds")
-        cur = await self._db.execute("SELECT id,messaged FROM users WHERE nick=?", (user.nick,))
-        row = await cur.fetchone()
-        if row:
+        cur = await self._db.execute(
+            "INSERT INTO users(nick,gender,registered,anonymous,guest,first_seen,last_seen,messaged) "
+            "SELECT ?,?,?,?,?,?,?,0 WHERE NOT EXISTS (SELECT 1 FROM users WHERE nick=?)",
+            (user.nick, user.gender, user.registered, user.anonymous, user.guest, now, now, user.nick))
+        inserted = cur.rowcount > 0
+        if not inserted:
             await self._db.execute(
                 "UPDATE users SET last_seen=?,gender=?,registered=?,anonymous=?,guest=? WHERE nick=?",
                 (now, user.gender, user.registered, user.anonymous, user.guest, user.nick))
-            await self._db.commit()
-            return "known"
-        await self._db.execute(
-            "INSERT INTO users(nick,gender,registered,anonymous,guest,first_seen,last_seen,messaged) "
-            "VALUES(?,?,?,?,?,?,?,0)",
-            (user.nick, user.gender, user.registered, user.anonymous, user.guest, now, now))
         await self._db.commit()
-        return "new"
+        return "new" if inserted else "known"
 
     async def upsert_many(self, users: list[UserRecord]) -> tuple[int, int]:
         new_cnt = known_cnt = 0
@@ -145,6 +164,7 @@ class UserMemory:
             else: known_cnt += 1
         return new_cnt, known_cnt
 
+    @_serialized_write
     async def mark_messaged(self, nick: str) -> None:
         now = datetime.now().isoformat(timespec="seconds")
         await self._db.execute(
@@ -168,6 +188,7 @@ class UserMemory:
     async def get_user(self, nick: str) -> Optional[UserRecord]:
         return await self.query.get_user(nick)
 
+    @_serialized_write
     async def delete_user(self, nick: str) -> bool:
         """Delete a single user by nick. Returns True when a row was removed."""
         cur = await self._db.execute("DELETE FROM users WHERE nick=?", (nick,))
@@ -176,6 +197,7 @@ class UserMemory:
         log.info("delete_user(%s) → %s", nick, "removed" if removed else "not found")
         return removed
 
+    @_serialized_write
     async def delete_users(self, nicks: list[str]) -> int:
         """Delete many users in one transaction. Returns the number removed."""
         nicks = [n for n in (nicks or []) if n]
@@ -193,6 +215,7 @@ class UserMemory:
         log.info("delete_users(%d requested) → %d removed", len(nicks), total)
         return total
 
+    @_serialized_write
     async def set_messaged(self, nick: str, messaged: bool) -> bool:
         """Manually flip a user's messaged flag (per-row Mark done / Undo)."""
         if messaged:
@@ -207,6 +230,7 @@ class UserMemory:
         await self._db.commit()
         return cur.rowcount > 0
 
+    @_serialized_write
     async def reset_messaged(self) -> int:
         """Mark every user as new again.
 
@@ -219,11 +243,13 @@ class UserMemory:
         await self._db.commit()
         return cur.rowcount
 
+    @_serialized_write
     async def clear_all(self) -> int:
         cur = await self._db.execute("DELETE FROM users")
         await self._db.commit()
         return cur.rowcount
 
+    @_serialized_write
     async def replace_all(self, rows: list[dict]) -> int:
         """Restore a full snapshot: wipe the table and insert the given rows.
 
@@ -234,21 +260,15 @@ class UserMemory:
         """
         await self._db.execute("DELETE FROM users")
         count = 0
-        try:
-            for row in rows or []:
-                params = _replacement_params(row)
-                if params is None:
-                    continue
-                await self._db.execute(
-                    "INSERT INTO users(nick,gender,registered,anonymous,guest,"
-                    "first_seen,last_seen,messaged,message_count,last_messaged,"
-                    "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)", params)
-                count += 1
-        except Exception:
-            # All-or-nothing: a garbage row must never leave the table
-            # half-replaced (the DELETE above is still uncommitted).
-            await self._db.rollback()
-            raise
+        for row in rows or []:
+            params = _replacement_params(row)
+            if params is None:
+                continue
+            await self._db.execute(
+                "INSERT INTO users(nick,gender,registered,anonymous,guest,"
+                "first_seen,last_seen,messaged,message_count,last_messaged,"
+                "notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)", params)
+            count += 1
         await self._db.commit()
         log.info("replace_all → %d rows restored", count)
         return count

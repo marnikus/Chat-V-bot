@@ -13,6 +13,7 @@ The dated groups below preserve the designs; latest additions appear first.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-13-person-delete-lock/`](2026-09-13-person-delete-lock/DESIGN.md) | 3 | Queue transaction leaks, [WAL cursor interleaving](2026-09-13-person-delete-lock/CURSOR_INTERLEAVING.md), [compatibility decisions](2026-09-13-person-delete-lock/COMPATIBILITY_REVIEW.md); verified person delete/restore fix. |
 | [`2026-09-13-refactor-round4/`](2026-09-13-refactor-round4/STEPS_8_9_DESIGN.md) | 4 | [Steps 6–7](2026-09-13-refactor-round4/STEPS_6_7_DESIGN.md), steps 8–9, [gate usage](2026-09-13-refactor-round4/CHANGED_CODE_GATE.md), [follow-up priorities](2026-09-13-refactor-round4/FOLLOW_UP_PRIORITIES.md). Results: `reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md`. |
 | [`2026-09-12-refactor-round4/`](2026-09-12-refactor-round4/ROUND4_DESIGN.md) | 2 | Round-4 queue plus [steps 4–5](2026-09-12-refactor-round4/STEPS_4_5_DESIGN.md); outcomes through steps 4–5 in `reports/REFACTOR_ROUND4_STEPS_4_5_2026-09-12.md`. |
 | [`2026-09-04-foundation/`](#2026-09-04-foundation) | 5 | The original architecture proposal (written before any code existed — **superseded by `docs/current/SYSTEM_OF_RECORD.md`**) plus the first three rounds of bug fixes and the configurable Find & Click block. |

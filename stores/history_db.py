@@ -1,11 +1,8 @@
-"""The archive database: connection, schema and small query helpers.
+"""Archive connection, schema and serialized query helpers for one world.
 
-`history.db` is deliberately a SEPARATE file from config.json and from the
-People list. Nothing that filters, purges or forgets a person in the People
-table may touch this store — it is the all-time archive.
-
-The store is opened with aiosqlite so that collecting never blocks the Qt
-event loop (and therefore never freezes the UI).
+Queue/archive tables share a world file but use distinct async connections.
+Read cursors must close before another statement starts on this connection;
+mutation owners keep their existing commit boundaries. No Qt/services imports.
 """
 
 from __future__ import annotations
@@ -15,6 +12,9 @@ import os
 from typing import Any, Iterable, Optional
 
 import aiosqlite
+
+import asyncio
+from contextlib import asynccontextmanager as _asynccontextmanager
 
 # The schema lives in `stores/history_schema.py` now (the B2 split, design
 # §2.4); these names are re-exported because `backend/history_db.py`, the
@@ -35,6 +35,51 @@ from stores.history_schema import (                                   # noqa: F4
 
 log = logging.getLogger("chatbot")
 
+
+class _HistoryAccess:
+    """Per-HistoryDB statement/cursor ownership; schema lifecycle stays on DB."""
+    def __init__(self, owner):
+        self._owner = owner
+        self._lock = asyncio.Lock()
+
+    async def execute(self, sql, params=()):
+        async with self._lock:
+            return await self._owner.conn.execute(sql, tuple(params))
+
+    async def executemany(self, sql, rows):
+        async with self._lock:
+            return await self._owner.conn.executemany(sql, rows)
+
+    async def commit(self):
+        async with self._lock:
+            await self._owner.conn.commit()
+
+    @_asynccontextmanager
+    async def _cursor(self, sql, params):
+        async with self._lock:
+            pending = asyncio.ensure_future(self._owner.conn.execute(sql, tuple(params)))
+            try:
+                cursor = await asyncio.shield(pending)
+            except asyncio.CancelledError:
+                # The worker may already have opened a cursor. Reap it before
+                # releasing the statement lock, even when its caller stops.
+                cursor = await pending
+                await cursor.close()
+                raise
+            try:
+                yield cursor
+            finally:
+                await cursor.close()
+
+    async def fetchall(self, sql, params=()):
+        async with self._cursor(sql, params) as cursor:
+            return await cursor.fetchall()
+
+    async def fetchone(self, sql, params=()):
+        async with self._cursor(sql, params) as cursor:
+            return await cursor.fetchone()
+
+
 class HistoryDB:
     """Thin async wrapper around the archive's SQLite file."""
 
@@ -47,6 +92,7 @@ class HistoryDB:
         self._want_fts = use_fts
         self.fts_enabled = False
         self._conn: Optional[aiosqlite.Connection] = None
+        self._access = _HistoryAccess(self)
         self.migrator = SchemaMigrator(self)
 
     # ── lifecycle ────────────────────────────────────────────────
@@ -207,36 +253,24 @@ class HistoryDB:
 
     # ── helpers ──────────────────────────────────────────────────
     async def execute(self, sql: str, params: Iterable[Any] = ()):
-        return await self.conn.execute(sql, tuple(params))
+        return await self._access.execute(sql, params)
 
     async def executemany(self, sql: str, seq):
-        return await self.conn.executemany(sql, seq)
+        return await self._access.executemany(sql, seq)
 
     async def commit(self) -> None:
-        await self.conn.commit()
+        await self._access.commit()
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list:
         """Rows as plain tuples — the shape callers (and tests) compare."""
-        cur = await self.conn.execute(sql, tuple(params))
-        try:
-            return [tuple(row) for row in await cur.fetchall()]
-        finally:
-            await cur.close()
+        return [tuple(row) for row in await self._access.fetchall(sql, params)]
 
     async def fetchdicts(self, sql: str, params: Iterable[Any] = ()) -> list:
         """Rows as dictionaries, for code that reads columns by name."""
-        cur = await self.conn.execute(sql, tuple(params))
-        try:
-            return [dict(row) for row in await cur.fetchall()]
-        finally:
-            await cur.close()
+        return [dict(row) for row in await self._access.fetchall(sql, params)]
 
     async def fetchone(self, sql: str, params: Iterable[Any] = ()):
-        cur = await self.conn.execute(sql, tuple(params))
-        try:
-            return await cur.fetchone()
-        finally:
-            await cur.close()
+        return await self._access.fetchone(sql, params)
 
     async def scalar(self, sql: str, params: Iterable[Any] = (), default=0):
         row = await self.fetchone(sql, params)

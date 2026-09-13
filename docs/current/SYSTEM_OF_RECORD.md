@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-13 (round 4 through steps 8–9) |
-| Test suite | `2898 passed, 3 skipped, 1 deselected, 1 xfailed, 774 subtests passed` + 25 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **91.21175%** · branch **85.99340%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-13 (person delete/restore lock fix) |
+| Test suite | `2916 passed, 3 skipped, 1 deselected, 1 xfailed, 774 subtests passed` + 25 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **91.31107%** · branch **86.22112%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -51,7 +51,7 @@ collector** archives whatever private conversation is on screen.
 | **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
 | **Passive collector** | Heartbeat probe per tick; archives only when changed; never blocks the UI; throttled (not paused) during runs; sync retry/pacing waits honor Stop without dropping completed chunks | `services/collector_service.py`, `services/collector_tick.py`, `backend/sync/reading.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
-| **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person | `stores/history_*`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
+| **Message archive** | Append-only per-person history, FTS5/LIKE search, stable paging and per-person media; person delete/restore now protects queue writes and archive cursor lifetimes against shared-world locks | `stores/history_*`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
 | **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
 | **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/test_person_labels.py`, `tests/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
 | **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z` | `services/undo_service.py`, `services/undo_support.py`, `stores/undo_store.py` | `tests/test_people_undo.py`, `tests/test_archive_delete_undo.py`, `tests/integration/services/test_undo_support_contract.py` |
@@ -264,7 +264,7 @@ dict, and the collector status strings.
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | 44 legacy functions > 30 LOC; touched functions do not worsen |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | max CC 10, max nesting 4; one legacy cognitive offender (router, 17); settings cognition 17 → 6 (round 4) |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.21175% / 85.99340%** (round 4; frozen RULE 16 floors unchanged) |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.31107% / 86.22112%** (round 4; frozen RULE 16 floors unchanged) |
 | Enforcement / baseline | staged general gate; hosted CI **inactive** | [Gate usage / limits](../archive/2026-09-13-refactor-round4/CHANGED_CODE_GATE.md); [original baseline](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | sync family: 7 files, each ≤ 221 lines; session 91 LOC / 12 methods, facade 33 lines; [`steps 6–7 results`](../../reports/REFACTOR_ROUND4_STEPS_6_7_2026-09-13.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
@@ -275,7 +275,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
-| 2026-09-13 | [Round 4 queue](../archive/2026-09-12-refactor-round4/ROUND4_DESIGN.md) · [steps 8–9 design](../archive/2026-09-13-refactor-round4/STEPS_8_9_DESIGN.md) · [results](../../reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md) | All nine steps delivered locally; hosted activation pending. Next: Collector queue ownership, then bounded lifecycle work |
+| 2026-09-13 | [Person delete/restore design](../archive/2026-09-13-person-delete-lock/DESIGN.md) · [fix results](../../reports/PERSON_DELETE_RESTORE_LOCK_FIX_2026-09-13.md) · [round 4 results](../../reports/REFACTOR_ROUND4_STEPS_8_9_2026-09-13.md) | Queue rollback/serialization and archive cursor ownership fixed; Collector queue policy remains next. Hosted CI inactive |
 | 2026-09-11 | [CC tail fixes — round 3](../archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) | How the 63-function CC queue went to zero over-gate functions |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |
 | 2026-09-10 | [`_delete_unlocked` decomposition](../archive/2026-09-10-safety-refactor/DELETE_FLOW_EXTRACTION_DESIGN_2026-09-10.md) · [CC tail extraction](../archive/2026-09-10-safety-refactor/CC_TAIL_EXTRACTION_DESIGN_2026-09-10.md) · [remaining tail](../archive/2026-09-10-safety-refactor/CC_REMAINING_TAIL_DESIGN_2026-09-10.md) | How the worst hotspots were split without changing behaviour |

@@ -1,6 +1,12 @@
 {
   "version": 1,
-  "provenance": "Round 4 steps 6-7, 2026-09-13; separate coverage.py line/branch counts",
-  "line": {"covered": 13534, "total": 14838},
-  "branch": {"covered": 3125, "total": 3634}
+  "provenance": "Person delete/restore lock fix, 2026-09-13; verified full branch-coverage run",
+  "line": {
+    "covered": 13588,
+    "total": 14881
+  },
+  "branch": {
+    "covered": 3135,
+    "total": 3636
+  }
 }
