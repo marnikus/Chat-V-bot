@@ -18,6 +18,7 @@ from core.events import LogMessage, UserDbChanged
 from backend.history_query import (
     DEFAULT_LIMIT, DEFAULT_SORT, PersonPageRequest,
 )
+from services.world_events import run_when_world_open
 
 log = logging.getLogger("chatbot")
 
@@ -40,6 +41,7 @@ def _person_request(opts: dict) -> PersonPageRequest:
         include_deleted=bool(opts.get("include_deleted")))
 
 
+
 class HistoryBridge(QObject):
     history_page_ready = Signal(str, str)    # req_id, JSON page
     history_search_ready = Signal(str, str)  # req_id, JSON results
@@ -57,13 +59,9 @@ class HistoryBridge(QObject):
 
     # ── guarded async runner ─────────────────────────────────────
     def _run_async(self, scope: str, coro) -> None:
-        async def guarded():
-            try:
-                await coro
-            except Exception as exc:                     # noqa: BLE001
-                log.warning("archive %s failed: %s", scope, exc)
-                self.history_error.emit(scope, str(exc))
-        self._schedule(guarded())
+        self._schedule(run_when_world_open(
+            scope, coro, getattr(self.ctx.archive, "db", None),
+            self.history_error.emit))
 
     @staticmethod
     def _schedule(coro) -> bool:

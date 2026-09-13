@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +25,8 @@ if ROOT not in sys.path:
 from core.events import (EventBus, LabelsChanged, PeopleChanged,  # noqa: E402
                          UserDbChanged)
 from services.undo_service import restart_world  # noqa: E402
-from services.world_events import announce_world_live  # noqa: E402
+from services.world_events import (announce_world_live,  # noqa: E402
+                                   run_when_world_open, wait_for_world_open)
 
 
 class FakeLabels:
@@ -117,6 +119,103 @@ class TestRestartWorldUsesTheOneBroadcast(unittest.IsolatedAsyncioTestCase):
         seen = collector(bus)
         await restart_world(FakeMemory(), None, None, FakeUndo(), bus, "load")
         self.assertEqual(seen, [], "a tear-down without a world says nothing")
+
+
+class FakeStore:
+    """A store that opens when told to (the app's world, in miniature)."""
+
+    def __init__(self, open_after: int | None = 2):
+        self._left = open_after
+        self.checks = 0
+
+    @property
+    def is_open(self) -> bool:
+        self.checks += 1
+        if self._left is None:
+            return False
+        if self._left <= 0:
+            return True
+        self._left -= 1
+        return False
+
+
+class TestWaitForWorldOpen(unittest.IsolatedAsyncioTestCase):
+    async def test_an_open_store_is_not_waited_for(self):
+        store = FakeStore(open_after=0)
+        started = time.monotonic()
+        self.assertTrue(await wait_for_world_open(store, step=1.0))
+        self.assertLess(time.monotonic() - started, 0.5,
+                        "an open world is never slept on")
+        # one read is the `hasattr` probe, one is the loop's own check
+        self.assertEqual(store.checks, 2, "no polling once it is open")
+
+    async def test_a_store_that_opens_later_is_waited_for(self):
+        store = FakeStore(open_after=3)
+        self.assertTrue(await wait_for_world_open(store, timeout=2.0))
+        self.assertEqual(store.checks, 4)
+
+    async def test_a_store_that_never_opens_gives_up_at_the_timeout(self):
+        store = FakeStore(open_after=None)
+        self.assertFalse(await wait_for_world_open(store, timeout=0.1,
+                                                   step=0.01))
+
+    async def test_something_that_is_not_a_store_is_never_waited_for(self):
+        class NoFlag:
+            pass
+
+        self.assertFalse(await wait_for_world_open(NoFlag()))
+        self.assertFalse(await wait_for_world_open(None))
+
+
+class TestRunWhenWorldOpen(unittest.IsolatedAsyncioTestCase):
+    """The archive's runner: wait, run, and never lose the failure."""
+
+    async def test_the_work_runs_once_the_world_opens(self):
+        store = FakeStore(open_after=2)
+        done = []
+
+        async def work():
+            done.append(store.is_open)
+
+        await run_when_world_open("userdb_page", work(), store)
+        self.assertEqual(done, [True],
+                         "the request must run against the open world")
+
+    async def test_work_that_raises_reaches_the_window(self):
+        store = FakeStore(open_after=0)
+        seen = []
+
+        async def work():
+            raise RuntimeError("history database is not open")
+
+        with self.assertLogs("chatbot", level="WARNING") as logged:
+            await run_when_world_open("userdb_page", work(), store,
+                                      lambda scope, msg: seen.append(scope))
+        self.assertEqual(seen, ["userdb_page"],
+                         "a failed read is still an answer for the window")
+        self.assertIn("userdb_page", logged.output[0])
+
+    async def test_a_failure_without_a_listener_is_only_logged(self):
+        store = FakeStore(open_after=0)
+
+        async def work():
+            raise RuntimeError("boom")
+
+        with self.assertLogs("chatbot", level="WARNING"):
+            await run_when_world_open("stats", work(), store)
+
+    async def test_a_world_that_never_opens_still_reports_itself(self):
+        store = FakeStore(open_after=None)
+        seen = []
+
+        async def work():
+            raise RuntimeError("history database is not open")
+
+        with self.assertLogs("chatbot", level="WARNING"):
+            await run_when_world_open("people", work(), store,
+                                      lambda scope, msg: seen.append(msg))
+        self.assertEqual(seen, ["history database is not open"],
+                         "giving up must not mean silence")
 
 
 if __name__ == "__main__":

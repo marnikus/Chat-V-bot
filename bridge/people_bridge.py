@@ -15,6 +15,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import PeopleChanged, UsersDeleted
 from core.result import Ok
+from services.world_events import wait_for_world_open
 
 log = logging.getLogger("chatbot")
 
@@ -65,9 +66,14 @@ class PeopleBridge(QObject):
         self._schedule(self._refresh_users_async())
 
     async def _refresh_users_async(self) -> None:
-        """The awaited refresh: one users_updated + one stats_updated."""
+        """The awaited refresh: one users_updated + one stats_updated.
+
+        The page boots before the queue is open, so this waits for the world
+        instead of returning nothing (the list stayed empty until ↻).
+        """
         if self.ctx.memory is None:       # archive-only bridges (tests)
             return
+        await wait_for_world_open(self.ctx.memory)
         result = await self.ctx.people.payload()
         if result.is_ok:
             payload = result.value

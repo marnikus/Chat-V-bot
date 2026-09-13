@@ -46,6 +46,8 @@ function mkEl(id) {
     set className(v) { el.classList._set = new Set(String(v).split(/\s+/).filter(Boolean)); },
     textContent: '',
     appendChild(c) { el.children.push(c); return c; },
+    setAttribute(k, v) { el.attrs[k] = v; },
+    replaceChildren(...nodes) { el.children = nodes; },
     addEventListener(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
     removeEventListener() {},
     querySelectorAll() { return []; },
@@ -68,6 +70,7 @@ global.document = {
   getElementById: (id) => byId[id] || null,
   querySelectorAll: () => [],
   createElement: (tag) => mkEl('<' + tag + '>'),
+  createTextNode: (text) => ({ nodeValue: text, textContent: text }),
   addEventListener() {},
   removeEventListener() {},
 };
@@ -225,6 +228,24 @@ t('reload() is enough — no button press is ever required', () => {
   HistoryDb.reload();
   eq(calls.map((c) => c[0]), ['page', 'stats'], 'one reload, one load');
 });
+
+// 9 — the backend now WAITS for the world instead of failing the boot request,
+// so the answer can arrive seconds later. It must still fill the table on its
+// own: one request, one answer, no ↻ — and the flag released for scrolling.
+t('a boot answer that arrives after the world opens still fills the table',
+  () => {
+    reset();
+    HistoryDb.reload();                  // the boot request goes out…
+    eq(pages(), 1, 'one boot request, sent while the world was still closed');
+    HistoryDb.onPage('u1', JSON.stringify({   // …the world opens, answer arrives
+      items: [{ nick: 'Mloni', messages: 3, media: 0 }],
+      total: 1, has_more: false, offset: 0,
+    }));
+    eq(pages(), 1, 'the late answer needs no second request');
+    eq(HistoryDb.rows.map((r) => r.nick), ['Mloni'], 'the row is loaded');
+    ok(byId.userdbBody.children.length >= 1, 'the row is on screen');
+    eq(HistoryDb.loading, false, 'the table is ready for the next page');
+  });
 
 console.log(failures ? 'FAILED ' + failures : 'all good');
 process.exit(failures ? 1 : 0);

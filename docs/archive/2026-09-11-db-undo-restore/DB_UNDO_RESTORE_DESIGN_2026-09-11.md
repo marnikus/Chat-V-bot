@@ -244,11 +244,6 @@ app/lifecycle.py::startup            (after memory.init + history.init + sync)
 * The announcement is **last** in `startup` (before the tab fetch), and it
   fires even when the archive is unavailable — the queue is readable on its
   own, so the People list still fills.
-* Ordering is race-free without polling: the JS registers its signal handlers
-  (`setupBridgeListeners`) before it asks for anything, so an announcement can
-  never fall between "listeners" and "requests". Either the backend was ready
-  first (the boot requests return data) or it announces later (the windows
-  reload).
 * `HistoryDb.reload()` keeps clearing its `loading` flag, so a request the
   backend never answered cannot block the reload the announcement brings —
   pinned by `tests/test_userdb_refresh.js`.
@@ -258,6 +253,69 @@ announcement; an unavailable archive still announces), and
 `tests/unit/bridge_safety/test_world_ready.py`, which runs the REAL router,
 `UserMemory` and `PeopleService` and reads the JS signals — deleting the
 announcement fails 5 of those 6 tests.
+
+### 2.5b Why the broadcast alone was not enough — the first request must be ANSWERED
+
+The user reported the same symptom again after the announcement shipped
+(“the list of persons still not visible as I run app … it forces me to press
+refresh first”). Re-running the real boot path explained it, and the
+explanation retired the assumption above — **an announcement cannot repair a
+request that is already dead**:
+
+```
+create_window(config, bridge)         the page is up, JS HistoryDb.init() asks
+      │                               → userdb_page(req u1)
+      ▼                               → HistoryDB is CLOSED here
+ApplicationLifecycle.startup          ── history database is not open (raised)
+  memory.init() / history.init()      ── answered with history_error ONLY:
+  …                                      no userdb_page_ready ever followed
+  announce_world_ready()              JS waits for an answer to u1 that never
+      │                                  comes; the table stays empty
+      ▼                               a later userdb_changed asks for u2 —
+  PeopleChanged / UserDbChanged          correct, but only after that request
+                                      and only if its listener is registered
+```
+
+The reproduction (`/tmp/repro_boot2.py`) shows the boot request answered with
+`('error', 'userdb_page', 'history database is not open')` and **no** page
+payload; the announcement does bridge (`userdb_changed` observed), but the
+window's first request is already gone. The repair is server-side and
+one request → one answer:
+
+```
+bridge/history_bridge.py::_run_async(scope, coro)
+      └── services/world_events.py::run_when_world_open(scope, coro, store, on_error)
+              ├── wait_for_world_open(store)     polls store.is_open every 0.05 s
+              ├── await coro                     the SAME request finally runs
+              └── except → on_error(scope, str(exc))   and logs a WARNING
+bridge/people_bridge.py::_refresh_users_async → wait_for_world_open(ctx.memory)
+```
+
+* `wait_for_world_open` is bounded by `WAIT_S = 15.0` — the same patience the
+  write gate gives an outside holder: long enough for the schema migration of
+  a big world, short enough to answer with an error instead of hanging. When
+  the world really never opens, the request fails exactly as before — through
+  `history_error`, never by hanging the window (`mock.patch` on `WAIT_S`
+  shortens it in tests).
+* The helper lives in `services/world_events.py` — the module that already owns
+  “the world's own clock”. It points down only (stdlib + `core.events`), so the
+  bridges may call it and it stays out of the 526-line `history_bridge.py`
+  (§16.5 landmine).
+* A store without `is_open` (a unit-test double, `None`) is not waited for at
+  all: a fake must not turn a unit test into a 15-second sleep.
+* The announcement stays: it is what makes the *other* windows (People list,
+  DB Connection, labels) catch up with a world that opened after they asked.
+  Waiting and announcing are the two halves of one promise — the request is
+  answered **and** everything live reloads.
+
+Evidence — `tests/unit/bridge_safety/test_boot_race.py` (the real
+`HistoryBridge`/`PeopleBridge` over a real world file; the boot request
+survives, the stats arrive, a never-opening world is a bounded error, the
+People refresh waits) and `tests/unit/bridge_safety/test_boot_chain.py`, which
+runs the SHIPPED order — real `Router`, real `ApplicationLifecycle`, real
+`HistoryService`/`UserMemory`, one closed world, one request before it opens,
+zero refresh calls. `TestRunWhenWorldOpen` in
+`tests/unit/services/test_world_events.py` pins the runner itself.
 
 ## 3. Measurements (RULE 16 / RULE 18)
 
@@ -310,6 +368,18 @@ All new functions are inside RULE 16 (≤ 30 LOC, ≤ 4 params, CC ≤ 3, cognit
 ≤ 2) and inside the RULE 18 4–20 line band. The clone scan is unchanged (0 new
 groups, 0 stale baseline entries).
 
+### 3.1c The waiting first request (2026-09-11, third slice)
+
+| Where | Before | After |
+|---|---|---|
+| `services/world_events.py` | 55 lines, 2 public functions | **104 lines** — `wait_for_world_open` (20 LOC / 3 params / CC 6 / cog 6) and `run_when_world_open` (16 LOC / 4 params / CC 3 / cog 3), both inside RULE 16 and the RULE 18 4–20 band |
+| `bridge/history_bridge.py` (526 lines, ratchet 493 / 45) | `HistoryBridge` **486 LOC / 45 methods** | **482 / 44** — `_run_async` became a 4-line call into `run_when_world_open`: the guard moved INTO the new service module, so the landmine shrank instead of growing (the first attempt put it in the class and hit 494 > 493; the gate caught it) |
+| `bridge/people_bridge.py` | `_refresh_users_async` 11 LOC | **15 LOC** — one `await wait_for_world_open(self.ctx.memory)` before the payload (class 133 / 20, file 155 lines) |
+
+The gate (`--with-clones`) exits **0**; the diff audit against `3fc511b` and
+against `fc66365` reports **`problems: 0`** (new `/tmp/audit.py`, scope =
+production code, per RULE 16 §16.1).
+
 ### 3.2 The hot spots, before and after
 
 | Symbol | 3fc511b | Close-out | Limit |
@@ -357,18 +427,41 @@ same or smaller values.
 * `tests/test_history_repo_lifecycle.py` (extended) — `purge_deleted()`
   erases tombstoned persons while a living person survives, and a
   single-nick purge leaves the other tombstone alone.
+* `tests/unit/bridge_safety/test_boot_race.py` (new, third slice) — the real
+  bridges over a real world file: the boot `userdb_page` is answered once the
+  world opens (all nicks), the stats follow, a world that never opens is a
+  bounded error naming the read, and the People refresh waits for the queue.
+* `tests/unit/bridge_safety/test_boot_chain.py` (new, third slice) — the shipped
+  order end to end: a REAL `Router` with a REAL `ApplicationLifecycle`, real
+  `HistoryService`/`UserMemory`, both stores closed while the page asks for its
+  first page; `startup()` is the only thing that opens the world, and the
+  answer arrives without a single refresh call (`userdb_page_ready` once,
+  stats once, `users_updated` for the People table, `userdb_changed(startup)`).
+* `tests/unit/services/test_world_events.py` (extended) — `TestWaitForWorldOpen`
+  and `TestRunWhenWorldOpen`: an open store is never slept on, a later one is
+  waited for, a never-opening one gives up at the timeout, a non-store is not
+  waited for, the work runs against the open world, and a failure reaches the
+  window (or only the log) instead of vanishing.
 * `tests/test_userdb_refresh.js` (new, Node) — the real `history-db.js`
   against the real ids from `ui/index.html`: one reload per burst of live
   changes (and the scroll position kept), named changes reloading at once, the
   footer carrying no trash button, **no confirmation dialog on a person
   delete** (the call reaches the backend on the first click), and no purge
-  path inside the window at all.
+  path inside the window at all. Its eleventh check pins the late answer: the
+  backend now waits for the world, so the boot reply can arrive seconds later
+  — it must fill the table by itself (one request, one answer, no ↻, `loading`
+  released for the next page).
 * `tests/test_archive_delete_undo.py`, `tests/test_people_undo.py`,
   `tests/integration/services/test_services_undo.py` — unchanged contracts
   (kind/value payloads, one global timeline, `wait_for(self.changed)`); all
   still green after the verified-command rewrite.
 
-**Mutation check (RULE 8).** Reverting the fix in-process (gate inert + no
+**Mutation check (RULE 8), third slice.** Removing the two waits (the one in
+`run_when_world_open` and the one in `_refresh_users_async`) makes **5 of the 8**
+boot tests fail — the two shipped-order page tests, the boot-race page and
+stats tests, and the People refresh; restoring them turns all 8 green again.
+
+**Mutation check (RULE 8), first slice.** Reverting the fix in-process (gate inert + no
 `busy_timeout`) makes 7 of the 30 Python tests fail, including all three
 cross-connection ones; with the connections’ own `busy_timeout` left in place
 (the pre-fix world had 5 s of `sqlite3` default waiting) the tests still pass,
