@@ -11,6 +11,11 @@ logs/*.log
 *.db-journal
 logs/*.jsonl
 .venv/
+# mutmut's sandbox: a full copy of the tree with every mutant inlined, left
+# behind untracked by `mutmut run` (see setup.cfg [mutmut]). It used to be
+# deleted by hand after each run; ignoring it means `git add -A` cannot commit
+# ~1,100 mutated copies of backend/history_query.py by accident.
+mutants/
 media_cache/
 saved_media/
 history.db*
