@@ -691,6 +691,72 @@ t('the filter buttons send an include/exclude rule', () => {
   eq(named('label_clear_filter').length, 1);
 });
 
+// ═════════════════════════════════════════════════════════════════
+// a lost boot answer heals itself (2026-09-13 — the person list stayed
+// empty until the first manual ↻: the request died, `loading` stuck at
+// true, nothing re-asked). onError un-sticks the loader and retries with
+// a bounded budget; a good answer resets it.
+// ═════════════════════════════════════════════════════════════════
+
+t('a failed boot page un-sticks the loader and arms one retry', () => {
+  HistoryDb.loading = true;                 // the answer died mid-flight
+  HistoryDb._retries = 0;
+  HistoryDb.onError('userdb_page');
+  eq(HistoryDb.loading, false, 'later loads must fire again');
+  eq(HistoryDb._retries, 1);
+  ok(HistoryDb._retryTimer, 'a retry is scheduled');
+  HistoryDb.onError('userdb_stats');        // the twin request failed too
+  eq(HistoryDb._retries, 1, 'one pending retry covers both reads');
+  clearTimeout(HistoryDb._retryTimer);      // keep the harness synchronous
+  HistoryDb._retryTimer = null;
+});
+
+t('errors from other scopes never trigger a database reload', () => {
+  const before = named('userdb_page').length;
+  HistoryDb._retries = 0;
+  HistoryDb.onError('history_open');
+  HistoryDb.onError('media_path');
+  HistoryDb.onError('');
+  eq(named('userdb_page').length, before, 'nothing re-asked');
+  eq(HistoryDb._retries, 0, 'the budget is untouched');
+  eq(HistoryDb._retryTimer, null, 'no retry is scheduled');
+});
+
+t('a good page pays off the retry budget', () => {
+  HistoryDb._retries = 3;
+  HistoryDb._retryTimer = setTimeout(() => {}, 60000);
+  const req = named('userdb_page').pop().args[0];
+  HistoryDb.onPage(req, JSON.stringify({
+    items: [{ nick: 'Ангелина', message_count: 1, media_count: 0,
+              first_seen: '2026-09-01 10:00:00',
+              last_seen: '2026-09-07 12:00:00', my_nicks: ['Me'] }],
+    total: 1, has_more: false, offset: 0 }));
+  eq(HistoryDb._retries, 0);
+  eq(HistoryDb._retryTimer, null, 'the pending retry is cancelled');
+});
+
+t('the retry budget is bounded — a truly broken world stops asking', () => {
+  HistoryDb._retries = 0;
+  HistoryDb._retryTimer = null;
+  for (let i = 0; i < HistoryDb.RETRY_MAX; i++) {
+    HistoryDb.onError('userdb_page');
+    ok(HistoryDb._retryTimer, 'retry ' + (i + 1) + ' is scheduled');
+    clearTimeout(HistoryDb._retryTimer);    // the timer "fires"… (reload
+    HistoryDb._retryTimer = null;          // keeps counting, see reload)
+  }
+  HistoryDb.onError('userdb_page');
+  eq(HistoryDb._retryTimer, null, 'no sixth retry is scheduled');
+  eq(HistoryDb._retries, HistoryDb.RETRY_MAX);
+  HistoryDb._retries = 0;                  // leave no state for the report
+});
+
+t('a manual reload restarts the retry budget', () => {
+  HistoryDb._retries = 4;
+  HistoryDb.reload();
+  eq(HistoryDb._retries, 0, '↻ starts fresh');
+  eq(HistoryDb._retryTimer, null);
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('history_panels_boot: ' + passed + ' passed, ' + failed + ' failed');

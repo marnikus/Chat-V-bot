@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**90 documents in 16 groups.**
+**91 documents in 17 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -29,6 +29,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | RULE 1’s worked examples (visual click runner), moved out of the rules file so it stays loadable in one read. |
 | [`2026-09-12-god-classes/`](#2026-09-12-god-classes) | 6 | The god-class & size-debt round (RULE 19 step 4): the plan, and steps 1–5 — splitting `chat_sync`, the deletion family, `scroll_parser`, `Collector` and `history_query`. |
 | [`2026-09-13-god-classes/`](#2026-09-13-god-classes) | 2 | The same round, executed the next day: steps 6–7 — the two Qt bridge facades split by wire surface, and the `UndoService` god class split into `services/undo_service/`, each with the tool that proves the surface did not change. |
+| [`2026-09-13-boot-world-wait/`](#2026-09-13-boot-world-wait) | 1 | The boot world-wait fix reapplied to this branch's restructured tree: a window that asks before the world is open now **waits** for it and is answered, and the page re-asks what it fired before its own listeners connected. |
 
 ---
 
@@ -265,3 +266,19 @@ name (RULE 17).
 
 - [`STEP6_BRIDGE_FACADES_DESIGN_2026-09-13.md`](2026-09-13-god-classes/STEP6_BRIDGE_FACADES_DESIGN_2026-09-13.md) — Step 6: `bridge/history_bridge.py` + `bridge/stack_bridge.py` → one package each, seven plain-class mixins per facade, with the QWebChannel metaobject surface proven IDENTICAL
 - [`STEP7_UNDO_SERVICE_DESIGN_2026-09-13.md`](2026-09-13-god-classes/STEP7_UNDO_SERVICE_DESIGN_2026-09-13.md) — Step 7: `services/undo_service.py` → `services/undo_service/`, eight mixins + a facade, with the `MAX_STACK_HISTORY` patch seam kept live, two dead methods removed and four observed-not-changed behaviours pinned
+
+---
+
+## 2026-09-13-boot-world-wait
+
+A field bug fixed on the upstream session branch while this one was mid-round:
+after a restart the **Full User Database** person list stayed empty until ↻.
+The startup broadcast was already here (it fills the windows after `init()`);
+what was missing is the other half — a window that asks *before* the world is
+open must **wait** for it and be answered. Reapplied to this branch's restructured
+tree (`bridge/history_bridge/`, `services/undo_service/` are packages now), with
+every number re-measured rather than copied.
+
+*1 doc.*
+
+- [`BOOT_WORLD_WAIT_DESIGN_2026-09-13.md`](2026-09-13-boot-world-wait/BOOT_WORLD_WAIT_DESIGN_2026-09-13.md) — `services/world_events.py` gains `wait_for_world_open` + `run_when_world_open` (the world's clock: wait for it, announce it live), `_run_async` becomes a 4-line call into it, the page re-asks what it fired before its listeners connected, and `HistoryDb` un-sticks its loader with a bounded retry — plus the flat-`readdirSync` harness bug step 6 exposed

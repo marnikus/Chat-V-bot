@@ -117,9 +117,15 @@ SMELL_FILES = ["backend/history_query/", "bridge/history_bridge/",
 # need the same five imports (`from __future__ / json / logging / Slot /
 # core.events` + `log = logging.getLogger("chatbot")`). No logic is copied;
 # the bodies of `_emit_presets`/`_emit_templates`, `deletion`/`person_ops`
-# and `runner`/`layout_service` are unrelated. Faking a difference to keep the
-# scan quiet (a stray import, a reworded header) would be the gaming §16.2
-# forbids, so the noise is recorded instead.
+# and `runner`/`layout_service` are unrelated.
+#
+# The boot-fix port (2026-09-13) removed the third: `runner.py`'s `_run_async`
+# now delegates to `services/world_events.run_when_world_open`, so the mixin no
+# longer logs and dropped `import logging` + the module `log` — the shared
+# header with `services/layout_service.py` is gone. The baseline shrank again.
+#
+# Faking a difference to keep the scan quiet (a stray import, a reworded
+# header) would be the gaming §16.2 forbids, so the noise is recorded instead.
 #
 # Maintenance 2026-09-11 (DB undo/restore): the AREA C sized split removed two
 # of these outright — ('app/lifecycle.py', 'services/history/export.py') and
@@ -150,9 +156,10 @@ CLONE_BASELINE = frozenset({
     # Maintenance 2026-09-13 (god-class round, step 6): splitting the two
     # bridge facades into `bridge/history_bridge/` and `bridge/stack_bridge/`
     # left three pairs of leaves with the identical standard import header
-    # (see the note above — no logic copied).
+    # (see the note above — no logic copied). The boot-fix port of 2026-09-13
+    # dissolved the third (`runner.py` dropped its logging header), so two are
+    # left; the baseline only ever shrinks.
     ("bridge/history_bridge/deletion.py", "bridge/history_bridge/person_ops.py"),
-    ("bridge/history_bridge/runner.py", "services/layout_service.py"),
     ("bridge/stack_bridge/presets.py", "bridge/stack_bridge/templates.py"),
 })
 # Step 4 (2026-09-12) removed one stale entry: `("bridge/stack_bridge.py",
