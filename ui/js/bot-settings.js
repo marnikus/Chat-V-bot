@@ -1,15 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════
    bot-settings.js — the AI Connections window
 
-   Opened by the ⚙ button in the Grok Prompt Editor title bar. Lists the
-   user's NAMED connections — several may share one provider — and holds
-   each one's key, model and endpoint. This is the ONLY place connection
-   details live; the Prompt Editor selects one and nothing more.
+   An anchored popup under the ⚙ button in the Grok Prompt Editor title
+   bar — same placement and same outside-click dismissal as the Grid view /
+   Bookmarks menu, because that is the dropdown pattern this app already has.
+
+   It lists the user's NAMED connections (several may share one provider)
+   and holds each one's key, model and endpoint. This is the ONLY place
+   connection details live AND the only place the active one is chosen:
+   the Prompt Editor holds prompt controls and nothing else, so "which AI
+   runs this?" has exactly one answer and one home.
+
+   Every provider always has a row — the store seeds a keyless one — so
+   adding a Google key is something the user can reach on a fresh install.
+   An unusable connection is listed WITH its problem, never hidden.
 
    The key is write-only here. The backend reports only a MASKED form
    ("xai-…mnop"), so a stored secret is never echoed back into the DOM
    — which also means a blank key field on Save means "keep the one
    you have", not "erase it".
+
+   ideal-size: 314 lines reason=one window = one controller, at the top of
+   RULE 18's band. The separable part already left: the dropdown itself is
+   `dark-select.js`, shared with the Prompt Editor's preset chooser.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -26,6 +39,7 @@ const BotSettings = {
     const $ = (id) => document.getElementById(id);
     this._els = {
       backdrop: $('botSettingsBackdrop'), list: $('botProviderList'),
+      openFromEditor: $('botPromptSettingsBtn'),
       key: $('botProviderKey'), keyState: $('botProviderKeyState'),
       model: $('botProviderModel'), url: $('botProviderUrl'),
       status: $('botSettingsStatus'), open: $('botSettingsBtn'),
@@ -33,14 +47,45 @@ const BotSettings = {
       close: $('botSettingsCloseBtn'), test: $('botTestConnBtn'),
       title: $('botConnTitle'), provider: $('botConnProvider'),
       add: $('botConnNewBtn'), remove: $('botConnDeleteBtn'),
+      use: $('botConnUseBtn'),
     };
     if (!this._els.backdrop) return;
+    this._providerBox = DarkSelect.attach(this._els.provider, {
+      placeholder: 'Choose a provider',
+      onPick: () => this._onProviderPicked(),
+    });
     this._wire();
+  },
+
+  /** The provider decides the default model and endpoint, so show them
+   *  the moment it changes rather than after a save the user cannot judge. */
+  _onProviderPicked() {
+    const spec = this.providers.filter(
+      (p) => p.id === this.providerId())[0];
+    if (!spec) return;
+    if (this._els.model && !this._els.model.value)
+      this._els.model.value = spec.model || '';
+    if (this._els.url && !this._els.url.value)
+      this._els.url.value = spec.url || '';
+    this.setStatus('Provider: ' + spec.title);
+  },
+
+  providerId() {
+    return this._providerBox ? this._providerBox.value : '';
   },
 
   _wire() {
     const on = (el, fn) => { if (el) el.addEventListener('click', fn); };
-    on(this._els.open, () => this.open());
+    const opener = (btn) => {
+      if (!btn) return;
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();      // the outside-click handler would
+        this.toggle(btn);             // otherwise close it immediately
+      });
+    };
+    opener(this._els.open);
+    opener(this._els.openFromEditor);
+    on(this._els.use, () => this.useForPrompts());
     on(this._els.close, () => this.close());
     on(this._els.cancel, () => this.close());
     on(this._els.save, () => this.save());
@@ -56,8 +101,11 @@ const BotSettings = {
     }
   },
 
-  open() {
-    if (this._els.backdrop) this._els.backdrop.classList.remove('hidden');
+  /** Open under the ⚙ that was clicked, like the Grid view / Bookmarks menu. */
+  open(anchor) {
+    if (!this._els.backdrop) return;
+    this._els.backdrop.classList.remove('hidden');
+    this._place(anchor || this._els.openFromEditor || this._els.open);
     this.setStatus('');
     this.load();
   },
@@ -65,6 +113,39 @@ const BotSettings = {
   close() {
     if (this._els.backdrop) this._els.backdrop.classList.add('hidden');
     if (this._els.key) this._els.key.value = '';   // never leave a typed key
+    if (typeof DarkSelect !== 'undefined') DarkSelect.closeAll(null);
+  },
+
+  toggle(anchor) {
+    if (this.isOpen()) this.close(); else this.open(anchor);
+  },
+
+  isOpen() {
+    return !!this._els.backdrop &&
+      !this._els.backdrop.classList.contains('hidden');
+  },
+
+  /** Same arithmetic the layout menu uses: right-aligned, clamped on screen. */
+  _place(anchor) {
+    const panel = this._els.backdrop;
+    if (!anchor || !panel || !anchor.getBoundingClientRect) return;
+    const at = anchor.getBoundingClientRect();
+    const width = panel.offsetWidth || 520;
+    const left = Math.max(8, Math.min(at.right - width,
+                                      window.innerWidth - width - 8));
+    panel.style.left = left + 'px';
+    panel.style.top = (at.bottom + 6) + 'px';
+  },
+
+  /** Run prompts through the selected connection from now on. */
+  useForPrompts() {
+    if (!this.selected) { this.setStatus('Select a connection first.'); return; }
+    if (!App.bridge || !App.bridge.bot_use_connection) return;
+    App.bridge.bot_use_connection(this.selected, (ok) => {
+      this.setStatus(ok ? 'Prompts now run on this connection.'
+                        : 'Could not switch connection.');
+      this.load();
+    });
   },
 
   load() {
@@ -89,15 +170,11 @@ const BotSettings = {
   },
 
   _renderProviderChoices() {
-    const box = this._els.provider;
-    if (!box) return;
-    box.textContent = '';
-    this.providers.forEach((spec) => {
-      const opt = document.createElement('option');
-      opt.value = spec.id;
-      opt.textContent = spec.title;
-      box.appendChild(opt);
-    });
+    if (!this._providerBox) return;
+    const current = this._current() || {};
+    this._providerBox.setOptions(this.providers.map((spec) => ({
+      value: spec.id, title: spec.title, sub: spec.model || '',
+    })), current.provider || this.providerId());
   },
 
   _renderList() {
@@ -132,8 +209,8 @@ const BotSettings = {
     const entry = this._current() || {};
     if (this._els.key) this._els.key.value = '';
     if (this._els.title) this._els.title.value = entry.title || '';
-    if (this._els.provider && entry.provider)
-      this._els.provider.value = entry.provider;
+    if (this._providerBox && entry.provider)
+      this._providerBox.select(entry.provider);
     if (this._els.model) this._els.model.value = entry.model || '';
     if (this._els.url) this._els.url.value = entry.url || '';
     if (this._els.keyState) {
@@ -180,7 +257,7 @@ const BotSettings = {
     if (!val(this._els.title)) { this.setStatus('Give it a name first.'); return; }
     App.bridge.bot_save_connection(
       this.selected, JSON.stringify({
-        title: val(this._els.title), provider: val(this._els.provider),
+        title: val(this._els.title), provider: this.providerId(),
         api_key: val(this._els.key), model: val(this._els.model),
         url: val(this._els.url) }),
       (ident) => {
@@ -221,5 +298,17 @@ const BotSettings = {
     if (this._els.status) this._els.status.textContent = text || '';
   },
 };
+
+/* Dismiss on a click outside, exactly like the Grid view / Bookmarks menu.
+   Registered once at load: the popup's own clicks stopPropagation, and the
+   two ⚙ triggers do too, so this only ever sees a genuine outside click. */
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('click', (event) => {
+    if (!BotSettings.isOpen()) return;
+    const inside = event.target && event.target.closest &&
+      event.target.closest('#botSettingsBackdrop');
+    if (!inside) BotSettings.close();
+  });
+}
 
 if (typeof window !== 'undefined') window.BotSettings = BotSettings;

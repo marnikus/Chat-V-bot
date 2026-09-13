@@ -50,7 +50,6 @@ BOT_SLOTS = ["bot_load_today", "bot_suggest_reply", "bot_analyze_reaction",
              "bot_reset_prompt", "bot_get_variables", "bot_check_prompt",
              # presets (Prompt Editor) and connections (AI Connections)
              "bot_get_presets", "bot_save_preset", "bot_delete_preset",
-             "bot_prompt_connections", "bot_use_connection_for_prompts",
              "bot_connections", "bot_save_connection",
              "bot_delete_connection", "bot_use_connection",
              "bot_test_connection"]
@@ -464,12 +463,26 @@ class TestTheEditorHoldsNoConnectionSettings(PromptBridgeCase):
                      'id="botConnSaveBtn"'):
             self.assertNotIn(gone, editor, f"{gone} is still in the editor")
 
-    def test_the_editor_still_selects_a_connection(self):
-        """"Configured elsewhere", not "unreachable": the editor must still
-        choose WHICH connection runs the prompt."""
-        data = json.loads(self.editor.bot_prompt_connections())
-        self.assertIn("connections", data)
-        self.assertIn("active", data)
+    def test_the_editor_cannot_choose_a_connection_either(self):
+        """One setting, one home. The editor used to carry a connection
+        dropdown beside the preset one, which meant two windows could change
+        which AI runs and the user had to guess which one won. Prompts now
+        run on whichever connection the AI Connections popup marks in use."""
+        for slot in ("bot_prompt_connections",
+                     "bot_use_connection_for_prompts"):
+            self.assertFalse(hasattr(self.editor, slot),
+                             f"{slot} is a second way to switch connection")
+
+    def test_the_editor_markup_has_no_connection_dropdown(self):
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        html = open(os.path.join(repo, "ui", "index.html"),
+                    encoding="utf-8").read()
+        editor = html[html.index('id="winBotPrompt"'):]
+        editor = editor[:editor.index("</main>")]
+        for gone in ('id="botConnSelect"', 'id="botConnWarn"'):
+            self.assertNotIn(gone, editor, f"{gone} is still in the editor")
+        self.assertIn('id="botPromptSettingsBtn"', editor,
+                      "the popup must still be reachable from the editor")
 
 
 class SettingsBridgeCase(BotBridgeCase):
@@ -491,6 +504,15 @@ class SettingsBridgeCase(BotBridgeCase):
     def listed(self):
         return json.loads(self.settings.bot_connections())["connections"]
 
+    def added(self):
+        """Only the connections this test made.
+
+        Every provider is seeded with a keyless row so it is selectable on a
+        fresh install (that IS the connection list the user sees), so a test
+        about saving has to look past the seeds."""
+        return [c for c in self.listed() if c["has_key"] or c["title"]
+                not in {"Grok (xAI)", "Google Gemini"}]
+
 
 class TestConnectionsOverTheWire(SettingsBridgeCase):
     def test_a_malformed_payload_is_refused_rather_than_crashing(self):
@@ -498,7 +520,7 @@ class TestConnectionsOverTheWire(SettingsBridgeCase):
         back as "not saved", not as an exception through QWebChannel."""
         self.assertEqual(self.settings.bot_save_connection("", "{oops"), "")
         self.assertEqual(self.settings.bot_save_connection("", "[1,2]"), "")
-        self.assertEqual(self.listed(), [])
+        self.assertEqual(self.added(), [])
 
     def test_a_connection_is_created_and_listed(self):
         ident = self.add("Grok — grok-4.3", model="grok-4.3")
@@ -550,7 +572,7 @@ class TestConnectionsOverTheWire(SettingsBridgeCase):
         self.assertEqual(self.settings.bot_save_connection(
             "", json.dumps({"title": "Nope", "provider": "nonesuch",
                             "api_key": "k", "model": "m"})), "")
-        self.assertEqual(self.listed(), [])
+        self.assertEqual(self.added(), [])
 
     def test_deleting_one_connection_leaves_the_others(self):
         keep, drop = self.add("Keep me"), self.add("Drop me")

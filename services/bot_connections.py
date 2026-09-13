@@ -105,11 +105,35 @@ class ConnectionStore(NamedSection):
     SECTION = SECTION       # the config section this library owns
 
     def all(self) -> list[Connection]:
-        """Every connection, oldest first, migrating legacy settings once."""
+        """Every connection, oldest first.
+
+        On the very first read an empty store is filled: legacy per-provider
+        settings are adopted if there are any, and then EVERY provider gets a
+        row. That second half is why Grok and Google are both selectable on a
+        fresh install — a provider with no connection would otherwise be a
+        vendor the app supports and the user cannot reach. A seeded row has no
+        key, so `problem()` reports it and `client_for` still refuses to send:
+        visible and unusable, never invisible.
+        """
         items = self._all()
         if not items:
             items = self._adopt_legacy()
+        items = self._seed_missing(items)
         return [Connection(key, value) for key, value in items.items()]
+
+    def _seed_missing(self, items: dict) -> dict:
+        """Add a keyless row for any provider that has no connection yet."""
+        if self._config is None:
+            return items
+        have = {str((row or {}).get("provider") or "")
+                for row in items.values() if isinstance(row, dict)}
+        for spec in bot_providers.PROVIDERS.values():
+            if spec.id in have:
+                continue
+            items[spec.id] = {"title": spec.title, "provider": spec.id,
+                              "api_key": "", "model": spec.model, "url": ""}
+            self._config.named_set(SECTION, spec.id, items[spec.id])
+        return items
 
     def get(self, ident: str) -> Connection | None:
         for conn in self.all():

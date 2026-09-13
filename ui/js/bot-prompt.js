@@ -7,12 +7,19 @@
    sent to Grok for the current person, and saves or cancels. A saved
    edit is stored by the backend and therefore survives a restart.
 
-   ideal-size: 406 lines reason=one window = one controller. The editor has
-   four jobs that only make sense together — the template tabs, the variable
-   checker, the saved presets and the connection dropdown — and each is a
-   handful of small methods over the SAME textarea and status line. Cutting
-   them apart would move the state, not the complexity. Over RULE 18's 300
-   in company with history-db.js, for the same reason.
+   It holds NO API configuration: no key, no model, no endpoint, and — since
+   the connection chooser moved out — no way to change which AI runs. That is
+   the ⚙ button's window, and one setting with one home is the point of the
+   split. Prompts run on whichever connection is marked in use there.
+
+   The preset chooser is a `DarkSelect`, not a native `<select>`: an OS-drawn
+   option list cannot be themed and came out white on a black app.
+
+   ideal-size: 354 lines reason=one window = one controller. The three
+   remaining jobs — template tabs, the variable checker and the saved presets
+   — are small methods over the SAME textarea and status line; splitting them
+   would move the state, not the complexity. Just over RULE 18's 300, and 57
+   lines shorter than before this round.
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -21,9 +28,7 @@ const BotPrompt = {
   templates: [],
   variables: [],
   presets: [],
-  connections: [],
   preset: '',
-  connection: '',
   current: '',
   nick: '',
   _seq: 0,
@@ -41,14 +46,15 @@ const BotPrompt = {
       preset: $('botPresetSelect'), presetSave: $('botPresetSaveBtn'),
       presetUpdate: $('botPresetUpdateBtn'),
       presetDelete: $('botPresetDeleteBtn'),
-      conn: $('botConnSelect'), connWarn: $('botConnWarn'),
-      settings: $('botPromptSettingsBtn'),
     };
     if (!this._els.text) return;
+    this._presetBox = DarkSelect.attach(this._els.preset, {
+      placeholder: '— current template —',
+      onPick: (value) => this.applyPreset(value),
+    });
     this._wire();
     this.load();
     this.loadVariables();
-    this.loadConnections();
   },
 
   _wire() {
@@ -60,17 +66,8 @@ const BotPrompt = {
     on(this._els.presetSave, () => this.savePresetAs());
     on(this._els.presetUpdate, () => this.updatePreset());
     on(this._els.presetDelete, () => this.deletePreset());
-    on(this._els.settings, () => {
-      if (typeof BotSettings !== 'undefined') BotSettings.open();
-    });
-    if (this._els.preset) {
-      this._els.preset.addEventListener('change', () =>
-        this.applyPreset(this._els.preset.value));
-    }
-    if (this._els.conn) {
-      this._els.conn.addEventListener('change', () =>
-        this.useConnection(this._els.conn.value));
-    }
+    // The ⚙ is wired by BotSettings itself (it owns that window, and two
+    // listeners on one button would toggle it open and shut again).
     if (this._els.text) {
       ['input', 'keyup', 'click'].forEach((ev) =>
         this._els.text.addEventListener(ev, () => this.checkVariables()));
@@ -186,21 +183,20 @@ const BotPrompt = {
   },
 
   _renderPresets() {
-    const box = this._els.preset;
-    if (!box) return;
-    box.textContent = '';
-    const none = document.createElement('option');
-    none.value = '';
-    none.textContent = this.presets.length
-      ? '— current template —' : '— no presets saved —';
-    box.appendChild(none);
-    this.presets.forEach((preset) => {
-      const opt = document.createElement('option');
-      opt.value = preset.id;
-      opt.textContent = preset.title;
-      box.appendChild(opt);
-    });
-    box.value = this.preset;
+    if (!this._presetBox) return;
+    const rows = [{ value: '', title: '— current template —',
+                    sub: 'the live template, as saved' }];
+    this.presets.forEach((preset) => rows.push({
+      value: preset.id, title: preset.title,
+      sub: this._excerpt(preset.text),
+    }));
+    this._presetBox.setOptions(rows, this.preset);
+  },
+
+  /** A one-line taste of the preset, so the list is readable at a glance. */
+  _excerpt(text) {
+    const flat = String(text || '').replace(/\s+/g, ' ').trim();
+    return flat.length > 60 ? flat.slice(0, 57) + '…' : flat;
   },
 
   /** Fill the editor from the selected preset (does not save it). */
@@ -255,61 +251,6 @@ const BotPrompt = {
     if (typeof window !== 'undefined' && typeof window.prompt === 'function')
       return String(window.prompt(question) || '').trim();
     return '';
-  },
-
-  /* ── which connection runs the prompt ─────────────────────────
-     Read-only here: keys, models and endpoints live in the AI Connections
-     window. This only chooses between what is already configured. */
-
-  loadConnections() {
-    if (!App.bridge || !App.bridge.bot_prompt_connections) return;
-    App.bridge.bot_prompt_connections((json) => {
-      let data = null;
-      try { data = JSON.parse(json || 'null'); } catch (err) { data = null; }
-      this.connections = (data && data.connections) || [];
-      this.connection = (data && data.active) || '';
-      this._renderConnections();
-    });
-  },
-
-  _renderConnections() {
-    const box = this._els.conn;
-    if (!box) return;
-    box.textContent = '';
-    if (!this.connections.length) {
-      const none = document.createElement('option');
-      none.value = '';
-      none.textContent = '— no connections — open ⚙ to add one —';
-      box.appendChild(none);
-    }
-    this.connections.forEach((conn) => {
-      const opt = document.createElement('option');
-      opt.value = conn.id;
-      opt.textContent = conn.title + (conn.ok ? '' : ' ⚠');
-      box.appendChild(opt);
-    });
-    box.value = this.connection;
-    this._warnConnection();
-  },
-
-  /** A selected-but-unusable connection must say why, not fail silently. */
-  _warnConnection() {
-    const box = this._els.connWarn;
-    if (!box) return;
-    const found = this.connections.filter((c) => c.id === this.connection)[0];
-    if (!this.connections.length)
-      box.textContent = 'No AI connection configured yet.';
-    else if (found && found.problem)
-      box.textContent = '⚠ ' + found.problem + ' — fix it in ⚙';
-    else
-      box.textContent = '';
-  },
-
-  useConnection(ident) {
-    this.connection = ident || '';
-    this._warnConnection();
-    if (!App.bridge || !App.bridge.bot_use_connection_for_prompts) return;
-    App.bridge.bot_use_connection_for_prompts(this.connection, () => {});
   },
 
   setTemplates(json) {
