@@ -187,6 +187,9 @@ function initApp() {
   // Label Manager + DB Connection windows.
   if (typeof Labels !== 'undefined') Labels.init();
   if (typeof DbPanel !== 'undefined') DbPanel.init();
+  // AI Bot Chat + Grok Prompt Editor windows.
+  if (typeof BotChat !== 'undefined') BotChat.init();
+  if (typeof BotPrompt !== 'undefined') BotPrompt.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
   if (App.bridge) {
     setupBridgeListeners();
@@ -448,6 +451,21 @@ function setupBridgeListeners() {
         HistoryStore.reloadCurrent();
     });
   }
+  // ── AI Bot Chat + Prompt Editor ───────────────────────────
+  if (b.bot_reply_ready) {
+    b.bot_reply_ready.connect((req, json) => {
+      BotChat.onReply(req, json);
+      BotPrompt.onReply(req, json);
+    });
+  }
+  if (b.bot_error)
+    b.bot_error.connect((req, message) => {
+      BotChat.onError(req, message);
+      LogConsole.log('⚠ Grok: ' + message, 'warn');
+    });
+  if (b.bot_prompts_changed)
+    b.bot_prompts_changed.connect((json) => BotPrompt.onPromptsChanged(json));
+
   if (b.collector_status)
     b.collector_status.connect((json) => CollectorPanel.onStatus(json));
   if (b.collector_log)

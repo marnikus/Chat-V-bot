@@ -1,0 +1,170 @@
+"""BotChatService — the AI Bot Chat window's use cases.
+
+Four of them, in the order the window uses them:
+
+* `today(nick)` — the messages of the CURRENT DAY for one person, read from
+  the archive (the window is about the running session, not the whole
+  history);
+* `suggest_reply(nick)` — render the "suggest next message" template over
+  those messages, ask Grok, and hand back a *pending* suggestion. It is never
+  sent here: sending is `send_message`, which the window only calls after the
+  user approved and then clicked "Send to Person";
+* `analyze_reaction(nick)` — render the "analyze reaction" template over the
+  person's last inbound message and classify the answer. It writes NOTHING;
+* `apply_reaction(nick, reaction)` — the single confirmed write, shared by the
+  "confirm the analysis" tick and by a manual click on another label, so the
+  latest human decision is always the one in the database.
+
+Everything answers a plain dict the bridge can serialise, or a `Result` for
+the two operations that can fail on the wire.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import date
+
+from core.result import Err, Ok, Result
+from services.bot_grok import GrokClient
+from services.bot_prompts import PromptLibrary
+from services.bot_reactions import ReactionLabels, parse
+
+log = logging.getLogger("chatbot")
+
+#: how many of the day's messages are worth sending as context
+CONTEXT_LIMIT = 60
+
+
+def today_key() -> str:
+    """The archive's `day` value for today (messages store `YYYY-MM-DD`)."""
+    return date.today().isoformat()
+
+
+def as_transcript(items: list) -> str:
+    """The day's messages as the plain "Nick: text" block Grok reads."""
+    lines = []
+    for item in items:
+        who = item.get("from") or ("me" if item.get("dir") == "out" else "them")
+        text = str(item.get("text") or "").strip()
+        if text:
+            lines.append(f"{who}: {text}")
+    return "\n".join(lines)
+
+
+def last_inbound(items: list) -> dict:
+    """The person's own last message of the day, or an empty dict."""
+    for item in reversed(items):
+        if item.get("dir") != "out" and str(item.get("text") or "").strip():
+            return item
+    return {}
+
+
+async def deliver(cdp, text: str) -> Result[str]:
+    """Type `text` into the open chat and press send, verified.
+
+    A module function, not a method: it needs the CDP client and nothing
+    from the service, and it is the same verified two-step
+    (`type_message` → `click_send`) the TYPE_MESSAGE / CLICK_SEND blocks use,
+    so a direct custom message and an approved AI message are delivered by
+    exactly one code path.
+    """
+    if not str(text or "").strip():
+        return Err("bot_empty_message", "there is nothing to send")
+    if cdp is None or not getattr(cdp, "is_connected", False):
+        return Err("bot_not_connected", "not connected to a chat tab")
+    from backend.message_injector import click_send, type_message
+    if not await type_message(cdp, text):
+        return Err("bot_type_failed", "the page did not accept the text")
+    if not await click_send(cdp):
+        return Err("bot_send_failed", "the send button could not be clicked")
+    return Ok(text)
+
+
+class BotChatService:
+    """Today's conversation, the two Grok calls, and the confirmed write."""
+
+    def __init__(self, archive=None, config=None, grok=None) -> None:
+        self.archive = archive
+        self.config = config
+        self.prompts = PromptLibrary(config)
+        self.grok = grok if grok is not None else GrokClient(config=config)
+
+    @property
+    def labels(self) -> ReactionLabels | None:
+        store = getattr(self.archive, "labels", None)
+        return ReactionLabels(store) if store is not None else None
+
+    async def today(self, nick: str) -> dict:
+        """The current day's messages of one person (empty is not broken)."""
+        db = getattr(self.archive, "db", None)
+        if db is None:
+            return {"nick": nick, "items": [], "empty": True,
+                    "day": today_key(), "reason": "archive_closed"}
+        rows = await db.fetchdicts(
+            "SELECT m.direction, m.from_nick, m.text, m.ts_display FROM "
+            "messages m JOIN persons p ON p.id = m.person_id WHERE "
+            "p.nick=? AND m.day=? AND m.deleted_at='' ORDER BY m.ord ASC "
+            "LIMIT ?", (nick, today_key(), CONTEXT_LIMIT))
+        items = [{"dir": row["direction"], "from": row["from_nick"],
+                  "text": row["text"], "time": row["ts_display"]}
+                 for row in rows]
+        return {"nick": nick, "items": items, "empty": not items,
+                "day": today_key()}
+
+    async def preview(self, nick: str, template_id: str) -> dict:
+        """Exactly what would be sent to Grok — the Prompt Editor shows it."""
+        page = await self.today(nick)
+        items = page["items"]
+        return {"nick": nick, "template": template_id,
+                "prompt": self.prompts.render(template_id, {
+                    "nick": nick, "conversation": as_transcript(items),
+                    "last_message": last_inbound(items).get("text", "")})}
+
+    async def suggest_reply(self, nick: str) -> Result[dict]:
+        """A pending reply suggestion — approved and sent by the user only."""
+        page = await self.today(nick)
+        if page["empty"]:
+            return Err("bot_no_messages",
+                       f"no messages with {nick} today to work from")
+        rendered = self.prompts.render("suggest_reply", {
+            "nick": nick, "conversation": as_transcript(page["items"]),
+            "last_message": last_inbound(page["items"]).get("text", "")})
+        answer = await self.grok.complete(rendered)
+        if answer.is_err:
+            return answer
+        return Ok({"nick": nick, "text": answer.value, "state": "pending"})
+
+    async def analyze_reaction(self, nick: str) -> Result[dict]:
+        """Grok's reading of the person's last answer. Writes nothing."""
+        page = await self.today(nick)
+        last = last_inbound(page["items"])
+        if not last:
+            return Err("bot_no_answer",
+                       f"{nick} has not answered today — nothing to analyze")
+        rendered = self.prompts.render("analyze_reaction", {
+            "nick": nick, "conversation": as_transcript(page["items"]),
+            "last_message": last.get("text", "")})
+        answer = await self.grok.complete(rendered)
+        if answer.is_err:
+            return answer
+        result = parse(answer.value)
+        result.update({"nick": nick, "state": "pending",
+                       "last_message": last.get("text", "")})
+        return Ok(result)
+
+    def reaction_state(self, nick: str) -> dict:
+        """The three labels and the active one, for the window's pills."""
+        labels = self.labels
+        if labels is None:
+            return {"nick": nick, "active": "", "available": []}
+        return labels.state_of(nick)
+
+    def apply_reaction(self, nick: str, reaction: str) -> Result[dict]:
+        """The ONE write: a confirmed analysis or a manual label click."""
+        labels = self.labels
+        if labels is None:
+            return Err("bot_no_world", "no world is open — open a database")
+        changed = labels.apply(nick, reaction)
+        state = labels.state_of(nick)
+        state["changed"] = changed
+        return Ok(state)

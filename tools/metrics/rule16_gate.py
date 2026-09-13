@@ -45,6 +45,67 @@ OWNED = [
     ("backend/history_query/rows.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
+    # ── AI Bot Chat + Grok Prompt Editor (2026-09-13) ────────────
+    ("services/bot_grok.py", None, "reply_text"),
+    ("services/bot_grok.py", None, "client_for"),
+    ("services/bot_grok.py", 'GrokSettings', "__init__"),
+    ("services/bot_grok.py", 'GrokSettings', "_read"),
+    ("services/bot_grok.py", 'GrokSettings', "api_key"),
+    ("services/bot_grok.py", 'GrokSettings', "url"),
+    ("services/bot_grok.py", 'GrokSettings', "model"),
+    ("services/bot_grok.py", 'GrokSettings', "timeout_s"),
+    ("services/bot_grok.py", 'GrokClient', "__init__"),
+    ("services/bot_grok.py", 'GrokClient', "_payload"),
+    ("services/bot_grok.py", 'GrokClient', "_session"),
+    ("services/bot_grok.py", 'GrokClient', "_post"),
+    ("services/bot_grok.py", 'GrokClient', "complete"),
+    ("services/bot_prompts.py", None, "default_text"),
+    ("services/bot_prompts.py", None, "title_of"),
+    ("services/bot_prompts.py", None, "is_usable"),
+    ("services/bot_prompts.py", 'PromptLibrary', "__init__"),
+    ("services/bot_prompts.py", 'PromptLibrary', "_stored"),
+    ("services/bot_prompts.py", 'PromptLibrary', "text"),
+    ("services/bot_prompts.py", 'PromptLibrary', "all"),
+    ("services/bot_prompts.py", 'PromptLibrary', "save"),
+    ("services/bot_prompts.py", 'PromptLibrary', "reset"),
+    ("services/bot_prompts.py", 'PromptLibrary', "render"),
+    ("services/bot_reactions.py", None, "parse"),
+    ("services/bot_reactions.py", 'ReactionLabels', "__init__"),
+    ("services/bot_reactions.py", 'ReactionLabels', "_def_for"),
+    ("services/bot_reactions.py", 'ReactionLabels', "ensure_defs"),
+    ("services/bot_reactions.py", 'ReactionLabels', "reaction_ids"),
+    ("services/bot_reactions.py", 'ReactionLabels', "active"),
+    ("services/bot_reactions.py", 'ReactionLabels', "_one_reaction"),
+    ("services/bot_reactions.py", 'ReactionLabels', "apply"),
+    ("services/bot_reactions.py", 'ReactionLabels', "clear"),
+    ("services/bot_reactions.py", 'ReactionLabels', "state_of"),
+    ("services/bot_chat.py", None, "today_key"),
+    ("services/bot_chat.py", None, "as_transcript"),
+    ("services/bot_chat.py", None, "last_inbound"),
+    ("services/bot_chat.py", None, "deliver"),
+    ("services/bot_chat.py", 'BotChatService', "__init__"),
+    ("services/bot_chat.py", 'BotChatService', "labels"),
+    ("services/bot_chat.py", 'BotChatService', "today"),
+    ("services/bot_chat.py", 'BotChatService', "preview"),
+    ("services/bot_chat.py", 'BotChatService', "suggest_reply"),
+    ("services/bot_chat.py", 'BotChatService', "analyze_reaction"),
+    ("services/bot_chat.py", 'BotChatService', "reaction_state"),
+    ("services/bot_chat.py", 'BotChatService', "apply_reaction"),
+    ("bridge/bot_bridge.py", None, "_emit_answer"),
+    ("bridge/bot_bridge.py", None, "_guarded"),
+    ("bridge/bot_bridge.py", None, "_schedule"),
+    ("bridge/bot_bridge.py", 'BotBridge', "__init__"),
+    ("bridge/bot_bridge.py", 'BotBridge', "service"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_load_today"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_suggest_reply"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_analyze_reaction"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_preview_prompt"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_send_message"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_reaction_state"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_apply_reaction"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_get_prompts"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_save_prompt"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_reset_prompt"),
 ]
 
 # Pre-existing oversized classes this feature cannot split — the AREA D API
@@ -77,7 +138,10 @@ RATCHET = {
 #     deleted, so the hatch cannot become a dumping ground.
 OVERRIDES: dict[tuple, str] = {}
 
-SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py"]
+SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py",
+               "services/bot_grok.py", "services/bot_prompts.py",
+               "services/bot_reactions.py", "services/bot_chat.py",
+               "bridge/bot_bridge.py"]
 
 # Exact-AST clone groups already in the tree at 53ba5fb, measured with
 # `python tools/metrics/clone_scan.py .`. The spec fails on *new* groups, not
@@ -167,15 +231,23 @@ SMELL_FILES = ["backend/history_query/query.py", "bridge/history_bridge.py"]
 # splitting the imports to break the span is exactly the cosmetic
 # span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
 # situation as the F1 pair below and the two F2 pairs above.
+# Maintenance 2026-09-13 (AI Bot Chat): `bridge/bot_bridge.py` joined the
+# existing ('bridge/cdp_bridge.py', 'bridge/people_bridge.py') group, which
+# grows to three files. It is the same standard bridge header the other groups
+# here are — `from __future__ / asyncio / json / logging / PySide6.QtCore
+# (QObject, Signal, Slot) / from core.events import …` — and no logic is
+# copied. Every name is genuinely used in bot_bridge.py: `asyncio.ensure_future`
+# schedules the Grok call, `json.dumps` shapes every answer, `log.warning`
+# reports a raising service, the three Qt names declare the slots and signals,
+# and `LogMessage` puts a failure in the log console. Tried and rejected:
+# dropping or reordering an import to dissolve the window would either delete a
+# used name or reintroduce pylint C0411 — the cosmetic span-shrinking §18.5
+# forbids.
 CLONE_BASELINE = frozenset({
-    # G7 removed the two REAL clones that used to sit here:
-    #   actions/click_back.py | actions/click_main_tab.py  (span 15) ->
-    #     actions.base.tab_fields()
-    #   backend/media_handler.py | backend/message_injector.py (span 7) ->
-    #     backend.logger.report_and_log()
-    # They are deleted rather than re-baselined: a baseline entry is a promise
-    # that a group is understood and accepted, not a way to silence one.
-    ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
+    # G7 removed two former real clones; BotBridge now joins the
+    # shared bridge import-header baseline without restoring either clone.
+    ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
+     "bridge/people_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),

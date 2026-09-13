@@ -27,6 +27,7 @@ from typing import Any, Optional, Type
 
 from PySide6.QtCore import QMetaMethod, QObject, Signal, Slot
 
+from bridge.bot_bridge import BotBridge
 from bridge.collector_bridge import CollectorBridge
 from bridge.context import BridgeContext
 from bridge.cdp_bridge import CdpBridge
@@ -47,10 +48,10 @@ from stores.preset_store import PresetStore
 
 log = logging.getLogger("chatbot")
 
-#: the ten domain bridges, in wiring order
+#: the eleven domain bridges, in wiring order
 BRIDGE_CLASSES = [CdpBridge, StackBridge, FileBridge, PeopleBridge,
                   HistoryBridge, LabelBridge, DbBridge, CollectorBridge,
-                  UndoBridge, LayoutBridge]
+                  UndoBridge, LayoutBridge, BotBridge]
 
 # Qt type-name → Python type for signature rebuilding
 _QT_TYPES = {
@@ -113,7 +114,7 @@ BRIDGE_SPECS: dict[str, tuple] = {}
 
 #: Layout grid helpers re-exported onto the Router for legacy callers (tests).
 _LAYOUT_ATTRS = ("GRID_VERSION", "WINDOW_IDS", "V1_WINDOW_IDS",
-                 "V2_WINDOW_IDS", "V3_WINDOW_IDS", "LEGACY_WINDOW_IDS",
+                 "V2_WINDOW_IDS", "V3_WINDOW_IDS", "V4_WINDOW_IDS", "LEGACY_WINDOW_IDS",
                  "NEW_WINDOW_IDS", "MIN_GRID_SIZE", "_default_grid_tree",
                  "_leaf_ids", "_parse_grid_payload", "_validate_grid_tree",
                  "_normalize_grid_tree", "_node_type", "_migrate_grid_tree",
@@ -171,7 +172,6 @@ def _slot_namespace() -> dict:
             deco = Slot(*types, result=ret) if ret else Slot(*types)
             ns[name] = deco(_make_forwarder(cls, name))
     return ns
-
 
 def _legacy_namespace() -> dict:
     """Class attributes older callers (mostly tests) still read off Router."""
