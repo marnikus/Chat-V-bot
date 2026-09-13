@@ -116,10 +116,14 @@ class TestRunCoordinatorLoadStack(unittest.TestCase):
 
 
 class TestRunProgressUserRecord(unittest.TestCase):
-    """P0-2 pin: UserRecord must be importable/constructible at runtime."""
+    """P0-2 pin: UserRecord must be importable/constructible at runtime.
 
-    def test_user_record_is_importable_from_progress(self):
-        from services.run.progress import UserRecord
+    G8 moved the construction site to services.run.queue with the rest of
+    RunQueueMixin; the pin follows it.
+    """
+
+    def test_user_record_is_importable_from_queue(self):
+        from services.run.queue import UserRecord
 
         rec = UserRecord(nick="wheel")
         self.assertEqual(rec.nick, "wheel")

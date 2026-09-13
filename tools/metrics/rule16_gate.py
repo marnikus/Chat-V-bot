@@ -183,7 +183,7 @@ CLONE_BASELINE = frozenset({
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
-    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("services/run/coordinator.py", "services/run/queue.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),

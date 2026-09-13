@@ -25,7 +25,8 @@ from .collect_phase import CollectPhaseMixin
 from .cycle_plan import choose_cycle_mode, inspect_stack
 from .error_recovery import RetryPolicy, RunExecutionMixin
 from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
-from .progress import RunProgress, RunQueueMixin
+from .progress import RunProgress
+from .queue import RunQueueMixin
 from .run_lifecycle import RunLifecycleMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")
