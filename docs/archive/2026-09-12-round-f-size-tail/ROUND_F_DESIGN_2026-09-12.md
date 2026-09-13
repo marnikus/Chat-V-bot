@@ -1392,3 +1392,300 @@ constraint here touches. F5's target was the tail's *count*, and that moved
   services/ stores/ app/ main.py`, the file and line counts by `wc -l`, the pair
   evidence by import scan, the merge arithmetic by adding the measured line
   counts of the named files.
+
+---
+
+## 12. F7 redesigned and reimplemented — decomposition done, and the metric §6 named is the wrong one (2026-09-13)
+
+§10.6 scored F7 "❌ half of two halves": the explanation had been rewritten from
+measurement, but §6's decomposition half was never done. This section does it, and
+reports a finding that changes what F7 should have been aimed at.
+
+### 12.1 The premise §6 got wrong, proven from the MI formula
+
+§6's F7 target reads "low MI **without** size … needs decomposition and
+explanation, not splitting". The assumption is that decomposing dense functions
+raises the module's Maintainability Index. It does not — it cannot. Radon computes
+MI per *module* as
+
+```
+171 − 5.2·ln(Halstead volume) − 0.23·CC − 16.2·ln(SLOC) + 50·sin(√(2.46·comments))
+```
+
+Decomposition moves three of those terms the wrong way at once. Measured on
+`window_preset_service.py`, with the prose held constant so only the code differs:
+
+| term | before | after decomposition | Δ |
+|---|---|---|---|
+| SLOC | 235 | 248 | **+13** → `−16.2·ln(SLOC)` −88.45 → −89.32 |
+| module-total CC | 82 | 85 | **+3** → `−0.23·CC` −18.86 → −19.55 |
+| worst *block* CC | 9 | 8 | **−1** (not a term in the formula) |
+| blocks | 23 | 26 | +3 |
+| **MI** | **28.15** | **27.97** | **−0.18** |
+
+The mechanism is structural, not incidental. Splitting one function into three
+*adds* two blocks, and radon charges each block a base complexity of 1, so
+module-total CC rises while the worst function's CC falls. Every seam in a
+`(value, error)` chain also adds an `if error: return None, error` guard — one
+more branch and three more lines. MI therefore penalises the exact remedy §6
+prescribed, twice: through SLOC and through total CC.
+
+The only levers that raise module MI are less SLOC, less total complexity, or more
+comments. "Less SLOC" means splitting, which §6 forbids. "More comments" is the
+§16.2 gaming §10.3 already caught this step doing — and caught it doing at scale,
++18.53 MI from prose alone. So §6's F7 target was unsatisfiable as written: the
+two available ways to hit the number were the two the rules forbid.
+
+F7 was therefore re-aimed at the defects MI was a poor proxy for, all of which are
+gated by a rule rather than inferred from a composite score.
+
+### 12.2 The decomposition
+
+`window_preset_service.py` — `_grid` did six jobs in 24 lines; the seams are forced
+by error precedence, since the order of the checks is the error a caller sees:
+
+| function | before | after |
+|---|---|---|
+| `_grid` | 24 LOC, CC 9 | **17 LOC, CC 7** — shape guard, then tree, then limits, then build |
+| `_grid_tree` | — | 10 LOC, CC 3 — the JSON round-trip and `canonical_grid_payload` |
+| `_grid_limits` | — | 8 LOC, CC 3 — the two declared constants |
+| `validate_document` | 22 LOC, CC 7 | **12 LOC, CC 4** — decode + header stay visible |
+| `_document_body` | — | 15 LOC, CC 5 — grid, states, windows, screen |
+
+`services/run/progress.py` — `_run_single_target_cycle` was **31 LOC, over §16.1's
+fail line of 30**, doing five jobs:
+
+| function | before | after |
+|---|---|---|
+| `_run_single_target_cycle` | 31 LOC, CC 9 | **18 LOC, CC 5** — guard, stop, announce, work, account |
+| `_announce_stop` | — | 4 LOC, CC 1 — the stop line two call sites spelled out verbatim |
+| `_announce_single_target` | — | 12 LOC, CC 1 |
+| `_work_single_target` | — | 9 LOC, CC 2 — the narrow `RunStopped` handler |
+| `_account_single_target` | — | 8 LOC, CC 2 — counters, mark-on-ok, `user_complete` |
+| `queue_order` | 9 LOC, **CC 9** | **9 LOC, CC 3** — the density was three lines of 116–164 chars |
+| `_enabled_block` | — | 4 LOC, CC 4 — one shape for a question asked in three spellings |
+| `_unmessaged` / `_order_by_recency` | — | 4 LOC CC 3 / 6 LOC CC 2 — the filter and the double stable sort |
+| `_run_take_phase` | 28 LOC, CC 8 | **18 LOC, CC 6** — the loop keeps its cancellation checks |
+| `_take_one_block` | — | 19 LOC, CC 4 — one block's choice, and the file's largest function |
+
+Two verbatim duplications collapsed on the way, found by reading rather than by a
+clone scan: the enabled-block predicate existed as two `next(...)` comprehensions
+and one `any(...)` (`queue_order`, `_repeat_cycles`, `_run_single_target_cycle`),
+and the stop announcement existed twice character-for-character
+(`_run_single_target_cycle` and `_stopped_single_target`). `progress.py` also
+gained the module docstring §18.2 requires and it never had, replacing the
+nine-line F7 comment whose detail now lives here.
+
+The new helpers in `window_preset_service.py` deliberately carry **no docstrings**:
+every one of its 22 existing validators has none, and adding prose to a file whose
+problem was prose would repeat §10.3's mistake. `progress.py`'s helpers do carry
+one-line docstrings, because that is its convention.
+
+Result, measured: **neither file has a single function past §18.1's 20-line ideal**
+(was 2 and 2), nothing is past §16.1's 30-line fail line (was 1), and the worst
+block CC in each file fell 9 → 8. The 8 that remains is `filter_by_labels` /
+`_screen` / `_bound_values` — all inside every limit and none a named F7 target, so
+they were left alone rather than churned.
+
+### 12.3 Behaviour verified differentially, not by the suite alone
+
+The suite passing is necessary but weak evidence for a refactor whose risk is a
+silently changed message or a reordered comparison, so each was checked directly
+against the pre-change module compiled from git:
+
+* **Every emitted string is byte-for-byte identical.** An AST walk collected the
+  literal skeleton of all 16 distinct `log_msg`/`debug_msg` payloads in
+  `progress.py` before and after: same set, no differences. This is the check that
+  matters for the strings split across lines, and for the `{{nick}}` in
+  `_single_target_guard`, which is a *plain* string — literal text the user reads,
+  not an f-string escape. Converting it would have silently changed the message.
+* **All 28 validator error strings survive.** The same walk over `(None, error)`
+  returns initially reported two as lost; they were not lost but moved into
+  `_grid_limits`, which returns a bare `str | None` that `_grid` re-wraps. Verified
+  at runtime rather than by inspection.
+* **16 differential document cases, 0 mismatches** — the valid document plus
+  `window_count`, `sizes_unit`, `type`, `version=True`, `version="3"`,
+  `tree=None`, an unserializable tree, a missing/non-dict grid, and the four
+  `name=` paths, each run through the original and the new module and compared on
+  both the returned document and the error.
+* **Error precedence proven, because a comment now claims it.** `_grid_limits`
+  carries a comment saying the constants are checked *after* the tree on purpose.
+  A document with all three faults returns `invalid grid tree: node must be an
+  object` in both versions — the claim is checked, not asserted.
+* **1 600 differential `queue_order` comparisons, 0 mismatches** — 400 randomised
+  user lists (duplicate nicks, `None` and equal `first_seen`, mixed `messaged`)
+  across four stack configurations, covering both sort branches: `sort_people`
+  when `SCROLL_PARSE` is enabled, and the double stable sort otherwise. The double
+  sort is the subtlest change in either file, because `reverse=True` on a stable
+  sort keeps the inner nick ordering as the tie-break rather than reversing it.
+
+Targeted suites: **623 passed, 121 subtests**, including `test_click_user_order`,
+`test_take_person`, `integration/run_safety/test_stop_contract` and
+`integration/services`.
+
+### 12.4 The §18.2 consequence, and the split that was rejected
+
+Decomposition costs lines, and both files were near the top of §18.2's band to
+begin with — `window_preset_service.py` sat at 299, **one line** under the 300
+ceiling. Both now exceed it, at **326** and **314**, and both carry an
+`ideal-size:` note whose stated line count was verified to agree with the file it
+sits in (§18.5's requirement, and the check §10.8 applied to F4's note).
+
+Splitting was considered and rejected, for three reasons rather than one. §6 rules
+it out explicitly for this step. §18.3's cohesion test argues against it: these
+validators are one short-circuiting DAG, and `RunProgress` and `RunQueueMixin` are
+both consumed by `RunCoordinator` through one import. And §8.1's recorded lesson
+is decisive against the tempting compromise — keeping a re-export shim in
+`progress.py` so `from .progress import RunProgress, RunQueueMixin` still works is
+exactly the shim that §8.1 proved is not patch-transparent.
+
+RULE 19 settles the tension: "fix complexity before size; size is a symptom." Both
+§18.1 and §18.2 are size ideals, and the complexity win — a function off §16.1's
+fail line, worst CC 9 → 8, two duplications gone — is real, while the 26 and 15
+lines over a 300-line ideal are what doing that work costs in a file that may not
+be split. §18.5 exists for precisely this case.
+
+One thing was reverted mid-step, and it is worth recording because it was my own
+error. Fixing all 15 over-long lines in `progress.py` grew it to 345, and the
+churn was not free: it pushed `_single_target_guard` from 13 to 21 LOC, *creating*
+an over-ideal function that did not exist before, and `_skip_verdict` was invented
+solely to shorten strings. Line length is a pylint default, and §10.3 already ruled
+that such defaults are "not a rule threshold" this round tracks. The reformatting
+was rolled back in the three methods that were inside every limit; the wraps that
+survive are only those inside functions being decomposed anyway, where the strings
+had to move. Final state: 15 over-long lines → **7**, and all 7 are byte-identical
+to HEAD — the step introduced none. A second pass over the diff caught one more
+piece of the same churn that the line-length sweep had missed: an 86-character
+`if` in `_run_take_phase` had been wrapped with a backslash continuation, which is
+both unnecessary (it was already inside the limit) and the one line-joining style
+PEP 8 discourages. Reverted, and proven formatting-only rather than assumed —
+`ast.dump` of the file before and after that edit is byte-identical.
+
+### 12.5 The MI accounting, including the part that is not progress
+
+Reported separately, because one of these numbers is not earned by the code:
+
+| | HEAD | after F7 | decomposition alone |
+|---|---|---|---|
+| `window_preset_service.py` | 28.71 | **30.57** | **27.97** |
+| `services/run/progress.py` | 31.79 | **31.05** | **29.26** |
+
+The §18.5 notes are worth **+2.61** and **+1.79** MI respectively, at **+0 SLOC
+and +0 CC** — purely the comment-ratio term. So the entire apparent MI gain in
+`window_preset_service.py`, and more than all of it, comes from a mandated comment
+block rather than from the refactor. Quoting 28.71 → 30.57 as F7's result would be
+the §16.2 gaming §10.3 caught, reached by a legitimate route: the note is required
+because the file really is over the band. The decomposition-only column is the
+honest one, and it is **lower** than the baseline in both files, exactly as §12.1's
+formula predicts.
+
+F7's scorecard is therefore the rule-gated set, not MI:
+
+| measure | rule | HEAD | after |
+|---|---|---|---|
+| functions past §18.1's 20-line ideal | §18.1 | 2 + 2 | **0 + 0** |
+| functions past §16.1's 30-line fail line | §16.1 | 0 + 1 | **0 + 0** |
+| largest function | §18.1 | 24 / 31 LOC | **17 / 19** |
+| worst block CC | §16.1 (fail > 10) | 9 / 9 | **8 / 8** |
+| `queue_order` CC | — | 9 | **3** |
+| `_run_single_target_cycle` CC | — | 9 | **5** |
+| verbatim duplications | §16.2 | 2 | **0** |
+| over-long lines | pylint default | 0 / 15 | **0 / 7**, none new |
+| module docstring | §18.2 | present / **absent** | present / present |
+| MI | §6's proxy | 28.71 / 31.79 | 27.97 / 29.23 (code only) |
+
+### 12.6 Targets vs achieved (supersedes the F7 row of §10.6)
+
+| Step | §6's target | Achieved | |
+|---|---|---|---|
+| **F7** | MI 16.1 / 27.8 *without* size; needs decomposition and explanation, not splitting | **Decomposition done**: 11 new functions across the two files (22 → 25 and 21 → 29) decomposing the 5 that §10.3 named as owed; no function past §18.1's ideal in either file, the one function past §16.1's fail line brought from 31 to 18 LOC, worst CC 9 → 8 in both, two verbatim duplications collapsed, 8 of 15 over-long lines removed with none added, `R0911` 2 → 0, and the missing §18.2 module docstring written. **MI fell** (27.97 / 29.26 from code alone), and §12.1 proves from the formula that it had to. Both files now carry §18.5 notes at 326 / 314 lines | ✅ decomposition · ❌ §6's MI target, which §12.1 shows was unsatisfiable without splitting or gaming |
+
+### 12.7 Verification
+
+* Targeted: **623 passed, 121 subtests** across `test_window_preset_service`,
+  `unit/bridge_safety/test_window_presets`, `test_click_user_order`,
+  `test_take_person`, `integration/run_safety`, `integration/services`,
+  `unit/actions/test_block_actions_coverage`, `test_action_registry` and
+  `unit/services` — 540 of them green before the first edit.
+* Differential: the four comparisons in §12.3, all at zero mismatch, each run
+  against the pre-change module compiled from `git show HEAD:`.
+* `tools/metrics/rule16_gate.py --with-clones` rc=0 — "All owned functions fit.
+  Ratchet intact. No stale overrides.", clone scan 0 new groups. Neither file is
+  in `OWNED`, so the gate does not police them; that is why §12.5's table is
+  measured directly rather than read off the gate.
+* pylint on both files **9.84/10** with no `W0611`/`W0612`/`E0602`/`R0912`/`R0915`;
+  the only findings are the 7 pre-existing `C0301`.
+* Full suite and the §18.2/§18.3 re-measurements: below.
+
+### 12.8 RULE 16 / RULE 18 recheck
+
+* **§16.0** — no new class; the ten functions added are module-level validators
+  and mixin methods, all under the class limits. `_run_single_target_cycle` was the
+  one function in either file past a §16.1 threshold (31 LOC against the 30 fail
+  line) and is now 18, so the step reduced a violation rather than adding one. No
+  `OWNED` file was touched, so no ratcheted function moved and the gate's ratchet
+  is intact.
+* **§16.1 / §16.2** — every function in both files is now inside the 30-line limit
+  and inside §18.1's 20-line ideal; worst CC 8 against a fail line of 10; nesting
+  unchanged at ≤ 2; no parameter list grew. The anti-gaming clause is the one this
+  step had to be most careful with, and §12.5 handles it by reporting the
+  decomposition-only MI as the headline and labelling the notes' +2.61/+1.79 as
+  what they are. No `_v2` twin, no dispatch table, no re-hosted body: each
+  extraction moved code and left one call site.
+* **§18.1** — this is the step's real target and it is met: 4 functions past the
+  ideal became 0, and the largest function in either file fell 31 → 19 LOC.
+* **Lint, before against after, because a refactor should not trade one smell for
+  another** — pylint's full default set, counted per code on both files:
+  `R0911` too-many-return-statements **2 → 0** (both were `_grid` and
+  `validate_document`, the two functions this step decomposed), `C0114`
+  missing-module-docstring **1 → 0**, `C0301` line-too-long **15 → 7**, `C0116`
+  **9 → 8**, and `C0115`, `W0718` unchanged. One finding was *added*: `C0415`
+  import-outside-toplevel **4 → 5**, because `_work_single_target` imports
+  `RunStopped` where `_run_single_target_cycle` used to. That import is not
+  incidental and moving it to module level would be a regression: `services/run/
+  __init__.py` resolves `RunCoordinator` through a lazy `__getattr__`, so
+  `import services.run` loads no `actions` module at all — verified by importing
+  it and checking `sys.modules` — and `progress.py` is imported eagerly by that
+  `__init__`. The in-method import is what preserves that, which is what the
+  file's existing comment claims and what the new module docstring now states.
+  `C0415` is a convention warning, not a §16.1 threshold.
+* **§18.2** — both files exceed the 300-line band as a direct cost of §18.1 work
+  that §6 forbids relieving by splitting, and both carry an `ideal-size:` note
+  whose number agrees with its file (326, 314). Repo-wide, re-measured with §18.6's
+  command: **171 files, median 136, 7 over 500** — the count, the median and the
+  set over 500 are all unchanged by this step, since it added no file and removed
+  none. The two files moved 299 → 326 and 258 → 314, which puts them in the
+  300–500 range where **20 other production files already sit** (300–484, across
+  `actions/`, `backend/`, `bridge/`, `services/` and `stores/`), so neither is an
+  outlier by this repo's actual practice. That is not a defence of the overrun and
+  is recorded as a finding rather than left implicit: before this step 6 files
+  carried an `ideal-size:` note and all 6 were over 500, so those 20 exceed
+  §18.2's ideal unnoted. F7's two files are over the band *and* noted, which is
+  more than the range they joined does; clearing the other 20 is its own change and
+  is not claimed here.
+* **§18.3** — `services/run/` gains no file (nothing was split), so its count stays
+  at 10 and §18.3's `stores/` measurement from §11.5 is unaffected.
+* **§18.4** — `docs/current/AGENT_RULES.md` was not touched by this step; the F7
+  record lives here in the archive, which is where §18.4 says the territory goes.
+* **§18.5** — two notes added, both on files that genuinely exceed an ideal, both
+  naming a constraint the reader can act on (§6's no-split ruling plus the measured
+  consequence of §18.1 work), and both with line counts verified against the file
+  (326 and 326, 314 and 314). No note was added to a file inside its band, which is
+  the error §10.3 corrected.
+* **§18.5, a finding this step did not act on** — checking every note in the tree
+  against its own file, which §10.8 did for F4's note alone, shows **5 of the 6
+  pre-existing notes now state a stale number, each exactly 7 lines low**:
+  `backend/chat_sync.py` says 800 and is 807, `config_manager.py` 502/509,
+  `dom_highlight.py` 527/534, `history_query.py` 596/603, `scroll_parser.py`
+  699/706. The identical offset says one later commit grew all five by the same
+  amount after `95cb38b` wrote the notes. Only `bridge/history_bridge.py` (544/544,
+  F4) and the two added here agree with their files. The fix is one number per
+  comment and cannot alter behaviour — but all five are AREA D frozen files, and
+  the standing instruction for this round is to work on unfrozen files only, so
+  this is recorded for the owner's decision rather than applied. A note whose number
+  is wrong is worse than no note, because §18.5's whole mechanism is that the next
+  reader can trust what they see.
+* **RULE 19** — the remediation order was followed rather than inverted. Nesting
+  was already ≤ 2 in every target, so the work went to cyclomatic (9 → 3, 9 → 5,
+  8 → 6, 9 → 7, 7 → 4) and only then to size. Splitting the files — the
+  size-first move — was considered and rejected in §12.4.

@@ -1,3 +1,19 @@
+"""Run-progress accounting, and the queue-order half of a run cycle.
+
+`RunProgress` owns the wire counters (done/total/skipped/failed and the ETA) and
+emits `RunProgressChanged`. `RunQueueMixin` contributes label filtering, queue
+ordering and the single-target cycle to `RunCoordinator`, which owns everything
+the mixin reads through `self`. Imports run one way: core.events and
+stores.user_memory at module level, backend.person_filter and
+actions.cancellation inside methods to keep `import services.run` light.
+"""
+
+# ideal-size: 314 lines reason=§6 of ROUND_F_DESIGN_2026-09-12.md rules out
+# splitting this file, and F7's decomposition — _run_single_target_cycle was 31
+# LOC, over §16.1's fail line — needs more room than §18.2's band leaves. RULE 19
+# puts complexity before size, so the functions come inside §18.1's ideal and the
+# file carries this note. Measured in §12: max function 19 LOC, worst CC 8.
+
 from __future__ import annotations
 
 import asyncio
@@ -16,16 +32,6 @@ except Exception:
         messaged: bool = False
 
 log = logging.getLogger("chatbot")
-
-
-# F7 (ROUND_F_DESIGN_2026-09-12.md §6) names this file for an MI of 27.85 that is
-# NOT a size problem: 258 lines sits inside RULE 18's 150–300 band, so no
-# `ideal-size:` note applies here — §18.5 is for exceeding an ideal. The density
-# is measured, not asserted: RunProgress 40 LOC / 7 methods, RunQueueMixin
-# 177 LOC / 14 methods, worst CC 9 (`queue_order`, `_run_single_target_cycle`),
-# and `_run_single_target_cycle` at 31 LOC is over §16.1's fail line as legacy
-# debt. §6 asks for decomposition of those, not a split; it is still owed, and a
-# higher MI from prose is not progress (§16.2 anti-gaming).
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,18 +129,35 @@ class RunQueueMixin:
         self.debug_msg.emit(f"🏷 Label filter skipped {len(skipped)} person(s): "
                             + ", ".join(samples) + more, "info")
 
+    def _enabled_block(self, block_id: str):
+        """The enabled block with this id, or None — one shape, three callers."""
+        return next((b for b in self._stack if b.block_id == block_id
+                     and getattr(b, "enabled", True)), None)
+
+    def _unmessaged(self, users: list) -> list:
+        """The people not yet messaged, after the label filter."""
+        return self.filter_by_labels(
+            [u for u in users if not getattr(u, "messaged", False)])
+
+    def _order_by_recency(self, users: list) -> list:
+        """Newest `first_seen` first; stable, so nick stays the tie-break."""
+        by_nick = sorted(users,
+                         key=lambda u: str(getattr(u, "nick", "")).casefold())
+        return sorted(by_nick, reverse=True,
+                      key=lambda u: str(getattr(u, "first_seen", "") or ""))
+
     def queue_order(self, users: list) -> list[str]:
-        block = next((b for b in self._stack if b.block_id == "SCROLL_PARSE" and getattr(b, "enabled", True)), None)
-        users = self.filter_by_labels([u for u in users if not getattr(u, "messaged", False)])
-        if block is not None:
+        """The nicks this cycle works, in the order it works them."""
+        users = self._unmessaged(users)
+        if self._enabled_block("SCROLL_PARSE") is not None:
             from backend.person_filter import sort_people
             users = sort_people(users)
         else:
-            users = sorted(sorted(users, key=lambda u: str(getattr(u, "nick", "")).casefold()), key=lambda u: str(getattr(u, "first_seen", "") or ""), reverse=True)
+            users = self._order_by_recency(users)
         return [getattr(u, "nick", "") for u in users]
 
     def _repeat_cycles(self) -> int:
-        block = next((b for b in self._stack if b.block_id == "REPEAT_LOOP" and getattr(b, "enabled", True)), None)
+        block = self._enabled_block("REPEAT_LOOP")
         try:
             return max(1, int(getattr(block, "repeat_count", 1))) if block else 1
         except (TypeError, ValueError):
@@ -171,37 +194,61 @@ class RunQueueMixin:
         while self._paused and not self._stop_requested:
             await asyncio.sleep(0.2)
 
-    async def _run_single_target_cycle(self, has_skip: bool, take_matched: bool) -> str:
-        from actions.cancellation import RunStopped, is_stop_requested
-        take_present = any(b.block_id == "TAKE_PERSON" and getattr(b, "enabled", True) for b in self._stack)
-        verdict = self._single_target_guard(take_present, take_matched)
-        if verdict is not None:
-            return verdict
-        if is_stop_requested(self):
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            self._tracer.note({"type": "run_end", "reason": "stopped"})
-            return "stopped"
-        target = self.selected_nick
+    def _announce_stop(self) -> None:
+        """The one stop line and its trace entry, which two call sites shared."""
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        self._tracer.note({"type": "run_end", "reason": "stopped"})
+
+    def _announce_single_target(self, target: str) -> None:
+        """Say once, before the work, that this cycle ignores the user list."""
         self.progress.extend_total(1)
-        self.log_msg.emit(f"▶ Single-target run — working the person saved in memory: “{target}” (the user list is ignored)")
-        self.debug_msg.emit("ℹ Click User 'Use Person from Memory' is on: this stack runs once per cycle against the saved nick, not once per queued person.", "info")
-        self._tracer.note({"type": "run_mode", "mode": "single_target", "nick": target})
+        self.log_msg.emit(
+            f"▶ Single-target run — working the person saved in memory: "
+            f"“{target}” (the user list is ignored)")
+        self.debug_msg.emit(
+            "ℹ Click User 'Use Person from Memory' is on: this stack runs once "
+            "per cycle against the saved nick, not once per queued person.",
+            "info")
+        self._tracer.note({"type": "run_mode", "mode": "single_target",
+                           "nick": target})
+
+    async def _work_single_target(self, target: str, has_skip: bool) -> str:
+        """Run the saved nick once; "stop" when cancellation caught it."""
+        from actions.cancellation import RunStopped
         try:
-            status = await self._execute_for_user(UserRecord(nick=target), has_skip)
+            return await self._execute_for_user(UserRecord(nick=target),
+                                                has_skip)
         except RunStopped:
             # Narrow handler: CancelledError and unexpected errors propagate.
-            status = "stop"
-        if status == "stop":
-            return self._stopped_single_target(target, announce=False)
-        if is_stop_requested(self):
-            # Stop observed before the automatic-mark boundary.
-            return self._stopped_single_target(target, announce=True)
+            return "stop"
+
+    async def _account_single_target(self, target: str, status: str) -> str:
+        """Account a finished cycle, and mark the person only on "ok"."""
         self.progress.note_status(status)
         if status == "ok":
             await self._memory.mark_messaged(target)
             self.person_marked.emit(target)
         self.user_complete.emit(target, status == "ok")
         return "worked"
+
+    async def _run_single_target_cycle(self, has_skip: bool, take_matched: bool) -> str:
+        from actions.cancellation import is_stop_requested
+        take_present = self._enabled_block("TAKE_PERSON") is not None
+        verdict = self._single_target_guard(take_present, take_matched)
+        if verdict is not None:
+            return verdict
+        if is_stop_requested(self):
+            self._announce_stop()
+            return "stopped"
+        target = self.selected_nick
+        self._announce_single_target(target)
+        status = await self._work_single_target(target, has_skip)
+        if status == "stop":
+            return self._stopped_single_target(target, announce=False)
+        if is_stop_requested(self):
+            # Stop observed before the automatic-mark boundary.
+            return self._stopped_single_target(target, announce=True)
+        return await self._account_single_target(target, status)
 
     def _single_target_guard(self, take_present: bool, take_matched: bool) -> str | None:
         """The pre-flight verdict of a single-target cycle (None ⇒ proceed)."""
@@ -222,8 +269,7 @@ class RunQueueMixin:
         # Already announced in _execute_for_user when the status came back as
         # "stop"; announce only the stop observed at the mark boundary.
         if announce:
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            self._announce_stop()
         self.progress.note_status("fail")
         self.user_complete.emit(target, False)
         return "stopped"
@@ -243,16 +289,26 @@ class RunQueueMixin:
             check_stopped(self)
             if block.block_id != "TAKE_PERSON" or not getattr(block, "enabled", True):
                 continue
-            try:
-                nick = block.choose(rows, self)
-            except Exception as exc:
-                log.warning("Pick Person failed: %s", exc)
-                self.debug_msg.emit(f"      ❌ Pick Person raised: {exc}", "error")
-                continue
-            if nick:
+            if self._take_one_block(block, rows):
                 matched = True
-                self.log_msg.emit(f"🎯 Pick Person: remembering “{nick}” — {{nick}} in later fields will resolve to it")
-                self.note_selected(nick)
-            else:
-                self.log_msg.emit("⚠ Pick Person: no " + (getattr(block, "mode_phrase", "") or "matching person") + " in the list — skipped (previous selection kept)")
         return matched
+
+    def _take_one_block(self, block, rows) -> bool:
+        """One Pick Person block's choice; True when it remembered someone."""
+        try:
+            nick = block.choose(rows, self)
+        except Exception as exc:
+            log.warning("Pick Person failed: %s", exc)
+            self.debug_msg.emit(f"      ❌ Pick Person raised: {exc}", "error")
+            return False
+        if nick:
+            self.log_msg.emit(
+                f"🎯 Pick Person: remembering “{nick}” — {{nick}} in later "
+                "fields will resolve to it")
+            self.note_selected(nick)
+            return True
+        self.log_msg.emit(
+            "⚠ Pick Person: no "
+            + (getattr(block, "mode_phrase", "") or "matching person")
+            + " in the list — skipped (previous selection kept)")
+        return False

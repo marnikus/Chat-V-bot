@@ -1,16 +1,21 @@
 """Portable window-preset document validation and compatibility metadata.
 
-One file for cohesion, not size: 22 pure validators form a strict DAG
-(_decode → _header → _grid → _states → _windows → _screen → validate_document),
-each returning (value, error) and short-circuiting on the first error; the
-WindowPresetService facade only delegates. Splitting would scatter the DAG.
-
-F7 names this file because its MI (16.08 before this note) is low WITHOUT the
-file being large, which a line-count sort never surfaces. The measured cause is
-volume: worst CC is 9 (_grid), and _grid (24 LOC) and validate_document (22) are
-the two past RULE 18 §18.1's ideal — so §6 asks for their decomposition, not a
-split, and that decomposition is still owed.
+One file for cohesion, not size: pure validators form a strict DAG (_decode →
+_header → _grid → _states → _windows → _screen → validate_document), each
+returning (value, error) and short-circuiting on the first error, so the order
+of the checks IS the error a caller sees. The WindowPresetService facade only
+delegates. Imports run one way: this module reads services.layout_service and
+nothing imports back. §6 of ROUND_F_DESIGN_2026-09-12.md rules out splitting the
+DAG, so a function past §18.1's ideal is decomposed in place, at seams the error
+precedence allows — the measurement is §12 of the same document.
 """
+
+# ideal-size: 326 lines reason=§6 of ROUND_F_DESIGN_2026-09-12.md rules out
+# splitting this validator DAG — its functions are one short-circuiting chain and
+# the order of the checks is the error a caller sees. It sat one line under
+# §18.2's 300 ceiling before F7 decomposed _grid and validate_document per
+# §18.1, and every seam in a (value, error) chain costs three lines of plumbing.
+# Measured in §12: no function over 20 LOC, worst CC 8.
 
 from __future__ import annotations
 
@@ -92,27 +97,42 @@ def _header(doc: dict, name: str | None) -> tuple[dict | None, str | None]:
             "updated_at": _timestamp(doc.get("updated_at"), now)}, None
 
 
-def _grid(doc: dict) -> tuple[dict | None, str | None]:
-    grid = doc.get("grid")
-    if not isinstance(grid, dict) or grid.get("type") != GRID_TYPE:
-        return None, "grid.type must be 'sash-tree'"
-    version = grid.get("version")
-    tree = grid.get("tree")
-    if isinstance(version, bool) or not isinstance(version, int):
-        return None, "grid.version must be an integer"
+def _grid_tree(grid: dict) -> tuple[Any | None, str | None]:
     try:
-        raw = json.dumps({"v": version, "tree": tree}, ensure_ascii=False)
+        raw = json.dumps({"v": grid.get("version"), "tree": grid.get("tree")},
+                         ensure_ascii=False)
     except (TypeError, ValueError):
         return None, "grid.tree must be JSON data"
     canonical, error = LayoutService.canonical_grid_payload(raw)
     if error:
         return None, f"invalid grid tree: {error}"
-    tree = json.loads(canonical)["tree"]
-    expected = len(LayoutService.WINDOW_IDS)
+    return json.loads(canonical)["tree"], None
+
+
+def _grid_limits(grid: dict, expected: int) -> str | None:
+    # Checked after the tree on purpose: a document with both faults has always
+    # reported the tree, and callers match on that message.
     if grid.get("window_count") != expected:
-        return None, f"window_count must be {expected}"
+        return f"window_count must be {expected}"
     if grid.get("sizes_unit") != "percent":
-        return None, "grid.sizes_unit must be 'percent'"
+        return "grid.sizes_unit must be 'percent'"
+    return None
+
+
+def _grid(doc: dict) -> tuple[dict | None, str | None]:
+    grid = doc.get("grid")
+    if not isinstance(grid, dict) or grid.get("type") != GRID_TYPE:
+        return None, "grid.type must be 'sash-tree'"
+    version = grid.get("version")
+    if isinstance(version, bool) or not isinstance(version, int):
+        return None, "grid.version must be an integer"
+    tree, error = _grid_tree(grid)
+    if error:
+        return None, error
+    expected = len(LayoutService.WINDOW_IDS)
+    error = _grid_limits(grid, expected)
+    if error:
+        return None, error
     return {"type": GRID_TYPE, "version": LayoutService.GRID_VERSION,
             "window_count": expected, "sizes_unit": "percent",
             "tree": tree}, None
@@ -246,13 +266,7 @@ def _screen(doc: dict) -> tuple[dict | None, str | None]:
             "device_pixel_ratio": round(dpr, 4)}, None
 
 
-def validate_document(raw: Any, name: str | None = None) -> tuple[dict | None, str | None]:
-    doc, error = _decode(raw)
-    if error:
-        return None, error
-    header, error = _header(doc, name)
-    if error:
-        return None, error
+def _document_body(doc: dict) -> tuple[dict | None, str | None]:
     grid, error = _grid(doc)
     if error:
         return None, error
@@ -265,8 +279,21 @@ def validate_document(raw: Any, name: str | None = None) -> tuple[dict | None, s
     screen, error = _screen(doc)
     if error:
         return None, error
-    header.update({"grid": grid, "windows": windows,
-                   "window_states": states, "screen": screen})
+    return {"grid": grid, "windows": windows,
+            "window_states": states, "screen": screen}, None
+
+
+def validate_document(raw: Any, name: str | None = None) -> tuple[dict | None, str | None]:
+    doc, error = _decode(raw)
+    if error:
+        return None, error
+    header, error = _header(doc, name)
+    if error:
+        return None, error
+    body, error = _document_body(doc)
+    if error:
+        return None, error
+    header.update(body)
     return header, None
 
 
