@@ -456,3 +456,231 @@ behaviour-preservation refactor and invalidated the equivalence gate that caught
 §8.1 — the exact scope discipline §3.5 applied to `_append_db_files`. They are
 therefore handed to **F5**, which is the parameter-object step, with these two as
 its first named targets; `PersonPageRequest` is the in-repo pattern to follow.
+
+## 9. Step F6 — the nine mutation survivors (executed 2026-09-13)
+
+F6 is the Round F step that changes no code: it adds tests. That is why §6
+called it the cheapest win and why it is the safest candidate to run in parallel
+with anything — no production line moves, so no size metric, no ratchet and no
+clone group can be touched by it. It landed as one new test file
+(`tests/test_history_query_gaps.py`, 12 tests, 306 lines), the `[mutmut]`
+section of `setup.cfg`, and one entry in `.gitignore`.
+
+**Measured outcome: 158 of 159 reachable mutants killed (99.37%), one survivor
+left, and that survivor is provably equivalent.** The audit's 94.34% (150/159,
+reports/CODE_QUALITY_METRICS_2026-09-12.md §3) is superseded. Eight of the nine
+named survivors are closed. The step also found a defect in the measurement
+itself (§9.3), which is worth more than any of the mutants.
+
+### 9.1 What the nine survivors actually were
+
+`mutmut show` on each, classified by *why* nothing killed it — the reason
+dictates the remedy, and the three reasons below are not the same problem:
+
+| Mutant (mutmut 3.7.0 name) | The change | Why it survived | Now |
+|---|---|---|---|
+| `_like_escape` 13 | `replace("\\", …)` → `replace("XX\\XX", …)` | no *selected* suite sends a backslash | killed |
+| `_like_escape` 14 | replacement `"\\\\"` → `"XX\\\\XX"` | same | killed |
+| `HistoryQuery._clamp` 4 | the `except` branch assigns `None` | same | killed |
+| `HistoryQuery._clamp` 9 | `max(1, …)` → `max(2, …)` | same | killed |
+| `HistoryQuery._my_nicks` 7 | `or "[]"` → `or "XX[]XX"` | **equivalent** (§9.4) | recorded |
+| `list_persons` 18 | COUNT fallback `0` → `None` | unreachable through a real engine | killed |
+| `list_persons` 21 | the COUNT fallback argument dropped | **equivalent** against the real engine (§9.4) | killed by a convention pin |
+| `list_persons` 22 | COUNT fallback `0` → `1` | unreachable through a real engine | killed |
+| `list_persons` 29 | `LIMIT ? OFFSET ?` lower-cased | SQLite folds keyword case: **equivalent** | killed by a statement pin |
+
+Two of the nine are real bugs waiting for an input, and it is worth saying what
+they do rather than only that they survived:
+
+* `_like_escape` 13 leaves a user's backslash un-doubled. With `ESCAPE '\'` the
+  pattern `%a\b%` then means *a, followed by a literal b*, so searching for the
+  person named `a\b` returns the person named `ab` — and reports a confident
+  `total` for them. Verified against a real database in
+  `TestABackslashInANickFilter`.
+* `_clamp` 4 turns a recoverable page into a crash: `limit` arrives from a JSON
+  blob the UI built, so a hand-edited payload can put `"garbage"` in it, the
+  `except` handler assigns `None`, and `min(MAX_LIMIT, None)` raises
+  `TypeError` inside a bridge slot. The user sees a list that stops paging.
+
+The other six sit on defensive code, which is why coverage never complained:
+`_clamp`'s floor, `_my_nicks`'s fallback and the COUNT's `default` argument are
+all *executed* by the existing suites, and executing a line is not asserting its
+value — the same distinction `tests/test_person_item.py` was written for.
+
+### 9.2 Four of the nine were a property of the job, not of the tests
+
+`setup.cfg` selects three suites (the sort path). `tests/test_history_query_edges.py`
+— the module's adversarial suite, written for the 2026-09-09 test round — is not
+one of them, and it already kills four of the nine. Measured, not assumed: each
+mutant was run against each file separately
+(`MUTANT_UNDER_TEST=<name> pytest -q --noconftest <file>` inside `mutants/`).
+
+| Mutant | `test_history_query_edges.py` | `test_history_query.py` | the three selected suites |
+|---|---|---|---|
+| `_like_escape` 13 | **1 failed** — `TestLikeEscape::test_wildcards_and_backslash_are_escaped` | 28 passed | survived |
+| `_like_escape` 14 | **1 failed** — same test | 28 passed | survived |
+| `_clamp` 4 | **1 failed** — `TestPaginationEdges::test_limit_is_clamped_both_ways` | 28 passed | survived |
+| `_clamp` 9 | **1 failed** — same test | 28 passed | survived |
+| `_my_nicks` 7 | 17 passed | 28 passed | survived |
+| `list_persons` 18 / 21 / 22 / 29 | 17 passed | 28 passed | survived |
+
+So the audit's "9 survivors" meant *9 mutants no selected suite kills*. Its
+description of them as "a concrete, actionable test-gap list" was right for five
+and wrong for four: those four were a scoping artifact of the job.
+
+**Widening the selection was measured and rejected.** Adding that one file
+executes all 29 functions of `backend/history_query.py`, which makes **910 of
+1,141 mutants reachable instead of 159** — computed by mapping the file's
+executed-line coverage under `test_history_query_edges.py` onto mutmut's
+per-function mutant counts. The narrow job runs in 22–28 s across three clean runs on this
+machine (the audit recorded ~2 min on its own); a 5.7× larger reachable set
+whose tests each build a temporary SQLite database is a different kind of gate, and `setup.cfg`
+says in terms that narrowness is the point ("~1 minute instead of hours"). The
+widened job's runtime was **not** measured — that part is an estimate and is
+labelled as one.
+
+Instead `tests/test_history_query_gaps.py` pins the same four guarantees at the
+level the job measures — through `list_persons`, over a real database, as a page
+the UI asked for — rather than as helper-level unit assertions. The duplication
+is named in the file's docstring *and* in the `setup.cfg` comment beside the
+selection, with the reason, so the next reader neither rediscovers it nor
+deletes one side thinking the other is redundant.
+
+### 9.3 The trap found on the way: the job silently reports 100% when conftest cannot import
+
+mutmut 3.7.0 runs pytest **in-process** and reads any non-zero exit as "killed".
+`tests/conftest.py` imports PySide6 and then `services.run` / `app.bootstrap` /
+`main`; on a machine without system OpenGL or libdbus that import fails, pytest
+exits **4** (usage error), mutmut raises `BadTestExecutionCommandsException`
+inside its forked child, the child dies with exit status **1** — and the parent
+records a kill.
+
+Measured on this sandbox before PySide6 was installed: **1141 mutants, 159
+reachable, 159 killed, 0 survived.** A perfect mutation score produced by a test
+runner that never ran. Every one of the nine survivors in the audit looked
+closed, including `_my_nicks` 7, which cannot be killed by any test anywhere.
+
+Two things follow, and both are committed:
+
+* `setup.cfg` now sets `pytest_add_cli_args = --noconftest`, with the
+  measurement in the comment above it. The flag is neutral where PySide6 exists:
+  with it, the job reproduces the audit's numbers exactly — **150 killed / 9
+  survived / 982 no tests**, the same three integers — and none of the selected
+  suites uses a conftest fixture, which the file's existing comment already
+  said. What the flag removes is an environment-dependent false green.
+* `mutants/` is now in `.gitignore`. The audit had to remind itself to delete it
+  before committing ("mutmut leaves it untracked and it is **not** gitignored");
+  an ignored directory cannot be committed by `git add -A`, which is the failure
+  mode the reminder was protecting against.
+
+Note the direction of this error: it inflates the score. A mutation job that can
+only fail by reporting *too many* kills is worse than no job, because the number
+is quoted (§3 of the audit quotes it) and nobody re-checks a 100%.
+
+### 9.4 Three equivalent mutants, with the proofs, and the two pins that are conventions rather than behaviour
+
+`_my_nicks` 7 is **unkillable and is left alive**:
+
+> `json.loads(v or "[]")` vs `json.loads(v or "XX[]XX")`. For a truthy `v` the
+> `or` short-circuits in both and the mutant never executes. For a falsy `v` the
+> original parses `"[]"` to `[]`, and the mutant raises inside the `try` and
+> returns `[]` from the `except`. Same value, same type, for every possible
+> input.
+
+Killing it would require spying on the argument `json.loads` receives, i.e.
+pinning a string literal instead of a behaviour — §16.2's "did not game metrics"
+applies to a mutation score too, so it is reported as equivalent and excluded,
+which is the reporting the audit's own convention asks for ("explicit
+timeout/equivalent-mutant reporting"). `TestTheIdentityListFallback` pins the
+behaviour both paths share instead, and records one schema fact found while
+writing it: `my_nicks` is `TEXT NOT NULL DEFAULT '[]'`
+(`stores/history_schema.py:55`), so the falsy branch is reachable only through a
+hand-emptied string, a non-JSON string, or a row that omits the column — a
+stored NULL is impossible.
+
+Two more mutants are equivalent **against the real engine** and were closed by
+pins that are honest about being pins:
+
+* `list_persons` 21 drops the third argument of the COUNT call.
+  `HistoryDB.scalar(self, sql, params=(), default=0)` already defaults to the
+  same `0`, so no test through a real database can distinguish the two. The new
+  `RecordingDB` stand-in declares `default` as a **required positional**, which
+  pins the call convention instead: the count's fallback belongs to the caller,
+  not to whichever default the engine happens to carry today. This is the
+  weakest of the twelve tests — it is the one that could be deleted without
+  losing a behaviour guarantee — and it is labelled as such in its docstring.
+* `list_persons` 29 lower-cases `LIMIT ? OFFSET ?`. SQLite folds keyword case,
+  so the behaviour is identical and only an assertion on the emitted SQL text
+  can see it. `TestTheSqlItSends` keeps that assertion because the statement is
+  the contract the module documents and the paging invariant depends on, but the
+  test says plainly that it pins a statement rather than an outcome. Exact-case
+  SQL assertions are not new to this repo:
+  `tests/test_person_page_request.py` already asserts
+  `"deleted_at IS NULL AND nick_lc LIKE ? ESCAPE '\\'"` and the full
+  `columns()` body character for character.
+
+Excluding the one unkillable mutant from the denominator, the job is
+**158/158 = 100%**; including it, **158/159 = 99.37%**. Both are given so
+neither can be quoted selectively — the same discipline §3 of the audit applied
+to its two mutation numbers.
+
+### 9.5 Targets vs achieved
+
+| Measure | Before | Target | Achieved | |
+|---|---:|---|---|---|
+| Mutants killed (reachable) | 150 / 159 = 94.34% | 9 survivors closed | **158 / 159 = 99.37%** | ✅ 8 closed, 1 equivalent |
+| Survivors | 9 | 0 | **1** (`_my_nicks` 7, proved equivalent) | ✅ recorded, not chased |
+| Reachable mutants (the denominator) | 159 | unchanged | **159** | ✅ not moved |
+| "no tests" mutants | 982 | unchanged | **982** | ✅ |
+| Job runtime | ~25 s | not hours | **~25 s** (22–28 over three clean runs) | ✅ selection stayed narrow |
+| Production lines changed | — | 0 | **0** | ✅ |
+| `production_nonblank_noncomment` | 23,620 | unchanged | **23,620** | ✅ |
+| Mean MI (production) | 66.1135 | unchanged | **66.1135** | ✅ identical to 4 d.p. |
+| Files over 500 lines | 7 | unchanged | **7** | ✅ (was 9 at F1; F2/F3 lowered it) |
+| Clone groups (`clone_scan`) | 12 = baseline | 12, none new | **12, 0 new / 0 stale** | ✅ `tests/` is outside the scanner's packages |
+| Exact-clone groups (`current_audit`) | 4 / 66 lines | unchanged | **4 / 66 lines** | ✅ |
+| Ratchet (`HistoryQuery` 362 LOC / 14 methods) | intact | intact | **intact** | ✅ class untouched |
+| vulture ≥ 90% | 7 | 7, none new | **7, none new** | ✅ |
+| `rule16_gate.py --with-clones` | pass | pass | **pass** (all owned functions fit) | ✅ |
+| `tests/test_rule16_new_code.py` | 23 passed | 23 passed | **23 passed** | ✅ |
+| Suite (this sandbox, see caveat) | 2,323 passed | ≥ baseline | **2,338 passed** | ✅ +12 new, +3 unskipped |
+| `history_query.py` coverage under the job's suites | 39% line (125/225 missed) | ≥ | **40% line (121/225 missed)** | ✅ |
+
+**The suite caveat, stated rather than glossed.** The full 2,710-test suite could
+not be run here: this sandbox has no system `libGL.so.1` and no `libdbus-1`, and
+Debian's package mirrors are unreachable, so 21 test modules cannot import
+PySide6's widget bindings at all (the same limitation `setup.cfg`'s existing
+comment describes). What was run, with `--noconftest` and
+`--continue-on-collection-errors`, is the 2,300-odd tests that do not need a
+GUI toolkit:
+
+* before the change: **2,323 passed, 6 failed, 36 errors, 7 skipped, 894
+  subtests**;
+* after: **2,338 passed, 6 failed, 36 errors, 4 skipped, 894 subtests**;
+* the 42 `FAILED`/`ERROR` lines are **byte-identical** between the two runs
+  (`diff` on the sorted lists), and every one is an `ImportError` on
+  `libGL.so.1` / `libQt6DBus` or a downstream consequence of it — including
+  `test_backend_api_snapshot.py::test_no_module_disappeared_or_failed_to_import`,
+  which counts a module that fails to import as disappeared.
+
+The +15 is 12 new tests plus 3 in `tests/test_rule16_new_code.py` that stopped
+skipping: they `skipTest("radon not installed …")` when the tools are absent,
+and this sandbox gained a `.venv` between the two runs. Repo-wide line/branch
+coverage was therefore **not** re-measured, and no claim is made about it; it
+cannot have fallen, since F6 adds tests and changes no production line.
+
+### 9.6 What F6 deliberately did not do
+
+* **No module-wide mutation run.** §9.2 measured that it would make 910 mutants
+  reachable; running it is a half-hour-scale job that would very likely surface
+  survivors in `page`, `around`, `db_stats` and `_search`, none of which F6 was
+  scoped to fix. If the owner wants the module measured rather than the feature,
+  that is its own step — call it F6b — and it should be scheduled as such, not
+  smuggled into a test-only commit.
+* **No change to `list_persons` itself.** Four mutants sat on
+  `int(await self.db.scalar(…, 0))`, and a reader may reasonably ask whether the
+  fallback should be reinforced at the call (`int(… or 0)`) instead of only
+  pinned by a test. Not done: `list_persons` is an OWNED function in the RULE 16
+  gate and `HistoryQuery` is under a ratchet, so touching it is a code change
+  with its own equivalence gate, and F6's value is precisely that it has none.
+* **No JavaScript suite run.** No JS changed; the 26 entrypoints are untouched.
