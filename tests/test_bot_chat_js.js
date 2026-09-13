@@ -894,6 +894,24 @@ t('it is anchored under the button, not centred as a modal', () => {
   ok(!html.includes('aria-modal="true"'), 'it is a popup, not a modal');
 });
 
+t('the popup lives OUTSIDE the sash grid, or it is destroyed on boot', () => {
+  /* The bug this pins: SashGrid.render() does
+       gridEl.replaceChildren(frag)
+     which wipes every child of <main class="sash-grid"> and re-adds ONLY
+     the registered window panels. The popup is not one of those, so while
+     it sat inside <main> it was deleted from the DOM at startup —
+     getElementById returned null, BotSettings.init() bailed at its guard,
+     and the ⚙ button silently did nothing. Being a child of <main> is the
+     whole bug; every other assertion here passed while it was broken. */
+  const grid = html.slice(html.indexOf('<main class="sash-grid"'),
+                          html.indexOf('</main>'));
+  ok(grid.indexOf('id="botSettingsBackdrop"') < 0,
+     'the popup is inside <main> and SashGrid will delete it on render');
+  ok(html.indexOf('id="botSettingsBackdrop"') >= 0, 'it must still exist');
+  // the reference popup it is modelled on lives outside <main> too
+  ok(grid.indexOf('id="layoutMenu"') < 0);
+});
+
 t('the connections window opens from the prompt editor title bar', () => {
   openSettings();
   ok(!$('botSettingsBackdrop').classList.contains('hidden'));
