@@ -51,9 +51,15 @@ OWNED = [
 # snapshot forbids removing `HistoryQuery` methods and the QWebChannel wire
 # contract pins `HistoryBridge`'s slot set. Frozen at the 3820136 measurement:
 # they may shrink, they may not grow.
+#
+# `HistoryBridge` re-frozen at 467/44 (was 493/45) after the boot-wait fix
+# moved `_run_async`'s guard into `services.world_events.run_when_world_open`.
+# The method count drops by one because the gate counts nested defs through
+# `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
+# method of real shrink, locked here so it cannot be handed back.
 RATCHET = {
     ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 493, "methods": 45},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is
