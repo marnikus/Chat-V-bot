@@ -44,12 +44,14 @@ assertions. It violates RULE 8 in spirit — it reads a file instead of executin
 the real store — and its skip-on-pristine-clone design meant CI-shaped
 environments never saw it fail.
 
-**Owner finding, recorded not acted on:** the seven tracked `config/*.json`
-files contradict the `.gitignore` intent (runtime data). Untracking them
-(`git rm -r --cached config/`) is a workflow decision — the owner may be
-committing settings deliberately — so this round fixes the test to be correct
-with the file **present or absent** and leaves the tracking question to the
-owner.
+**Owner finding — RULED (2026-09-13):** the seven tracked `config/*.json`
+files contradicted the `.gitignore` intent (runtime data). This round fixed
+the test to be correct with the file **present or absent**; the tracking
+question was put to the owner, who ruled **keep `config/` tracked** and drop
+the contradicting ignore rule, so tracked state is intended state. Applied in
+this round's follow-up commit: the `config/` line is removed from
+`.gitignore` (the legacy `config.json*` rules stay — those files are not
+tracked).
 
 ### 1b. F3c — the write-gate desync, a named residual risk and the only live bug class
 
@@ -137,6 +139,19 @@ hollow shells in the pinned file — legal, but the improvement is mostly
 notional, so a real split of `chat_sync.py` still wants the F0(a) refresh.
 The decision stays the owner's; step G2 carries both routes.
 
+**F0 RULED (2026-09-13, owner, verbatim):** *"remove any restrictino to all
+frozen solutions. redesign any code as needed"* — the AREA B / AREA D freezes
+are lifted for Round G onward. Pinned surfaces may change, and the snapshot
+tests (`test_stores_public_api.py`, `test_backend_api_snapshot.py`) are
+refreshed **deliberately, inside the step that changes the surface**, with the
+diff justified in that step's design doc (§16.2's anti-gaming discipline still
+applies — lifting a freeze is not a licence to shrink assertions silently).
+Consequences for the plan: G2 takes route (a) as its default (real
+`chat_sync.py` split + `ScrollParser` decomposition); G4's formerly-frozen
+wide signatures (`scroll_parse.__init__` 20 p, `chat_parser.sync_conversation`
+14 p) become migration candidates rather than quality-override debt. G1
+itself is unaffected: it landed contract-free and needed no spend.
+
 ### 1d. Structural tail, unfrozen — measured on this tree
 
 | Item | Measured 2026-09-13 | Source of the obligation |
@@ -194,11 +209,11 @@ what is spendable without an owner decision:
 | # | Step | Content | Size driver |
 |---|---|---|---|
 | **G1** | **Green baseline + the write-gate union fix (F3c)** | §1a test fix; §1b `WriteTurn` redesign, tests with negative checks, doc updates | this document §4–§5 |
-| G2 | The two worst files, in the shape the owner picks | **F0 decision gate.** (a) refresh AREA D snapshot → split `chat_sync.py` (807 · MI 11.35) into a prefix family and decompose `ScrollParser` (532/39); or (b) contract-sanctioned base-class extraction for `ScrollParser` only + honest note that `chat_sync.py` stays | design doc per §16.5 (landmine) |
+| G2 | The two worst files — **F0 ruled: freezes lifted (§1c)** | route (a): split `chat_sync.py` (807 · MI 11.35) into a prefix family with the AREA D snapshot refreshed in-step, and decompose `ScrollParser` (532/39) | design doc per §16.5 (landmine) |
 | G3 | The unfrozen 500-line file + the named long-flat ladders | `services/db_deletion_flow.py` 509 → F1-family split; `message_injector._run_type_strategies` 70 → per-attempt extraction (§19.5); `collector_service.__init__` 51 and `scroll_parse.__init__` 49 reductions | 3 named targets |
-| G4 | Wide-parameter continuation (F5, outside `stores/`) | `services/` 13, `bridge/` 2, `app/` 1 parameter objects; per-block RULE 3 ruling for `actions/` 15 (documented constraint or migration); AREA D-pinned signatures get recorded `quality-override:` comments, not silent debt | 44 → floor |
+| G4 | Wide-parameter continuation (F5, outside `stores/`) | `services/` 13, `bridge/` 2, `app/` 1 parameter objects; per-block RULE 3 ruling for `actions/` 15 (documented constraint or migration); formerly pinned signatures (`scroll_parse.__init__` 20 p, `sync_conversation` 14 p) migrate properly now that the freezes are lifted (§1c F0 ruling) | 44 → floor |
 | G5 | Test-debt batch | `_migrated_entry`, `_schedule_world_undo_save`, `restart_world` failure paths, `undo_apply`'s eight lines; **F6b** module-wide mutation measurement of `history_query.py`; dbconn-rewind decision + implementation if the owner rules | coverage ≥ baseline |
-| G6 | Hygiene + docs reconciliation | five stale notes corrected (comment-only, snapshot-neutral); three unused imports; `docs/README.md` map; AGENT_RULES.md budget paydown 763 → ≤ 730 by §18.4's "extract first"; the two cognitive-17 offenders reduced or recorded as exemptions; `config/` tracking ruling requested | one commit per family |
+| G6 | Hygiene + docs reconciliation | five stale notes corrected (comment-only, snapshot-neutral); three unused imports; `docs/README.md` map; AGENT_RULES.md budget paydown 763 → ≤ 730 by §18.4's "extract first"; the two cognitive-17 offenders reduced or recorded as exemptions; `config/` tracking **ruled** (owner: keep tracked — applied in the G1 follow-up commit) | one commit per family |
 | G7 | Backlog (scheduled after G1–G6) | JS coverage instrumentation; `StackBridge`/`ScrollParse` cohesion passes; `HistoryExportService` 21-method pass | — |
 
 **Implement 1st step only** — the owner's instruction for this session. G2–G7
