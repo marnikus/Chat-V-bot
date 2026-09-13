@@ -35,6 +35,7 @@ from backend.history_query import HistoryQuery  # noqa: E402
 from bridge.bot_bridge import BotBridge  # noqa: E402
 from bridge.bot_prompt_bridge import BotPromptBridge  # noqa: E402
 from bridge.bot_settings_bridge import BotSettingsBridge  # noqa: E402
+from services import bot_providers  # noqa: E402
 from services.bot_connections import ConnectionStore  # noqa: E402
 from bridge.context import BridgeContext  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
@@ -509,9 +510,14 @@ class SettingsBridgeCase(BotBridgeCase):
 
         Every provider is seeded with a keyless row so it is selectable on a
         fresh install (that IS the connection list the user sees), so a test
-        about saving has to look past the seeds."""
-        return [c for c in self.listed() if c["has_key"] or c["title"]
-                not in {"Grok (xAI)", "Google Gemini"}]
+        about saving has to look past the seeds.
+
+        The seed titles come from the provider table rather than a literal
+        set, so adding a provider does not silently break every test that
+        counts connections."""
+        seeded = {spec.title for spec in bot_providers.PROVIDERS.values()}
+        return [c for c in self.listed()
+                if c["has_key"] or c["title"] not in seeded]
 
 
 class TestConnectionsOverTheWire(SettingsBridgeCase):
@@ -545,7 +551,7 @@ class TestConnectionsOverTheWire(SettingsBridgeCase):
         google = self.add("Work Gemini", provider="google",
                           key="AIza-key-1234", model="gemini-2.0-flash")
         self.assertEqual(self.entry(google)["provider"], "google")
-        self.assertEqual(len(self.listed()), 2)
+        self.assertEqual(len(self.added()), 2)
 
     def test_the_key_is_masked_and_never_sent_in_full(self):
         ident = self.add("Grok", key="xai-supersecret-key")

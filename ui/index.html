@@ -475,52 +475,120 @@
 <!-- AI CONNECTIONS — an anchored popup, opened by the ⚙ in the Grok
      Prompt Editor title bar and dismissed by a click outside, exactly
      like the Grid view / Bookmarks menu. API keys, models and endpoints
-     live HERE and nowhere else: the Prompt Editor holds prompt controls
-     only, and prompts run on whichever connection is marked in use. -->
+     live HERE and nowhere else.
+
+     Two columns, master/detail. Clicking a row on the left only LOADS it
+     into the form on the right: browsing is not choosing. "Select" in the
+     footer is the single action that confirms a connection and closes the
+     popup, so the user can look at three connections, test one and change
+     their mind without anything having happened. -->
 <div class="bot-settings-backdrop layout-menu hidden"
      id="botSettingsBackdrop">
   <div class="bot-settings" role="dialog"
        aria-labelledby="botSettingsTitle">
-    <h3 id="botSettingsTitle">AI connections
-      <span class="spacer"></span>
-      <button id="botSettingsCloseBtn" class="btn-icon-sm" type="button"
-              title="Close without saving">✕</button>
-    </h3>
-    <div class="bot-settings-body">
-      <div class="bot-provider-list" id="botProviderList"></div>
-      <div class="bot-provider-form">
-        <label for="botConnTitle">Name</label>
-        <input id="botConnTitle" type="text" spellcheck="false"
-               placeholder="e.g. Grok — grok-4.3">
-        <label for="botConnProvider">Provider</label>
-        <div id="botConnProvider" class="dark-select-host"></div>
-        <label for="botProviderKey">API key</label>
-        <input id="botProviderKey" type="password" spellcheck="false"
-               autocomplete="off"
-               placeholder="stored on this machine — leave blank to keep the saved one">
-        <span id="botProviderKeyState" class="bot-hint"></span>
-        <label for="botProviderModel">Model</label>
-        <input id="botProviderModel" type="text" spellcheck="false"
-               placeholder="e.g. grok-4.3">
-        <label for="botProviderUrl">Endpoint</label>
-        <input id="botProviderUrl" type="text" spellcheck="false">
-        <span class="bot-hint">Leave the endpoint as it is unless you use a proxy.</span>
+    <header class="bot-settings-head">
+      <div>
+        <h3 id="botSettingsTitle">Choose AI connection</h3>
+        <p class="bot-settings-sub">Select a connection, adjust its
+          settings, then confirm with Select.</p>
       </div>
+      <button id="botSettingsCloseBtn" class="ui-btn ui-btn--icon"
+              type="button" title="Close without changing anything"
+              aria-label="Close">✕</button>
+    </header>
+
+    <div class="bot-settings-body">
+      <!-- LEFT: the list never moves while the right side is edited -->
+      <aside class="bot-conn-rail">
+        <div class="bot-rail-head">
+          <span class="bot-rail-title">Connections</span>
+          <span class="bot-rail-count" id="botConnCount"></span>
+        </div>
+        <div class="bot-provider-list" id="botProviderList"
+             role="listbox" aria-label="Saved connections"></div>
+        <button id="botConnNewBtn" class="ui-btn ui-btn--ghost ui-btn--block"
+                type="button" title="Add another connection">
+          <span class="ui-btn-ico">+</span>New connection</button>
+      </aside>
+
+      <!-- RIGHT: everything about the connection being viewed -->
+      <section class="bot-conn-detail">
+        <div class="bot-detail-head">
+          <h4 id="botDetailTitle">No connection</h4>
+          <span class="bot-ready" id="botConnReady">
+            <i class="bot-dot" id="botConnDot"></i>
+            <span id="botConnReadyText"></span>
+          </span>
+        </div>
+
+        <!-- The provider's recommended configuration. Choosing it only
+             describes it; the button below is what writes the fields. -->
+        <div class="bot-preset-card" id="botPresetCard">
+          <div class="bot-preset-head">Recommended preset</div>
+          <div class="bot-preset-options" id="botPresetOptions"
+               role="listbox" aria-label="Presets"></div>
+          <p class="bot-preset-desc" id="botPresetDesc"></p>
+          <button id="botApplyPresetBtn" class="ui-btn ui-btn--primary"
+                  type="button" disabled
+                  title="Copy the preset values into the fields below">
+            Apply Preset Settings</button>
+          <p class="bot-hint">Fills in the fields below. The popup stays
+            open and the values stay editable.</p>
+        </div>
+
+        <div class="bot-provider-form">
+          <div class="bot-field">
+            <label for="botConnTitle">Name</label>
+            <input id="botConnTitle" type="text" spellcheck="false"
+                   placeholder="e.g. Grok — grok-4.3">
+          </div>
+          <div class="bot-field">
+            <label for="botConnProvider">Provider</label>
+            <div id="botConnProvider" class="dark-select-host"></div>
+          </div>
+          <div class="bot-field">
+            <label for="botProviderModel">Model</label>
+            <input id="botProviderModel" type="text" spellcheck="false"
+                   placeholder="e.g. grok-4.3">
+          </div>
+          <div class="bot-field">
+            <label for="botProviderKey">API key</label>
+            <div class="bot-key-row">
+              <input id="botProviderKey" type="password" spellcheck="false"
+                     autocomplete="off"
+                     placeholder="leave blank to keep the saved key">
+              <button id="botKeyRevealBtn" class="ui-btn ui-btn--icon"
+                      type="button" title="Show the key you are typing"
+                      aria-label="Show or hide the key">◉</button>
+            </div>
+            <span id="botProviderKeyState" class="bot-hint"></span>
+          </div>
+          <div class="bot-field bot-field--wide">
+            <label for="botProviderUrl">Endpoint</label>
+            <input id="botProviderUrl" type="text" spellcheck="false">
+            <span class="bot-hint">Leave this alone unless you use a
+              proxy.</span>
+          </div>
+        </div>
+      </section>
     </div>
-    <div class="bot-settings-actions">
-      <button id="botConnNewBtn" class="btn-small" type="button"
-              title="Add another connection">+ New</button>
-      <button id="botTestConnBtn" class="btn-small" type="button"
-              title="Send one tiny request with these settings">Test connection</button>
-      <button id="botConnUseBtn" class="btn-small" type="button"
-              title="Run prompts through this connection">Use for prompts</button>
-      <button id="botConnDeleteBtn" class="btn-small btn-danger" type="button"
-              title="Delete this connection">Delete</button>
+
+    <footer class="bot-settings-actions">
+      <button id="botConnDeleteBtn" class="ui-btn ui-btn--danger"
+              type="button" title="Delete the connection shown on the right">
+        Delete connection</button>
       <span class="spacer"></span>
-      <button id="botSettingsSaveBtn" class="btn-success" type="button">Save</button>
-      <button id="botSettingsCancelBtn" class="btn-small" type="button">Cancel</button>
-    </div>
-    <div id="botSettingsStatus" class="bot-status" aria-live="polite"></div>
+      <div id="botSettingsStatus" class="bot-status" aria-live="polite"></div>
+      <button id="botTestConnBtn" class="ui-btn ui-btn--ghost" type="button"
+              title="Send one tiny request using the values shown">
+        Test connection</button>
+      <button id="botSettingsCancelBtn" class="ui-btn ui-btn--ghost"
+              type="button">Cancel</button>
+      <button id="botConnSelectBtn" class="ui-btn ui-btn--primary"
+              type="button"
+              title="Use this connection for prompts and close">
+        Select</button>
+    </footer>
   </div>
 </div>
 
@@ -663,6 +731,7 @@
 <script src="js/dark-select.js"></script>
 <script src="js/bot-messages.js"></script>
 <script src="js/bot-chat.js"></script>
+<script src="js/bot-connection-view.js"></script>
 <script src="js/bot-settings.js"></script>
 <script src="js/bot-prompt.js"></script>
 </body>

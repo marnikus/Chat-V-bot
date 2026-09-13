@@ -18,6 +18,10 @@ Verified against the vendors' own REST docs (September 2026):
   `candidates[0].content.parts[0].text`, plus a `finishReason` that must be
   read: a `SAFETY` refusal returns a candidate with no text at all, and
   reporting that as "empty answer" would send the user hunting the wrong bug.
+* Kimi (Moonshot) — `POST https://api.moonshot.ai/v1/chat/completions`,
+  `Authorization: Bearer <key>`, OpenAI-shaped throughout. It reuses Grok's
+  two functions exactly, which is the claim above being cashed: a third
+  provider cost one row of this table and no new code.
 """
 
 from __future__ import annotations
@@ -66,6 +70,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         "https://generativelanguage.googleapis.com/v1beta/models/"
         "{model}:generateContent",
         "gemini-2.0-flash", "x-goog-api-key", "gemini"),
+    "kimi": ProviderSpec(
+        "kimi", "Kimi (Moonshot)", "https://api.moonshot.ai/v1/chat/completions",
+        "kimi-k2.6", "bearer", "openai"),
 }
 
 DEFAULT_PROVIDER = "grok"
