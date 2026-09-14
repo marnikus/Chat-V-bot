@@ -448,8 +448,13 @@ class TestBlockContract(unittest.TestCase):
         self.assertEqual(out, ActionResult.OK)
 
     def test_ui_matches_the_backend(self):
-        js = open(os.path.join(os.path.dirname(__file__), "..", "ui", "js",
-                               "stack-dnd.js"), encoding="utf-8").read()
+        # Round H (H-A4): assert against the whole stack-dnd family.
+        base = os.path.join(os.path.dirname(__file__), "..", "ui", "js")
+        family = ["core/ui-helpers.js", "stack-drag.js", "stack-dnd-history.js",
+                  "stack-dnd-render.js", "stack-dnd-menu.js", "stack-dnd-config.js",
+                  "stack-dnd-form.js", "stack-dnd.js"]
+        js = "".join(open(os.path.join(base, f), encoding="utf-8").read()
+                     for f in family)
         self.assertIn("scroll_only:false", js)
         self.assertIn("scroll_only:'", js, "needs a label")
         # The retired keys must never be live, user-facing controls. They DO
@@ -459,9 +464,12 @@ class TestBlockContract(unittest.TestCase):
         import re
         code = re.sub(r"//[^\n]*", "", js)                     # // comments
         code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)      # /* comments */
-        code = re.sub(r"'[^']*'", "''", code)                  # 'strings'
-        code = re.sub(r'"[^"]*"', '""', code)                  # "strings"
-        code = re.sub(r"`[^`]*`", "``", code)                  # `templates`
+        # The esc() chain contains quote regex literals that would desync
+        # string pairing — neutralize them to /Q/g before stripping.
+        code = re.sub(r"/['\"]/g", "/Q/g", code)     # quote regex literals
+        code = re.sub(r"'(?:[^'\\]|\\.)*'", "''", code, flags=re.S)  # 'strings'
+        code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', code, flags=re.S)  # "strings"
+        code = re.sub(r"`(?:[^`\\]|\\.)*`", "``", code, flags=re.S)  # `templates`
         for dead in ("use_panel_filters", "skip_if_backlog",
                      "backlog_threshold"):
             self.assertNotIn(dead, code,

@@ -302,10 +302,22 @@ class TestInjectorFallback(unittest.TestCase):
 
 
 class TestUiContract(unittest.TestCase):
+    STACK_DND_FAMILY = [
+        "core/ui-helpers.js", "stack-drag.js", "stack-dnd-history.js",
+        "stack-dnd-render.js", "stack-dnd-menu.js", "stack-dnd-config.js",
+        "stack-dnd-form.js", "stack-dnd.js",
+    ]
+
+    def _read_stack_family(self):
+        # Round H (H-A4): the stack-dnd surface spans facade + part files;
+        # UI contracts are asserted against the whole family (same order as
+        # ui/index.html / tests/js_family.js).
+        base = os.path.join(os.path.dirname(__file__), "..", "ui", "js")
+        return "".join(open(os.path.join(base, f), encoding="utf-8").read()
+                       for f in self.STACK_DND_FAMILY)
+
     def test_stack_dnd_offers_the_checkbox_and_textarea_field(self):
-        with open(os.path.join(UI_DIR, "js", "stack-dnd.js"),
-                  encoding="utf-8") as fh:
-            js = fh.read()
+        js = self._read_stack_family()
         self.assertIn("use_composer:false", js)
         self.assertIn("Use text from the Message Composer window", js)
         self.assertIn("textarea[data-key]", js)

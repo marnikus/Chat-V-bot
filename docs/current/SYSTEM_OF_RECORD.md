@@ -6,8 +6,8 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-14 (this checkout) |
-| Test suite | `3197 passed, 2 skipped, 1 deselected, 1 xfailed, 902 subtests passed` + 30 green Node harness files |
+| Last verified against code | 2026-09-15 (this checkout) |
+| Test suite | `3213 passed, 2 skipped, 1 deselected, 1 xfailed, 902 subtests passed` + 35 green Node harness files |
 | Coverage (measured, `--branch`, 8 production packages) | line **91.83%** · branch **87.02%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
@@ -242,7 +242,7 @@ non-destructive).
 | Orchestration | `services/` (55) | `run/` (engine), `history/` (service + `trash.py` session-sized trash + `migrate.py` install migration), collector (the `collector_*` family), db lifecycle + deletion (the `db_deletion_*` family), layout, people, undo (the `undo_*` family: `undo_service.py` facade + `undo_history.py` / `undo_apply.py` / `undo_db.py` / `undo_world.py` + `undo_archive.py` verified archive commands + `undo_timeline.py` timeline commit + `undo_support.py`) + `world_events.py` (the world's clock: wait for it, announce it live) |
 | Persistence | `stores/` (37) | SQLite world store + schema/repair, JSON stores, labels, media, presets, undo, `world_lock.py` (one write gate per world file) |
 | Shell | `app/` (4) + `main.py` | Bootstrap/DI, window, lifecycle |
-| UI | `ui/` (27 JS) | Grid, stack DnD, archive windows, collector panel, labels, db panel, composer, log |
+| UI | `ui/` (39 JS) | Grid, stack DnD, archive windows, collector panel, labels, db panel, composer, log — Round H Area A: `sash-grid`, `stack-dnd` and `app` are facades + named part files, merged at load by `UIHelpers.mergeParts`, loaded in `ui/index.html` order (mirrored by `tests/js_family.js`) |
 | Tooling | `tools/` | `tools/metrics/*` audits, `tools/build_stubs.py` (headless Qt stubs) |
 
 Bootstrap wiring is one function: `app/bootstrap.create_container()` registers
@@ -254,11 +254,11 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (3197 tests + 902 subtests)
+# Python (3213 tests + 902 subtests)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (30 Node harness files)
+# Front-end (35 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)
@@ -281,6 +281,7 @@ export LD_LIBRARY_PATH=/tmp/stublibs
 | `tests/integration/run_safety/` | Stop/pause contracts, cycle event order, cleanup |
 | `tests/integration/services/` | Service-layer contracts (run engine, history, db, collector, undo, layout, people) |
 | `tests/js_harness.js` + `tests/dom_stub.js` | Runs real probe/UI JS against a DOM stub (RULE 8) |
+| `tests/js_family.js` + `tests/test_js_gate.py` | The Round H family loader (per-file eval, mirroring `index.html` order) and the JS quality gate's contract + end-to-end run against the committed baselines |
 | `tests/unit/bridge_safety/test_world_ready.py` | The boot broadcast: the real router hands the People window every user of the world and tells the DB window to reload — the regression for “after a restart I had to press refresh” |
 | `tests/unit/bridge_safety/test_boot_race.py` | The boot race itself: the real bridges over a real world file, one request sent while the world is still closed, answered once it opens (page, stats, People refresh; a never-opening world is a bounded error, not a hang) |
 | `tests/unit/bridge_safety/test_boot_chain.py` | The shipped boot order end to end: real `Router` + real `ApplicationLifecycle` + real stores, the page asking before `startup` opens the world — the answer arrives with zero refresh calls |
@@ -300,6 +301,7 @@ dict, and the collector status strings.
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC **10** (no function over the gate), mean 3.09 · cognitive > 15 only on the two frozen exemptions · nesting max 4 |
 | Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.83% / 87.02%** |
+| JS size/coverage gate (Round H, H-A2) | `tools/metrics/js_gate.py` vs `reports/js_size_baseline.json` + `js_coverage_baseline.json` — may shrink, never grow | **PASS**: 43 files / 12,504 lines · 50 functions over 30 LOC frozen · coverage 83.71%, no never-loaded file |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (63.6% in band) · median file 142 lines — RULE 18, re-measured 2026-09-12, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
@@ -310,6 +312,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-15 | [Round H Area A port notes](../archive/2026-09-15-area-a-port/AREA_A_PORT_NOTES_2026-09-15.md) (+ the [Round H plan](../archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md) and [Area A design](../archive/2026-09-14-round-h/AREA_A_FRONTEND_JS_DESIGN_2026-09-14.md) it ports) | Why the JS frontend is now facades + parts (`SashGrid` 1,361→112, `StackDnD` 1,132→269, `app.js` 509→93), what the JS gate ratchets, and how the grid-rows delta was remapped into the parts when both rounds met on `sash-grid.js` |
 | 2026-09-14 | [Grid rows + adaptive preset restore](../archive/2026-09-14-grid-rows-adaptive-restore/GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md) | Why drag & drop can now create ROWS (above/below/between) and why sashes stopped disappearing after moves (the minimum-size reflow, where it runs and where it deliberately does not), and how a preset whose window set drifted is repaired and reported instead of refused |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
@@ -338,6 +341,7 @@ dict, and the collector status strings.
 | Why one undo timeline instead of per-panel? | [People-list undo history](../archive/2026-09-05-grid-scroll-undo/PEOPLE_LIST_UNDO_HISTORY_DESIGN_2026-09-05.md) + [undo/redo toggle](../archive/2026-09-05-grid-scroll-undo/FEATURE_UNDO_REDO_ENABLE_TOGGLE_DESIGN_2026-09-05.md) |
 | Why the grid behaves like this (autosave, controls, reset)? | [Sash layout](../archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-05.md) + [grid window controls](../archive/2026-09-07-labels-and-collector/GRID_WINDOW_CONTROLS_DESIGN_2026-09-07.md) |
 | Why rows appear above/below/between on drag, and why a drifted preset restores adaptively? | [Grid rows + adaptive restore](../archive/2026-09-14-grid-rows-adaptive-restore/GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md) |
+| Why is the frontend split into facades + part files, and what does the JS gate freeze? | [Area A design](../archive/2026-09-14-round-h/AREA_A_FRONTEND_JS_DESIGN_2026-09-14.md) + [port notes](../archive/2026-09-15-area-a-port/AREA_A_PORT_NOTES_2026-09-15.md) |
 | Why did media recovery need a root-cause fix? | [Backfill media recovery](../archive/2026-09-07-labels-and-collector/BACKFILL_MEDIA_RECOVERY_ROOT_CAUSE_2026-09-07.md) |
 | Why do labels live in the world? | [Person labels & DB management](../archive/2026-09-07-labels-and-collector/PERSON_LABELS_AND_DB_MANAGEMENT_DESIGN_2026-09-07.md) |
 | Why does one coefficient scale every wait of a run? | [Speed multiplier design](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) |

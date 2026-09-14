@@ -21,16 +21,6 @@
  */
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
-
-// ── real modules ─────────────────────────────────────────────────
-const coreModule = { exports: {} };
-new Function('module', 'exports', read('ui/js/sash-core.js'))(coreModule, coreModule.exports);
-global.SashCore = coreModule.exports;
-global.PresetAdapt = require('../ui/js/preset-adapt.js');
-const SashCore = global.SashCore;
 
 // ── minimal DOM stub (window-controls pattern) ──────────────────
 function mkEl(tag, className) {
@@ -250,7 +240,12 @@ global.App = { bridge: null, recordGlobal() {} };
 global.MutationObserver = class { constructor() {} observe() {} disconnect() {} };
 global.getComputedStyle = () => ({ display: '' });
 
-const SashGrid = new Function(read('ui/js/sash-grid.js') + '\nreturn SashGrid;')();
+// the REAL shipped family, loaded like index.html does (Round H, H-A3:
+// facade + four parts + the DOM-free model + the adaptive-restore mirror)
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.sashGrid);
+const SashCore = global.SashCore;
+const SashGrid = global.SashGrid;
 for (const w of SashCore.WINDOWS) makePanel(PANEL_IDS[w.id]);
 SashGrid.init();
 

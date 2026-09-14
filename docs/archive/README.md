@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**106 documents in 23 groups.**
+**107 documents in 24 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,7 +35,8 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-grid-rows-adaptive-restore/`](#2026-09-14-grid-rows-adaptive-restore) | 1 | Row creation by drag & drop (above/below/between), the minimum-size reflow that fixed the disappearing horizontal sashes, and the adaptive preset restore that repairs and reports a drifted window set instead of refusing it. |
-| [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
+| [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan as written; Area A since implemented on this line — see [`2026-09-15-area-a-port/`](#2026-09-15-area-a-port)): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
+| [`2026-09-15-area-a-port/`](#2026-09-15-area-a-port) | 1 | The Area A port onto the grid-rows line: the collision map (both rounds edited `sash-grid.js`), the ten-change delta remap into the new parts, the re-baseline decision that lands the JS gate green instead of "known red until H-A6", and the executed verification. |
 
 ---
 
@@ -395,3 +396,18 @@ the repository has**, holding the largest file (1,361 lines), the largest class
 - [`AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md) — Area B: the four files over 500 lines in `backend/`+`bridge/`, the four-way responsibility split of `HistoryBridge` (reads / deletions / media / settings) with the QWebChannel slot surface kept on the facade, the search-vs-projection split of `history_query.py` plus its last mutation survivor, and the coverage-first steps for the two files the suite reaches worst (`history_bridge` 66.4%, `cdp_client` 65.2%).
 - [`AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md) — Area C: the measured separation between the 7 delegation facades (73–86% one-line methods — do not split) and the 17 genuinely incoherent classes; the run family, the undo family and the DB/world family decomposed by phase and by operation; the four store planners (cohesive but 306–407 LOC) extracted by named helper module; and the dense-file pass that a lines-only sort cannot see (`window_preset_service` MI 30.6 in 326 lines, `run/progress` 31.0, `history/mutate` 34.9).
 - [`AREA_D_VERIFICATION_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_D_VERIFICATION_DESIGN_2026-09-14.md) — Area D, no production files: mutation from one module to a platform measurement (the second job, and the measured 159 → 910 reachable-mutant widening sequenced after Area B), the RULE 8 double audit that would have caught the fake which hid the dead label store, a per-file coverage floor with a ratchet so the global average stops hiding `message_injector_send.py` at 26.3%, and the baseline/document currency work (RULE 16 §16.3 still quotes the 2026-09-10 floors).
+
+---
+
+## 2026-09-15-area-a-port
+
+Round H Area A (H-A1..H-A5) ported from `arena/01a0a1b7-chat-v-bot` onto the grid-rows line. The
+source branch pre-dated the grid-rows round, and both edited `ui/js/sash-grid.js` — the split into
+facade + parts and the minimum-size/adaptive-preset rewiring had to be merged by hand, not
+cherry-picked. The port also pulls the mechanical half of H-A6 forward (regenerating both JS
+baselines on the merged tree) so `tests/test_js_gate.py` lands green instead of the source's
+documented "known red until H-A6".
+
+*1 doc.*
+
+- [`AREA_A_PORT_NOTES_2026-09-15.md`](2026-09-15-area-a-port/AREA_A_PORT_NOTES_2026-09-15.md) — The collision map (3 files), the ten-change grid-rows delta remapped into `sash-grid-tree/windows/presets/drag.js` + facade (and the two paths deliberately NOT remapped: resize and undo), the `js_family` addition of `preset-adapt.js`, the re-baseline decision with its frozen debt stated plainly (50 functions over 30, eleven 151–270-LOC part objects, `_showConfig` 37), and the executed verification: 35/35 Node suites, 3,213-test Python battery, JS gate PASS at 43 files / 12,504 lines / 83.71% honest coverage, SashGrid 1,361→112, StackDnD 1,132→269, app.js 509→93.
