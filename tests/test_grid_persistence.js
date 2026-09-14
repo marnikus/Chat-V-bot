@@ -50,16 +50,11 @@ global.SashCore = {
 global.App = { bridge: null, recordGlobal() {} };
 global.BridgeReady = { ready() {} };
 
-vm.runInThisContext(
-  fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
-  '\nglobalThis.__SashGrid = SashGrid;'
-);
-vm.runInThisContext(
-  fs.readFileSync('ui/js/stack-dnd.js', 'utf8') +
-  '\nglobalThis.__StackDnD = StackDnD;'
-);
-const SashGrid = global.__SashGrid;
-const StackDnD = global.__StackDnD;
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.sashGrid);
+loadFamily(FAMILIES.stackDnd);
+const SashGrid = global.SashGrid;
+const StackDnD = global.StackDnD;
 
 test('SashGrid.flushPersistence is a function', () => {
   assert(typeof SashGrid.flushPersistence === 'function');

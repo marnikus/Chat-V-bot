@@ -1,0 +1,11006 @@
+{
+ "files": [
+  {
+   "file": "backend/js/chat_agent.js",
+   "functions": [
+    {
+     "end": 802,
+     "line": 21,
+     "loc": 782,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 209,
+     "line": 164,
+     "loc": 46,
+     "name": "selectPane"
+    },
+    {
+     "end": 410,
+     "line": 366,
+     "loc": 45,
+     "name": "walk"
+    },
+    {
+     "end": 268,
+     "line": 225,
+     "loc": 44,
+     "name": "visiblePane"
+    },
+    {
+     "end": 765,
+     "line": 725,
+     "loc": 41,
+     "name": "state"
+    },
+    {
+     "end": 664,
+     "line": 633,
+     "loc": 32,
+     "name": "scrollerCandidates"
+    },
+    {
+     "end": 504,
+     "line": 478,
+     "loc": 27,
+     "name": "onMutations"
+    },
+    {
+     "end": 709,
+     "line": 686,
+     "loc": 24,
+     "name": "scrollToTop"
+    },
+    {
+     "end": 325,
+     "line": 303,
+     "loc": 23,
+     "name": "parseNode"
+    },
+    {
+     "end": 476,
+     "line": 454,
+     "loc": 23,
+     "name": "sendPush"
+    },
+    {
+     "end": 571,
+     "line": 549,
+     "loc": 23,
+     "name": "describeTab"
+    },
+    {
+     "end": 608,
+     "line": 593,
+     "loc": 16,
+     "name": "describePane"
+    },
+    {
+     "end": 349,
+     "line": 335,
+     "loc": 15,
+     "name": "liveFields"
+    },
+    {
+     "end": 432,
+     "line": 419,
+     "loc": 14,
+     "name": "authorsOf"
+    },
+    {
+     "end": 162,
+     "line": 150,
+     "loc": 13,
+     "name": "groupAuthors"
+    },
+    {
+     "end": 287,
+     "line": 275,
+     "loc": 13,
+     "name": "messagesRoot"
+    },
+    {
+     "end": 591,
+     "line": 580,
+     "loc": 12,
+     "name": "countPaneUsers"
+    },
+    {
+     "end": 723,
+     "line": 712,
+     "loc": 12,
+     "name": "restoreScroll"
+    },
+    {
+     "end": 81,
+     "line": 72,
+     "loc": 10,
+     "name": "ownText"
+    },
+    {
+     "end": 148,
+     "line": 139,
+     "loc": 10,
+     "name": "paneGroups"
+    },
+    {
+     "end": 102,
+     "line": 94,
+     "loc": 9,
+     "name": "isHidden"
+    },
+    {
+     "end": 514,
+     "line": 506,
+     "loc": 9,
+     "name": "install"
+    },
+    {
+     "end": 48,
+     "line": 41,
+     "loc": 8,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 137,
+     "line": 130,
+     "loc": 8,
+     "name": "distinctNicks"
+    },
+    {
+     "end": 358,
+     "line": 351,
+     "loc": 8,
+     "name": "fieldsStale"
+    },
+    {
+     "end": 546,
+     "line": 539,
+     "loc": 8,
+     "name": "containerOf"
+    },
+    {
+     "end": 623,
+     "line": 616,
+     "loc": 8,
+     "name": "scrollInfo"
+    },
+    {
+     "end": 774,
+     "line": 767,
+     "loc": 8,
+     "name": "slice"
+    },
+    {
+     "end": 116,
+     "line": 110,
+     "loc": 7,
+     "name": "paneOf"
+    },
+    {
+     "end": 452,
+     "line": 446,
+     "loc": 7,
+     "name": "schedulePush"
+    },
+    {
+     "end": 525,
+     "line": 519,
+     "loc": 7,
+     "name": "reattach"
+    },
+    {
+     "end": 681,
+     "line": 675,
+     "loc": 7,
+     "name": "dispatchScroll"
+    },
+    {
+     "end": 782,
+     "line": 776,
+     "loc": 7,
+     "name": "drain"
+    },
+    {
+     "end": 59,
+     "line": 54,
+     "loc": 6,
+     "name": "fingerprint"
+    },
+    {
+     "end": 219,
+     "line": 214,
+     "loc": 6,
+     "name": "inDocument"
+    },
+    {
+     "end": 53,
+     "line": 49,
+     "loc": 5,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 301,
+     "line": 297,
+     "loc": 5,
+     "name": "liveMediaUrl"
+    },
+    {
+     "end": 416,
+     "line": 412,
+     "loc": 5,
+     "name": "strip"
+    },
+    {
+     "end": 531,
+     "line": 527,
+     "loc": 5,
+     "name": "uninstall"
+    },
+    {
+     "end": 614,
+     "line": 610,
+     "loc": 5,
+     "name": "describe"
+    },
+    {
+     "end": 65,
+     "line": 62,
+     "loc": 4,
+     "name": "qs"
+    },
+    {
+     "end": 69,
+     "line": 66,
+     "loc": 4,
+     "name": "qsa"
+    },
+    {
+     "end": 85,
+     "line": 82,
+     "loc": 4,
+     "name": "isAncestor"
+    },
+    {
+     "end": 107,
+     "line": 104,
+     "loc": 4,
+     "name": "visible"
+    },
+    {
+     "end": 363,
+     "line": 360,
+     "loc": 4,
+     "name": "keyOf"
+    },
+    {
+     "end": 444,
+     "line": 441,
+     "loc": 4,
+     "name": "bufferRecord"
+    },
+    {
+     "end": 451,
+     "line": 448,
+     "loc": 4,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 537,
+     "line": 534,
+     "loc": 4,
+     "name": "classContains"
+    },
+    {
+     "end": 673,
+     "line": 670,
+     "loc": 4,
+     "name": "scrollMetrics"
+    },
+    {
+     "end": 128,
+     "line": 126,
+     "loc": 3,
+     "name": "normNick"
+    },
+    {
+     "end": 185,
+     "line": 183,
+     "loc": 3,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 223,
+     "line": 221,
+     "loc": 3,
+     "name": "paneAmong"
+    },
+    {
+     "end": 272,
+     "line": 270,
+     "loc": 3,
+     "name": "containers"
+    },
+    {
+     "end": 668,
+     "line": 666,
+     "loc": 3,
+     "name": "chatScroller"
+    },
+    {
+     "end": 794,
+     "line": 792,
+     "loc": 3,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 70,
+     "line": 70,
+     "loc": 1,
+     "name": "clean"
+    },
+    {
+     "end": 86,
+     "line": 86,
+     "loc": 1,
+     "name": "num"
+    },
+    {
+     "end": 182,
+     "line": 182,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 187,
+     "line": 187,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 737,
+     "line": 737,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 738,
+     "line": 738,
+     "loc": 1,
+     "name": "(anonymous)"
+    }
+   ],
+   "lines": 803,
+   "objects": [
+    {
+     "end": 764,
+     "gated": true,
+     "line": 742,
+     "loc": 23,
+     "methods": 1
+    },
+    {
+     "end": 474,
+     "gated": false,
+     "line": 460,
+     "loc": 15,
+     "methods": 0
+    },
+    {
+     "end": 797,
+     "gated": true,
+     "line": 784,
+     "loc": 14,
+     "methods": 1
+    },
+    {
+     "end": 348,
+     "gated": false,
+     "line": 341,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 607,
+     "gated": false,
+     "line": 600,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 734,
+     "gated": false,
+     "line": 730,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 405,
+     "gated": false,
+     "line": 402,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 267,
+     "gated": false,
+     "line": 265,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 415,
+     "gated": false,
+     "line": 413,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 622,
+     "gated": false,
+     "line": 620,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 708,
+     "gated": false,
+     "line": 706,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 794,
+     "gated": false,
+     "line": 792,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 240,
+     "gated": false,
+     "line": 239,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 256,
+     "gated": false,
+     "line": 255,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 324,
+     "gated": false,
+     "line": 323,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 570,
+     "gated": false,
+     "line": 569,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 672,
+     "gated": false,
+     "line": 671,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 773,
+     "gated": false,
+     "line": 772,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 144,
+     "gated": false,
+     "line": 144,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 161,
+     "gated": false,
+     "line": 161,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 167,
+     "gated": false,
+     "line": 167,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 290,
+     "gated": false,
+     "line": 290,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 311,
+     "gated": false,
+     "line": 311,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 316,
+     "gated": false,
+     "line": 316,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 343,
+     "gated": false,
+     "line": 343,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 431,
+     "gated": false,
+     "line": 431,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 511,
+     "gated": false,
+     "line": 511,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 582,
+     "gated": false,
+     "line": 582,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 662,
+     "gated": false,
+     "line": 662,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 678,
+     "gated": false,
+     "line": 678,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 697,
+     "gated": false,
+     "line": 697,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 721,
+     "gated": false,
+     "line": 721,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 722,
+     "gated": false,
+     "line": 722,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 734,
+     "gated": false,
+     "line": 734,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 781,
+     "gated": false,
+     "line": 781,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 61,
+    "max_object_loc": 23,
+    "max_object_methods": 1,
+    "over_100": 1,
+    "over_30": 6,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/app-bridge.js",
+   "functions": [
+    {
+     "end": 282,
+     "line": 257,
+     "loc": 26,
+     "name": "wireHistorySettings"
+    },
+    {
+     "end": 199,
+     "line": 179,
+     "loc": 21,
+     "name": "wireArchiveSignals"
+    },
+    {
+     "end": 176,
+     "line": 157,
+     "loc": 20,
+     "name": "wireHistorySignals"
+    },
+    {
+     "end": 69,
+     "line": 51,
+     "loc": 19,
+     "name": "wireTabsReceived"
+    },
+    {
+     "end": 220,
+     "line": 202,
+     "loc": 19,
+     "name": "wireLabelDbSignals"
+    },
+    {
+     "end": 32,
+     "line": 16,
+     "loc": 17,
+     "name": "setupHeader"
+    },
+    {
+     "end": 68,
+     "line": 52,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 255,
+     "line": 239,
+     "loc": 17,
+     "name": "wireCollectorSignals"
+    },
+    {
+     "end": 49,
+     "line": 34,
+     "loc": 16,
+     "name": "setupListeners"
+    },
+    {
+     "end": 155,
+     "line": 140,
+     "loc": 16,
+     "name": "wirePresetSignals"
+    },
+    {
+     "end": 237,
+     "line": 223,
+     "loc": 15,
+     "name": "wireBotSignals"
+    },
+    {
+     "end": 110,
+     "line": 97,
+     "loc": 14,
+     "name": "wirePersonSignals"
+    },
+    {
+     "end": 138,
+     "line": 125,
+     "loc": 14,
+     "name": "wireStepSignals"
+    },
+    {
+     "end": 82,
+     "line": 71,
+     "loc": 12,
+     "name": "wireConnectionStatus"
+    },
+    {
+     "end": 95,
+     "line": 84,
+     "loc": 12,
+     "name": "wireUsersTable"
+    },
+    {
+     "end": 123,
+     "line": 112,
+     "loc": 12,
+     "name": "wireStatsLog"
+    },
+    {
+     "end": 175,
+     "line": 164,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 81,
+     "line": 72,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 197,
+     "line": 189,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 218,
+     "line": 211,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 266,
+     "line": 259,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 151,
+     "line": 145,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 31,
+     "line": 26,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 63,
+     "line": 58,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 118,
+     "line": 113,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 274,
+     "line": 269,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 89,
+     "line": 85,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 249,
+     "line": 245,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 24,
+     "line": 21,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 207,
+     "line": 204,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 228,
+     "line": 225,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 234,
+     "line": 231,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 281,
+     "line": 278,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 94,
+     "line": 92,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 103,
+     "line": 101,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 109,
+     "line": 107,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 122,
+     "line": 120,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 129,
+     "line": 127,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 133,
+     "line": 131,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 137,
+     "line": 135,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 284,
+   "objects": [
+    {
+     "end": 283,
+     "gated": true,
+     "line": 14,
+     "loc": 270,
+     "methods": 15
+    },
+    {
+     "end": 170,
+     "gated": false,
+     "line": 170,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 270,
+     "gated": false,
+     "line": 270,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 271,
+     "gated": false,
+     "line": 271,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 40,
+    "max_object_loc": 270,
+    "max_object_methods": 15,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app-history.js",
+   "functions": [
+    {
+     "end": 119,
+     "line": 92,
+     "loc": 28,
+     "name": "_applyGlobalKind"
+    },
+    {
+     "end": 64,
+     "line": 45,
+     "loc": 20,
+     "name": "recordGlobal"
+    },
+    {
+     "end": 38,
+     "line": 21,
+     "loc": 18,
+     "name": "loadGlobalHistory"
+    },
+    {
+     "end": 174,
+     "line": 157,
+     "loc": 18,
+     "name": "_updateUndoButtons"
+    },
+    {
+     "end": 138,
+     "line": 123,
+     "loc": 16,
+     "name": "_syncGlobalHistory"
+    },
+    {
+     "end": 90,
+     "line": 77,
+     "loc": 14,
+     "name": "_applyGlobalResult"
+    },
+    {
+     "end": 137,
+     "line": 125,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 155,
+     "line": 148,
+     "loc": 8,
+     "name": "redoGlobal"
+    },
+    {
+     "end": 75,
+     "line": 69,
+     "loc": 7,
+     "name": "_peopleRowsOf"
+    },
+    {
+     "end": 146,
+     "line": 140,
+     "loc": 7,
+     "name": "undoGlobal"
+    },
+    {
+     "end": 19,
+     "line": 16,
+     "loc": 4,
+     "name": "_copy"
+    },
+    {
+     "end": 43,
+     "line": 40,
+     "loc": 4,
+     "name": "_same"
+    },
+    {
+     "end": 153,
+     "line": 150,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 144,
+     "line": 142,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 176,
+   "objects": [
+    {
+     "end": 175,
+     "gated": true,
+     "line": 15,
+     "loc": 161,
+     "methods": 11
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 25,
+     "gated": false,
+     "line": 25,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 26,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 31,
+     "gated": false,
+     "line": 31,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 46,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 47,
+     "gated": false,
+     "line": 47,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 95,
+     "gated": false,
+     "line": 95,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 131,
+     "gated": false,
+     "line": 131,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 161,
+    "max_object_methods": 11,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app-session.js",
+   "functions": [
+    {
+     "end": 91,
+     "line": 72,
+     "loc": 20,
+     "name": "_restoreLastStack"
+    },
+    {
+     "end": 32,
+     "line": 15,
+     "loc": 18,
+     "name": "restoreSession"
+    },
+    {
+     "end": 70,
+     "line": 53,
+     "loc": 18,
+     "name": "_restoreStackStep"
+    },
+    {
+     "end": 42,
+     "line": 34,
+     "loc": 9,
+     "name": "_applyTheme"
+    },
+    {
+     "end": 51,
+     "line": 44,
+     "loc": 8,
+     "name": "_seedPresets"
+    }
+   ],
+   "lines": 93,
+   "objects": [
+    {
+     "end": 92,
+     "gated": true,
+     "line": 14,
+     "loc": 79,
+     "methods": 5
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 24,
+     "gated": false,
+     "line": 24,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 77,
+     "gated": false,
+     "line": 77,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 80,
+     "gated": false,
+     "line": 80,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 5,
+    "max_object_loc": 79,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app.js",
+   "functions": [
+    {
+     "end": 81,
+     "line": 61,
+     "loc": 21,
+     "name": "initWithBridge"
+    },
+    {
+     "end": 59,
+     "line": 43,
+     "loc": 17,
+     "name": "initPanels"
+    },
+    {
+     "end": 41,
+     "line": 37,
+     "loc": 5,
+     "name": "initApp"
+    },
+    {
+     "end": 88,
+     "line": 86,
+     "loc": 3,
+     "name": "restoreSession"
+    },
+    {
+     "end": 92,
+     "line": 90,
+     "loc": 3,
+     "name": "setupBridgeListeners"
+    },
+    {
+     "end": 34,
+     "line": 34,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 93,
+   "objects": [
+    {
+     "end": 27,
+     "gated": false,
+     "line": 20,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": true,
+     "line": 34,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 6,
+    "max_object_loc": 8,
+    "max_object_methods": 1,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-chat.js",
+   "functions": [
+    {
+     "end": 89,
+     "line": 61,
+     "loc": 29,
+     "name": "_wire"
+    },
+    {
+     "end": 59,
+     "line": 42,
+     "loc": 18,
+     "name": "init"
+    },
+    {
+     "end": 322,
+     "line": 305,
+     "loc": 18,
+     "name": "renderLabels"
+    },
+    {
+     "end": 170,
+     "line": 156,
+     "loc": 15,
+     "name": "onReply"
+    },
+    {
+     "end": 231,
+     "line": 217,
+     "loc": 15,
+     "name": "renderAnalysis"
+    },
+    {
+     "end": 303,
+     "line": 289,
+     "loc": 15,
+     "name": "applyReaction"
+    },
+    {
+     "end": 378,
+     "line": 364,
+     "loc": 15,
+     "name": "_verifyRow"
+    },
+    {
+     "end": 253,
+     "line": 240,
+     "loc": 14,
+     "name": "reject"
+    },
+    {
+     "end": 362,
+     "line": 349,
+     "loc": 14,
+     "name": "_card"
+    },
+    {
+     "end": 321,
+     "line": 309,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 302,
+     "line": 291,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 103,
+     "line": 93,
+     "loc": 11,
+     "name": "openPerson"
+    },
+    {
+     "end": 215,
+     "line": 206,
+     "loc": 10,
+     "name": "renderSuggestion"
+    },
+    {
+     "end": 376,
+     "line": 368,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 388,
+     "line": 380,
+     "loc": 9,
+     "name": "_updateSendButton"
+    },
+    {
+     "end": 112,
+     "line": 105,
+     "loc": 8,
+     "name": "refreshLabels"
+    },
+    {
+     "end": 202,
+     "line": 195,
+     "loc": 8,
+     "name": "_countNote"
+    },
+    {
+     "end": 347,
+     "line": 340,
+     "loc": 8,
+     "name": "_restore"
+    },
+    {
+     "end": 80,
+     "line": 74,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 126,
+     "line": 120,
+     "loc": 7,
+     "name": "_send"
+    },
+    {
+     "end": 185,
+     "line": 179,
+     "loc": 7,
+     "name": "renderDay"
+    },
+    {
+     "end": 285,
+     "line": 279,
+     "loc": 7,
+     "name": "onSent"
+    },
+    {
+     "end": 87,
+     "line": 82,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 141,
+     "line": 136,
+     "loc": 6,
+     "name": "_restoreScope"
+    },
+    {
+     "end": 177,
+     "line": 172,
+     "loc": 6,
+     "name": "onError"
+    },
+    {
+     "end": 238,
+     "line": 233,
+     "loc": 6,
+     "name": "approve"
+    },
+    {
+     "end": 268,
+     "line": 263,
+     "loc": 6,
+     "name": "sendDirect"
+    },
+    {
+     "end": 277,
+     "line": 272,
+     "loc": 6,
+     "name": "_deliver"
+    },
+    {
+     "end": 111,
+     "line": 107,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 118,
+     "line": 114,
+     "loc": 5,
+     "name": "ask"
+    },
+    {
+     "end": 191,
+     "line": 187,
+     "loc": 5,
+     "name": "_emptyNote"
+    },
+    {
+     "end": 261,
+     "line": 257,
+     "loc": 5,
+     "name": "sendApproved"
+    },
+    {
+     "end": 70,
+     "line": 67,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 79,
+     "line": 76,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 134,
+     "line": 131,
+     "loc": 4,
+     "name": "_rememberScope"
+    },
+    {
+     "end": 152,
+     "line": 149,
+     "loc": 4,
+     "name": "scope"
+    },
+    {
+     "end": 226,
+     "line": 223,
+     "loc": 4,
+     "name": "approve"
+    },
+    {
+     "end": 332,
+     "line": 329,
+     "loc": 4,
+     "name": "_bubble"
+    },
+    {
+     "end": 392,
+     "line": 390,
+     "loc": 3,
+     "name": "setStatus"
+    },
+    {
+     "end": 43,
+     "line": 43,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 62,
+     "line": 62,
+     "loc": 1,
+     "name": "on"
+    },
+    {
+     "end": 210,
+     "line": 210,
+     "loc": 1,
+     "name": "approve"
+    },
+    {
+     "end": 211,
+     "line": 211,
+     "loc": 1,
+     "name": "reject"
+    },
+    {
+     "end": 227,
+     "line": 227,
+     "loc": 1,
+     "name": "reject"
+    },
+    {
+     "end": 326,
+     "line": 326,
+     "loc": 1,
+     "name": "_clear"
+    }
+   ],
+   "lines": 397,
+   "objects": [
+    {
+     "end": 393,
+     "gated": true,
+     "line": 34,
+     "loc": 360,
+     "methods": 31
+    },
+    {
+     "end": 52,
+     "gated": false,
+     "line": 44,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 229,
+     "gated": true,
+     "line": 222,
+     "loc": 8,
+     "methods": 2
+    },
+    {
+     "end": 213,
+     "gated": true,
+     "line": 209,
+     "loc": 5,
+     "methods": 2
+    },
+    {
+     "end": 38,
+     "gated": false,
+     "line": 38,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 40,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 57,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 110,
+     "gated": false,
+     "line": 110,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 281,
+     "gated": false,
+     "line": 281,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 295,
+     "gated": false,
+     "line": 295,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 45,
+    "max_object_loc": 360,
+    "max_object_methods": 31,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-connection-view.js",
+   "functions": [
+    {
+     "end": 79,
+     "line": 63,
+     "loc": 17,
+     "name": "_row"
+    },
+    {
+     "end": 97,
+     "line": 81,
+     "loc": 17,
+     "name": "_rowName"
+    },
+    {
+     "end": 135,
+     "line": 121,
+     "loc": 15,
+     "name": "presets"
+    },
+    {
+     "end": 117,
+     "line": 107,
+     "loc": 11,
+     "name": "head"
+    },
+    {
+     "end": 147,
+     "line": 137,
+     "loc": 11,
+     "name": "_presetOpt"
+    },
+    {
+     "end": 212,
+     "line": 203,
+     "loc": 10,
+     "name": "place"
+    },
+    {
+     "end": 175,
+     "line": 167,
+     "loc": 9,
+     "name": "presetsFor"
+    },
+    {
+     "end": 159,
+     "line": 152,
+     "loc": 8,
+     "name": "footer"
+    },
+    {
+     "end": 186,
+     "line": 179,
+     "loc": 8,
+     "name": "fill"
+    },
+    {
+     "end": 52,
+     "line": 46,
+     "loc": 7,
+     "name": "collect"
+    },
+    {
+     "end": 61,
+     "line": 55,
+     "loc": 7,
+     "name": "rows"
+    },
+    {
+     "end": 195,
+     "line": 189,
+     "loc": 7,
+     "name": "read"
+    },
+    {
+     "end": 232,
+     "line": 226,
+     "loc": 7,
+     "name": "keyState"
+    },
+    {
+     "end": 104,
+     "line": 100,
+     "loc": 5,
+     "name": "rowTag"
+    },
+    {
+     "end": 219,
+     "line": 215,
+     "loc": 5,
+     "name": "_below"
+    },
+    {
+     "end": 127,
+     "line": 124,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 50,
+     "line": 48,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 60,
+     "line": 58,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 223,
+     "line": 221,
+     "loc": 3,
+     "name": "_clamp"
+    },
+    {
+     "end": 161,
+     "line": 161,
+     "loc": 1,
+     "name": "_able"
+    },
+    {
+     "end": 190,
+     "line": 190,
+     "loc": 1,
+     "name": "val"
+    }
+   ],
+   "lines": 238,
+   "objects": [
+    {
+     "end": 233,
+     "gated": true,
+     "line": 24,
+     "loc": 210,
+     "methods": 17
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 27,
+     "loc": 15,
+     "methods": 0
+    },
+    {
+     "end": 174,
+     "gated": false,
+     "line": 170,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 194,
+     "gated": true,
+     "line": 191,
+     "loc": 4,
+     "methods": 1
+    },
+    {
+     "end": 47,
+     "gated": false,
+     "line": 47,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 153,
+     "gated": false,
+     "line": 153,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 21,
+    "max_object_loc": 210,
+    "max_object_methods": 17,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-messages.js",
+   "functions": [
+    {
+     "end": 45,
+     "line": 29,
+     "loc": 17,
+     "name": "bubble"
+    },
+    {
+     "end": 59,
+     "line": 49,
+     "loc": 11,
+     "name": "_media"
+    },
+    {
+     "end": 71,
+     "line": 62,
+     "loc": 10,
+     "name": "_mediaFallback"
+    },
+    {
+     "end": 56,
+     "line": 56,
+     "loc": 1,
+     "name": "onRestoreMedia"
+    }
+   ],
+   "lines": 76,
+   "objects": [
+    {
+     "end": 72,
+     "gated": true,
+     "line": 26,
+     "loc": 47,
+     "methods": 3
+    },
+    {
+     "end": 57,
+     "gated": true,
+     "line": 54,
+     "loc": 4,
+     "methods": 1
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 53,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 63,
+     "gated": false,
+     "line": 63,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 4,
+    "max_object_loc": 47,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-prompt.js",
+   "functions": [
+    {
+     "end": 89,
+     "line": 60,
+     "loc": 30,
+     "name": "_wire"
+    },
+    {
+     "end": 58,
+     "line": 37,
+     "loc": 22,
+     "name": "init"
+    },
+    {
+     "end": 133,
+     "line": 113,
+     "loc": 21,
+     "name": "_renderVariables"
+    },
+    {
+     "end": 132,
+     "line": 117,
+     "loc": 16,
+     "name": "(arrow)"
+    },
+    {
+     "end": 149,
+     "line": 136,
+     "loc": 14,
+     "name": "insert"
+    },
+    {
+     "end": 297,
+     "line": 284,
+     "loc": 14,
+     "name": "renderTabs"
+    },
+    {
+     "end": 334,
+     "line": 322,
+     "loc": 13,
+     "name": "preview"
+    },
+    {
+     "end": 169,
+     "line": 158,
+     "loc": 12,
+     "name": "showWarnings"
+    },
+    {
+     "end": 282,
+     "line": 272,
+     "loc": 11,
+     "name": "select"
+    },
+    {
+     "end": 194,
+     "line": 185,
+     "loc": 10,
+     "name": "_renderPresets"
+    },
+    {
+     "end": 212,
+     "line": 203,
+     "loc": 10,
+     "name": "applyPreset"
+    },
+    {
+     "end": 237,
+     "line": 228,
+     "loc": 10,
+     "name": "_writePreset"
+    },
+    {
+     "end": 247,
+     "line": 239,
+     "loc": 9,
+     "name": "deletePreset"
+    },
+    {
+     "end": 296,
+     "line": 288,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 307,
+     "line": 299,
+     "loc": 9,
+     "name": "save"
+    },
+    {
+     "end": 344,
+     "line": 336,
+     "loc": 9,
+     "name": "onReply"
+    },
+    {
+     "end": 183,
+     "line": 176,
+     "loc": 8,
+     "name": "loadPresets"
+    },
+    {
+     "end": 262,
+     "line": 256,
+     "loc": 7,
+     "name": "setTemplates"
+    },
+    {
+     "end": 320,
+     "line": 314,
+     "loc": 7,
+     "name": "reset"
+    },
+    {
+     "end": 111,
+     "line": 106,
+     "loc": 6,
+     "name": "setVariables"
+    },
+    {
+     "end": 236,
+     "line": 231,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 270,
+     "line": 265,
+     "loc": 6,
+     "name": "open"
+    },
+    {
+     "end": 80,
+     "line": 76,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 87,
+     "line": 83,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 156,
+     "line": 152,
+     "loc": 5,
+     "name": "checkVariables"
+    },
+    {
+     "end": 182,
+     "line": 178,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 219,
+     "line": 215,
+     "loc": 5,
+     "name": "savePresetAs"
+    },
+    {
+     "end": 226,
+     "line": 222,
+     "loc": 5,
+     "name": "updatePreset"
+    },
+    {
+     "end": 246,
+     "line": 242,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 254,
+     "line": 250,
+     "loc": 5,
+     "name": "_ask"
+    },
+    {
+     "end": 306,
+     "line": 302,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 94,
+     "line": 91,
+     "loc": 4,
+     "name": "load"
+    },
+    {
+     "end": 104,
+     "line": 101,
+     "loc": 4,
+     "name": "loadVariables"
+    },
+    {
+     "end": 200,
+     "line": 197,
+     "loc": 4,
+     "name": "_excerpt"
+    },
+    {
+     "end": 312,
+     "line": 309,
+     "loc": 4,
+     "name": "cancel"
+    },
+    {
+     "end": 319,
+     "line": 316,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 350,
+     "line": 348,
+     "loc": 3,
+     "name": "setStatus"
+    },
+    {
+     "end": 38,
+     "line": 38,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 53,
+     "line": 53,
+     "loc": 1,
+     "name": "onPick"
+    },
+    {
+     "end": 61,
+     "line": 61,
+     "loc": 1,
+     "name": "on"
+    },
+    {
+     "end": 346,
+     "line": 346,
+     "loc": 1,
+     "name": "onPromptsChanged"
+    }
+   ],
+   "lines": 355,
+   "objects": [
+    {
+     "end": 351,
+     "gated": true,
+     "line": 27,
+     "loc": 325,
+     "methods": 29
+    },
+    {
+     "end": 49,
+     "gated": false,
+     "line": 39,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 54,
+     "gated": true,
+     "line": 51,
+     "loc": 4,
+     "methods": 1
+    },
+    {
+     "end": 192,
+     "gated": false,
+     "line": 189,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 188,
+     "gated": false,
+     "line": 187,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 35,
+     "gated": false,
+     "line": 35,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 261,
+     "gated": false,
+     "line": 261,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 269,
+     "gated": false,
+     "line": 269,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 41,
+    "max_object_loc": 325,
+    "max_object_methods": 29,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-settings.js",
+   "functions": [
+    {
+     "end": 106,
+     "line": 91,
+     "loc": 16,
+     "name": "_wire"
+    },
+    {
+     "end": 121,
+     "line": 108,
+     "loc": 14,
+     "name": "_wireLists"
+    },
+    {
+     "end": 195,
+     "line": 182,
+     "loc": 14,
+     "name": "setConnections"
+    },
+    {
+     "end": 304,
+     "line": 291,
+     "loc": 14,
+     "name": "save"
+    },
+    {
+     "end": 331,
+     "line": 321,
+     "loc": 11,
+     "name": "remove"
+    },
+    {
+     "end": 142,
+     "line": 133,
+     "loc": 10,
+     "name": "_onProviderPicked"
+    },
+    {
+     "end": 281,
+     "line": 272,
+     "loc": 10,
+     "name": "applyPreset"
+    },
+    {
+     "end": 319,
+     "line": 310,
+     "loc": 10,
+     "name": "select"
+    },
+    {
+     "end": 344,
+     "line": 335,
+     "loc": 10,
+     "name": "test"
+    },
+    {
+     "end": 57,
+     "line": 49,
+     "loc": 9,
+     "name": "init"
+    },
+    {
+     "end": 89,
+     "line": 81,
+     "loc": 9,
+     "name": "_actions"
+    },
+    {
+     "end": 238,
+     "line": 230,
+     "loc": 9,
+     "name": "view"
+    },
+    {
+     "end": 254,
+     "line": 246,
+     "loc": 9,
+     "name": "addNew"
+    },
+    {
+     "end": 362,
+     "line": 354,
+     "loc": 9,
+     "name": "onReply"
+    },
+    {
+     "end": 116,
+     "line": 109,
+     "loc": 8,
+     "name": "pick"
+    },
+    {
+     "end": 212,
+     "line": 205,
+     "loc": 8,
+     "name": "_render"
+    },
+    {
+     "end": 303,
+     "line": 296,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 318,
+     "line": 311,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 103,
+     "line": 97,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 152,
+     "line": 146,
+     "loc": 7,
+     "name": "open"
+    },
+    {
+     "end": 203,
+     "line": 197,
+     "loc": 7,
+     "name": "_renderProviderChoices"
+    },
+    {
+     "end": 129,
+     "line": 124,
+     "loc": 6,
+     "name": "_wireDirty"
+    },
+    {
+     "end": 160,
+     "line": 155,
+     "loc": 6,
+     "name": "close"
+    },
+    {
+     "end": 224,
+     "line": 219,
+     "loc": 6,
+     "name": "_renderForm"
+    },
+    {
+     "end": 351,
+     "line": 346,
+     "loc": 6,
+     "name": "_testDone"
+    },
+    {
+     "end": 115,
+     "line": 111,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 260,
+     "line": 256,
+     "loc": 5,
+     "name": "toggleKey"
+    },
+    {
+     "end": 317,
+     "line": 313,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 330,
+     "line": 326,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 76,
+     "line": 73,
+     "loc": 4,
+     "name": "chosen"
+    },
+    {
+     "end": 96,
+     "line": 93,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 102,
+     "line": 99,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 169,
+     "line": 166,
+     "loc": 4,
+     "name": "isOpen"
+    },
+    {
+     "end": 180,
+     "line": 177,
+     "loc": 4,
+     "name": "load"
+    },
+    {
+     "end": 217,
+     "line": 214,
+     "loc": 4,
+     "name": "_renderPresets"
+    },
+    {
+     "end": 243,
+     "line": 240,
+     "loc": 4,
+     "name": "_confirmDiscard"
+    },
+    {
+     "end": 268,
+     "line": 265,
+     "loc": 4,
+     "name": "choosePreset"
+    },
+    {
+     "end": 367,
+     "line": 364,
+     "loc": 4,
+     "name": "onError"
+    },
+    {
+     "end": 387,
+     "line": 384,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 391,
+     "line": 388,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 63,
+     "line": 61,
+     "loc": 3,
+     "name": "current"
+    },
+    {
+     "end": 67,
+     "line": 65,
+     "loc": 3,
+     "name": "providerId"
+    },
+    {
+     "end": 71,
+     "line": 69,
+     "loc": 3,
+     "name": "presetsFor"
+    },
+    {
+     "end": 128,
+     "line": 126,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 164,
+     "line": 162,
+     "loc": 3,
+     "name": "toggle"
+    },
+    {
+     "end": 173,
+     "line": 171,
+     "loc": 3,
+     "name": "_place"
+    },
+    {
+     "end": 287,
+     "line": 285,
+     "loc": 3,
+     "name": "_fields"
+    },
+    {
+     "end": 371,
+     "line": 369,
+     "loc": 3,
+     "name": "setStatus"
+    },
+    {
+     "end": 54,
+     "line": 54,
+     "loc": 1,
+     "name": "onPick"
+    },
+    {
+     "end": 83,
+     "line": 83,
+     "loc": 1,
+     "name": "save"
+    },
+    {
+     "end": 83,
+     "line": 83,
+     "loc": 1,
+     "name": "select"
+    },
+    {
+     "end": 84,
+     "line": 84,
+     "loc": 1,
+     "name": "cancel"
+    },
+    {
+     "end": 84,
+     "line": 84,
+     "loc": 1,
+     "name": "close"
+    },
+    {
+     "end": 85,
+     "line": 85,
+     "loc": 1,
+     "name": "add"
+    },
+    {
+     "end": 85,
+     "line": 85,
+     "loc": 1,
+     "name": "test"
+    },
+    {
+     "end": 86,
+     "line": 86,
+     "loc": 1,
+     "name": "apply"
+    },
+    {
+     "end": 86,
+     "line": 86,
+     "loc": 1,
+     "name": "remove"
+    },
+    {
+     "end": 87,
+     "line": 87,
+     "loc": 1,
+     "name": "reveal"
+    },
+    {
+     "end": 127,
+     "line": 127,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 395,
+   "objects": [
+    {
+     "end": 372,
+     "gated": true,
+     "line": 37,
+     "loc": 336,
+     "methods": 36
+    },
+    {
+     "end": 88,
+     "gated": true,
+     "line": 82,
+     "loc": 7,
+     "methods": 9
+    },
+    {
+     "end": 55,
+     "gated": true,
+     "line": 52,
+     "loc": 4,
+     "methods": 1
+    },
+    {
+     "end": 202,
+     "gated": false,
+     "line": 200,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 47,
+     "gated": false,
+     "line": 47,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 199,
+     "gated": false,
+     "line": 199,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 220,
+     "gated": false,
+     "line": 220,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 59,
+    "max_object_loc": 336,
+    "max_object_methods": 36,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/collector-panel.js",
+   "functions": [
+    {
+     "end": 88,
+     "line": 30,
+     "loc": 59,
+     "name": "init"
+    },
+    {
+     "end": 299,
+     "line": 257,
+     "loc": 43,
+     "name": "renderRows"
+    },
+    {
+     "end": 148,
+     "line": 122,
+     "loc": 27,
+     "name": "onLog"
+    },
+    {
+     "end": 181,
+     "line": 155,
+     "loc": 27,
+     "name": "onStatus"
+    },
+    {
+     "end": 202,
+     "line": 183,
+     "loc": 20,
+     "name": "onAppended"
+    },
+    {
+     "end": 255,
+     "line": 241,
+     "loc": 15,
+     "name": "_rowLink"
+    },
+    {
+     "end": 114,
+     "line": 101,
+     "loc": 14,
+     "name": "openPartner"
+    },
+    {
+     "end": 222,
+     "line": 212,
+     "loc": 11,
+     "name": "onPeopleChanged"
+    },
+    {
+     "end": 239,
+     "line": 229,
+     "loc": 11,
+     "name": "_row"
+    },
+    {
+     "end": 53,
+     "line": 47,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 84,
+     "line": 79,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 209,
+     "line": 205,
+     "loc": 5,
+     "name": "onDbChanged"
+    },
+    {
+     "end": 93,
+     "line": 90,
+     "loc": 4,
+     "name": "command"
+    },
+    {
+     "end": 98,
+     "line": 95,
+     "loc": 4,
+     "name": "configure"
+    },
+    {
+     "end": 119,
+     "line": 116,
+     "loc": 4,
+     "name": "setMyNick"
+    },
+    {
+     "end": 153,
+     "line": 150,
+     "loc": 4,
+     "name": "clearLog"
+    },
+    {
+     "end": 227,
+     "line": 224,
+     "loc": 4,
+     "name": "_addedFor"
+    },
+    {
+     "end": 61,
+     "line": 59,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 71,
+     "line": 69,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 76,
+     "line": 74,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 31,
+     "line": 31,
+     "loc": 1,
+     "name": "$"
+    }
+   ],
+   "lines": 303,
+   "objects": [
+    {
+     "end": 300,
+     "gated": true,
+     "line": 11,
+     "loc": 290,
+     "methods": 15
+    },
+    {
+     "end": 44,
+     "gated": false,
+     "line": 32,
+     "loc": 13,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 17,
+     "loc": 12,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 75,
+     "gated": false,
+     "line": 75,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 83,
+     "gated": false,
+     "line": 83,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 118,
+     "gated": false,
+     "line": 118,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 171,
+     "gated": false,
+     "line": 171,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 193,
+     "gated": false,
+     "line": 193,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 201,
+     "gated": false,
+     "line": 201,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 207,
+     "gated": false,
+     "line": 207,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 208,
+     "gated": false,
+     "line": 208,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 221,
+     "gated": false,
+     "line": 221,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 226,
+     "gated": false,
+     "line": 226,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 264,
+     "gated": false,
+     "line": 264,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 21,
+    "max_object_loc": 290,
+    "max_object_methods": 15,
+    "over_100": 0,
+    "over_30": 2,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/color-picker.js",
+   "functions": [
+    {
+     "end": 126,
+     "line": 54,
+     "loc": 73,
+     "name": "open"
+    },
+    {
+     "end": 147,
+     "line": 129,
+     "loc": 19,
+     "name": "_place"
+    },
+    {
+     "end": 175,
+     "line": 161,
+     "loc": 15,
+     "name": "_startDrag"
+    },
+    {
+     "end": 207,
+     "line": 195,
+     "loc": 13,
+     "name": "pick"
+    },
+    {
+     "end": 101,
+     "line": 90,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 158,
+     "line": 149,
+     "loc": 10,
+     "name": "_clamp"
+    },
+    {
+     "end": 224,
+     "line": 215,
+     "loc": 10,
+     "name": "close"
+    },
+    {
+     "end": 184,
+     "line": 177,
+     "loc": 8,
+     "name": "_onDrag"
+    },
+    {
+     "end": 192,
+     "line": 186,
+     "loc": 7,
+     "name": "_endDrag"
+    },
+    {
+     "end": 213,
+     "line": 209,
+     "loc": 5,
+     "name": "cancel"
+    },
+    {
+     "end": 202,
+     "line": 200,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 43,
+     "line": 43,
+     "loc": 1,
+     "name": "get isOpen"
+    },
+    {
+     "end": 123,
+     "line": 123,
+     "loc": 1,
+     "name": "_onKey"
+    },
+    {
+     "end": 168,
+     "line": 168,
+     "loc": 1,
+     "name": "move"
+    },
+    {
+     "end": 169,
+     "line": 169,
+     "loc": 1,
+     "name": "up"
+    }
+   ],
+   "lines": 229,
+   "objects": [
+    {
+     "end": 225,
+     "gated": true,
+     "line": 15,
+     "loc": 211,
+     "methods": 10
+    },
+    {
+     "end": 170,
+     "gated": true,
+     "line": 165,
+     "loc": 6,
+     "methods": 2
+    },
+    {
+     "end": 157,
+     "gated": false,
+     "line": 154,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 20,
+     "gated": false,
+     "line": 20,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 21,
+     "gated": false,
+     "line": 21,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 21,
+     "gated": false,
+     "line": 21,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 23,
+     "gated": false,
+     "line": 23,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 24,
+     "gated": false,
+     "line": 24,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 24,
+     "gated": false,
+     "line": 24,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 25,
+     "gated": false,
+     "line": 25,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 25,
+     "gated": false,
+     "line": 25,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 26,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 29,
+     "gated": false,
+     "line": 29,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 30,
+     "gated": false,
+     "line": 30,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 56,
+     "gated": false,
+     "line": 56,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 196,
+     "gated": false,
+     "line": 196,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 210,
+     "gated": false,
+     "line": 210,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 15,
+    "max_object_loc": 211,
+    "max_object_methods": 10,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/composer.js",
+   "functions": [
+    {
+     "end": 69,
+     "line": 10,
+     "loc": 60,
+     "name": "init"
+    },
+    {
+     "end": 44,
+     "line": 34,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 49,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 43,
+     "line": 35,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 32,
+     "line": 25,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 68,
+     "line": 62,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 22,
+     "line": 17,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 76,
+     "line": 71,
+     "loc": 6,
+     "name": "setMessage"
+    },
+    {
+     "end": 67,
+     "line": 64,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 58,
+     "line": 56,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 79,
+     "line": 79,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 81,
+   "objects": [
+    {
+     "end": 77,
+     "gated": true,
+     "line": 9,
+     "loc": 69,
+     "methods": 2
+    },
+    {
+     "end": 79,
+     "gated": true,
+     "line": 79,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 69,
+    "max_object_methods": 2,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/core/bridge-ready.js",
+   "functions": [
+    {
+     "end": 73,
+     "line": 20,
+     "loc": 54,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 52,
+     "line": 35,
+     "loc": 18,
+     "name": "onChannel"
+    },
+    {
+     "end": 63,
+     "line": 54,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 33,
+     "line": 25,
+     "loc": 9,
+     "name": "flush"
+    },
+    {
+     "end": 69,
+     "line": 66,
+     "loc": 4,
+     "name": "ready"
+    },
+    {
+     "end": 70,
+     "line": 70,
+     "loc": 1,
+     "name": "get bridge"
+    },
+    {
+     "end": 71,
+     "line": 71,
+     "loc": 1,
+     "name": "get connected"
+    }
+   ],
+   "lines": 74,
+   "objects": [
+    {
+     "end": 72,
+     "gated": true,
+     "line": 65,
+     "loc": 8,
+     "methods": 3
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 8,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/core/dialog.js",
+   "functions": [
+    {
+     "end": 42,
+     "line": 14,
+     "loc": 29,
+     "name": "promptName"
+    },
+    {
+     "end": 68,
+     "line": 45,
+     "loc": 24,
+     "name": "confirm"
+    },
+    {
+     "end": 30,
+     "line": 25,
+     "loc": 6,
+     "name": "cleanup"
+    },
+    {
+     "end": 36,
+     "line": 31,
+     "loc": 6,
+     "name": "onclick"
+    },
+    {
+     "end": 59,
+     "line": 54,
+     "loc": 6,
+     "name": "cleanup"
+    },
+    {
+     "end": 41,
+     "line": 38,
+     "loc": 4,
+     "name": "onkeydown"
+    },
+    {
+     "end": 63,
+     "line": 60,
+     "loc": 4,
+     "name": "onKey"
+    },
+    {
+     "end": 64,
+     "line": 64,
+     "loc": 1,
+     "name": "onclick"
+    }
+   ],
+   "lines": 70,
+   "objects": [
+    {
+     "end": 69,
+     "gated": true,
+     "line": 12,
+     "loc": 58,
+     "methods": 2
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 58,
+    "max_object_methods": 2,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/core/ui-helpers.js",
+   "functions": [
+    {
+     "end": 77,
+     "line": 40,
+     "loc": 38,
+     "name": "chip"
+    },
+    {
+     "end": 103,
+     "line": 94,
+     "loc": 10,
+     "name": "mergeParts"
+    },
+    {
+     "end": 24,
+     "line": 17,
+     "loc": 8,
+     "name": "esc"
+    },
+    {
+     "end": 33,
+     "line": 26,
+     "loc": 8,
+     "name": "el"
+    },
+    {
+     "end": 68,
+     "line": 65,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 74,
+     "line": 71,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 83,
+     "line": 80,
+     "loc": 4,
+     "name": "sortArrow"
+    }
+   ],
+   "lines": 105,
+   "objects": [
+    {
+     "end": 104,
+     "gated": true,
+     "line": 16,
+     "loc": 89,
+     "methods": 5
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 89,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/criteria-editor.js",
+   "functions": [
+    {
+     "end": 59,
+     "line": 42,
+     "loc": 18,
+     "name": "_renderEditorForm"
+    },
+    {
+     "end": 40,
+     "line": 27,
+     "loc": 14,
+     "name": "openEditor"
+    },
+    {
+     "end": 25,
+     "line": 14,
+     "loc": 12,
+     "name": "renderDisplay"
+    },
+    {
+     "end": 83,
+     "line": 74,
+     "loc": 10,
+     "name": "_collectFromForm"
+    },
+    {
+     "end": 23,
+     "line": 16,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 67,
+     "line": 61,
+     "loc": 7,
+     "name": "addCriterion"
+    },
+    {
+     "end": 82,
+     "line": 76,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 36,
+     "line": 31,
+     "loc": 6,
+     "name": "onclick"
+    },
+    {
+     "end": 72,
+     "line": 69,
+     "loc": 4,
+     "name": "removeCriterion"
+    },
+    {
+     "end": 12,
+     "line": 10,
+     "loc": 3,
+     "name": "loadFromJson"
+    },
+    {
+     "end": 39,
+     "line": 37,
+     "loc": 3,
+     "name": "onclick"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "onclick"
+    }
+   ],
+   "lines": 85,
+   "objects": [
+    {
+     "end": 84,
+     "gated": true,
+     "line": 7,
+     "loc": 78,
+     "methods": 7
+    },
+    {
+     "end": 65,
+     "gated": false,
+     "line": 62,
+     "loc": 4,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 12,
+    "max_object_loc": 78,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/dark-select.js",
+   "functions": [
+    {
+     "end": 80,
+     "line": 53,
+     "loc": 28,
+     "name": "_build"
+    },
+    {
+     "end": 126,
+     "line": 106,
+     "loc": 21,
+     "name": "_row"
+    },
+    {
+     "end": 177,
+     "line": 165,
+     "loc": 13,
+     "name": "_onKey"
+    },
+    {
+     "end": 45,
+     "line": 34,
+     "loc": 12,
+     "name": "attach"
+    },
+    {
+     "end": 104,
+     "line": 94,
+     "loc": 11,
+     "name": "_renderMenu"
+    },
+    {
+     "end": 92,
+     "line": 83,
+     "loc": 10,
+     "name": "setOptions"
+    },
+    {
+     "end": 141,
+     "line": 135,
+     "loc": 7,
+     "name": "pick"
+    },
+    {
+     "end": 185,
+     "line": 179,
+     "loc": 7,
+     "name": "_step"
+    },
+    {
+     "end": 132,
+     "line": 128,
+     "loc": 5,
+     "name": "_renderLabel"
+    },
+    {
+     "end": 148,
+     "line": 144,
+     "loc": 5,
+     "name": "select"
+    },
+    {
+     "end": 154,
+     "line": 150,
+     "loc": 5,
+     "name": "open"
+    },
+    {
+     "end": 77,
+     "line": 74,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 124,
+     "line": 121,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 159,
+     "line": 156,
+     "loc": 4,
+     "name": "close"
+    },
+    {
+     "end": 50,
+     "line": 48,
+     "loc": 3,
+     "name": "closeAll"
+    },
+    {
+     "end": 38,
+     "line": 38,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 161,
+     "line": 161,
+     "loc": 1,
+     "name": "isOpen"
+    },
+    {
+     "end": 163,
+     "line": 163,
+     "loc": 1,
+     "name": "toggle"
+    }
+   ],
+   "lines": 195,
+   "objects": [
+    {
+     "end": 187,
+     "gated": true,
+     "line": 27,
+     "loc": 161,
+     "methods": 2
+    },
+    {
+     "end": 186,
+     "gated": true,
+     "line": 52,
+     "loc": 135,
+     "methods": 13
+    },
+    {
+     "end": 88,
+     "gated": false,
+     "line": 84,
+     "loc": 5,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 19,
+    "max_object_loc": 161,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/db-panel.js",
+   "functions": [
+    {
+     "end": 349,
+     "line": 295,
+     "loc": 55,
+     "name": "renderList"
+    },
+    {
+     "end": 347,
+     "line": 307,
+     "loc": 41,
+     "name": "(arrow)"
+    },
+    {
+     "end": 293,
+     "line": 257,
+     "loc": 37,
+     "name": "renderStats"
+    },
+    {
+     "end": 68,
+     "line": 38,
+     "loc": 31,
+     "name": "init"
+    },
+    {
+     "end": 131,
+     "line": 108,
+     "loc": 24,
+     "name": "onChanged"
+    },
+    {
+     "end": 188,
+     "line": 165,
+     "loc": 24,
+     "name": "remove"
+    },
+    {
+     "end": 255,
+     "line": 234,
+     "loc": 22,
+     "name": "renderActive"
+    },
+    {
+     "end": 105,
+     "line": 87,
+     "loc": 19,
+     "name": "onInfo"
+    },
+    {
+     "end": 291,
+     "line": 274,
+     "loc": 18,
+     "name": "(arrow)"
+    },
+    {
+     "end": 154,
+     "line": 140,
+     "loc": 15,
+     "name": "create"
+    },
+    {
+     "end": 204,
+     "line": 190,
+     "loc": 15,
+     "name": "clean"
+    },
+    {
+     "end": 84,
+     "line": 77,
+     "loc": 8,
+     "name": "refresh"
+    },
+    {
+     "end": 163,
+     "line": 156,
+     "loc": 8,
+     "name": "load"
+    },
+    {
+     "end": 219,
+     "line": 212,
+     "loc": 8,
+     "name": "bytes"
+    },
+    {
+     "end": 232,
+     "line": 226,
+     "loc": 7,
+     "name": "render"
+    },
+    {
+     "end": 74,
+     "line": 70,
+     "loc": 5,
+     "name": "_bridge"
+    },
+    {
+     "end": 137,
+     "line": 133,
+     "loc": 5,
+     "name": "setStatus"
+    },
+    {
+     "end": 187,
+     "line": 183,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 203,
+     "line": 199,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 210,
+     "line": 207,
+     "loc": 4,
+     "name": "baseName"
+    },
+    {
+     "end": 60,
+     "line": 58,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 223,
+     "line": 221,
+     "loc": 3,
+     "name": "num"
+    },
+    {
+     "end": 41,
+     "line": 41,
+     "loc": 1,
+     "name": "$"
+    }
+   ],
+   "lines": 354,
+   "objects": [
+    {
+     "end": 350,
+     "gated": true,
+     "line": 26,
+     "loc": 325,
+     "methods": 17
+    },
+    {
+     "end": 52,
+     "gated": false,
+     "line": 42,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 32,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 169,
+     "gated": false,
+     "line": 169,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 260,
+     "gated": false,
+     "line": 260,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 23,
+    "max_object_loc": 325,
+    "max_object_methods": 17,
+    "over_100": 0,
+    "over_30": 4,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-db.js",
+   "functions": [
+    {
+     "end": 106,
+     "line": 47,
+     "loc": 60,
+     "name": "init"
+    },
+    {
+     "end": 444,
+     "line": 389,
+     "loc": 56,
+     "name": "render"
+    },
+    {
+     "end": 439,
+     "line": 410,
+     "loc": 30,
+     "name": "(arrow)"
+    },
+    {
+     "end": 235,
+     "line": 213,
+     "loc": 23,
+     "name": "onPage"
+    },
+    {
+     "end": 345,
+     "line": 324,
+     "loc": 22,
+     "name": "_flashIfPresent"
+    },
+    {
+     "end": 387,
+     "line": 367,
+     "loc": 21,
+     "name": "_actions"
+    },
+    {
+     "end": 81,
+     "line": 63,
+     "loc": 19,
+     "name": "(arrow)"
+    },
+    {
+     "end": 179,
+     "line": 163,
+     "loc": 17,
+     "name": "reload"
+    },
+    {
+     "end": 146,
+     "line": 135,
+     "loc": 12,
+     "name": "sortBy"
+    },
+    {
+     "end": 192,
+     "line": 181,
+     "loc": 12,
+     "name": "_request"
+    },
+    {
+     "end": 131,
+     "line": 121,
+     "loc": 11,
+     "name": "_wireSortHeaders"
+    },
+    {
+     "end": 161,
+     "line": 151,
+     "loc": 11,
+     "name": "_updateSortHeaders"
+    },
+    {
+     "end": 247,
+     "line": 237,
+     "loc": 11,
+     "name": "onStats"
+    },
+    {
+     "end": 101,
+     "line": 92,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 211,
+     "line": 202,
+     "loc": 10,
+     "name": "onError"
+    },
+    {
+     "end": 309,
+     "line": 300,
+     "loc": 10,
+     "name": "markLabelTarget"
+    },
+    {
+     "end": 380,
+     "line": 371,
+     "loc": 10,
+     "name": "button"
+    },
+    {
+     "end": 130,
+     "line": 122,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 160,
+     "line": 152,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 115,
+     "line": 108,
+     "loc": 8,
+     "name": "applySettings"
+    },
+    {
+     "end": 264,
+     "line": 257,
+     "loc": 8,
+     "name": "liveChanged"
+    },
+    {
+     "end": 319,
+     "line": 312,
+     "loc": 8,
+     "name": "highlightNick"
+    },
+    {
+     "end": 89,
+     "line": 83,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 364,
+     "line": 358,
+     "loc": 7,
+     "name": "_cell"
+    },
+    {
+     "end": 129,
+     "line": 124,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 271,
+     "line": 266,
+     "loc": 6,
+     "name": "_onScroll"
+    },
+    {
+     "end": 308,
+     "line": 304,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 88,
+     "line": 85,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 197,
+     "line": 194,
+     "loc": 4,
+     "name": "_requestStats"
+    },
+    {
+     "end": 210,
+     "line": 207,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 252,
+     "line": 249,
+     "loc": 4,
+     "name": "onChanged"
+    },
+    {
+     "end": 263,
+     "line": 260,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 281,
+     "line": 278,
+     "loc": 4,
+     "name": "deletePerson"
+    },
+    {
+     "end": 287,
+     "line": 284,
+     "loc": 4,
+     "name": "clearHistory"
+    },
+    {
+     "end": 293,
+     "line": 290,
+     "loc": 4,
+     "name": "labelPerson"
+    },
+    {
+     "end": 344,
+     "line": 341,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 351,
+     "line": 348,
+     "loc": 4,
+     "name": "visibleRows"
+    },
+    {
+     "end": 356,
+     "line": 354,
+     "loc": 3,
+     "name": "_day"
+    },
+    {
+     "end": 48,
+     "line": 48,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 230,
+     "line": 230,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 448,
+   "objects": [
+    {
+     "end": 445,
+     "gated": true,
+     "line": 15,
+     "loc": 431,
+     "methods": 25
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 49,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 191,
+     "gated": false,
+     "line": 186,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 427,
+     "gated": false,
+     "line": 422,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 29,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 36,
+     "gated": false,
+     "line": 36,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 109,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 164,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 209,
+     "gated": false,
+     "line": 209,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 262,
+     "gated": false,
+     "line": 262,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 292,
+     "gated": false,
+     "line": 292,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 307,
+     "gated": false,
+     "line": 307,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 339,
+     "gated": false,
+     "line": 339,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 40,
+    "max_object_loc": 431,
+    "max_object_methods": 25,
+    "over_100": 0,
+    "over_30": 2,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-model.js",
+   "functions": [
+    {
+     "end": 411,
+     "line": 26,
+     "loc": 386,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 399,
+     "line": 162,
+     "loc": 238,
+     "name": "create"
+    },
+    {
+     "end": 127,
+     "line": 88,
+     "loc": 40,
+     "name": "toRow"
+    },
+    {
+     "end": 330,
+     "line": 294,
+     "loc": 37,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 388,
+     "line": 361,
+     "loc": 28,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 358,
+     "line": 337,
+     "loc": 22,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 215,
+     "line": 196,
+     "loc": 20,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 147,
+     "line": 130,
+     "loc": 18,
+     "name": "highlight"
+    },
+    {
+     "end": 381,
+     "line": 369,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 85,
+     "line": 74,
+     "loc": 12,
+     "name": "groupByDay"
+    },
+    {
+     "end": 287,
+     "line": 276,
+     "loc": 12,
+     "name": "trim"
+    },
+    {
+     "end": 47,
+     "line": 39,
+     "loc": 9,
+     "name": "fileUrl"
+    },
+    {
+     "end": 158,
+     "line": 150,
+     "loc": 9,
+     "name": "clipboardText"
+    },
+    {
+     "end": 71,
+     "line": 64,
+     "loc": 8,
+     "name": "dayLabel"
+    },
+    {
+     "end": 274,
+     "line": 267,
+     "loc": 8,
+     "name": "mergeGaps"
+    },
+    {
+     "end": 57,
+     "line": 51,
+     "loc": 7,
+     "name": "previousDay"
+    },
+    {
+     "end": 249,
+     "line": 243,
+     "loc": 7,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 83,
+     "line": 78,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 157,
+     "line": 152,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 257,
+     "line": 252,
+     "loc": 6,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 265,
+     "line": 260,
+     "loc": 6,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 396,
+     "line": 391,
+     "loc": 6,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 26,
+     "line": 22,
+     "loc": 5,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 221,
+     "line": 217,
+     "loc": 5,
+     "name": "request"
+    },
+    {
+     "end": 228,
+     "line": 224,
+     "loc": 5,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 234,
+     "line": 231,
+     "loc": 4,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 240,
+     "line": 237,
+     "loc": 4,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 272,
+     "line": 269,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 404,
+     "line": 402,
+     "loc": 3,
+     "name": "toRows"
+    },
+    {
+     "end": 318,
+     "line": 318,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 412,
+   "objects": [
+    {
+     "end": 126,
+     "gated": false,
+     "line": 106,
+     "loc": 21,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 164,
+     "loc": 17,
+     "methods": 0
+    },
+    {
+     "end": 104,
+     "gated": false,
+     "line": 94,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 193,
+     "gated": false,
+     "line": 188,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 410,
+     "gated": false,
+     "line": 406,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 184,
+     "gated": false,
+     "line": 182,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 187,
+     "gated": false,
+     "line": 185,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 227,
+     "gated": false,
+     "line": 226,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 248,
+     "gated": false,
+     "line": 247,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 363,
+     "gated": false,
+     "line": 362,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 373,
+     "gated": false,
+     "line": 372,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 378,
+     "gated": false,
+     "line": 377,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 385,
+     "gated": false,
+     "line": 384,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 393,
+     "gated": false,
+     "line": 392,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 29,
+     "gated": false,
+     "line": 29,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 82,
+     "gated": false,
+     "line": 82,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 89,
+     "gated": false,
+     "line": 89,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 133,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 141,
+     "gated": false,
+     "line": 141,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 142,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 145,
+     "gated": false,
+     "line": 145,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 151,
+     "gated": false,
+     "line": 151,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 163,
+     "gated": false,
+     "line": 163,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 163,
+     "gated": false,
+     "line": 163,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 197,
+     "gated": false,
+     "line": 197,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 219,
+     "gated": false,
+     "line": 219,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 220,
+     "gated": false,
+     "line": 220,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 233,
+     "gated": false,
+     "line": 233,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 239,
+     "gated": false,
+     "line": 239,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 295,
+     "gated": false,
+     "line": 295,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 364,
+     "gated": false,
+     "line": 364,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 394,
+     "gated": false,
+     "line": 394,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 30,
+    "max_object_loc": 21,
+    "max_object_methods": 0,
+    "over_100": 2,
+    "over_30": 4,
+    "over_60": 2
+   }
+  },
+  {
+   "file": "ui/js/history-store.js",
+   "functions": [
+    {
+     "end": 82,
+     "line": 27,
+     "loc": 56,
+     "name": "init"
+    },
+    {
+     "end": 432,
+     "line": 409,
+     "loc": 24,
+     "name": "render"
+    },
+    {
+     "end": 159,
+     "line": 138,
+     "loc": 22,
+     "name": "openPerson"
+    },
+    {
+     "end": 104,
+     "line": 85,
+     "loc": 20,
+     "name": "initMyNick"
+    },
+    {
+     "end": 228,
+     "line": 210,
+     "loc": 19,
+     "name": "onLiveAppend"
+    },
+    {
+     "end": 208,
+     "line": 191,
+     "loc": 18,
+     "name": "onSearch"
+    },
+    {
+     "end": 278,
+     "line": 262,
+     "loc": 17,
+     "name": "onMediaReady"
+    },
+    {
+     "end": 328,
+     "line": 312,
+     "loc": 17,
+     "name": "_onScroll"
+    },
+    {
+     "end": 293,
+     "line": 280,
+     "loc": 14,
+     "name": "_applyModelMedia"
+    },
+    {
+     "end": 126,
+     "line": 115,
+     "loc": 12,
+     "name": "applySettings"
+    },
+    {
+     "end": 189,
+     "line": 178,
+     "loc": 12,
+     "name": "onPage"
+    },
+    {
+     "end": 403,
+     "line": 392,
+     "loc": 12,
+     "name": "renderHeader"
+    },
+    {
+     "end": 244,
+     "line": 236,
+     "loc": 9,
+     "name": "onStats"
+    },
+    {
+     "end": 255,
+     "line": 247,
+     "loc": 9,
+     "name": "openFolder"
+    },
+    {
+     "end": 368,
+     "line": 360,
+     "loc": 9,
+     "name": "deleteMessage"
+    },
+    {
+     "end": 379,
+     "line": 371,
+     "loc": 9,
+     "name": "clearHistory"
+    },
+    {
+     "end": 390,
+     "line": 382,
+     "loc": 9,
+     "name": "deletePerson"
+    },
+    {
+     "end": 442,
+     "line": 434,
+     "loc": 9,
+     "name": "_updateLatestButton"
+    },
+    {
+     "end": 95,
+     "line": 88,
+     "loc": 8,
+     "name": "commit"
+    },
+    {
+     "end": 113,
+     "line": 106,
+     "loc": 8,
+     "name": "setMyNick"
+    },
+    {
+     "end": 174,
+     "line": 167,
+     "loc": 8,
+     "name": "_send"
+    },
+    {
+     "end": 291,
+     "line": 284,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 303,
+     "line": 296,
+     "loc": 8,
+     "name": "restoreMedia"
+    },
+    {
+     "end": 357,
+     "line": 350,
+     "loc": 8,
+     "name": "_context"
+    },
+    {
+     "end": 134,
+     "line": 128,
+     "loc": 7,
+     "name": "saveSettings"
+    },
+    {
+     "end": 346,
+     "line": 341,
+     "loc": 6,
+     "name": "runSearch"
+    },
+    {
+     "end": 454,
+     "line": 449,
+     "loc": 6,
+     "name": "copySelection"
+    },
+    {
+     "end": 58,
+     "line": 54,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 65,
+     "line": 61,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 334,
+     "line": 330,
+     "loc": 5,
+     "name": "jumpToLatest"
+    },
+    {
+     "end": 51,
+     "line": 48,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 165,
+     "line": 162,
+     "loc": 4,
+     "name": "reloadCurrent"
+    },
+    {
+     "end": 234,
+     "line": 231,
+     "loc": 4,
+     "name": "refreshStats"
+    },
+    {
+     "end": 308,
+     "line": 305,
+     "loc": 4,
+     "name": "onError"
+    },
+    {
+     "end": 339,
+     "line": 336,
+     "loc": 4,
+     "name": "_debounceSearch"
+    },
+    {
+     "end": 447,
+     "line": 444,
+     "loc": 4,
+     "name": "copyMedia"
+    },
+    {
+     "end": 100,
+     "line": 98,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 407,
+     "line": 405,
+     "loc": 3,
+     "name": "renderEmpty"
+    },
+    {
+     "end": 28,
+     "line": 28,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 198,
+     "line": 198,
+     "loc": 1,
+     "name": "onOpenHit"
+    },
+    {
+     "end": 354,
+     "line": 354,
+     "loc": 1,
+     "name": "onCopyMedia"
+    },
+    {
+     "end": 355,
+     "line": 355,
+     "loc": 1,
+     "name": "onRestoreMedia"
+    },
+    {
+     "end": 356,
+     "line": 356,
+     "loc": 1,
+     "name": "onDeleteMessage"
+    },
+    {
+     "end": 400,
+     "line": 400,
+     "loc": 1,
+     "name": "onRemove"
+    }
+   ],
+   "lines": 458,
+   "objects": [
+    {
+     "end": 455,
+     "gated": true,
+     "line": 12,
+     "loc": 444,
+     "methods": 32
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 29,
+     "loc": 13,
+     "methods": 0
+    },
+    {
+     "end": 402,
+     "gated": true,
+     "line": 394,
+     "loc": 9,
+     "methods": 2
+    },
+    {
+     "end": 356,
+     "gated": true,
+     "line": 351,
+     "loc": 6,
+     "methods": 3
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 130,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 199,
+     "gated": true,
+     "line": 196,
+     "loc": 4,
+     "methods": 1
+    },
+    {
+     "end": 45,
+     "gated": false,
+     "line": 43,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 144,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 220,
+     "gated": false,
+     "line": 218,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 345,
+     "gated": false,
+     "line": 343,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 132,
+     "gated": false,
+     "line": 131,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 400,
+     "gated": true,
+     "line": 399,
+     "loc": 2,
+     "methods": 1
+    },
+    {
+     "end": 23,
+     "gated": false,
+     "line": 23,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 116,
+     "gated": false,
+     "line": 116,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 140,
+     "gated": false,
+     "line": 140,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 158,
+     "gated": false,
+     "line": 158,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 164,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 183,
+     "gated": false,
+     "line": 183,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 185,
+     "gated": false,
+     "line": 185,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 198,
+     "gated": false,
+     "line": 198,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 204,
+     "gated": false,
+     "line": 204,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 218,
+     "gated": false,
+     "line": 218,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 218,
+     "gated": false,
+     "line": 218,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 224,
+     "gated": false,
+     "line": 224,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 410,
+     "gated": false,
+     "line": 410,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 44,
+    "max_object_loc": 444,
+    "max_object_methods": 32,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-view.js",
+   "functions": [
+    {
+     "end": 341,
+     "line": 15,
+     "loc": 327,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 235,
+     "line": 197,
+     "loc": 39,
+     "name": "renderHeader"
+    },
+    {
+     "end": 106,
+     "line": 69,
+     "loc": 38,
+     "name": "mediaNode"
+    },
+    {
+     "end": 320,
+     "line": 284,
+     "loc": 37,
+     "name": "appendMediaPath"
+    },
+    {
+     "end": 138,
+     "line": 108,
+     "loc": 31,
+     "name": "messageNode"
+    },
+    {
+     "end": 267,
+     "line": 238,
+     "loc": 30,
+     "name": "renderSearchGroups"
+    },
+    {
+     "end": 318,
+     "line": 294,
+     "loc": 25,
+     "name": "(arrow)"
+    },
+    {
+     "end": 264,
+     "line": 242,
+     "loc": 23,
+     "name": "(arrow)"
+    },
+    {
+     "end": 67,
+     "line": 52,
+     "loc": 16,
+     "name": "mediaRestoreNode"
+    },
+    {
+     "end": 194,
+     "line": 179,
+     "loc": 16,
+     "name": "renderGroups"
+    },
+    {
+     "end": 262,
+     "line": 249,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 176,
+     "line": 166,
+     "loc": 11,
+     "name": "renderRows"
+    },
+    {
+     "end": 39,
+     "line": 30,
+     "loc": 10,
+     "name": "appendHighlighted"
+    },
+    {
+     "end": 148,
+     "line": 140,
+     "loc": 9,
+     "name": "gapNode"
+    },
+    {
+     "end": 191,
+     "line": 183,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 27,
+     "line": 21,
+     "loc": 7,
+     "name": "el"
+    },
+    {
+     "end": 161,
+     "line": 156,
+     "loc": 6,
+     "name": "nodeFor"
+    },
+    {
+     "end": 190,
+     "line": 185,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 275,
+     "line": 270,
+     "loc": 6,
+     "name": "renderNotice"
+    },
+    {
+     "end": 331,
+     "line": 326,
+     "loc": 6,
+     "name": "applyMediaPath"
+    },
+    {
+     "end": 38,
+     "line": 34,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 48,
+     "line": 44,
+     "loc": 5,
+     "name": "mediaSrc"
+    },
+    {
+     "end": 64,
+     "line": 60,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 102,
+     "line": 98,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 128,
+     "line": 124,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 154,
+     "line": 150,
+     "loc": 5,
+     "name": "dayNode"
+    },
+    {
+     "end": 282,
+     "line": 278,
+     "loc": 5,
+     "name": "copyFromView"
+    },
+    {
+     "end": 293,
+     "line": 289,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 309,
+     "line": 305,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 96,
+     "line": 93,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 173,
+     "line": 170,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 46,
+     "line": 46,
+     "loc": 1,
+     "name": "fileUrl"
+    }
+   ],
+   "lines": 345,
+   "objects": [
+    {
+     "end": 340,
+     "gated": false,
+     "line": 333,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 167,
+     "gated": false,
+     "line": 167,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 180,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 184,
+     "gated": false,
+     "line": 184,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 199,
+     "gated": false,
+     "line": 199,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 239,
+     "gated": false,
+     "line": 239,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 286,
+     "gated": false,
+     "line": 286,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 329,
+     "gated": false,
+     "line": 329,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 32,
+    "max_object_loc": 8,
+    "max_object_methods": 0,
+    "over_100": 1,
+    "over_30": 5,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/labels.js",
+   "functions": [
+    {
+     "end": 545,
+     "line": 483,
+     "loc": 63,
+     "name": "renderActive"
+    },
+    {
+     "end": 93,
+     "line": 35,
+     "loc": 59,
+     "name": "init"
+    },
+    {
+     "end": 619,
+     "line": 561,
+     "loc": 59,
+     "name": "_editRow"
+    },
+    {
+     "end": 753,
+     "line": 700,
+     "loc": 54,
+     "name": "renderAssign"
+    },
+    {
+     "end": 543,
+     "line": 491,
+     "loc": 53,
+     "name": "(arrow)"
+    },
+    {
+     "end": 697,
+     "line": 646,
+     "loc": 52,
+     "name": "renderFilter"
+    },
+    {
+     "end": 249,
+     "line": 202,
+     "loc": 48,
+     "name": "pill"
+    },
+    {
+     "end": 129,
+     "line": 105,
+     "loc": 25,
+     "name": "applyState"
+    },
+    {
+     "end": 403,
+     "line": 381,
+     "loc": 23,
+     "name": "applyRole"
+    },
+    {
+     "end": 674,
+     "line": 653,
+     "loc": 22,
+     "name": "(arrow)"
+    },
+    {
+     "end": 192,
+     "line": 173,
+     "loc": 20,
+     "name": "pills"
+    },
+    {
+     "end": 364,
+     "line": 346,
+     "loc": 19,
+     "name": "saveEdit"
+    },
+    {
+     "end": 446,
+     "line": 431,
+     "loc": 16,
+     "name": "setPerson"
+    },
+    {
+     "end": 636,
+     "line": 622,
+     "loc": 15,
+     "name": "renderTarget"
+    },
+    {
+     "end": 339,
+     "line": 326,
+     "loc": 14,
+     "name": "startEdit"
+    },
+    {
+     "end": 283,
+     "line": 271,
+     "loc": 13,
+     "name": "createFromForm"
+    },
+    {
+     "end": 309,
+     "line": 298,
+     "loc": 12,
+     "name": "toggleAssign"
+    },
+    {
+     "end": 323,
+     "line": 312,
+     "loc": 12,
+     "name": "flashNoTarget"
+    },
+    {
+     "end": 459,
+     "line": 448,
+     "loc": 12,
+     "name": "assignSelected"
+    },
+    {
+     "end": 558,
+     "line": 548,
+     "loc": 11,
+     "name": "_badgeTitle"
+    },
+    {
+     "end": 599,
+     "line": 589,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 742,
+     "line": 732,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 581,
+     "line": 573,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 764,
+     "line": 756,
+     "loc": 9,
+     "name": "knownNicks"
+    },
+    {
+     "end": 66,
+     "line": 59,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 159,
+     "line": 152,
+     "loc": 8,
+     "name": "allows"
+    },
+    {
+     "end": 259,
+     "line": 252,
+     "loc": 8,
+     "name": "tint"
+    },
+    {
+     "end": 269,
+     "line": 262,
+     "loc": 8,
+     "name": "_bridge"
+    },
+    {
+     "end": 417,
+     "line": 410,
+     "loc": 8,
+     "name": "setDraftColor"
+    },
+    {
+     "end": 718,
+     "line": 711,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 774,
+     "line": 767,
+     "loc": 8,
+     "name": "repaintTables"
+    },
+    {
+     "end": 102,
+     "line": 96,
+     "loc": 7,
+     "name": "refresh"
+    },
+    {
+     "end": 245,
+     "line": 239,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 644,
+     "line": 638,
+     "loc": 7,
+     "name": "countFor"
+    },
+    {
+     "end": 318,
+     "line": 313,
+     "loc": 6,
+     "name": "flash"
+    },
+    {
+     "end": 467,
+     "line": 462,
+     "loc": 6,
+     "name": "render"
+    },
+    {
+     "end": 474,
+     "line": 469,
+     "loc": 6,
+     "name": "_notice"
+    },
+    {
+     "end": 519,
+     "line": 514,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 86,
+     "line": 82,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 165,
+     "line": 161,
+     "loc": 5,
+     "name": "roleOf"
+    },
+    {
+     "end": 289,
+     "line": 285,
+     "loc": 5,
+     "name": "deleteLabel"
+    },
+    {
+     "end": 397,
+     "line": 393,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 137,
+     "line": 134,
+     "loc": 4,
+     "name": "idsFor"
+    },
+    {
+     "end": 344,
+     "line": 341,
+     "loc": 4,
+     "name": "cancelEdit"
+    },
+    {
+     "end": 369,
+     "line": 366,
+     "loc": 4,
+     "name": "assignTo"
+    },
+    {
+     "end": 374,
+     "line": 371,
+     "loc": 4,
+     "name": "unassign"
+    },
+    {
+     "end": 379,
+     "line": 376,
+     "loc": 4,
+     "name": "setLabelsOf"
+    },
+    {
+     "end": 408,
+     "line": 405,
+     "loc": 4,
+     "name": "clearFilter"
+    },
+    {
+     "end": 597,
+     "line": 594,
+     "loc": 4,
+     "name": "onPick"
+    },
+    {
+     "end": 663,
+     "line": 660,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 73,
+     "line": 71,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 124,
+     "line": 122,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 142,
+     "line": 140,
+     "loc": 3,
+     "name": "forNick"
+    },
+    {
+     "end": 146,
+     "line": 144,
+     "loc": 3,
+     "name": "get filterActive"
+    },
+    {
+     "end": 190,
+     "line": 188,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 642,
+     "line": 640,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 38,
+     "line": 38,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 64,
+     "line": 64,
+     "loc": 1,
+     "name": "onPick"
+    },
+    {
+     "end": 132,
+     "line": 132,
+     "loc": 1,
+     "name": "byId"
+    },
+    {
+     "end": 572,
+     "line": 572,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 684,
+     "line": 684,
+     "loc": 1,
+     "name": "names"
+    },
+    {
+     "end": 759,
+     "line": 759,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 761,
+     "line": 761,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 779,
+   "objects": [
+    {
+     "end": 775,
+     "gated": true,
+     "line": 20,
+     "loc": 756,
+     "methods": 39
+    },
+    {
+     "end": 55,
+     "gated": false,
+     "line": 39,
+     "loc": 17,
+     "methods": 0
+    },
+    {
+     "end": 598,
+     "gated": true,
+     "line": 590,
+     "loc": 9,
+     "methods": 1
+    },
+    {
+     "end": 65,
+     "gated": true,
+     "line": 60,
+     "loc": 6,
+     "methods": 1
+    },
+    {
+     "end": 509,
+     "gated": false,
+     "line": 504,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 118,
+     "gated": false,
+     "line": 115,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 402,
+     "gated": false,
+     "line": 400,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 23,
+     "gated": false,
+     "line": 23,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 32,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 85,
+     "gated": false,
+     "line": 85,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 113,
+     "gated": false,
+     "line": 113,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 114,
+     "gated": false,
+     "line": 114,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 174,
+     "gated": false,
+     "line": 174,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 203,
+     "gated": false,
+     "line": 203,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 432,
+     "gated": false,
+     "line": 432,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 665,
+     "gated": false,
+     "line": 665,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 684,
+     "gated": false,
+     "line": 684,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 740,
+     "gated": false,
+     "line": 740,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 763,
+     "gated": false,
+     "line": 763,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 63,
+    "max_object_loc": 756,
+    "max_object_methods": 39,
+    "over_100": 0,
+    "over_30": 7,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/log-console.js",
+   "functions": [
+    {
+     "end": 30,
+     "line": 15,
+     "loc": 16,
+     "name": "log"
+    },
+    {
+     "end": 13,
+     "line": 11,
+     "loc": 3,
+     "name": "init"
+    },
+    {
+     "end": 34,
+     "line": 32,
+     "loc": 3,
+     "name": "clear"
+    },
+    {
+     "end": 37,
+     "line": 37,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 39,
+   "objects": [
+    {
+     "end": 35,
+     "gated": true,
+     "line": 7,
+     "loc": 29,
+     "methods": 3
+    },
+    {
+     "end": 37,
+     "gated": true,
+     "line": 37,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 4,
+    "max_object_loc": 29,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui.js",
+   "functions": [
+    {
+     "end": 444,
+     "line": 404,
+     "loc": 41,
+     "name": "applyImported"
+    },
+    {
+     "end": 355,
+     "line": 319,
+     "loc": 37,
+     "name": "showImportPreview"
+    },
+    {
+     "end": 111,
+     "line": 79,
+     "loc": 33,
+     "name": "toggleStackPicker"
+    },
+    {
+     "end": 443,
+     "line": 418,
+     "loc": 26,
+     "name": "(arrow)"
+    },
+    {
+     "end": 175,
+     "line": 151,
+     "loc": 25,
+     "name": "toggleTemplatePicker"
+    },
+    {
+     "end": 212,
+     "line": 190,
+     "loc": 23,
+     "name": "renderCustomChips"
+    },
+    {
+     "end": 72,
+     "line": 52,
+     "loc": 21,
+     "name": "loadStack"
+    },
+    {
+     "end": 50,
+     "line": 35,
+     "loc": 16,
+     "name": "renderStackChips"
+    },
+    {
+     "end": 134,
+     "line": 119,
+     "loc": 16,
+     "name": "renderTemplateChips"
+    },
+    {
+     "end": 392,
+     "line": 377,
+     "loc": 16,
+     "name": "_wireImportButtons"
+    },
+    {
+     "end": 211,
+     "line": 198,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 71,
+     "line": 59,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 369,
+     "line": 357,
+     "loc": 13,
+     "name": "_importRow"
+    },
+    {
+     "end": 249,
+     "line": 238,
+     "loc": 12,
+     "name": "_placePicker"
+    },
+    {
+     "end": 317,
+     "line": 308,
+     "loc": 10,
+     "name": "onImportPreview"
+    },
+    {
+     "end": 473,
+     "line": 464,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 144,
+     "line": 136,
+     "loc": 9,
+     "name": "loadTemplate"
+    },
+    {
+     "end": 236,
+     "line": 228,
+     "loc": 9,
+     "name": "_makeChip"
+    },
+    {
+     "end": 269,
+     "line": 261,
+     "loc": 9,
+     "name": "exportCurrentStack"
+    },
+    {
+     "end": 402,
+     "line": 394,
+     "loc": 9,
+     "name": "closeImportPreview"
+    },
+    {
+     "end": 49,
+     "line": 43,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 104,
+     "line": 98,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 133,
+     "line": 127,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 220,
+     "line": 214,
+     "loc": 7,
+     "name": "addCustomBlock"
+    },
+    {
+     "end": 298,
+     "line": 292,
+     "loc": 7,
+     "name": "_parseResult"
+    },
+    {
+     "end": 306,
+     "line": 300,
+     "loc": 7,
+     "name": "onFileResult"
+    },
+    {
+     "end": 97,
+     "line": 92,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 110,
+     "line": 105,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 143,
+     "line": 138,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 168,
+     "line": 163,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 174,
+     "line": 169,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 183,
+     "line": 178,
+     "loc": 6,
+     "name": "setCustomBlocks"
+    },
+    {
+     "end": 256,
+     "line": 251,
+     "loc": 6,
+     "name": "refreshAll"
+    },
+    {
+     "end": 103,
+     "line": 99,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 285,
+     "line": 281,
+     "loc": 5,
+     "name": "importStack"
+    },
+    {
+     "end": 375,
+     "line": 371,
+     "loc": 5,
+     "name": "escText"
+    },
+    {
+     "end": 27,
+     "line": 24,
+     "loc": 4,
+     "name": "_date"
+    },
+    {
+     "end": 33,
+     "line": 30,
+     "loc": 4,
+     "name": "setStackPresets"
+    },
+    {
+     "end": 77,
+     "line": 74,
+     "loc": 4,
+     "name": "deleteStack"
+    },
+    {
+     "end": 96,
+     "line": 93,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 109,
+     "line": 106,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 117,
+     "line": 114,
+     "loc": 4,
+     "name": "setTemplatePresets"
+    },
+    {
+     "end": 149,
+     "line": 146,
+     "loc": 4,
+     "name": "deleteTemplate"
+    },
+    {
+     "end": 167,
+     "line": 164,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 173,
+     "line": 170,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 188,
+     "line": 185,
+     "loc": 4,
+     "name": "setCustomBlocksJson"
+    },
+    {
+     "end": 225,
+     "line": 222,
+     "loc": 4,
+     "name": "deleteCustomBlock"
+    },
+    {
+     "end": 274,
+     "line": 271,
+     "loc": 4,
+     "name": "exportPreset"
+    },
+    {
+     "end": 279,
+     "line": 276,
+     "loc": 4,
+     "name": "exportBlock"
+    },
+    {
+     "end": 290,
+     "line": 287,
+     "loc": 4,
+     "name": "importBlock"
+    },
+    {
+     "end": 381,
+     "line": 378,
+     "loc": 4,
+     "name": "onclick"
+    },
+    {
+     "end": 456,
+     "line": 453,
+     "loc": 4,
+     "name": "confirmDelete"
+    },
+    {
+     "end": 22,
+     "line": 20,
+     "loc": 3,
+     "name": "esc"
+    },
+    {
+     "end": 336,
+     "line": 334,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 343,
+     "line": 341,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 390,
+     "line": 388,
+     "loc": 3,
+     "name": "_importKeyHandler"
+    },
+    {
+     "end": 451,
+     "line": 449,
+     "loc": 3,
+     "name": "promptName"
+    },
+    {
+     "end": 461,
+     "line": 459,
+     "loc": 3,
+     "name": "confirm"
+    },
+    {
+     "end": 204,
+     "line": 204,
+     "loc": 1,
+     "name": "onLoad"
+    },
+    {
+     "end": 205,
+     "line": 205,
+     "loc": 1,
+     "name": "onDelete"
+    },
+    {
+     "end": 206,
+     "line": 206,
+     "loc": 1,
+     "name": "onExport"
+    },
+    {
+     "end": 383,
+     "line": 383,
+     "loc": 1,
+     "name": "onclick"
+    },
+    {
+     "end": 385,
+     "line": 385,
+     "loc": 1,
+     "name": "onclick"
+    },
+    {
+     "end": 387,
+     "line": 387,
+     "loc": 1,
+     "name": "onclick"
+    }
+   ],
+   "lines": 474,
+   "objects": [
+    {
+     "end": 462,
+     "gated": true,
+     "line": 9,
+     "loc": 454,
+     "methods": 37
+    },
+    {
+     "end": 208,
+     "gated": true,
+     "line": 202,
+     "loc": 7,
+     "methods": 3
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 57,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 180,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 180,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 180,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 199,
+     "gated": false,
+     "line": 199,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 234,
+     "gated": false,
+     "line": 234,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 413,
+     "gated": false,
+     "line": 413,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 64,
+    "max_object_loc": 454,
+    "max_object_methods": 37,
+    "over_100": 0,
+    "over_30": 3,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-core.js",
+   "functions": [
+    {
+     "end": 641,
+     "line": 23,
+     "loc": 619,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 492,
+     "line": 450,
+     "loc": 43,
+     "name": "moveWindow"
+    },
+    {
+     "end": 532,
+     "line": 500,
+     "loc": 33,
+     "name": "validate"
+    },
+    {
+     "end": 280,
+     "line": 256,
+     "loc": 25,
+     "name": "insertAtSplitIndex"
+    },
+    {
+     "end": 625,
+     "line": 601,
+     "loc": 25,
+     "name": "deserialize"
+    },
+    {
+     "end": 524,
+     "line": 502,
+     "loc": 23,
+     "name": "check"
+    },
+    {
+     "end": 563,
+     "line": 541,
+     "loc": 23,
+     "name": "pruneTree"
+    },
+    {
+     "end": 423,
+     "line": 403,
+     "loc": 21,
+     "name": "removeNode"
+    },
+    {
+     "end": 182,
+     "line": 165,
+     "loc": 18,
+     "name": "normalizeSizes"
+    },
+    {
+     "end": 362,
+     "line": 346,
+     "loc": 17,
+     "name": "insertAtSplitPath"
+    },
+    {
+     "end": 132,
+     "line": 117,
+     "loc": 16,
+     "name": "layoutB"
+    },
+    {
+     "end": 153,
+     "line": 138,
+     "loc": 16,
+     "name": "layoutC"
+    },
+    {
+     "end": 419,
+     "line": 404,
+     "loc": 16,
+     "name": "removeFrom"
+    },
+    {
+     "end": 593,
+     "line": 579,
+     "loc": 15,
+     "name": "migrate"
+    },
+    {
+     "end": 98,
+     "line": 85,
+     "loc": 14,
+     "name": "defaultTree"
+    },
+    {
+     "end": 247,
+     "line": 235,
+     "loc": 13,
+     "name": "splitLeaf"
+    },
+    {
+     "end": 309,
+     "line": 300,
+     "loc": 10,
+     "name": "insertBetween"
+    },
+    {
+     "end": 385,
+     "line": 376,
+     "loc": 10,
+     "name": "parentPath"
+    },
+    {
+     "end": 112,
+     "line": 104,
+     "loc": 9,
+     "name": "layoutA"
+    },
+    {
+     "end": 373,
+     "line": 365,
+     "loc": 9,
+     "name": "setSplitSizesByPath"
+    },
+    {
+     "end": 396,
+     "line": 388,
+     "loc": 9,
+     "name": "leafPaths"
+    },
+    {
+     "end": 75,
+     "line": 68,
+     "loc": 8,
+     "name": "split"
+    },
+    {
+     "end": 218,
+     "line": 211,
+     "loc": 8,
+     "name": "findNode"
+    },
+    {
+     "end": 294,
+     "line": 287,
+     "loc": 8,
+     "name": "insertSibling"
+    },
+    {
+     "end": 319,
+     "line": 312,
+     "loc": 8,
+     "name": "setSplitSizes"
+    },
+    {
+     "end": 339,
+     "line": 332,
+     "loc": 8,
+     "name": "nodeAtPath"
+    },
+    {
+     "end": 202,
+     "line": 196,
+     "loc": 7,
+     "name": "forEachLeaf"
+    },
+    {
+     "end": 558,
+     "line": 552,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 571,
+     "line": 566,
+     "loc": 6,
+     "name": "evenSizes"
+    },
+    {
+     "end": 23,
+     "line": 19,
+     "loc": 5,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 208,
+     "line": 204,
+     "loc": 5,
+     "name": "leafIds"
+    },
+    {
+     "end": 382,
+     "line": 378,
+     "loc": 5,
+     "name": "walk"
+    },
+    {
+     "end": 430,
+     "line": 426,
+     "loc": 5,
+     "name": "removeLeaf"
+    },
+    {
+     "end": 170,
+     "line": 167,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 193,
+     "line": 190,
+     "loc": 4,
+     "name": "firstLeafId"
+    },
+    {
+     "end": 200,
+     "line": 197,
+     "loc": 4,
+     "name": "walk"
+    },
+    {
+     "end": 216,
+     "line": 213,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 224,
+     "line": 221,
+     "loc": 4,
+     "name": "parentSplit"
+    },
+    {
+     "end": 329,
+     "line": 326,
+     "loc": 4,
+     "name": "normalizePath"
+    },
+    {
+     "end": 393,
+     "line": 390,
+     "loc": 4,
+     "name": "walk"
+    },
+    {
+     "end": 66,
+     "line": 66,
+     "loc": 1,
+     "name": "leaf"
+    },
+    {
+     "end": 77,
+     "line": 77,
+     "loc": 1,
+     "name": "clone"
+    },
+    {
+     "end": 186,
+     "line": 186,
+     "loc": 1,
+     "name": "isLeaf"
+    },
+    {
+     "end": 187,
+     "line": 187,
+     "loc": 1,
+     "name": "isSplit"
+    },
+    {
+     "end": 595,
+     "line": 595,
+     "loc": 1,
+     "name": "serialize"
+    }
+   ],
+   "lines": 642,
+   "objects": [
+    {
+     "end": 640,
+     "gated": false,
+     "line": 627,
+     "loc": 14,
+     "methods": 0
+    },
+    {
+     "end": 160,
+     "gated": false,
+     "line": 155,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 562,
+     "gated": false,
+     "line": 561,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 588,
+     "gated": false,
+     "line": 587,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 591,
+     "gated": false,
+     "line": 590,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 29,
+     "gated": false,
+     "line": 29,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 30,
+     "gated": false,
+     "line": 30,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 31,
+     "gated": false,
+     "line": 31,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 32,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": false,
+     "line": 34,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 36,
+     "gated": false,
+     "line": 36,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 37,
+     "gated": false,
+     "line": 37,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 38,
+     "gated": false,
+     "line": 38,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 40,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 43,
+     "gated": false,
+     "line": 43,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 44,
+     "gated": false,
+     "line": 44,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 66,
+     "gated": false,
+     "line": 66,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 74,
+     "gated": false,
+     "line": 74,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 214,
+     "gated": false,
+     "line": 214,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 389,
+     "gated": false,
+     "line": 389,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 595,
+     "gated": false,
+     "line": 595,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 606,
+     "gated": false,
+     "line": 606,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 612,
+     "gated": false,
+     "line": 612,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 615,
+     "gated": false,
+     "line": 615,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 615,
+     "gated": false,
+     "line": 615,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 620,
+     "gated": false,
+     "line": 620,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 623,
+     "gated": false,
+     "line": 623,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 624,
+     "gated": false,
+     "line": 624,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 45,
+    "max_object_loc": 14,
+    "max_object_methods": 0,
+    "over_100": 1,
+    "over_30": 3,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-drag.js",
+   "functions": [
+    {
+     "end": 291,
+     "line": 263,
+     "loc": 29,
+     "name": "_specGeometry"
+    },
+    {
+     "end": 355,
+     "line": 328,
+     "loc": 28,
+     "name": "_startResize"
+    },
+    {
+     "end": 126,
+     "line": 102,
+     "loc": 25,
+     "name": "_dragMove"
+    },
+    {
+     "end": 406,
+     "line": 385,
+     "loc": 22,
+     "name": "_resizeUp"
+    },
+    {
+     "end": 66,
+     "line": 48,
+     "loc": 19,
+     "name": "_cacheDragRects"
+    },
+    {
+     "end": 261,
+     "line": 243,
+     "loc": 19,
+     "name": "_showSpec"
+    },
+    {
+     "end": 34,
+     "line": 18,
+     "loc": 17,
+     "name": "_startDrag"
+    },
+    {
+     "end": 373,
+     "line": 357,
+     "loc": 17,
+     "name": "_resizePixelAllocation"
+    },
+    {
+     "end": 166,
+     "line": 151,
+     "loc": 16,
+     "name": "_cleanupDrag"
+    },
+    {
+     "end": 452,
+     "line": 437,
+     "loc": 16,
+     "name": "simulateResize"
+    },
+    {
+     "end": 93,
+     "line": 79,
+     "loc": 15,
+     "name": "_buildDragVisual"
+    },
+    {
+     "end": 142,
+     "line": 128,
+     "loc": 15,
+     "name": "_dragUp"
+    },
+    {
+     "end": 422,
+     "line": 408,
+     "loc": 15,
+     "name": "_cancelResize"
+    },
+    {
+     "end": 190,
+     "line": 177,
+     "loc": 14,
+     "name": "simulateDrop"
+    },
+    {
+     "end": 16,
+     "line": 4,
+     "loc": 13,
+     "name": "_pointerDown"
+    },
+    {
+     "end": 232,
+     "line": 220,
+     "loc": 13,
+     "name": "_centerSpec"
+    },
+    {
+     "end": 206,
+     "line": 195,
+     "loc": 12,
+     "name": "_computeSpec"
+    },
+    {
+     "end": 435,
+     "line": 424,
+     "loc": 12,
+     "name": "_onDblClick"
+    },
+    {
+     "end": 46,
+     "line": 36,
+     "loc": 11,
+     "name": "_beginDrag"
+    },
+    {
+     "end": 218,
+     "line": 208,
+     "loc": 11,
+     "name": "_edgeZoneSpec"
+    },
+    {
+     "end": 77,
+     "line": 68,
+     "loc": 10,
+     "name": "_createDragVisuals"
+    },
+    {
+     "end": 65,
+     "line": 57,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 301,
+     "line": 293,
+     "loc": 9,
+     "name": "_siblingBar"
+    },
+    {
+     "end": 311,
+     "line": 303,
+     "loc": 9,
+     "name": "_placeIndicator"
+    },
+    {
+     "end": 383,
+     "line": 375,
+     "loc": 9,
+     "name": "_resizeMove"
+    },
+    {
+     "end": 175,
+     "line": 168,
+     "loc": 8,
+     "name": "_flashLanded"
+    },
+    {
+     "end": 241,
+     "line": 234,
+     "loc": 8,
+     "name": "_sashSpec"
+    },
+    {
+     "end": 100,
+     "line": 95,
+     "loc": 6,
+     "name": "_winIdOf"
+    },
+    {
+     "end": 149,
+     "line": 144,
+     "loc": 6,
+     "name": "_cancelDrag"
+    },
+    {
+     "end": 323,
+     "line": 318,
+     "loc": 6,
+     "name": "_applyDrop"
+    },
+    {
+     "end": 401,
+     "line": 396,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 55,
+     "line": 51,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 316,
+     "line": 313,
+     "loc": 4,
+     "name": "_specText"
+    },
+    {
+     "end": 353,
+     "line": 351,
+     "loc": 3,
+     "name": "_onResizeKey"
+    },
+    {
+     "end": 29,
+     "line": 29,
+     "loc": 1,
+     "name": "_onDragKey"
+    },
+    {
+     "end": 185,
+     "line": 185,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 335,
+     "line": 335,
+     "loc": 1,
+     "name": "axisSize"
+    },
+    {
+     "end": 350,
+     "line": 350,
+     "loc": 1,
+     "name": "_onResizeCancel"
+    },
+    {
+     "end": 382,
+     "line": 382,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 415,
+     "line": 415,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 454,
+   "objects": [
+    {
+     "end": 191,
+     "gated": true,
+     "line": 3,
+     "loc": 189,
+     "methods": 13
+    },
+    {
+     "end": 324,
+     "gated": true,
+     "line": 194,
+     "loc": 131,
+     "methods": 10
+    },
+    {
+     "end": 453,
+     "gated": true,
+     "line": 327,
+     "loc": 127,
+     "methods": 7
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 19,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 64,
+     "gated": false,
+     "line": 60,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 321,
+     "gated": false,
+     "line": 319,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 30,
+     "gated": false,
+     "line": 30,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 50,
+     "gated": false,
+     "line": 50,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 154,
+     "gated": false,
+     "line": 154,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 179,
+     "gated": false,
+     "line": 179,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 180,
+     "gated": false,
+     "line": 180,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 181,
+     "gated": false,
+     "line": 181,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 182,
+     "gated": false,
+     "line": 182,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 183,
+     "gated": false,
+     "line": 183,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 184,
+     "gated": false,
+     "line": 184,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 217,
+     "gated": true,
+     "line": 217,
+     "loc": 1,
+     "methods": 1
+    },
+    {
+     "end": 227,
+     "gated": false,
+     "line": 227,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 231,
+     "gated": false,
+     "line": 231,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 238,
+     "gated": false,
+     "line": 238,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 270,
+     "gated": false,
+     "line": 270,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 271,
+     "gated": false,
+     "line": 271,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 286,
+     "gated": false,
+     "line": 286,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 287,
+     "gated": false,
+     "line": 287,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 290,
+     "gated": false,
+     "line": 290,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 297,
+     "gated": false,
+     "line": 297,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 300,
+     "gated": false,
+     "line": 300,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 338,
+     "gated": false,
+     "line": 338,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 338,
+     "gated": false,
+     "line": 338,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 348,
+     "gated": false,
+     "line": 348,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 411,
+     "gated": false,
+     "line": 411,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 40,
+    "max_object_loc": 189,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-presets.js",
+   "functions": [
+    {
+     "end": 49,
+     "line": 24,
+     "loc": 26,
+     "name": "createPortablePreset"
+    },
+    {
+     "end": 135,
+     "line": 115,
+     "loc": 21,
+     "name": "validatePortablePreset"
+    },
+    {
+     "end": 157,
+     "line": 137,
+     "loc": 21,
+     "name": "applyPortablePreset"
+    },
+    {
+     "end": 81,
+     "line": 65,
+     "loc": 17,
+     "name": "_portableWindows"
+    },
+    {
+     "end": 63,
+     "line": 51,
+     "loc": 13,
+     "name": "_portableStates"
+    },
+    {
+     "end": 113,
+     "line": 102,
+     "loc": 12,
+     "name": "_cleanPortablePreset"
+    },
+    {
+     "end": 22,
+     "line": 12,
+     "loc": 11,
+     "name": "_portableBounds"
+    },
+    {
+     "end": 100,
+     "line": 90,
+     "loc": 11,
+     "name": "_portableScreen"
+    },
+    {
+     "end": 10,
+     "line": 4,
+     "loc": 7,
+     "name": "_screenSnapshot"
+    },
+    {
+     "end": 41,
+     "line": 36,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 88,
+     "line": 83,
+     "loc": 6,
+     "name": "_validPortableBounds"
+    },
+    {
+     "end": 34,
+     "line": 30,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 151,
+     "line": 147,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 18,
+     "line": 18,
+     "loc": 1,
+     "name": "clamp"
+    },
+    {
+     "end": 55,
+     "line": 55,
+     "loc": 1,
+     "name": "known"
+    }
+   ],
+   "lines": 159,
+   "objects": [
+    {
+     "end": 158,
+     "gated": true,
+     "line": 3,
+     "loc": 156,
+     "methods": 10
+    },
+    {
+     "end": 48,
+     "gated": false,
+     "line": 43,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 9,
+     "gated": true,
+     "line": 8,
+     "loc": 2,
+     "methods": 1
+    },
+    {
+     "end": 21,
+     "gated": false,
+     "line": 20,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 39,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 47,
+     "gated": false,
+     "line": 46,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 112,
+     "gated": false,
+     "line": 111,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 26,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 35,
+     "gated": false,
+     "line": 35,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 54,
+     "gated": false,
+     "line": 54,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 57,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 59,
+     "gated": false,
+     "line": 59,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 61,
+     "gated": false,
+     "line": 61,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 62,
+     "gated": false,
+     "line": 62,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 62,
+     "gated": false,
+     "line": 62,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 67,
+     "gated": false,
+     "line": 67,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 75,
+     "gated": false,
+     "line": 75,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 79,
+     "gated": false,
+     "line": 79,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 80,
+     "gated": false,
+     "line": 80,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 104,
+     "gated": false,
+     "line": 104,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 118,
+     "gated": false,
+     "line": 118,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 119,
+     "gated": false,
+     "line": 119,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 121,
+     "gated": false,
+     "line": 121,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 122,
+     "gated": false,
+     "line": 122,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 124,
+     "gated": false,
+     "line": 124,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 127,
+     "gated": false,
+     "line": 127,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 128,
+     "gated": false,
+     "line": 128,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 129,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 15,
+    "max_object_loc": 156,
+    "max_object_methods": 10,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-tree.js",
+   "functions": [
+    {
+     "end": 80,
+     "line": 54,
+     "loc": 27,
+     "name": "_createWindowControls"
+    },
+    {
+     "end": 29,
+     "line": 4,
+     "loc": 26,
+     "name": "_buildNode"
+    },
+    {
+     "end": 145,
+     "line": 121,
+     "loc": 25,
+     "name": "_syncHidden"
+    },
+    {
+     "end": 216,
+     "line": 195,
+     "loc": 22,
+     "name": "_checkEmptyGrid"
+    },
+    {
+     "end": 239,
+     "line": 218,
+     "loc": 22,
+     "name": "_setupVisibilityWatch"
+    },
+    {
+     "end": 168,
+     "line": 152,
+     "loc": 17,
+     "name": "_splitHasVisibleDescendant"
+    },
+    {
+     "end": 235,
+     "line": 219,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 52,
+     "line": 37,
+     "loc": 16,
+     "name": "_ensureWindowControls"
+    },
+    {
+     "end": 110,
+     "line": 96,
+     "loc": 15,
+     "name": "_updateWindowControlIcons"
+    },
+    {
+     "end": 51,
+     "line": 39,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 94,
+     "line": 82,
+     "loc": 13,
+     "name": "_attachWindowControls"
+    },
+    {
+     "end": 193,
+     "line": 181,
+     "loc": 13,
+     "name": "_hideTouchedSashes"
+    },
+    {
+     "end": 134,
+     "line": 123,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 165,
+     "line": 154,
+     "loc": 12,
+     "name": "checkVisible"
+    },
+    {
+     "end": 27,
+     "line": 17,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 192,
+     "line": 182,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 144,
+     "line": 135,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 179,
+     "line": 170,
+     "loc": 10,
+     "name": "_syncEmptySplits"
+    },
+    {
+     "end": 228,
+     "line": 221,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 143,
+     "line": 137,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 191,
+     "line": 185,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 119,
+     "line": 114,
+     "loc": 6,
+     "name": "_panelIsHidden"
+    },
+    {
+     "end": 214,
+     "line": 210,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 74,
+     "line": 71,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 78,
+     "line": 75,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 33,
+     "line": 31,
+     "loc": 3,
+     "name": "_parsePath"
+    },
+    {
+     "end": 176,
+     "line": 174,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 238,
+     "line": 236,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 243,
+   "objects": [
+    {
+     "end": 242,
+     "gated": true,
+     "line": 3,
+     "loc": 240,
+     "methods": 13
+    },
+    {
+     "end": 237,
+     "gated": false,
+     "line": 237,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 28,
+    "max_object_loc": 240,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-windows.js",
+   "functions": [
+    {
+     "end": 117,
+     "line": 89,
+     "loc": 29,
+     "name": "_loadFromBackend"
+    },
+    {
+     "end": 471,
+     "line": 443,
+     "loc": 29,
+     "name": "_setupLayoutMenu"
+    },
+    {
+     "end": 358,
+     "line": 333,
+     "loc": 26,
+     "name": "_setupWindowsMenu"
+    },
+    {
+     "end": 57,
+     "line": 33,
+     "loc": 25,
+     "name": "_loadWindowStates"
+    },
+    {
+     "end": 381,
+     "line": 360,
+     "loc": 22,
+     "name": "_wireWindowsMenuActions"
+    },
+    {
+     "end": 435,
+     "line": 415,
+     "loc": 21,
+     "name": "_wireWindowsMenu"
+    },
+    {
+     "end": 331,
+     "line": 312,
+     "loc": 20,
+     "name": "_dockChipButtons"
+    },
+    {
+     "end": 163,
+     "line": 145,
+     "loc": 19,
+     "name": "resetToDefault"
+    },
+    {
+     "end": 310,
+     "line": 293,
+     "loc": 18,
+     "name": "_dockChip"
+    },
+    {
+     "end": 413,
+     "line": 396,
+     "loc": 18,
+     "name": "_windowsMenuRow"
+    },
+    {
+     "end": 18,
+     "line": 4,
+     "loc": 15,
+     "name": "_collectPanels"
+    },
+    {
+     "end": 73,
+     "line": 59,
+     "loc": 15,
+     "name": "_saveWindowStates"
+    },
+    {
+     "end": 209,
+     "line": 195,
+     "loc": 15,
+     "name": "openWindow"
+    },
+    {
+     "end": 468,
+     "line": 455,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 87,
+     "line": 75,
+     "loc": 13,
+     "name": "_save"
+    },
+    {
+     "end": 225,
+     "line": 213,
+     "loc": 13,
+     "name": "showWindow"
+    },
+    {
+     "end": 31,
+     "line": 20,
+     "loc": 12,
+     "name": "_loadTree"
+    },
+    {
+     "end": 114,
+     "line": 103,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 176,
+     "line": 165,
+     "loc": 12,
+     "name": "setLayout"
+    },
+    {
+     "end": 193,
+     "line": 182,
+     "loc": 12,
+     "name": "closeWindow"
+    },
+    {
+     "end": 278,
+     "line": 267,
+     "loc": 12,
+     "name": "_ensureDock"
+    },
+    {
+     "end": 291,
+     "line": 280,
+     "loc": 12,
+     "name": "_renderDock"
+    },
+    {
+     "end": 143,
+     "line": 133,
+     "loc": 11,
+     "name": "showAllWindows"
+    },
+    {
+     "end": 355,
+     "line": 345,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 434,
+     "line": 424,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 128,
+     "line": 119,
+     "loc": 10,
+     "name": "_applySerialized"
+    },
+    {
+     "end": 246,
+     "line": 237,
+     "loc": 10,
+     "name": "minimizeWindow"
+    },
+    {
+     "end": 380,
+     "line": 371,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 257,
+     "line": 249,
+     "loc": 9,
+     "name": "restoreMinimized"
+    },
+    {
+     "end": 433,
+     "line": 425,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 100,
+     "line": 93,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 344,
+     "line": 337,
+     "loc": 8,
+     "name": "place"
+    },
+    {
+     "end": 369,
+     "line": 362,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 423,
+     "line": 416,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 454,
+     "line": 447,
+     "loc": 8,
+     "name": "place"
+    },
+    {
+     "end": 479,
+     "line": 473,
+     "loc": 7,
+     "name": "_wireLayoutMenuActions"
+    },
+    {
+     "end": 388,
+     "line": 383,
+     "loc": 6,
+     "name": "_renderWindowsMenu"
+    },
+    {
+     "end": 422,
+     "line": 417,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 140,
+     "line": 136,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 231,
+     "line": 227,
+     "loc": 5,
+     "name": "toggleWindow"
+    },
+    {
+     "end": 290,
+     "line": 286,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 394,
+     "line": 390,
+     "loc": 5,
+     "name": "_windowsMenuState"
+    },
+    {
+     "end": 441,
+     "line": 437,
+     "loc": 5,
+     "name": "_updateWindowsMenu"
+    },
+    {
+     "end": 485,
+     "line": 481,
+     "loc": 5,
+     "name": "_dismissOutside"
+    },
+    {
+     "end": 262,
+     "line": 259,
+     "loc": 4,
+     "name": "toggleMinimize"
+    },
+    {
+     "end": 308,
+     "line": 305,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 326,
+     "line": 323,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 330,
+     "line": 327,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 41,
+     "line": 39,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 50,
+     "line": 48,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 476,
+     "line": 474,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 484,
+     "line": 482,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 154,
+     "line": 154,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 178,
+     "line": 178,
+     "loc": 1,
+     "name": "isClosed"
+    },
+    {
+     "end": 180,
+     "line": 180,
+     "loc": 1,
+     "name": "isMinimized"
+    },
+    {
+     "end": 375,
+     "line": 375,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 475,
+     "line": 475,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 478,
+     "line": 478,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 487,
+   "objects": [
+    {
+     "end": 486,
+     "gated": true,
+     "line": 266,
+     "loc": 221,
+     "methods": 14
+    },
+    {
+     "end": 263,
+     "gated": true,
+     "line": 132,
+     "loc": 132,
+     "methods": 12
+    },
+    {
+     "end": 129,
+     "gated": true,
+     "line": 3,
+     "loc": 127,
+     "methods": 7
+    },
+    {
+     "end": 12,
+     "gated": false,
+     "line": 5,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 69,
+     "gated": false,
+     "line": 66,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 85,
+     "gated": false,
+     "line": 85,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 156,
+     "gated": false,
+     "line": 156,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 172,
+     "gated": false,
+     "line": 172,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 391,
+     "gated": false,
+     "line": 391,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 392,
+     "gated": false,
+     "line": 392,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 393,
+     "gated": false,
+     "line": 393,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 58,
+    "max_object_loc": 221,
+    "max_object_methods": 14,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid.js",
+   "functions": [
+    {
+     "end": 64,
+     "line": 48,
+     "loc": 17,
+     "name": "init"
+    },
+    {
+     "end": 80,
+     "line": 65,
+     "loc": 16,
+     "name": "flushPersistence"
+    },
+    {
+     "end": 87,
+     "line": 81,
+     "loc": 7,
+     "name": "render"
+    },
+    {
+     "end": 96,
+     "line": 90,
+     "loc": 7,
+     "name": "_applyStates"
+    },
+    {
+     "end": 102,
+     "line": 100,
+     "loc": 3,
+     "name": "getWindowStates"
+    },
+    {
+     "end": 99,
+     "line": 99,
+     "loc": 1,
+     "name": "getTree"
+    },
+    {
+     "end": 108,
+     "line": 108,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 110,
+   "objects": [
+    {
+     "end": 102,
+     "gated": true,
+     "line": 19,
+     "loc": 84,
+     "methods": 6
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 41,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": false,
+     "line": 34,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 78,
+     "gated": false,
+     "line": 78,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 101,
+     "gated": false,
+     "line": 101,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 108,
+     "gated": true,
+     "line": 108,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 84,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-config.js",
+   "functions": [
+    {
+     "end": 123,
+     "line": 105,
+     "loc": 19,
+     "name": "_updateConfigVisibility"
+    },
+    {
+     "end": 54,
+     "line": 39,
+     "loc": 16,
+     "name": "_setupConfigPin"
+    },
+    {
+     "end": 33,
+     "line": 22,
+     "loc": 12,
+     "name": "_persistConfigPin"
+    },
+    {
+     "end": 75,
+     "line": 64,
+     "loc": 12,
+     "name": "_configCloseHandler"
+    },
+    {
+     "end": 96,
+     "line": 86,
+     "loc": 11,
+     "name": "_updateConfigPinButton"
+    },
+    {
+     "end": 51,
+     "line": 42,
+     "loc": 10,
+     "name": "onclick"
+    },
+    {
+     "end": 74,
+     "line": 65,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 84,
+     "line": 77,
+     "loc": 8,
+     "name": "_toggleConfigPin"
+    },
+    {
+     "end": 10,
+     "line": 4,
+     "loc": 7,
+     "name": "_loadConfigPin"
+    },
+    {
+     "end": 62,
+     "line": 56,
+     "loc": 7,
+     "name": "_wireConfigCloseButton"
+    },
+    {
+     "end": 103,
+     "line": 98,
+     "loc": 6,
+     "name": "_clearConfigPanel"
+    },
+    {
+     "end": 16,
+     "line": 12,
+     "loc": 5,
+     "name": "_applyConfigPin"
+    },
+    {
+     "end": 20,
+     "line": 18,
+     "loc": 3,
+     "name": "applyConfigPin"
+    },
+    {
+     "end": 37,
+     "line": 35,
+     "loc": 3,
+     "name": "flushPersistence"
+    }
+   ],
+   "lines": 125,
+   "objects": [
+    {
+     "end": 124,
+     "gated": true,
+     "line": 3,
+     "loc": 122,
+     "methods": 12
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 122,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-form.js",
+   "functions": [
+    {
+     "end": 40,
+     "line": 4,
+     "loc": 37,
+     "name": "_showConfig"
+    },
+    {
+     "end": 211,
+     "line": 183,
+     "loc": 29,
+     "name": "_wireConfigForm"
+    },
+    {
+     "end": 281,
+     "line": 255,
+     "loc": 27,
+     "name": "_wireSpeedControls"
+    },
+    {
+     "end": 95,
+     "line": 71,
+     "loc": 25,
+     "name": "_configRowHtml"
+    },
+    {
+     "end": 210,
+     "line": 187,
+     "loc": 24,
+     "name": "(arrow)"
+    },
+    {
+     "end": 119,
+     "line": 97,
+     "loc": 23,
+     "name": "_speedRowHtml"
+    },
+    {
+     "end": 207,
+     "line": 188,
+     "loc": 20,
+     "name": "handler"
+    },
+    {
+     "end": 159,
+     "line": 146,
+     "loc": 14,
+     "name": "_checkboxRowHtml"
+    },
+    {
+     "end": 144,
+     "line": 133,
+     "loc": 12,
+     "name": "_radioRowHtml"
+    },
+    {
+     "end": 131,
+     "line": 121,
+     "loc": 11,
+     "name": "_messageRowHtml"
+    },
+    {
+     "end": 223,
+     "line": 213,
+     "loc": 11,
+     "name": "_wireCustomBlockActions"
+    },
+    {
+     "end": 273,
+     "line": 263,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 51,
+     "line": 42,
+     "loc": 10,
+     "name": "_configKeys"
+    },
+    {
+     "end": 170,
+     "line": 161,
+     "loc": 10,
+     "name": "_selectRowHtml"
+    },
+    {
+     "end": 181,
+     "line": 172,
+     "loc": 10,
+     "name": "_inputRowHtml"
+    },
+    {
+     "end": 272,
+     "line": 264,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 245,
+     "line": 239,
+     "loc": 7,
+     "name": "_speedDesc"
+    },
+    {
+     "end": 253,
+     "line": 247,
+     "loc": 7,
+     "name": "_speedPreviewHtml"
+    },
+    {
+     "end": 64,
+     "line": 59,
+     "loc": 6,
+     "name": "_configConstructorHint"
+    },
+    {
+     "end": 57,
+     "line": 53,
+     "loc": 5,
+     "name": "_configHeadHtml"
+    },
+    {
+     "end": 139,
+     "line": 135,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 232,
+     "line": 228,
+     "loc": 5,
+     "name": "_speedValue"
+    },
+    {
+     "end": 262,
+     "line": 258,
+     "loc": 5,
+     "name": "refresh"
+    },
+    {
+     "end": 165,
+     "line": 162,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 237,
+     "line": 234,
+     "loc": 4,
+     "name": "_speedCoef"
+    },
+    {
+     "end": 278,
+     "line": 275,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 45,
+     "line": 45,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 48,
+     "line": 48,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 218,
+     "line": 218,
+     "loc": 1,
+     "name": "onclick"
+    }
+   ],
+   "lines": 283,
+   "objects": [
+    {
+     "end": 224,
+     "gated": true,
+     "line": 3,
+     "loc": 222,
+     "methods": 13
+    },
+    {
+     "end": 282,
+     "gated": true,
+     "line": 227,
+     "loc": 56,
+     "methods": 5
+    },
+    {
+     "end": 43,
+     "gated": false,
+     "line": 43,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 134,
+     "gated": false,
+     "line": 134,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 30,
+    "max_object_loc": 222,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-history.js",
+   "functions": [
+    {
+     "end": 134,
+     "line": 110,
+     "loc": 25,
+     "name": "undo"
+    },
+    {
+     "end": 207,
+     "line": 183,
+     "loc": 25,
+     "name": "loadHistoryFromState"
+    },
+    {
+     "end": 159,
+     "line": 136,
+     "loc": 24,
+     "name": "redo"
+    },
+    {
+     "end": 81,
+     "line": 66,
+     "loc": 16,
+     "name": "pushHistory"
+    },
+    {
+     "end": 176,
+     "line": 161,
+     "loc": 16,
+     "name": "updateHistoryButtons"
+    },
+    {
+     "end": 52,
+     "line": 38,
+     "loc": 15,
+     "name": "_initDefaultStack"
+    },
+    {
+     "end": 218,
+     "line": 209,
+     "loc": 10,
+     "name": "_setupHistoryButtons"
+    },
+    {
+     "end": 12,
+     "line": 4,
+     "loc": 9,
+     "name": "_deepCopy"
+    },
+    {
+     "end": 36,
+     "line": 30,
+     "loc": 7,
+     "name": "_stacksEqual"
+    },
+    {
+     "end": 100,
+     "line": 94,
+     "loc": 7,
+     "name": "_enforceMaxHistory"
+    },
+    {
+     "end": 61,
+     "line": 56,
+     "loc": 6,
+     "name": "_getCurrentHistoryStack"
+    },
+    {
+     "end": 92,
+     "line": 88,
+     "loc": 5,
+     "name": "_truncateHistoryFuture"
+    },
+    {
+     "end": 28,
+     "line": 25,
+     "loc": 4,
+     "name": "_normalizeStack"
+    },
+    {
+     "end": 86,
+     "line": 83,
+     "loc": 4,
+     "name": "_historyTipEquals"
+    },
+    {
+     "end": 181,
+     "line": 178,
+     "loc": 4,
+     "name": "saveHistoryToBackend"
+    },
+    {
+     "end": 23,
+     "line": 21,
+     "loc": 3,
+     "name": "_normalizeBlock"
+    },
+    {
+     "end": 104,
+     "line": 102,
+     "loc": 3,
+     "name": "canUndo"
+    },
+    {
+     "end": 108,
+     "line": 106,
+     "loc": 3,
+     "name": "canRedo"
+    }
+   ],
+   "lines": 222,
+   "objects": [
+    {
+     "end": 221,
+     "gated": true,
+     "line": 65,
+     "loc": 157,
+     "methods": 12
+    },
+    {
+     "end": 62,
+     "gated": true,
+     "line": 3,
+     "loc": 60,
+     "methods": 6
+    },
+    {
+     "end": 9,
+     "gated": false,
+     "line": 9,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 10,
+     "gated": false,
+     "line": 10,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 43,
+     "gated": false,
+     "line": 43,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 44,
+     "gated": false,
+     "line": 44,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 45,
+     "gated": false,
+     "line": 45,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 46,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 47,
+     "gated": false,
+     "line": 47,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 48,
+     "gated": false,
+     "line": 48,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 49,
+     "gated": false,
+     "line": 49,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 50,
+     "gated": false,
+     "line": 50,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 67,
+     "gated": false,
+     "line": 67,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 121,
+     "gated": false,
+     "line": 121,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 147,
+     "gated": false,
+     "line": 147,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 18,
+    "max_object_loc": 157,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-menu.js",
+   "functions": [
+    {
+     "end": 173,
+     "line": 152,
+     "loc": 22,
+     "name": "_wireSaveLoadButtons"
+    },
+    {
+     "end": 143,
+     "line": 124,
+     "loc": 20,
+     "name": "_wirePauseButton"
+    },
+    {
+     "end": 212,
+     "line": 193,
+     "loc": 20,
+     "name": "_saveBlockPreset"
+    },
+    {
+     "end": 232,
+     "line": 214,
+     "loc": 19,
+     "name": "setRunning"
+    },
+    {
+     "end": 51,
+     "line": 35,
+     "loc": 17,
+     "name": "_setupAddMenu"
+    },
+    {
+     "end": 96,
+     "line": 80,
+     "loc": 17,
+     "name": "_wireMenu"
+    },
+    {
+     "end": 122,
+     "line": 106,
+     "loc": 17,
+     "name": "_wireRunButton"
+    },
+    {
+     "end": 142,
+     "line": 126,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 191,
+     "line": 175,
+     "loc": 17,
+     "name": "_wireImportExportButtons"
+    },
+    {
+     "end": 67,
+     "line": 53,
+     "loc": 15,
+     "name": "_renderMenu"
+    },
+    {
+     "end": 24,
+     "line": 11,
+     "loc": 14,
+     "name": "_refreshSaveLabel"
+    },
+    {
+     "end": 121,
+     "line": 108,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 164,
+     "line": 154,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 48,
+     "line": 39,
+     "loc": 10,
+     "name": "open"
+    },
+    {
+     "end": 78,
+     "line": 69,
+     "loc": 10,
+     "name": "_customMenuRows"
+    },
+    {
+     "end": 243,
+     "line": 234,
+     "loc": 10,
+     "name": "setRunningBlock"
+    },
+    {
+     "end": 33,
+     "line": 26,
+     "loc": 8,
+     "name": "addBlockConfig"
+    },
+    {
+     "end": 77,
+     "line": 70,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 88,
+     "line": 81,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 95,
+     "line": 89,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 104,
+     "line": 98,
+     "loc": 7,
+     "name": "_setupButtons"
+    },
+    {
+     "end": 172,
+     "line": 166,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 9,
+     "line": 4,
+     "loc": 6,
+     "name": "setCustomBlocks"
+    },
+    {
+     "end": 87,
+     "line": 82,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 150,
+     "line": 145,
+     "loc": 6,
+     "name": "_wireStopButton"
+    },
+    {
+     "end": 200,
+     "line": 195,
+     "loc": 6,
+     "name": "finish"
+    },
+    {
+     "end": 94,
+     "line": 90,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 205,
+     "line": 201,
+     "loc": 5,
+     "name": "useName"
+    },
+    {
+     "end": 21,
+     "line": 18,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 171,
+     "line": 168,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 242,
+     "line": 239,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 149,
+     "line": 147,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 163,
+     "line": 161,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 182,
+     "line": 180,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 186,
+     "line": 184,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 190,
+     "line": 188,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 245,
+   "objects": [
+    {
+     "end": 244,
+     "gated": true,
+     "line": 3,
+     "loc": 242,
+     "methods": 16
+    },
+    {
+     "end": 6,
+     "gated": false,
+     "line": 6,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 6,
+     "gated": false,
+     "line": 6,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 6,
+     "gated": false,
+     "line": 6,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 85,
+     "gated": false,
+     "line": 85,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 85,
+     "gated": false,
+     "line": 85,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 36,
+    "max_object_loc": 242,
+    "max_object_methods": 16,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-render.js",
+   "functions": [
+    {
+     "end": 237,
+     "line": 209,
+     "loc": 29,
+     "name": "_setupKeyboardReorder"
+    },
+    {
+     "end": 279,
+     "line": 251,
+     "loc": 29,
+     "name": "removeBlock"
+    },
+    {
+     "end": 207,
+     "line": 180,
+     "loc": 28,
+     "name": "moveBlock"
+    },
+    {
+     "end": 236,
+     "line": 210,
+     "loc": 27,
+     "name": "(arrow)"
+    },
+    {
+     "end": 158,
+     "line": 133,
+     "loc": 26,
+     "name": "_wireToggles"
+    },
+    {
+     "end": 111,
+     "line": 89,
+     "loc": 23,
+     "name": "_stackItemHtml"
+    },
+    {
+     "end": 157,
+     "line": 135,
+     "loc": 23,
+     "name": "(arrow)"
+    },
+    {
+     "end": 33,
+     "line": 14,
+     "loc": 20,
+     "name": "_findDesc"
+    },
+    {
+     "end": 69,
+     "line": 50,
+     "loc": 20,
+     "name": "_summaryPart"
+    },
+    {
+     "end": 131,
+     "line": 113,
+     "loc": 19,
+     "name": "_wireStackList"
+    },
+    {
+     "end": 153,
+     "line": 136,
+     "loc": 18,
+     "name": "(arrow)"
+    },
+    {
+     "end": 178,
+     "line": 163,
+     "loc": 16,
+     "name": "_attachDrag"
+    },
+    {
+     "end": 48,
+     "line": 35,
+     "loc": 14,
+     "name": "_summary"
+    },
+    {
+     "end": 129,
+     "line": 116,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 128,
+     "line": 117,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 87,
+     "line": 77,
+     "loc": 11,
+     "name": "_renderStack"
+    },
+    {
+     "end": 12,
+     "line": 8,
+     "loc": 5,
+     "name": "_displayName"
+    },
+    {
+     "end": 75,
+     "line": 71,
+     "loc": 5,
+     "name": "_esc"
+    },
+    {
+     "end": 175,
+     "line": 171,
+     "loc": 5,
+     "name": "labelOf"
+    },
+    {
+     "end": 243,
+     "line": 239,
+     "loc": 5,
+     "name": "selectBlock"
+    },
+    {
+     "end": 249,
+     "line": 245,
+     "loc": 5,
+     "name": "deselectBlock"
+    },
+    {
+     "end": 6,
+     "line": 4,
+     "loc": 3,
+     "name": "_meta"
+    },
+    {
+     "end": 176,
+     "line": 176,
+     "loc": 1,
+     "name": "onReorder"
+    }
+   ],
+   "lines": 281,
+   "objects": [
+    {
+     "end": 159,
+     "gated": true,
+     "line": 3,
+     "loc": 157,
+     "methods": 10
+    },
+    {
+     "end": 280,
+     "gated": true,
+     "line": 162,
+     "loc": 119,
+     "methods": 6
+    },
+    {
+     "end": 177,
+     "gated": true,
+     "line": 166,
+     "loc": 12,
+     "methods": 2
+    },
+    {
+     "end": 61,
+     "gated": false,
+     "line": 59,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 5,
+     "gated": false,
+     "line": 5,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 23,
+    "max_object_loc": 157,
+    "max_object_methods": 10,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd.js",
+   "functions": [
+    {
+     "end": 247,
+     "line": 224,
+     "loc": 24,
+     "name": "setStack"
+    },
+    {
+     "end": 212,
+     "line": 196,
+     "loc": 17,
+     "name": "init"
+    },
+    {
+     "end": 223,
+     "line": 213,
+     "loc": 11,
+     "name": "_migrateBlock"
+    },
+    {
+     "end": 256,
+     "line": 248,
+     "loc": 9,
+     "name": "notifyEdited"
+    },
+    {
+     "end": 255,
+     "line": 251,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 261,
+     "line": 257,
+     "loc": 5,
+     "name": "refreshPresets"
+    },
+    {
+     "end": 218,
+     "line": 218,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 267,
+     "line": 267,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 269,
+   "objects": [
+    {
+     "end": 261,
+     "gated": true,
+     "line": 172,
+     "loc": 90,
+     "methods": 5
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 43,
+     "loc": 28,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 72,
+     "loc": 20,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 54,
+     "loc": 17,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 150,
+     "loc": 15,
+     "methods": 0
+    },
+    {
+     "end": 123,
+     "gated": false,
+     "line": 110,
+     "loc": 14,
+     "methods": 0
+    },
+    {
+     "end": 39,
+     "gated": false,
+     "line": 27,
+     "loc": 13,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 80,
+     "loc": 12,
+     "methods": 0
+    },
+    {
+     "end": 39,
+     "gated": false,
+     "line": 29,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 99,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 134,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 156,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 51,
+     "gated": false,
+     "line": 44,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 123,
+     "gated": false,
+     "line": 116,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 79,
+     "gated": false,
+     "line": 73,
+     "loc": 7,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 104,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 95,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 103,
+     "gated": false,
+     "line": 100,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 114,
+     "gated": false,
+     "line": 111,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 130,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 140,
+     "gated": false,
+     "line": 137,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 140,
+     "gated": false,
+     "line": 137,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 143,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 154,
+     "gated": false,
+     "line": 151,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 168,
+     "gated": false,
+     "line": 165,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 42,
+     "gated": false,
+     "line": 40,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 94,
+     "gated": false,
+     "line": 92,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 124,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 127,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 149,
+     "gated": false,
+     "line": 147,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 52,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 97,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 132,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 141,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 145,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 168,
+     "gated": false,
+     "line": 167,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 42,
+     "gated": false,
+     "line": 42,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 93,
+     "gated": false,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 94,
+     "gated": false,
+     "line": 94,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 96,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 115,
+     "gated": false,
+     "line": 115,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 125,
+     "gated": false,
+     "line": 125,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 126,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 128,
+     "gated": false,
+     "line": 128,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 129,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 131,
+     "gated": false,
+     "line": 131,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 135,
+     "gated": false,
+     "line": 135,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 136,
+     "gated": false,
+     "line": 136,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 144,
+     "gated": false,
+     "line": 144,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 148,
+     "gated": false,
+     "line": 148,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 149,
+     "gated": false,
+     "line": 149,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 155,
+     "gated": false,
+     "line": 155,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 166,
+     "gated": false,
+     "line": 166,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 217,
+     "gated": false,
+     "line": 217,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 217,
+     "gated": false,
+     "line": 217,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 226,
+     "gated": false,
+     "line": 226,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 243,
+     "gated": false,
+     "line": 243,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 267,
+     "gated": true,
+     "line": 267,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 90,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-drag.js",
+   "functions": [
+    {
+     "end": 152,
+     "line": 105,
+     "loc": 48,
+     "name": "_begin"
+    },
+    {
+     "end": 97,
+     "line": 67,
+     "loc": 31,
+     "name": "_pointerDown"
+    },
+    {
+     "end": 279,
+     "line": 250,
+     "loc": 30,
+     "name": "_autoScroll"
+    },
+    {
+     "end": 309,
+     "line": 282,
+     "loc": 28,
+     "name": "_pointerUp"
+    },
+    {
+     "end": 174,
+     "line": 155,
+     "loc": 20,
+     "name": "_pointerMove"
+    },
+    {
+     "end": 195,
+     "line": 177,
+     "loc": 19,
+     "name": "_updateTarget"
+    },
+    {
+     "end": 276,
+     "line": 260,
+     "loc": 17,
+     "name": "tick"
+    },
+    {
+     "end": 344,
+     "line": 329,
+     "loc": 16,
+     "name": "_cleanupVisuals"
+    },
+    {
+     "end": 211,
+     "line": 198,
+     "loc": 14,
+     "name": "_applySlide"
+    },
+    {
+     "end": 53,
+     "line": 41,
+     "loc": 13,
+     "name": "attach"
+    },
+    {
+     "end": 237,
+     "line": 228,
+     "loc": 10,
+     "name": "_placeBar"
+    },
+    {
+     "end": 320,
+     "line": 311,
+     "loc": 10,
+     "name": "_cancel"
+    },
+    {
+     "end": 247,
+     "line": 239,
+     "loc": 9,
+     "name": "_placeBadge"
+    },
+    {
+     "end": 62,
+     "line": 55,
+     "loc": 8,
+     "name": "detach"
+    },
+    {
+     "end": 354,
+     "line": 347,
+     "loc": 8,
+     "name": "flashLanded"
+    },
+    {
+     "end": 300,
+     "line": 294,
+     "loc": 7,
+     "name": "finish"
+    },
+    {
+     "end": 225,
+     "line": 220,
+     "loc": 6,
+     "name": "_slotTop"
+    },
+    {
+     "end": 327,
+     "line": 322,
+     "loc": 6,
+     "name": "_teardownListeners"
+    },
+    {
+     "end": 102,
+     "line": 99,
+     "loc": 4,
+     "name": "_items"
+    },
+    {
+     "end": 339,
+     "line": 336,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 272,
+     "line": 270,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 64,
+     "line": 64,
+     "loc": 1,
+     "name": "get dragging"
+    },
+    {
+     "end": 91,
+     "line": 91,
+     "loc": 1,
+     "name": "_onKey"
+    },
+    {
+     "end": 303,
+     "line": 303,
+     "loc": 1,
+     "name": "swallow"
+    }
+   ],
+   "lines": 356,
+   "objects": [
+    {
+     "end": 355,
+     "gated": true,
+     "line": 23,
+     "loc": 333,
+     "methods": 18
+    },
+    {
+     "end": 87,
+     "gated": false,
+     "line": 80,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 49,
+     "gated": false,
+     "line": 44,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 92,
+     "gated": false,
+     "line": 92,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 323,
+     "gated": false,
+     "line": 323,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 24,
+    "max_object_loc": 333,
+    "max_object_methods": 18,
+    "over_100": 0,
+    "over_30": 2,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/url-toolbar.js",
+   "functions": [
+    {
+     "end": 144,
+     "line": 113,
+     "loc": 32,
+     "name": "onMatch"
+    },
+    {
+     "end": 77,
+     "line": 55,
+     "loc": 23,
+     "name": "renderChips"
+    },
+    {
+     "end": 35,
+     "line": 17,
+     "loc": 19,
+     "name": "init"
+    },
+    {
+     "end": 73,
+     "line": 59,
+     "loc": 15,
+     "name": "(arrow)"
+    },
+    {
+     "end": 92,
+     "line": 80,
+     "loc": 13,
+     "name": "selectBookmark"
+    },
+    {
+     "end": 158,
+     "line": 147,
+     "loc": 12,
+     "name": "restoreSession"
+    },
+    {
+     "end": 111,
+     "line": 104,
+     "loc": 8,
+     "name": "connectNow"
+    },
+    {
+     "end": 34,
+     "line": 28,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 44,
+     "line": 38,
+     "loc": 7,
+     "name": "_selectedTabUrl"
+    },
+    {
+     "end": 49,
+     "line": 46,
+     "loc": 4,
+     "name": "setPresets"
+    },
+    {
+     "end": 71,
+     "line": 68,
+     "loc": 4,
+     "name": "onDelete"
+    },
+    {
+     "end": 97,
+     "line": 94,
+     "loc": 4,
+     "name": "rememberUrl"
+    },
+    {
+     "end": 102,
+     "line": 99,
+     "loc": 4,
+     "name": "addPreset"
+    },
+    {
+     "end": 163,
+     "line": 160,
+     "loc": 4,
+     "name": "refresh"
+    },
+    {
+     "end": 53,
+     "line": 51,
+     "loc": 3,
+     "name": "shortUrl"
+    },
+    {
+     "end": 22,
+     "line": 22,
+     "loc": 1,
+     "name": "doConnect"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 67,
+     "line": 67,
+     "loc": 1,
+     "name": "onLoad"
+    },
+    {
+     "end": 166,
+     "line": 166,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 168,
+   "objects": [
+    {
+     "end": 164,
+     "gated": true,
+     "line": 12,
+     "loc": 153,
+     "methods": 12
+    },
+    {
+     "end": 72,
+     "gated": true,
+     "line": 62,
+     "loc": 11,
+     "methods": 4
+    },
+    {
+     "end": 67,
+     "gated": false,
+     "line": 67,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 81,
+     "gated": false,
+     "line": 81,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 96,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 138,
+     "gated": false,
+     "line": 138,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 150,
+     "gated": false,
+     "line": 150,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 166,
+     "gated": true,
+     "line": 166,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 19,
+    "max_object_loc": 153,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/user-table.js",
+   "functions": [
+    {
+     "end": 101,
+     "line": 28,
+     "loc": 74,
+     "name": "init"
+    },
+    {
+     "end": 253,
+     "line": 205,
+     "loc": 49,
+     "name": "_row"
+    },
+    {
+     "end": 91,
+     "line": 61,
+     "loc": 31,
+     "name": "(arrow)"
+    },
+    {
+     "end": 132,
+     "line": 104,
+     "loc": 29,
+     "name": "render"
+    },
+    {
+     "end": 163,
+     "line": 144,
+     "loc": 20,
+     "name": "_sortValue"
+    },
+    {
+     "end": 321,
+     "line": 302,
+     "loc": 20,
+     "name": "_syncSelectionUI"
+    },
+    {
+     "end": 178,
+     "line": 165,
+     "loc": 14,
+     "name": "_compare"
+    },
+    {
+     "end": 400,
+     "line": 387,
+     "loc": 14,
+     "name": "flashRow"
+    },
+    {
+     "end": 203,
+     "line": 192,
+     "loc": 12,
+     "name": "_visible"
+    },
+    {
+     "end": 190,
+     "line": 180,
+     "loc": 11,
+     "name": "_updateSortHeaders"
+    },
+    {
+     "end": 344,
+     "line": 334,
+     "loc": 11,
+     "name": "deleteSelected"
+    },
+    {
+     "end": 291,
+     "line": 282,
+     "loc": 10,
+     "name": "markLabelTarget"
+    },
+    {
+     "end": 415,
+     "line": 406,
+     "loc": 10,
+     "name": "onPersonRemoved"
+    },
+    {
+     "end": 55,
+     "line": 47,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 142,
+     "line": 134,
+     "loc": 9,
+     "name": "sortBy"
+    },
+    {
+     "end": 189,
+     "line": 181,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 354,
+     "line": 346,
+     "loc": 9,
+     "name": "clearAll"
+    },
+    {
+     "end": 384,
+     "line": 376,
+     "loc": 9,
+     "name": "onPersonFound"
+    },
+    {
+     "end": 269,
+     "line": 262,
+     "loc": 8,
+     "name": "_paintLabels"
+    },
+    {
+     "end": 98,
+     "line": 92,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 300,
+     "line": 294,
+     "loc": 7,
+     "name": "toggleAll"
+    },
+    {
+     "end": 432,
+     "line": 426,
+     "loc": 7,
+     "name": "_bridge"
+    },
+    {
+     "end": 54,
+     "line": 49,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 366,
+     "line": 361,
+     "loc": 6,
+     "name": "toggleMessaged"
+    },
+    {
+     "end": 423,
+     "line": 418,
+     "loc": 6,
+     "name": "onDeleted"
+    },
+    {
+     "end": 268,
+     "line": 264,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 290,
+     "line": 286,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 332,
+     "line": 328,
+     "loc": 5,
+     "name": "deleteNick"
+    },
+    {
+     "end": 438,
+     "line": 434,
+     "loc": 5,
+     "name": "_esc"
+    },
+    {
+     "end": 35,
+     "line": 32,
+     "loc": 4,
+     "name": "on"
+    },
+    {
+     "end": 46,
+     "line": 43,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 275,
+     "line": 272,
+     "loc": 4,
+     "name": "labelNick"
+    },
+    {
+     "end": 298,
+     "line": 295,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 359,
+     "line": 356,
+     "loc": 4,
+     "name": "resetMessaged"
+    },
+    {
+     "end": 370,
+     "line": 368,
+     "loc": 3,
+     "name": "manualMessage"
+    },
+    {
+     "end": 443,
+     "line": 441,
+     "loc": 3,
+     "name": "_attr"
+    },
+    {
+     "end": 108,
+     "line": 108,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 446,
+     "line": 446,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 448,
+   "objects": [
+    {
+     "end": 444,
+     "gated": true,
+     "line": 18,
+     "loc": 427,
+     "methods": 26
+    },
+    {
+     "end": 24,
+     "gated": false,
+     "line": 24,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 146,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 176,
+     "gated": false,
+     "line": 176,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 274,
+     "gated": false,
+     "line": 274,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 289,
+     "gated": false,
+     "line": 289,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 398,
+     "gated": false,
+     "line": 398,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 446,
+     "gated": true,
+     "line": 446,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 38,
+    "max_object_loc": 427,
+    "max_object_methods": 26,
+    "over_100": 0,
+    "over_30": 3,
+    "over_60": 1
+   }
+  },
+  {
+   "file": "ui/js/window-presets.js",
+   "functions": [
+    {
+     "end": 188,
+     "line": 157,
+     "loc": 32,
+     "name": "_renderList"
+    },
+    {
+     "end": 100,
+     "line": 73,
+     "loc": 28,
+     "name": "_persistDocument"
+    },
+    {
+     "end": 320,
+     "line": 295,
+     "loc": 26,
+     "name": "_showPreview"
+    },
+    {
+     "end": 187,
+     "line": 168,
+     "loc": 20,
+     "name": "(arrow)"
+    },
+    {
+     "end": 271,
+     "line": 254,
+     "loc": 18,
+     "name": "showInFolder"
+    },
+    {
+     "end": 54,
+     "line": 39,
+     "loc": 16,
+     "name": "setPresets"
+    },
+    {
+     "end": 293,
+     "line": 278,
+     "loc": 16,
+     "name": "_readFile"
+    },
+    {
+     "end": 361,
+     "line": 347,
+     "loc": 15,
+     "name": "remove"
+    },
+    {
+     "end": 142,
+     "line": 130,
+     "loc": 13,
+     "name": "_renderQuickChips"
+    },
+    {
+     "end": 216,
+     "line": 204,
+     "loc": 13,
+     "name": "_getDocument"
+    },
+    {
+     "end": 360,
+     "line": 348,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 22,
+     "line": 11,
+     "loc": 12,
+     "name": "init"
+    },
+    {
+     "end": 155,
+     "line": 144,
+     "loc": 12,
+     "name": "_presetButton"
+    },
+    {
+     "end": 252,
+     "line": 242,
+     "loc": 11,
+     "name": "_handleExportResponse"
+    },
+    {
+     "end": 71,
+     "line": 62,
+     "loc": 10,
+     "name": "saveCurrent"
+    },
+    {
+     "end": 111,
+     "line": 102,
+     "loc": 10,
+     "name": "_saveLocalDocument"
+    },
+    {
+     "end": 318,
+     "line": 309,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 331,
+     "line": 322,
+     "loc": 10,
+     "name": "_previewMeta"
+    },
+    {
+     "end": 95,
+     "line": 87,
+     "loc": 9,
+     "name": "done"
+    },
+    {
+     "end": 121,
+     "line": 113,
+     "loc": 9,
+     "name": "_localDocuments"
+    },
+    {
+     "end": 371,
+     "line": 363,
+     "loc": 9,
+     "name": "_message"
+    },
+    {
+     "end": 290,
+     "line": 283,
+     "loc": 8,
+     "name": "onload"
+    },
+    {
+     "end": 30,
+     "line": 24,
+     "loc": 7,
+     "name": "_bindButton"
+    },
+    {
+     "end": 196,
+     "line": 190,
+     "loc": 7,
+     "name": "_rowAction"
+    },
+    {
+     "end": 339,
+     "line": 333,
+     "loc": 7,
+     "name": "_applyPreview"
+    },
+    {
+     "end": 37,
+     "line": 32,
+     "loc": 6,
+     "name": "_loadLocal"
+    },
+    {
+     "end": 128,
+     "line": 123,
+     "loc": 6,
+     "name": "render"
+    },
+    {
+     "end": 266,
+     "line": 261,
+     "loc": 6,
+     "name": "done"
+    },
+    {
+     "end": 60,
+     "line": 56,
+     "loc": 5,
+     "name": "refresh"
+    },
+    {
+     "end": 153,
+     "line": 149,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 202,
+     "line": 198,
+     "loc": 5,
+     "name": "load"
+    },
+    {
+     "end": 215,
+     "line": 211,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 233,
+     "line": 229,
+     "loc": 5,
+     "name": "done"
+    },
+    {
+     "end": 345,
+     "line": 341,
+     "loc": 5,
+     "name": "_closePreview"
+    },
+    {
+     "end": 29,
+     "line": 26,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 70,
+     "line": 67,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 276,
+     "line": 273,
+     "loc": 4,
+     "name": "_openFilePicker"
+    },
+    {
+     "end": 201,
+     "line": 199,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 220,
+     "line": 218,
+     "loc": 3,
+     "name": "exportSelected"
+    },
+    {
+     "end": 118,
+     "line": 118,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 185,
+     "line": 185,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 194,
+     "line": 194,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 291,
+     "line": 291,
+     "loc": 1,
+     "name": "onerror"
+    },
+    {
+     "end": 358,
+     "line": 358,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 374,
+     "line": 374,
+     "loc": 1,
+     "name": "documentById"
+    }
+   ],
+   "lines": 376,
+   "objects": [
+    {
+     "end": 372,
+     "gated": true,
+     "line": 4,
+     "loc": 369,
+     "methods": 27
+    },
+    {
+     "end": 49,
+     "gated": false,
+     "line": 44,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 110,
+     "gated": false,
+     "line": 107,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 114,
+     "gated": false,
+     "line": 114,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 238,
+     "gated": false,
+     "line": 238,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 245,
+     "gated": false,
+     "line": 245,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 298,
+     "gated": false,
+     "line": 298,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 325,
+     "gated": false,
+     "line": 325,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 45,
+    "max_object_loc": 369,
+    "max_object_methods": 27,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  }
+ ],
+ "totals": {
+  "files": 42,
+  "functions": 1144,
+  "lines": 12229,
+  "over_100": 5,
+  "over_30": 49,
+  "over_60": 8
+ }
+}

@@ -43,9 +43,9 @@ global.document = {
 global.localStorage = { setItem() {}, getItem() { return null; } };
 global.BridgeReady = { ready() {} };
 global.SashCore = SashCore;
-vm.runInThisContext(fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
-  '\nglobalThis.__SashGrid = SashGrid;');
-const SashGrid = global.__SashGrid;
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.sashGrid);
+const SashGrid = global.SashGrid;
 SashGrid.gridEl = grid;
 SashGrid.root = SashCore.defaultTree();
 SashGrid.closedWindows = new Set();

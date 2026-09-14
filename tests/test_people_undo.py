@@ -280,9 +280,18 @@ class TestPeopleHistoryCoexists(unittest.TestCase):
 class TestPeopleUndoFrontend(unittest.TestCase):
     """Structural checks that the shipped UI speaks the people history."""
 
+    # Round H (H-A5): the App surface spans the facade + part files;
+    # the UI contract is checked against the whole app family (same
+    # order as ui/index.html / tests/js_family.js).
+    APP_FAMILY = [
+        "core/ui-helpers.js", "app-bridge.js", "app-history.js",
+        "app-session.js", "app.js",
+    ]
+
     def setUp(self):
-        with open(os.path.join(UI_DIR, "js", "app.js"), encoding="utf-8") as fh:
-            self.app = fh.read()
+        self.app = "".join(
+            open(os.path.join(UI_DIR, "js", f), encoding="utf-8").read()
+            for f in self.APP_FAMILY)
         with open(os.path.join(UI_DIR, "js", "user-table.js"),
                   encoding="utf-8") as fh:
             self.table = fh.read()

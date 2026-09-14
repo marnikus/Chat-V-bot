@@ -50,7 +50,7 @@ def pytest_collection_modifyitems(config, items):
         fspath = str(item.fspath)
 
         # Gate
-        if any(k in fspath for k in ("rule16", "clone", "smell", "double_audit", "file_coverage", "stores_module")):
+        if any(k in fspath for k in ("rule16", "clone", "smell", "double_audit", "file_coverage", "stores_module", "js_gate", "js_size", "js_coverage")):
             item.add_marker("gate")
             item.add_marker("slow")
             continue
