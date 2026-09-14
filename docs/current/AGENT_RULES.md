@@ -581,27 +581,18 @@ reference implementation of that count is the AST walker in
 * **Over 300** — stop and look for the second responsibility before adding the
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
-* *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13 after Round G: **190 files, median 126, 4 still over
-  500** (was 171 / 136 / 7).
-  **`backend/` is no longer frozen.** Round G step G0 taught the AREA D snapshot
-  to walk into packages and to count a symbol defined in a submodule as owned by
-  its package, so the package remedy now works there too — proven by a
-  byte-identical dump of the unchanged tree and by three splits
-  (`chat_sync` 807, `scroll_parser` 706, `history_query` 603) that pass
-  `test_backend_api_snapshot.py` **unrefreshed**. Worst MI is now 24.9, mean
-  68.08. Rules, proof and the remaining candidates:
-  [`AREA_D_DECISION_2026-09-13.md`](../archive/2026-09-13-round-g/AREA_D_DECISION_2026-09-13.md).
-  Two constraints on that freedom, both non-negotiable: the package `__init__`
-  must re-export the previous public surface **verbatim** (`owns()` does not
-  make an un-exported symbol appear); and **when size and LCOM disagree, LCOM
-  wins** — G3 split the module around `HistoryQuery` (LCOM 0.74) and left the
-  class whole, because splitting a cohesive class by line count raises coupling
-  to lower a number. Of the four files still over 500,
-  `bridge/history_bridge.py` carries step F4's §18.5 note naming its
-  QWebChannel slot contract; the other three are now *unblocked* debt rather
-  than exemptions. Known debt (§16.5 landmines): do not grow them, extract when
-  you next touch.
+* **No area is frozen.** `backend/` included: Round G step G0 taught the AREA D
+  snapshot to walk into packages, so the package remedy works everywhere. Two
+  non-negotiable constraints come with that freedom: a package `__init__` must
+  re-export the previous public surface **verbatim** (`owns()` does not make an
+  un-exported symbol appear), and **when size and LCOM disagree, LCOM wins** —
+  splitting a cohesive class by line count raises coupling to lower a number.
+* *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here
+  — files move. 2026-09-14 after Round I: **221 files, no file over 500, two
+  over 400** (`bridge/router.py`, `stores/history_schema_repair.py`), each with
+  a `# ideal-size:` header re-derived from measurement. The per-round history,
+  the AREA D unfreezing and its proof:
+  [`FILE_SIZE_HISTORY_2026-09-14.md`](../archive/2026-09-14-round-i/FILE_SIZE_HISTORY_2026-09-14.md).
 
 ### 18.2b Refactor growth budget — measure it in SLOC, not lines
 
@@ -659,7 +650,7 @@ working: the files in `docs/current/`, a root `CLAUDE.md` / `AGENTS.md`, a
 package-level README. The test is not "is it complete?" but **"can an agent read
 all of it and still have room for the code it must change?"**
 
-* That single test is why `docs/current/` holds three files and 78 are archived
+* That single test is why `docs/current/` holds three files and 96 are archived
   (RULE 17): a pointer outward beats a wall of prose.
 * **Over 200 lines**, move the detail into `docs/archive/<date>-<topic>/` (or a
   linked appendix) and leave the link here. A context file is a map, not the
@@ -672,19 +663,21 @@ all of it and still have room for the code it must change?"**
   detail into `docs/archive/` instead of adding lines.
 * `AGENT_RULES.md` is measured against a different budget: an agent must be able
   to load *all* the rules in one read, so splitting them would defeat the
-  purpose. **Budget: ~730 lines; measured 772 (2026-09-13).** Adding RULE 19
+  purpose. **Budget: ~730 lines; measured 793 (2026-09-14).** Adding RULE 19
   (2026-09-11) pushed it past the ~700 set when RULE 18 was written, and the
-  difference was paid by moving detail out, not by cutting norms: RULE 1's worked
-  code went to a linked appendix, the measurement dumps went to
-  `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, and the remediation prose that
-  RULE 18 and RULE 19 both carried now lives once, in RULE 19.
-  **It is over budget by ~42 lines and that is recorded, not hidden.** Round G
-  rewrote §18.2's frozen-`backend/` paragraph (the claim became false when G0
-  unblocked it) and compressed §18.3 to pay part of the cost; the rest is the
-  new constraint every future split needs — re-export verbatim, and LCOM beats
-  line count. The next edit here **extracts before it adds**: §18.2's per-file
-  history is the next candidate to move into the Round G archive, leaving the
-  norm and one link.
+  difference has been paid by moving detail out, not by cutting norms: RULE 1's
+  worked code went to a linked appendix, the measurement dumps went to
+  `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, the remediation prose that RULE
+  18 and RULE 19 both carried now lives once in RULE 19, and Round I moved
+  §18.2's per-file history and the AREA D unfreezing argument to
+  [`FILE_SIZE_HISTORY_2026-09-14.md`](../archive/2026-09-14-round-i/FILE_SIZE_HISTORY_2026-09-14.md)
+  (−19 lines) exactly as the previous revision of this bullet said the next
+  edit would.
+  **It is still over budget by ~63 lines and that is recorded, not hidden** —
+  the file grew by 28 in the interim (§18.2b's SLOC growth budget, and RULE
+  16's clone/vulture gate wording). The next edit here **extracts before it
+  adds**: §16.5's landmine list and §18.5's worked exemption examples are the
+  next candidates, leaving the norm and one link each.
 
 ### 18.5 When you exceed an ideal
 
