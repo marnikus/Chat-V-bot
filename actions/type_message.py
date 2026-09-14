@@ -29,7 +29,7 @@ class TypeMessage(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         if self.use_composer:
             composer_text = getattr(engine, "composer_text", "") or ""
             if not composer_text.strip():

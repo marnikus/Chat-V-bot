@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **92 archived ones**. That is
+This repository has **three current docs** and **100 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 92 archived docs
+    ├── README.md                    ← index of all 100 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -29,9 +29,11 @@ docs/
     ├── 2026-09-11-rules-appendices/
     ├── 2026-09-12-db-undo-restore-port/  ← porting it here
     ├── 2026-09-12-round-f-size-tail/ ← Round F: the size tail + the two god classes
+    ├── 2026-09-13-ai-bot-chat/       ← the AI Bot Chat window + Grok Prompt Editor, six rounds
     ├── 2026-09-13-round-f/           ← Round F's F5 parameter-object step
     ├── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the executed steps G1–G7
-    └── 2026-09-13-rules-appendices/  ← RULE 19's ladder + case studies, extracted from the rules file (newest)
+    ├── 2026-09-13-rules-appendices/  ← RULE 19's ladder + case studies, extracted from the rules file
+    └── 2026-09-13-speed-multiplier/  ← global wait-speed multiplier (newest)
 ```
 
 Also in the repo, not under `docs/`:
@@ -40,7 +42,7 @@ Also in the repo, not under `docs/`:
 |---|---|
 | [`README.md`](../README.md) | User manual: install, Chrome flags, UI tour |
 | [`reports/`](../reports/) | Measured code-quality snapshots (the coverage/complexity **baseline** the rules compare against) |
-| `tests/` | The executable spec — 173 Python test files + 28 Node harness files |
+| `tests/` | The executable spec — 178 Python test files + 31 Node harness files |
 
 ---
 

@@ -17,8 +17,11 @@ shape as the G7 §3 `_Parts` bundle).
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Optional
+
+from actions.speed import read_multiplier, scale_ms
 
 from actions.scroll_parse import PipelineRun, ScrollCallbacks
 from backend.cdp_client import CDPClient
@@ -26,6 +29,26 @@ from backend.person_filter import PersonFilter
 from backend.scroll_parser import CollectResult, ScrollOptions, ScrollParser
 
 log = logging.getLogger("chatbot")
+
+
+
+def _with_run_speed(parser, engine):
+    """The parser's pacing knobs, scaled by the run's wait-speed rate.
+
+    Wraps the built parser in ONE expression so `_collect` keeps its exact
+    G7.5 line count (the ScrollRunPart ratchet must not grow). Lives beside
+    the run pipeline — this module is the helper's ONE caller — and uses
+    `dataclasses.replace` so `backend/scroll_parser.py`, a RULE 16.5
+    landmine, stays untouched, as the feature's design doc §4 requires.
+    """
+    if read_multiplier(engine) != 1.0:
+        options = parser.options
+        parser.options = dataclasses.replace(
+            options,
+            pause_ms=scale_ms(options.pause_ms, engine),
+            load_timeout_ms=scale_ms(options.load_timeout_ms, engine),
+            confirm_pause_ms=scale_ms(options.confirm_pause_ms, engine))
+    return parser
 
 
 class ScrollRunPart:
@@ -191,11 +214,11 @@ class ScrollRunPart:
         cbs = run.cbs or ScrollCallbacks()
         on_collect, on_reject, should_stop = self._hooks(
             run.engine, cbs.on_collect, cbs.on_reject, cbs.should_stop)
-        parser = self.build_parser(
+        parser = _with_run_speed(self.build_parser(
             cdp, run.panel_criteria,
             ScrollCallbacks(log_cb=self._binder(run.engine),
                             on_collect=on_collect, on_reject=on_reject,
-                            should_stop=should_stop))
+                            should_stop=should_stop)), run.engine)
         result = await parser.collect(
             min_new_users=block.min_new_users,
             known_messaged=run.known_messaged or set(),

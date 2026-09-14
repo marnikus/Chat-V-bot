@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**93 documents in 19 groups.**
+**100 documents in 21 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -29,9 +29,11 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-11-rules-appendices/`](#2026-09-11-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 1's worked visual-click examples. |
 | [`2026-09-12-db-undo-restore-port/`](#2026-09-12-db-undo-restore-port) | 1 | Porting that feature onto the CC-tail tree by hand (the branches have unrelated histories): the four merge conflicts, the write-gate bug the port exposed, and the re-measured RULE 16 / RULE 18 numbers. |
 | [`2026-09-12-round-f-size-tail/`](#2026-09-12-round-f-size-tail) | 2 | Round F: the 500-line file tail. Why the frozen AREA D snapshot blocks splitting the two worst files, the `services/db_deletion.py` split that it does not block, and the decomposition of the two god classes the snapshot does not cover — `Collector` and `UndoService`. |
+| [`2026-09-13-ai-bot-chat/`](#2026-09-13-ai-bot-chat) | 6 | The AI Bot Chat window and the Grok Prompt Editor: the four-service + bridge design, the six-defect round, multi-provider settings with the variable library and the blank-media fix, named connections with prompt presets and the history scope, the settings-popup home with the dark-select rebuild, and the browsing-vs-choosing connection-picker redesign. |
 | [`2026-09-13-round-f/`](#2026-09-13-round-f) | 1 | Round F's parameter-object step (F5): the abandoned `_v2` attempt it replaced, the in-place migration pattern, the 19 migrated signatures, and the seven `stores/` functions a frozen contract blocks. |
 | [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 7 | Round G: the complete post-Round-F tail inventory with fresh measurements, the prioritised G1–G7 step plan, and the executed steps G1–G7 — the red suite at HEAD and the `WriteTurn` union fix (F3c), the two worst-file family splits under the lifted freezes, the flow/injector splits plus the ladder and constructor reductions, and the wide-parameter continuation that took the >4-param walker from 51 to its 18-entry floor, the test-debt step that took the three undo modules to 100% and paid the F6b module-wide mutation run, the hygiene step that zeroed the tree's cognitive-17 offenders and paid the rules file back inside its budget, and the backlog step that gave the JavaScript side its first coverage measurement, migrated all seven deferred stores wide-parameter offenders (the >4-param walker 18 → its documented 11-entry floor, the stores API baseline refreshed in-step), took `HistoryExportService` from 21 to 14 methods and split `StackBridge`/`ScrollParse` into wire facades plus cohesive parts with zero golden drift. |
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
+| [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 
 ---
 
@@ -342,3 +344,15 @@ answer as a *pending* card behind an explicit ✅ / ❌ / 🔄 verification step
 - [`CONNECTIONS_POPUP_DARK_SELECT_2026-09-13.md`](2026-09-13-ai-bot-chat/CONNECTIONS_POPUP_DARK_SELECT_2026-09-13.md) — The fifth round, fixing what the fourth left half-done: connection *storage* had moved out of the Prompt Editor but a connection *chooser* stayed behind, so two windows could change which AI runs and the user had to guess which won. The editor now holds prompt controls only and the ⚙ popup is the single home for "which AI, which key, which model". Two smaller defects have the more interesting causes. Only Grok was selectable because a connection is user-created and a fresh install has none — Google was a provider the app supported and the UI could not reach, fixed by seeding one keyless row per provider (visible, flagged "no API key", refused by `client_for` until a key exists). And the dropdowns were white on a black app because no CSS can theme a native `<select>`: the open list is drawn by the OS. The fix was to stop using one — `dark-select.js` rebuilds the Bookmarks popup's own `.layout-menu` / `.lm-sub` classes as a shared component, so "matches Bookmarks" holds by construction rather than by two stylesheets kept in step by hand. The round also caught the ⚙ being wired by both modules at once, and a test-stub that handed every module a bare `<div>` — which is why no test had been able to notice any of it.
 - [`CONNECTION_PICKER_REDESIGN_2026-09-13.md`](2026-09-13-ai-bot-chat/CONNECTION_PICKER_REDESIGN_2026-09-13.md) — The sixth round, and the first whose core defect is conceptual rather than technical: the popup could not tell *browsing* from *choosing*. Clicking a connection to look at it was read by the app as committing to it, so a user comparing three connections had already changed the answer by the time they finished reading. The fix names the two states apart — `viewed` is what the form shows, `active` is what prompts run on — and gives the second exactly one mover: **Select**, the only button that closes on confirm. The same confusion had a second victim in presets, where choosing and applying were one gesture; they are now a highlight and a separate **Apply Preset Settings** button that writes the fields and leaves them editable, because a value the app filled in silently is a value the user cannot check. Also here: a two-column master/detail layout, one `.ui-btn` component so a row of buttons differs only in semantic colour, and Kimi — which cost a single row in the `PROVIDERS` table, the payoff of that table existing. Adding it broke three unrelated tests that had hardcoded the provider list, which is its own small lesson about what a test should derive rather than restate.
 
+## 2026-09-13-speed-multiplier
+
+The SPEED_MULTIPLIER action block and the `actions/speed.py` helpers behind it: one float coefficient
+(1.0 = normal, 0.5 = 2x faster, 2.0 = 2x slower) scaling every user-facing wait of the run — pre-delays,
+pauses, visual-confirmation holds, page waits, scroll pacing, attach verification and history chunk pauses.
+The semantics are global (last enabled SPEED block wins, resolved at run start) rather than positional,
+because Scroll & Parse runs at cycle level before the per-user loop, so "blocks below it" could never scale
+the longest waits of all.
+
+*1 doc.*
+
+- [`SPEED_MULTIPLIER_DESIGN_2026-09-13.md`](2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) — The semantics decision and its rationale, the full inventory of which waits scale and which do not (stop slices, retry backoff, protocol gaps and cosmetic highlight durations are out of scope), the rejected `ScrollOptions.speed_multiplier` field (it would force a 20th parameter onto a RULE 16.5 legacy constructor), and the RULE 16 measurements.

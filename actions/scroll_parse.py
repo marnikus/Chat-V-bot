@@ -218,7 +218,7 @@ class ScrollParse(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         panel = getattr(engine, "criteria", None) if engine else None
         result = await self.run_pipeline(cdp, PipelineRun(engine=engine, panel_criteria=panel))
         if result.seeking and not result.collected:

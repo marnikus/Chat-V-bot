@@ -45,6 +45,21 @@ OWNED = [
     ("backend/history_query.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
+    # ── Speed multiplier (2026-09-13, ported onto the G line) ────
+    ("actions/speed.py", None, "coerce_multiplier"),
+    ("actions/speed.py", None, "read_multiplier"),
+    ("actions/speed.py", None, "scale_ms"),
+    ("actions/speed.py", None, "_fmt_rate"),
+    ("actions/speed.py", None, "describe"),
+    ("actions/speed.py", None, "_is_active_speed"),
+    ("actions/speed.py", None, "resolve_stack_multiplier"),
+    ("actions/speed_multiplier.py", "SpeedMultiplier", "__init__"),
+    ("actions/speed_multiplier.py", "SpeedMultiplier", "execute"),
+    # the feature's two touchpoints inside already-split G-line modules:
+    ("actions/scroll_parse_run.py", None, "_with_run_speed"),
+    ("services/run/run_lifecycle.py", "RunLifecycleMixin",
+     "_resolve_run_speed"),
+    ("actions/base.py", "BaseAction", "pre_delay"),
     # ── AI Bot Chat + Grok Prompt Editor (2026-09-13) ────────────
     ("services/bot_grok.py", None, "mask"),
     ("services/bot_grok.py", 'GrokSettings', "__init__"),
@@ -204,9 +219,18 @@ OWNED = [
 # The method count drops by one because the gate counts nested defs through
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
+# `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
+# ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
+# documents, shipped while the file sat outside the OWNED scan. The Speed
+# port (2026-09-13) registers the file here, so the class becomes gated;
+# it is frozen at exactly that size — the port's `_with_run_speed` helper
+# is module-level and the call site is net-zero lines, deliberately, so the
+# ratchet could not be handed any growth.
 RATCHET = {
     ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
     ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
+                                                       "methods": 12},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is

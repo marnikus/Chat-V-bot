@@ -742,6 +742,26 @@
     "text": "''"
    }
   },
+  "SPEED_MULTIPLIER": {
+   "class": "actions.speed_multiplier.SpeedMultiplier",
+   "init": "(self, multiplier: float = 1.0, **kw)",
+   "schema": {
+    "multiplier": {
+     "default": "1.0",
+     "label": "'Speed coefficient — 1.0 = normal'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "multiplier"
+   ],
+   "to_dict": {
+    "block_id": "'SPEED_MULTIPLIER'",
+    "enabled": "True",
+    "multiplier": "1.0",
+    "pre_delay_ms": "0"
+   }
+  },
   "TAKE_PERSON": {
    "class": "actions.take_person.TakePerson",
    "init": "(self, pick_mode: str = 'random_new', **kw)",
@@ -864,7 +884,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -918,7 +938,7 @@
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      }
     },
@@ -996,7 +1016,7 @@
      "inherited": {
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1027,7 +1047,7 @@
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1057,7 +1077,7 @@
       "as_dict": "(self) -> 'dict'",
       "display_name": "<property>",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1137,7 +1157,7 @@
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1181,7 +1201,7 @@
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1223,7 +1243,7 @@
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1255,7 +1275,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1318,7 +1338,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'"
+      "pre_delay": "(self, engine=None) -> 'None'"
      },
      "methods": {
       "__init__": "(self, target: 'str' = 'active', mode: 'str' = 'incremental', require_private: 'bool' = True, max_messages: 'int' = 0, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40, download_media: 'bool' = True, fail_if_empty: 'bool' = False, **kwargs)",
@@ -1359,7 +1379,7 @@
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1384,7 +1404,8 @@
       "criteria": "None",
       "history": "None",
       "memory": "None",
-      "selected_nick": "''"
+      "selected_nick": "''",
+      "speed_multiplier": "1.0"
      },
      "bases": [
       "object"
@@ -1433,11 +1454,15 @@
       "selected_nick": {
        "default": "''",
        "type": "str"
+      },
+      "speed_multiplier": {
+       "default": "1.0",
+       "type": "float"
       }
      },
      "inherited": {},
      "methods": {
-      "__init__": "(self, cdp: 'Any' = None, memory: 'Any' = None, criteria: 'Any' = None, history: 'Any' = None, report_fn: 'Callable[..., None]' = <function ActionContext.<lambda> at 0xADDR>, composer_text: 'str' = '', selected_nick: 'str' = '', _stop_checker: 'Optional[Callable[[], bool]]' = None, _mark_messaged: 'Optional[Callable[[str], Any]]' = None, _unmessaged_nicks: 'Optional[Callable[[], Any]]' = None, _queue_order: 'Optional[Callable[[list], list]]' = None) -> None",
+      "__init__": "(self, cdp: 'Any' = None, memory: 'Any' = None, criteria: 'Any' = None, history: 'Any' = None, report_fn: 'Callable[..., None]' = <function ActionContext.<lambda> at 0xADDR>, composer_text: 'str' = '', selected_nick: 'str' = '', speed_multiplier: 'float' = 1.0, _stop_checker: 'Optional[Callable[[], bool]]' = None, _mark_messaged: 'Optional[Callable[[str], Any]]' = None, _unmessaged_nicks: 'Optional[Callable[[], Any]]' = None, _queue_order: 'Optional[Callable[[list], list]]' = None) -> None",
       "is_stopping": "(self) -> 'bool'",
       "mark_person_messaged": "(self, nick: 'str') -> 'str'",
       "note_selected": "(self, nick: 'str') -> 'None'",
@@ -1481,7 +1506,7 @@
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1519,7 +1544,7 @@
      "inherited": {
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1557,7 +1582,7 @@
       "display_name": "<property>",
       "marker_message": "(self, user_nick: 'str') -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1626,7 +1651,7 @@
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1726,7 +1751,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1763,12 +1788,62 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
       "__init__": "(self, text: str = '', pre_delay_ms: int = 500, **kw)",
       "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.speed": {
+   "classes": {},
+   "functions": {
+    "coerce_multiplier": "(value) -> 'float'",
+    "describe": "(multiplier) -> 'str'",
+    "read_multiplier": "(engine) -> 'float'",
+    "resolve_stack_multiplier": "(blocks) -> 'float'",
+    "scale_ms": "(ms, engine=None) -> 'int'"
+   },
+   "values": {}
+  },
+  "actions.speed_multiplier": {
+   "classes": {
+    "SpeedMultiplier": {
+     "ancestry": [
+      "SpeedMultiplier",
+      "MarkerBlock",
+      "DeclaredSettings",
+      "BaseAction",
+      "ABC",
+      "object"
+     ],
+     "attrs": {
+      "FIELDS": "(BlockField(name='multiplier', type='number', label='Speed coefficient — 1.0 = normal', default=<object object at 0x…>, options=(), help='', clean=<function coerce_multiplier at 0x…>, request=None),)",
+      "block_id": "'SPEED_MULTIPLIER'",
+      "icon": "'⏩'",
+      "name": "'Speed Multiplier'"
+     },
+     "bases": [
+      "MarkerBlock"
+     ],
+     "fields": {},
+     "inherited": {
+      "as_dict": "(self) -> 'dict'",
+      "config_schema": "(self) -> 'dict'",
+      "display_name": "<property>",
+      "marker_message": "(self, user_nick: 'str') -> 'str'",
+      "panel_schema": "(self) -> 'dict'",
+      "pre_delay": "(self, engine=None) -> 'None'",
+      "to_dict": "(self) -> 'dict'"
+     },
+     "methods": {
+      "__init__": "(self, multiplier: float = 1.0, **kw)",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
      }
     }
@@ -1796,7 +1871,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1831,7 +1906,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1864,7 +1939,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
