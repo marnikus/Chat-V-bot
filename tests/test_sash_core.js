@@ -420,6 +420,64 @@ t('every preset shows every window', () => {
   }
 });
 
+// ── minimum-size reflow (enforceMinimums / minimumExtent) ───────
+
+t('minimumExtent sums along the axis and takes the max across it', () => {
+  const opts = { minPx: 96, sashPx: 6 };
+  ok(S.minimumExtent(S.leaf('a'), 'col', opts) === 96, 'leaf needs minPx');
+  const stacked = S.split('col', [S.leaf('a'), S.leaf('b')], [50, 50]);
+  ok(S.minimumExtent(stacked, 'col', opts) === 198, 'stack sums + sash');
+  ok(S.minimumExtent(stacked, 'row', opts) === 96, 'across the axis: max');
+  const sideBySide = S.split('row', [S.leaf('a'), S.leaf('b')], [50, 50]);
+  ok(S.minimumExtent(sideBySide, 'row', opts) === 198, 'row sums widths');
+});
+
+t('enforceMinimums lifts a 50/50 drop out of a too-short slot', () => {
+  // bug 5 repro: log dropped below composer → col [composer, log] inside a
+  // 13 % slot (104 px of an 800 px grid) — both children below the 96 px min.
+  let tree = S.moveWindow(S.defaultTree(), 'log',
+    { kind: 'edge', target: 'composer', dir: 'col', newFirst: false });
+  const heights = (node, h, out) => {
+    if (S.isLeaf(node)) { out.push(h); return out; }
+    const gap = 6 * (node.children.length - 1);
+    node.children.forEach((c, i) => heights(c,
+      node.dir === 'col' ? (h - gap) * node.sizes[i] / 100 : h, out));
+    return out;
+  };
+  const before = heights(tree, 800, []).filter((h) => h < 96).length;
+  ok(before > 0, 'the blind 50/50 split does violate the minimum');
+  const res = S.enforceMinimums(tree, 1400, 900, { minPx: 96, sashPx: 6 });
+  ok(res.changed === true, 'the fix reports a change');
+  ok(S.validate(res.tree) === null, 'tree stays valid');
+  const after = heights(res.tree, 900, []).filter((h) => h < 95.999).length;
+  ok(after === 0, 'every leaf keeps the minimum at a feasible viewport: ' + after);
+  const again = S.enforceMinimums(res.tree, 1400, 900);
+  ok(again.changed === false, 'idempotent');
+});
+
+t('enforceMinimums degrades fairly when the minimums cannot fit', () => {
+  // 800 px cannot hold two stacked pairs (780 px of requirements + sashes):
+  // sizes go proportional to the requirements instead of overflowing one row.
+  let tree = S.moveWindow(S.defaultTree(), 'log',
+    { kind: 'edge', target: 'composer', dir: 'col', newFirst: false });
+  const res = S.enforceMinimums(tree, 1400, 800);
+  ok(res.changed && S.validate(res.tree) === null, 'still a valid tree');
+  const spread = Math.max(...res.tree.sizes) - Math.min(...res.tree.sizes);
+  ok(spread < 20, 'no row keeps a giant share while another starves');
+});
+
+t('enforceMinimums is a no-op for headless callers and healthy trees', () => {
+  const tree = S.defaultTree();
+  ok(S.enforceMinimums(tree, 0, 0).changed === false, 'no viewport, no guess');
+  // 1400×1600 is the smallest common viewport where the default tree's
+  // deepest nested panel (config at 28 % of row 1) clears 96 px.
+  ok(S.enforceMinimums(tree, 1400, 1600).changed === false,
+    'a feasible default tree is left alone');
+  ok(S.enforceMinimums(tree, 1400, 1200).changed === true,
+    'at 1200 px the default tree DOES violate the minimum — and is fixed');
+  ok(S.enforceMinimums(tree, 1400, 1600).tree !== tree, 'returns a copy');
+});
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('sash_core: ' + passed + ' passed, ' + failed + ' failed');

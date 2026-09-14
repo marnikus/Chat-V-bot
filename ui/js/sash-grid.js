@@ -76,6 +76,7 @@ const SashGrid = {
     this.minimizedWindows = new Set();
 
     this.root = this._loadTree() || SashCore.defaultTree();
+    this._enforceMinimums();
     this._loadWindowStates();
     this.render();
     this._loadFromBackend();
@@ -183,6 +184,7 @@ const SashGrid = {
           if (!res.ok) return;
           if (raw === SashCore.serialize(this.root)) return;
           this.root = res.tree;
+          this._enforceMinimums();
           this.render();
         });
       }
@@ -261,45 +263,28 @@ const SashGrid = {
       windows, window_states: effectiveStates, screen };
   },
 
-  _portableStates(doc) {
-    const state = doc.window_states;
-    if (!state || !Array.isArray(state.closed) || !Array.isArray(state.minimized))
-      return { ok: false, error: 'window_states must contain closed and minimized lists' };
-    const known = (id) => typeof id === 'string' && SashCore.WINDOW_IDS.includes(id);
-    if (!state.closed.every(known) || !state.minimized.every(known))
-      return { ok: false, error: 'window_states contains an unknown window' };
-    if (new Set(state.closed).size !== state.closed.length || new Set(state.minimized).size !== state.minimized.length)
-      return { ok: false, error: 'window_states contains a duplicate window' };
-    if (state.closed.some((id) => state.minimized.includes(id)))
-      return { ok: false, error: 'closed and minimized window states overlap' };
-    return { ok: true, states: { closed: state.closed.slice(), minimized: state.minimized.slice() } };
+  /** Recommit the tree with every window's minimum extent preserved.
+   *  Blind-percent commits (drops, even resets, installed layouts, imported
+   *  presets, boot) can hand a split less pixels than its children need;
+   *  SashCore.enforceMinimums redistributes so sashes never overflow out of
+   *  reach (bug 5). Returns whether the tree moved. */
+  _enforceMinimums() {
+    const rect = this.gridEl && this.gridEl.getBoundingClientRect
+      ? this.gridEl.getBoundingClientRect() : null;
+    if (!rect || !(rect.width > 0) || !(rect.height > 0)) return false;
+    const res = SashCore.enforceMinimums(this.root, rect.width, rect.height,
+      { minPx: this.MIN_PX, sashPx: this.SASH_W });
+    if (!res.changed) return false;
+    this.root = res.tree;
+    return true;
   },
 
-  _portableWindows(doc, states) {
-    if (!Array.isArray(doc.windows) || doc.windows.length !== SashCore.WINDOW_IDS.length)
-      return { ok: false, error: 'windows do not contain the current window set' };
-    const seen = new Set();
-    for (const item of doc.windows) {
-      if (!item || typeof item.id !== 'string' || seen.has(item.id) || !SashCore.WINDOW_IDS.includes(item.id))
-        return { ok: false, error: 'windows contain an unknown or duplicate id' };
-      const wanted = states.closed.includes(item.id) ? 'closed'
-        : (states.minimized.includes(item.id) ? 'minimized' : 'open');
-      if (item.state !== wanted || !this._validPortableBounds(item.bounds))
-        return { ok: false, error: 'window state or normalized bounds are invalid' };
-      seen.add(item.id);
-    }
-    if (seen.size !== SashCore.WINDOW_IDS.length)
-      return { ok: false, error: 'windows do not contain the current window set' };
-    return { ok: true };
-  },
-
-  _validPortableBounds(bounds) {
-    if (!bounds || typeof bounds !== 'object') return false;
-    const values = ['x', 'y', 'width', 'height'].map((key) => bounds[key]);
-    if (!values.every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)) return false;
-    return bounds.x + bounds.width <= 1.001 && bounds.y + bounds.height <= 1.001;
-  },
-
+  /**
+   * Adaptive validation of a portable preset document (2026-09-14):
+   * window-set drift is repaired and REPORTED (PresetAdapt), structural
+   * corruption still refuses. The canonical output carries the CURRENT
+   * window set, so re-saving an imported document round-trips strictly.
+   */
   validatePortablePreset(raw) {
     let doc;
     try { doc = typeof raw === 'string' ? JSON.parse(raw) : SashCore.clone(raw); }
@@ -311,14 +296,16 @@ const SashGrid = {
     if (typeof doc.name !== 'string' || !doc.name.trim() || doc.name.trim().length > 80)
       return { ok: false, error: 'preset name must be 1–80 characters' };
     const grid = doc.grid;
-    if (!grid || grid.type !== 'sash-tree' || grid.sizes_unit !== 'percent' || grid.window_count !== SashCore.WINDOW_IDS.length)
+    const entries = Array.isArray(doc.windows) ? doc.windows : null;
+    if (!grid || grid.type !== 'sash-tree' || grid.sizes_unit !== 'percent' ||
+        (entries && grid.window_count !== entries.length))
       return { ok: false, error: 'grid metadata is invalid' };
-    const treeResult = SashCore.deserialize(JSON.stringify({ v: grid.version, tree: grid.tree }));
-    if (!treeResult.ok) return { ok: false, error: 'invalid grid tree: ' + treeResult.error };
-    const stateResult = this._portableStates(doc);
-    if (!stateResult.ok) return stateResult;
-    const windowResult = this._portableWindows(doc, stateResult.states);
-    if (!windowResult.ok) return windowResult;
+    const treeRes = PresetAdapt.adaptTree(grid.tree, grid.version);
+    if (!treeRes.ok) return { ok: false, error: 'invalid grid tree: ' + treeRes.error };
+    const statesRes = PresetAdapt.adaptStates(doc.window_states);
+    if (!statesRes.ok) return statesRes;
+    const winsRes = PresetAdapt.adaptWindows(entries, statesRes.states);
+    if (!winsRes.ok) return winsRes;
     const screen = doc.screen;
     const dpr = screen && screen.device_pixel_ratio === undefined
       ? 1 : screen && screen.device_pixel_ratio;
@@ -331,9 +318,13 @@ const SashGrid = {
     clean.name = clean.name.trim();
     clean.app_version = clean.app_version.trim();
     clean.screen.device_pixel_ratio = dpr;
-    clean.grid.tree = treeResult.tree;
-    clean.grid.version = SashCore.VERSION;
+    clean.grid = { type: 'sash-tree', version: SashCore.VERSION,
+      window_count: SashCore.WINDOW_IDS.length, sizes_unit: 'percent',
+      tree: treeRes.tree };
+    clean.windows = winsRes.windows;
+    clean.window_states = statesRes.states;
     return { ok: true, document: clean,
+      report: PresetAdapt.buildReport(treeRes, statesRes, winsRes, winsRes.windows),
       warning: clean.app_version === this.APP_VERSION ? '' : 'preset was created by app ' + clean.app_version };
   },
 
@@ -341,7 +332,7 @@ const SashGrid = {
     const result = this.validatePortablePreset(raw);
     if (!result.ok) {
       if (typeof LogConsole !== 'undefined') LogConsole.log('❌ Window preset not applied: ' + result.error, 'error');
-      return false;
+      return { ok: false, error: result.error };
     }
     const doc = result.document;
     this.root = SashCore.clone(doc.grid.tree);
@@ -352,11 +343,16 @@ const SashGrid = {
       panel.classList.remove('hidden');
       if (panel.style && panel.style.display === 'none') panel.style.display = '';
     });
+    this._enforceMinimums();
     this.render();
     this._save();
     this._saveWindowStates();
-    if (typeof LogConsole !== 'undefined') LogConsole.log('✅ Window preset “' + doc.name + '” restored', 'success');
-    return true;
+    if (typeof LogConsole !== 'undefined') {
+      LogConsole.log('✅ Window preset “' + doc.name + '” restored — ' +
+        result.report.applied.length + ' windows placed' +
+        PresetAdapt.reportSummary(result.report), 'success');
+    }
+    return { ok: true, report: result.report };
   },
 
   showAllWindows() {
@@ -373,6 +369,7 @@ const SashGrid = {
 
   resetToDefault() {
     this.root = SashCore.defaultTree();
+    this._enforceMinimums();
     this.closedWindows.clear();
     this.minimizedWindows.clear();
     this.showAllWindows();
@@ -395,6 +392,7 @@ const SashGrid = {
     const fn = SashCore.PRESETS[name];
     if (!fn) return false;
     this.root = fn();
+    this._enforceMinimums();
     this.render();
     this._save();
     if (typeof LogConsole !== 'undefined') {
@@ -1119,6 +1117,7 @@ const SashGrid = {
     this._cleanupDrag();
     if (spec) {
       this._applyDrop(d.id, spec);
+      this._enforceMinimums();
       this.render();
       this._save();
       this._flashLanded(d.id);
@@ -1277,6 +1276,7 @@ const SashGrid = {
     const n = (pEl.children.length + 1) / 2;
     const path = this._parsePath(pEl.dataset.path);
     this.root = SashCore.setSplitSizesByPath(this.root, path, new Array(n).fill(100 / n));
+    this._enforceMinimums();
     this.render();
     this._save();
     if (typeof LogConsole !== 'undefined') LogConsole.log('📏 Split reset to even sizes', 'info');
@@ -1333,6 +1333,7 @@ const SashGrid = {
       zone === 'bottom' ? { kind: 'edge', target: targetId, dir: 'col', newFirst: false } :
                           (() => { throw new Error('simulateDrop: bad zone ' + zone); })();
     this.root = SashCore.moveWindow(this.root, draggedId, drop);
+    this._enforceMinimums();
     this.render();
     this._save();
     return this.getTree();

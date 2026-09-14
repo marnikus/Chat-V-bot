@@ -30,11 +30,21 @@
 }
 .sash-row { flex-direction: row; }
 .sash-col { flex-direction: column; }
-/* Every direct child gets a usable floor in BOTH axes. The resize handler
-   applies the same floor in pixels before it commits the model sizes. */
-.sash-split > .sash-window,
-.sash-split > .sash-split {
+/* Every direct child gets a usable floor ALONG ITS SPLIT'S AXIS ONLY (a
+   row child needs width, a col child needs height — the cross extent is
+   the parent's, stretched). A dual-axis floor over-constrained nested
+   splits: flexbox forced the children to 96px each, the split box kept
+   its smaller percent size, and the children overflowed it — painting
+   over the NEXT rows and covering their sashes (bug 5, 2026-09-14). The
+   model side is SashCore.enforceMinimums, which redistributes sizes in
+   pixels on every blind-math commit; these minimums are the last-resort
+   floor for what the model could not fit. */
+.sash-row > .sash-window,
+.sash-row > .sash-split {
   min-width: var(--sash-min-panel);
+}
+.sash-col > .sash-window,
+.sash-col > .sash-split {
   min-height: var(--sash-min-panel);
 }
 .sash-split > .sash-window.sash-win-hidden { min-width: 0; min-height: 0; }
@@ -58,9 +68,12 @@
 .sash.sash-hidden { display: none; }
 .sash-window > .panel {
   flex: 1;
-  min-width: var(--sash-min-panel);
-  min-height: var(--sash-min-panel);
+  min-width: 0;
+  min-height: 0;
 }
+/* The panel floor follows the window's split axis, like the wrapper's. */
+.sash-row > .sash-window > .panel { min-width: var(--sash-min-panel); }
+.sash-col > .sash-window > .panel { min-height: var(--sash-min-panel); }
 .sash-window.sash-win-hidden > .panel { min-width: 0; min-height: 0; }
 
 /* — title bar = drag handle (full-bleed via negative margins) — */

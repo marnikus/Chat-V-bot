@@ -181,6 +181,73 @@
     return excess.map((s) => MIN_SIZE + (s / excessTotal) * remaining);
   }
 
+  // ── minimum-size reflow (row inserts must stay usable) ───────
+
+  /**
+   * The pixels `node` needs along `axis` ('row' = width, 'col' = height).
+   * A split ALONG the axis sums its children plus the fixed sashes between
+   * them; a split ACROSS the axis stretches, so its deepest child wins.
+   */
+  function minimumExtent(node, axis, opts) {
+    if (isLeaf(node)) return opts.minPx;
+    const reqs = node.children.map((c) => minimumExtent(c, axis, opts));
+    if (node.dir !== axis) return Math.max.apply(null, reqs);
+    return reqs.reduce((a, b) => a + b, 0) + opts.sashPx * (reqs.length - 1);
+  }
+
+  /**
+   * One split's pixel allocation: children below their requirement are
+   * lifted to it, donors with surplus give proportionally; when even the
+   * total minimum does not fit, space is shared proportionally to the
+   * requirements (fair degradation). null = nothing has to move.
+   */
+  function _fitAllocation(px, req) {
+    const need = px.map((p, i) => Math.max(0, req[i] - p));
+    const deficit = need.reduce((a, b) => a + b, 0);
+    if (deficit <= 0.5) return null;
+    const surplus = px.map((p, i) => Math.max(0, p - req[i]));
+    const total = surplus.reduce((a, b) => a + b, 0);
+    if (total >= deficit - 1e-9)
+      return px.map((p, i) => (need[i] ? req[i] : p - surplus[i] * deficit / total));
+    const reqTotal = req.reduce((a, b) => a + b, 0) || 1;
+    const inner = px.reduce((a, b) => a + b, 0);
+    return req.map((r) => inner * r / reqTotal);
+  }
+
+  /**
+   * Recalculate every split's sizes IN PIXELS so each window keeps `minPx`
+   * and each nested stack keeps its summed requirement — the row-insert
+   * contract "recalculate row heights and preserve minimum window sizes",
+   * and the fix for sashes being overflowed out of reach after moves.
+   * Pure: returns a NEW tree plus whether anything moved. A non-positive
+   * viewport (headless callers) is a no-op, never a guess.
+   */
+  function enforceMinimums(root, widthPx, heightPx, options) {
+    const opts = Object.assign({ minPx: 96, sashPx: 6 }, options || {});
+    const tree = clone(root);
+    if (!(widthPx > 0) || !(heightPx > 0)) return { tree: tree, changed: false };
+    let changed = false;
+    const walk = (node, w, h) => {
+      if (!isSplit(node)) return;
+      const inner = (node.dir === 'row' ? w : h) - opts.sashPx * (node.children.length - 1);
+      const req = node.children.map((c) => minimumExtent(c, node.dir, opts));
+      let px = node.sizes.map((s) => inner * s / 100);
+      const fitted = inner > 0 ? _fitAllocation(px, req) : null;
+      if (fitted) {
+        px = fitted;
+        const sizes = normalizeSizes(px.map((p) => p / inner * 100));
+        if (sizes.some((s, i) => Math.abs(s - node.sizes[i]) > 1e-6)) {
+          node.sizes = sizes;
+          changed = true;
+        }
+      }
+      node.children.forEach((c, i) =>
+        walk(c, node.dir === 'row' ? px[i] : w, node.dir === 'col' ? px[i] : h));
+    };
+    walk(tree, widthPx, heightPx);
+    return { tree: tree, changed: changed };
+  }
+
   // ── traversal ────────────────────────────────────────────────
 
   function isLeaf(node) { return node && node.t === 'leaf'; }
@@ -630,7 +697,7 @@
     MAX_DEPTH, MIN_SIZE, pruneTree, migrate,
     leaf, split, clone, firstLeafId,
     defaultTree, layoutA, layoutB, layoutC, PRESETS,
-    normalizeSizes,
+    normalizeSizes, minimumExtent, enforceMinimums,
     isLeaf, isSplit, forEachLeaf, leafIds, findNode, parentSplit,
     splitLeaf, insertAtSplitIndex, insertSibling, insertBetween,
     setSplitSizes,

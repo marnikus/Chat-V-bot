@@ -5,17 +5,17 @@ _header → _grid → _states → _windows → _screen → validate_document), e
 returning (value, error) and short-circuiting on the first error, so the order
 of the checks IS the error a caller sees. The WindowPresetService facade only
 delegates. Imports run one way: this module reads services.layout_service and
-nothing imports back. §6 of ROUND_F_DESIGN_2026-09-12.md rules out splitting the
-DAG, so a function past §18.1's ideal is decomposed in place, at seams the error
-precedence allows — the measurement is §12 of the same document.
-"""
+services.preset_adapt and nothing imports back. §6 of
+ROUND_F_DESIGN_2026-09-12.md ruled out splitting the DAG, so a function past
+§18.1's ideal is decomposed in place, at seams the error precedence allows.
 
-# ideal-size: 326 lines reason=§6 of ROUND_F_DESIGN_2026-09-12.md rules out
-# splitting this validator DAG — its functions are one short-circuiting chain and
-# the order of the checks is the error a caller sees. It sat one line under
-# §18.2's 300 ceiling before F7 decomposed _grid and validate_document per
-# §18.1, and every seam in a (value, error) chain costs three lines of plumbing.
-# Measured in §12: no function over 20 LOC, worst CC 8.
+Since the 2026-09-14 adaptive-restore round the set-membership checks live in
+services/preset_adapt.py (the mirror of ui/js/preset-adapt.js): window-set
+DRIFT is repaired and reported inside the document's `restore_report`, while
+structural corruption still short-circuits this DAG with the pinned errors.
+
+Design: docs/archive/2026-09-14-grid-rows-adaptive-restore/GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md
+"""
 
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ import math
 from datetime import datetime
 from typing import Any
 
+from services import preset_adapt
 from services.layout_service import LayoutService
 
 FORMAT = "chat-v-bot.window-preset"
 SCHEMA_VERSION = 1
 APP_VERSION = "0.1.0"
 GRID_TYPE = "sash-tree"
-_BOUNDS_KEYS = ("x", "y", "width", "height")
 
 
 def _decode(raw: Any) -> tuple[dict | None, str | None]:
@@ -97,159 +97,56 @@ def _header(doc: dict, name: str | None) -> tuple[dict | None, str | None]:
             "updated_at": _timestamp(doc.get("updated_at"), now)}, None
 
 
-def _grid_tree(grid: dict) -> tuple[Any | None, str | None]:
+def _grid_tree(grid: dict) -> tuple[Any | None, dict, str | None]:
+    """(tree, tree_report, error) — the JSON guard stays, then the set
+    drift is adapted (pruned/added) instead of refusing the document."""
     try:
-        raw = json.dumps({"v": grid.get("version"), "tree": grid.get("tree")},
-                         ensure_ascii=False)
+        json.dumps({"v": grid.get("version"), "tree": grid.get("tree")},
+                   ensure_ascii=False)
     except (TypeError, ValueError):
-        return None, "grid.tree must be JSON data"
-    canonical, error = LayoutService.canonical_grid_payload(raw)
+        return None, {}, "grid.tree must be JSON data"
+    tree, report, error = preset_adapt.adapt_tree(grid.get("tree"),
+                                                  grid.get("version"))
     if error:
-        return None, f"invalid grid tree: {error}"
-    return json.loads(canonical)["tree"], None
+        return None, {}, f"invalid grid tree: {error}"
+    return tree, report, None
 
 
-def _grid_limits(grid: dict, expected: int) -> str | None:
-    # Checked after the tree on purpose: a document with both faults has always
-    # reported the tree, and callers match on that message.
-    if grid.get("window_count") != expected:
-        return f"window_count must be {expected}"
-    if grid.get("sizes_unit") != "percent":
-        return "grid.sizes_unit must be 'percent'"
-    return None
-
-
-def _grid(doc: dict) -> tuple[dict | None, str | None]:
+def _grid(doc: dict) -> tuple[dict | None, dict, str | None]:
     grid = doc.get("grid")
     if not isinstance(grid, dict) or grid.get("type") != GRID_TYPE:
-        return None, "grid.type must be 'sash-tree'"
+        return None, {}, "grid.type must be 'sash-tree'"
     version = grid.get("version")
     if isinstance(version, bool) or not isinstance(version, int):
-        return None, "grid.version must be an integer"
-    tree, error = _grid_tree(grid)
+        return None, {}, "grid.version must be an integer"
+    tree, tree_report, error = _grid_tree(grid)
     if error:
-        return None, error
-    expected = len(LayoutService.WINDOW_IDS)
-    error = _grid_limits(grid, expected)
-    if error:
-        return None, error
+        return None, {}, error
+    # Internal consistency only: the count must describe the DOCUMENT's own
+    # windows list — the live set is what adaptation restores towards.
+    # Checked after the tree on purpose: a document with both faults has
+    # always reported the tree, and callers match on that message.
+    entries = doc.get("windows")
+    if isinstance(entries, list) and grid.get("window_count") != len(entries):
+        return None, {}, f"window_count must be {len(entries)}"
+    if grid.get("sizes_unit") != "percent":
+        return None, {}, "grid.sizes_unit must be 'percent'"
     return {"type": GRID_TYPE, "version": LayoutService.GRID_VERSION,
-            "window_count": expected, "sizes_unit": "percent",
-            "tree": tree}, None
+            "window_count": len(LayoutService.WINDOW_IDS),
+            "sizes_unit": "percent", "tree": tree}, tree_report, None
 
 
-def _id_list(value: Any, label: str) -> tuple[list[str] | None, str | None]:
-    if not isinstance(value, list):
-        return None, f"{label} must be a list"
-    known = set(LayoutService.WINDOW_IDS)
-    result = []
-    for item in value:
-        if not isinstance(item, str) or item not in known:
-            return None, f"{label} contains an unknown window"
-        if item in result:
-            return None, f"{label} contains a duplicate window"
-        result.append(item)
-    return result, None
+def _states(doc: dict) -> tuple[dict | None, list, str | None]:
+    return preset_adapt.adapt_states(doc.get("window_states"))
 
 
-def _states(doc: dict) -> tuple[dict | None, str | None]:
-    states = doc.get("window_states")
-    if not isinstance(states, dict):
-        return None, "window_states must be an object"
-    closed, error = _id_list(states.get("closed"), "closed")
-    if error:
-        return None, error
-    minimized, error = _id_list(states.get("minimized"), "minimized")
-    if error:
-        return None, error
-    overlap = set(closed).intersection(minimized)
-    if overlap:
-        return None, "closed and minimized window states overlap"
-    return {"closed": closed, "minimized": minimized}, None
+def _windows(doc: dict, states: dict) -> tuple[list | None, dict, str | None]:
+    return preset_adapt.adapt_windows(doc.get("windows"), states)
 
 
 def _number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) \
         and math.isfinite(value)
-
-
-def _bound_values(entry: dict) -> tuple[dict | None, str | None]:
-    bounds = entry.get("bounds")
-    if not isinstance(bounds, dict):
-        return None, "window bounds must be an object"
-    values = {key: bounds.get(key) for key in _BOUNDS_KEYS}
-    if not all(_number(value) for value in values.values()):
-        return None, "window bounds must contain finite numbers"
-    if any(value < 0 or value > 1 for value in values.values()):
-        return None, "window bounds must be normalized between 0 and 1"
-    return values, None
-
-
-def _bounds_extend_screen(values: dict) -> bool:
-    return values["x"] + values["width"] > 1.001 or \
-        values["y"] + values["height"] > 1.001
-
-
-def _bounds(entry: dict) -> tuple[dict | None, str | None]:
-    values, error = _bound_values(entry)
-    if error:
-        return None, error
-    if _bounds_extend_screen(values):
-        return None, "window bounds extend outside the screen"
-    return {key: round(value, 6) for key, value in values.items()}, None
-
-
-def _window_id(entry: dict, expected: set[str], seen: set[str]) -> tuple[str | None, str | None]:
-    wid = entry.get("id")
-    if isinstance(wid, str) and wid in expected and wid not in seen:
-        return wid, None
-    return None, "windows contain an unknown or duplicate id"
-
-
-def _window_state(entry: dict, wid: str, states: dict) -> tuple[str | None, str | None]:
-    wanted = "closed" if wid in states["closed"] else "open"
-    if wid in states["minimized"]:
-        wanted = "minimized"
-    if entry.get("state") != wanted:
-        return None, f"window {wid!r} has an inconsistent state"
-    return wanted, None
-
-
-def _window_entry(
-    entry: Any, expected: set[str], seen: set[str], states: dict
-) -> tuple[dict | None, str | None]:
-    if not isinstance(entry, dict):
-        return None, "each window entry must be an object"
-    wid, error = _window_id(entry, expected, seen)
-    if error:
-        return None, error
-    state, error = _window_state(entry, wid, states)
-    if error:
-        return None, error
-    bounds, error = _bounds(entry)
-    if error:
-        return None, f"window {wid!r}: {error}"
-    title = entry.get("title")
-    return {"id": wid, "title": title if isinstance(title, str) else wid,
-            "state": state, "bounds": bounds}, None
-
-
-def _windows(doc: dict, states: dict) -> tuple[list[dict] | None, str | None]:
-    entries = doc.get("windows")
-    if not isinstance(entries, list):
-        return None, "windows must be a list"
-    expected = set(LayoutService.WINDOW_IDS)
-    seen = set()
-    clean = []
-    for entry in entries:
-        window, error = _window_entry(entry, expected, seen, states)
-        if error:
-            return None, error
-        clean.append(window)
-        seen.add(window["id"])
-    if seen != expected:
-        return None, "windows do not contain the current window set"
-    return clean, None
 
 
 def _screen(doc: dict) -> tuple[dict | None, str | None]:
@@ -267,20 +164,23 @@ def _screen(doc: dict) -> tuple[dict | None, str | None]:
 
 
 def _document_body(doc: dict) -> tuple[dict | None, str | None]:
-    grid, error = _grid(doc)
+    grid, tree_report, error = _grid(doc)
     if error:
         return None, error
-    states, error = _states(doc)
+    states, states_skipped, error = _states(doc)
     if error:
         return None, error
-    windows, error = _windows(doc, states)
+    windows, win_parts, error = _windows(doc, states)
     if error:
         return None, error
     screen, error = _screen(doc)
     if error:
         return None, error
+    report = preset_adapt.build_report(tree_report, states_skipped,
+                                       win_parts, windows)
     return {"grid": grid, "windows": windows,
-            "window_states": states, "screen": screen}, None
+            "window_states": states, "screen": screen,
+            "restore_report": report}, None
 
 
 def validate_document(raw: Any, name: str | None = None) -> tuple[dict | None, str | None]:
@@ -307,7 +207,7 @@ class WindowPresetService:
 
     @classmethod
     def validate(cls, raw: Any, name: str | None = None):
-        return validate_document(raw, name)
+        return validate_document(raw, name=name)
 
     @staticmethod
     def compatibility_note(document: dict) -> str:

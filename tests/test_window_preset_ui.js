@@ -39,6 +39,8 @@ global.localStorage = { data: {}, getItem(k) { return this.data[k] || null; }, s
 global.Dialog = {};
 global.LogConsole = { log() {} };
 global.App = { bridge: null };
+global.SashCore = require('../ui/js/sash-core.js');
+global.PresetAdapt = require('../ui/js/preset-adapt.js');
 vm.runInThisContext(fs.readFileSync('ui/js/window-presets.js', 'utf8') +
   '\nglobalThis.__WindowPresets = WindowPresets;');
 const presets = global.__WindowPresets;
@@ -67,7 +69,12 @@ test('valid restore data creates a visual preview without applying it', () => {
   global.SashGrid = {
     validatePortablePreset(value) {
       if (value === 'bad') return { ok: false, error: 'bad JSON' };
-      return { ok: true, document: value, warning: '' };
+      return { ok: true, document: value, warning: '',
+        report: { applied: ['stats'], skipped: [], added: [], corrected: [] } };
+    },
+    applyPortablePreset(value) {
+      return { ok: true, report: { applied: [], corrected: [], added: [],
+        skipped: [{ id: 'ghost', reason: global.PresetAdapt.REASON.unknown }] } };
     },
     _screenSnapshot() { return { width: 1400, height: 900 }; },
     gridEl: null,
@@ -83,6 +90,21 @@ test('valid restore data creates a visual preview without applying it', () => {
   assert(elements.layoutMenu.className.includes('hidden'), 'grid menu closes for preview');
   assert(elements.windowPresetPreviewCanvas.children.length === 1, 'preview tile');
   assert(elements.windowPresetPreviewCanvas.children[0].textContent === 'Stats', 'tile label');
+});
+
+test('applying a previewed preset explains skipped windows in the status', () => {
+  presets._applyPreview();
+  assert(elements.windowPresetStatus.textContent.includes('ghost'),
+    'status names the skipped window');
+  assert(elements.windowPresetStatus.textContent.includes('unknown window in this build'),
+    'status carries the shared reason string');
+  assert(presets.pending === null, 'preview closed after apply');
+  // the next test asserts an unchanged pending preview — re-open one
+  presets._showPreview({ name: 'Desk', grid: { window_count: 1 },
+    screen: { width: 1400, height: 900 },
+    windows: [{ id: 'stats', title: 'Stats', state: 'open',
+      bounds: { x: 0, y: 0, width: 1, height: 1 } }] }, 'restore');
+  assert(presets.pending && presets.pending.action === 'restore', 'pending back');
 });
 
 test('invalid imported file reports an error and does not open a preview', () => {

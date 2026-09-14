@@ -27,6 +27,28 @@ def _bounds():
     ]
 
 
+def _entry(entries, wid):
+    return next(e for e in entries if e["id"] == wid)
+
+
+def _rename_leaf(node, old_id, new_id):
+    if isinstance(node, dict) and node.get("t") == "leaf":
+        if node.get("id") == old_id:
+            node["id"] = new_id
+        return
+    for child in (node or {}).get("children", []) if isinstance(node, dict) else []:
+        _rename_leaf(child, old_id, new_id)
+
+
+def _leaf_ids(node):
+    if isinstance(node, dict) and node.get("t") == "leaf":
+        return [node.get("id")]
+    ids = []
+    for child in (node or {}).get("children", []) if isinstance(node, dict) else []:
+        ids.extend(_leaf_ids(child))
+    return ids
+
+
 def _document():
     return {
         "format": FORMAT,
@@ -67,18 +89,65 @@ class TestWindowPresetService(unittest.TestCase):
             self.assertIsNone(parsed)
             self.assertIn(fragment, error)
 
-    def test_wrong_window_set_and_bad_bounds_are_refused(self):
-        missing = _document()
-        missing["windows"] = missing["windows"][:-1]
-        parsed, error = WindowPresetService.validate(missing)
-        self.assertIsNone(parsed)
-        self.assertIn("window", error)
+    def test_window_set_drift_and_bad_bounds_adapt_with_a_report(self):
+        from services import preset_adapt
 
+        # A dropped entry: the window comes back and is explained as added.
+        missing = _document()
+        dropped = missing["windows"].pop()
+        missing["grid"]["window_count"] = len(missing["windows"])
+        parsed, error = WindowPresetService.validate(missing)
+        self.assertIsNone(error)
+        added = {a["id"]: a["reason"]
+                 for a in parsed["restore_report"]["added"]}
+        self.assertEqual(added[dropped["id"]], preset_adapt.REASON_ADDED)
+        self.assertEqual(len(parsed["windows"]),
+                         len(LayoutService.WINDOW_IDS))
+        self.assertNotIn(dropped["id"], parsed["restore_report"]["applied"])
+
+        # Corrupt bounds: default position + a corrected report line.
         bad = _document()
-        bad["windows"][0]["bounds"]["width"] = 2
+        _entry(bad["windows"], "stats")["bounds"]["width"] = 2
         parsed, error = WindowPresetService.validate(bad)
-        self.assertIsNone(parsed)
-        self.assertIn("bounds", error)
+        self.assertIsNone(error)
+        corrected = {c["id"]: c["reason"]
+                     for c in parsed["restore_report"]["corrected"]}
+        self.assertEqual(corrected["stats"], preset_adapt.REASON_BOUNDS)
+        self.assertEqual(_entry(parsed["windows"], "stats")["bounds"],
+                         dict(preset_adapt.DEFAULT_BOUNDS))
+
+    def test_ghost_entries_states_and_leaves_are_skipped_not_fatal(self):
+        from services import preset_adapt
+
+        doc = _document()
+        doc["windows"].append({"id": "ghost", "title": "Ghost",
+                               "state": "open",
+                               "bounds": {"x": 0.0, "y": 0.0,
+                                          "width": 0.5, "height": 0.5}})
+        doc["grid"]["window_count"] = len(doc["windows"])
+        doc["window_states"]["closed"] = ["ghost"]
+        _rename_leaf(doc["grid"]["tree"], "stats", "ghost")
+        parsed, error = WindowPresetService.validate(doc)
+        self.assertIsNone(error)
+        report = parsed["restore_report"]
+        skipped = {s["id"]: s["reason"] for s in report["skipped"]}
+        self.assertEqual(skipped["ghost"], preset_adapt.REASON_UNKNOWN)
+        added = {a["id"] for a in report["added"]}
+        self.assertIn("stats", added)  # pruned leaf re-added by the tree pass
+        self.assertNotIn("ghost", _leaf_ids(parsed["grid"]["tree"]))
+        self.assertIn("stats", _leaf_ids(parsed["grid"]["tree"]))
+
+    def test_contradicting_entry_state_is_corrected_from_window_states(self):
+        from services import preset_adapt
+
+        doc = _document()
+        _entry(doc["windows"], "stats")["state"] = "closed"  # states say open
+        parsed, error = WindowPresetService.validate(doc)
+        self.assertIsNone(error)
+        corrected = {c["id"]: c["reason"]
+                     for c in parsed["restore_report"]["corrected"]}
+        self.assertEqual(corrected["stats"], preset_adapt.REASON_STATE)
+        self.assertEqual(_entry(parsed["windows"], "stats")["state"], "open")
 
     def test_state_overlap_is_refused_without_mutating_input(self):
         original = _document()
@@ -128,30 +197,14 @@ class TestWindowPresetService(unittest.TestCase):
             (lambda doc: doc.update(window_states=[]), "window_states must"),
             (lambda doc: doc["window_states"].update(closed="bad"),
              "closed must"),
-            (lambda doc: doc["window_states"].update(closed=["ghost"]),
-             "closed contains"),
             (lambda doc: doc["window_states"].update(closed=["stats", "stats"]),
              "closed contains a duplicate"),
             (lambda doc: doc["window_states"].update(minimized="bad"),
              "minimized must"),
-            (lambda doc: doc["window_states"].update(minimized=["ghost"]),
-             "minimized contains"),
             (lambda doc: doc.update(windows={}), "windows must be a list"),
             (lambda doc: doc["windows"].__setitem__(0, None),
              "each window entry"),
-            (lambda doc: doc["windows"].__setitem__(0, {"id": "ghost"}),
-             "unknown or duplicate id"),
-            (lambda doc: doc["windows"][0].update(state="closed"),
-             "inconsistent state"),
-            (lambda doc: doc["windows"][0].update(bounds=None),
-             "bounds must be an object"),
-            (lambda doc: doc["windows"][0]["bounds"].update(width="wide"),
-             "finite numbers"),
-            (lambda doc: doc["windows"][0]["bounds"].update(width=-1),
-             "between 0 and 1"),
-            (lambda doc: doc["windows"][0]["bounds"].update(
-                x=0.8, width=0.5), "outside the screen"),
-            (lambda doc: doc["windows"].pop(), "current window set"),
+            (lambda doc: doc["windows"].pop(), "window_count must be"),
             (lambda doc: doc.update(screen=[]), "screen must"),
             (lambda doc: doc["screen"].update(width=0), "positive numbers"),
             (lambda doc: doc["screen"].update(device_pixel_ratio=0),

@@ -1768,6 +1768,31 @@
    "functions": {},
    "values": {}
   },
+  "actions.scroll_parse_run": {
+   "classes": {
+    "ScrollRunPart": {
+     "ancestry": [
+      "ScrollRunPart",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, block)",
+      "build_filter": "(self, panel_criteria=None) -> 'PersonFilter'",
+      "build_parser": "(self, cdp: 'CDPClient', panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollParser'",
+      "run": "(self, cdp: 'CDPClient', run: 'Optional[PipelineRun]' = None) -> 'CollectResult'",
+      "to_scroll_options": "(self, panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollOptions'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "actions.search_users": {
    "classes": {
     "SearchUsers": {

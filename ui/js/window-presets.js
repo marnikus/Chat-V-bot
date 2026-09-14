@@ -304,7 +304,7 @@ const WindowPresets = {
     const canvas = documentById('windowPresetPreviewCanvas');
     if (!modal || !title || !meta || !canvas) return;
     title.textContent = 'Preview: ' + result.document.name;
-    meta.textContent = this._previewMeta(result.document, result.warning);
+    meta.textContent = this._previewMeta(result.document, result.warning, result.report);
     canvas.replaceChildren();
     result.document.windows.forEach((item) => {
       const tile = document.createElement('div');
@@ -319,13 +319,15 @@ const WindowPresets = {
     modal.classList.remove('hidden');
   },
 
-  _previewMeta(document, warning) {
+  _previewMeta(document, warning, report) {
     const resolution = document.screen.width + '×' + document.screen.height;
     const note = SashGrid._screenSnapshot(SashGrid.gridEl && SashGrid.gridEl.getBoundingClientRect
       ? SashGrid.gridEl.getBoundingClientRect() : { width: 1, height: 1 });
     const parts = [document.grid.window_count + ' windows · source screen ' + resolution];
     if (note.width !== document.screen.width || note.height !== document.screen.height)
       parts.push('target screen differs; percentages will adapt');
+    if (report && (report.skipped.length || report.added.length || report.corrected.length))
+      parts.push('on restore ' + PresetAdapt.reportSummary(report).replace(/^ — /, ''));
     if (warning) parts.push(warning);
     return parts.join(' · ');
   },
@@ -334,7 +336,12 @@ const WindowPresets = {
     if (!this.pending) return;
     const pending = this.pending;
     this._closePreview();
-    if (!SashGrid.applyPortablePreset(pending.document)) return;
+    const result = SashGrid.applyPortablePreset(pending.document);
+    if (!result || !result.ok) return;
+    const report = result.report;
+    if (report && (report.skipped.length || report.added.length || report.corrected.length))
+      this._message('Preset “' + pending.document.name + '” restored' +
+        PresetAdapt.reportSummary(report), 'warn');
     if (pending.action === 'import') this._persistDocument(pending.document, true);
   },
 

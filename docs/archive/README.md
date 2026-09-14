@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**100 documents in 21 groups.**
+**101 documents in 22 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -34,6 +34,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 7 | Round G: the complete post-Round-F tail inventory with fresh measurements, the prioritised G1–G7 step plan, and the executed steps G1–G7 — the red suite at HEAD and the `WriteTurn` union fix (F3c), the two worst-file family splits under the lifted freezes, the flow/injector splits plus the ladder and constructor reductions, and the wide-parameter continuation that took the >4-param walker from 51 to its 18-entry floor, the test-debt step that took the three undo modules to 100% and paid the F6b module-wide mutation run, the hygiene step that zeroed the tree's cognitive-17 offenders and paid the rules file back inside its budget, and the backlog step that gave the JavaScript side its first coverage measurement, migrated all seven deferred stores wide-parameter offenders (the >4-param walker 18 → its documented 11-entry floor, the stores API baseline refreshed in-step), took `HistoryExportService` from 21 to 14 methods and split `StackBridge`/`ScrollParse` into wire facades plus cohesive parts with zero golden drift. |
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
+| [`2026-09-14-grid-rows-adaptive-restore/`](#2026-09-14-grid-rows-adaptive-restore) | 1 | Row creation by drag & drop (above/below/between), the minimum-size reflow that fixed the disappearing horizontal sashes, and the adaptive preset restore that repairs and reports a drifted window set instead of refusing it. |
 
 ---
 
@@ -356,3 +357,18 @@ the longest waits of all.
 *1 doc.*
 
 - [`SPEED_MULTIPLIER_DESIGN_2026-09-13.md`](2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) — The semantics decision and its rationale, the full inventory of which waits scale and which do not (stop slices, retry backoff, protocol gaps and cosmetic highlight durations are out of scope), the rejected `ScrollOptions.speed_multiplier` field (it would force a 20th parameter onto a RULE 16.5 legacy constructor), and the RULE 16 measurements.
+
+## 2026-09-14-grid-rows-adaptive-restore
+
+Issue 4 and bug 5 of the grid round: drag & drop could create columns but not rows, and after a few
+moves the horizontal sashes disappeared (a 50/50 split of a short slot pushed neighbours under the
+96 px minimum until the sashes were covered). The fix is a minimum-extent reflow (`enforceMinimums`)
+running on the blind-math commit paths only — never behind an explicit drag, never inside undo —
+plus the adaptive preset restore: a document whose window set drifted from the live build is repaired
+(prune ghosts, re-add missing windows, correct contradicting states and corrupt bounds) and every
+deviation is explained in a `restore_report`, mirrored 1:1 between `ui/js/preset-adapt.js` and
+`services/preset_adapt.py`.
+
+*1 doc.*
+
+- [`GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md`](2026-09-14-grid-rows-adaptive-restore/GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md) — The feasibility mathematics (the default tree needs ≈708 px of grid height, each extra stacked pair ≈102 px, and why the "regression" at 800 px was an infeasible scenario degrading fairly rather than a bug), the enforcement call-site rationale, the shared REASON-string contract between the two mirrors, the refusal-vs-repair boundary, and §5's executed verification (3192-test battery, 100 % line+branch on both adaptive modules, 82.7 %/75.7 % mutation spot-checks, and the sandbox-specific instrumentation note).
