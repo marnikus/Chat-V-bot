@@ -186,9 +186,15 @@ class TestBridgeSurface(unittest.TestCase):
         """The block owns its own parser now; the bridge must not rebuild one."""
         import inspect
         from bridge.stack_bridge import StackBridge
+        from bridge.stack_bridge_parts import RunControl
         # the router forwards run_stack to the domain bridge — inspect
-        # the real implementation, not the generated forwarder
-        src = inspect.getsource(StackBridge.run_stack)
+        # the real implementation, not the generated forwarder. G7 §4
+        # adaptation: the body moved into the RunControl part; the @Slot
+        # delegate stays on the bridge and must forward to it (checked
+        # here too, so the wire half of the pin is stronger than before).
+        wire = inspect.getsource(StackBridge.run_stack)
+        self.assertIn("_parts.run.run_stack", wire)
+        src = inspect.getsource(RunControl.run_stack)
         self.assertNotIn("ScrollParser(", src)
         self.assertIn("engine.execute()", src)
 
