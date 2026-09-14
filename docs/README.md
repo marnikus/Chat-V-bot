@@ -36,7 +36,7 @@ Also in the repo, not under `docs/`:
 |---|---|
 | [`README.md`](../README.md) | User manual: install, Chrome flags, UI tour |
 | [`reports/`](../reports/) | Measured code-quality snapshots (the coverage/complexity **baseline** the rules compare against) |
-| `tests/` | The executable spec — 165 Python test files + 26 Node harness files |
+| `tests/` | The executable spec — 190 Python test files + 30 Node harness files |
 
 ---
 

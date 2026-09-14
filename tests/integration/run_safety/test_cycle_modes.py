@@ -32,7 +32,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
         ) as h:
             block = make_ok_block()
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(block.calls, ["a", "b"])
             self.assertEqual(h.memory.marked, ["a", "b"])
             self.assertEqual(h.user_done, [("a", True), ("b", True)])
@@ -55,7 +55,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
             # Ensure the mem-click flag is absent/False.
             blk.use_person_from_memory = False
             h.engine._stack = [blk]
-            await h.engine.execute(None)
+            await h.engine.execute()
             records = h.trace_records()
             self.assertTrue(
                 any(
@@ -71,7 +71,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
             block = make_ok_block()
             block.enabled = False
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(h.user_done, [("a", False)])
             self.assertEqual(h.memory.marked, [])
 
@@ -79,7 +79,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
         # Queue must be empty for empty-stack (nonempty queue wins by design).
         with EngineHarness(users=[]) as h:
             h.engine._stack = []
-            await h.engine.execute(None)
+            await h.engine.execute()
             text = " ".join(h.logs).lower()
             self.assertIn("empty", text)
 
@@ -87,7 +87,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
         with EngineHarness(users=[]) as h:
             block = make_ok_block()
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(block.calls, [STANDALONE_NICK])
             self.assertEqual(h.memory.marked, [])
             self.assertEqual(h.user_done, [])
@@ -96,7 +96,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
         with EngineHarness(users=[]) as h:
             block = FailBlock()
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(block.calls, [STANDALONE_NICK])
             self.assertTrue(any(lvl == "error" for _, lvl in h.debug))
 
@@ -108,7 +108,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
                 u.messaged = True
             h.engine._stack = [take, make_ok_block()]
             # make_ok_block is TEST_* (not user-scoped) → take-miss branch.
-            await h.engine.execute(None)
+            await h.engine.execute()
             records = h.trace_records()
             self.assertTrue(
                 any(
@@ -150,7 +150,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             click = MemClick()
             h.engine._stack = [PickBella(pre_delay_ms=0), click]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(click.calls, ["Bella"])
             self.assertEqual(h.memory.marked, ["Bella"])
             self.assertEqual(h.user_done, [("Bella", True)])
@@ -174,7 +174,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             click = MemClick()
             h.engine._stack = [click]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(click.calls, [])
             self.assertEqual(h.memory.marked, [])
             records = h.trace_records()
@@ -202,14 +202,14 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             fail.execute = flaky  # type: ignore
             h.engine._stack = [fail]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(h.user_done, [("a", False), ("b", True)])
             self.assertEqual(h.memory.marked, ["b"])
 
     async def test_skip_stops_user_without_mark(self):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SkipBlock()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(h.user_done, [("a", False)])
             self.assertEqual(h.memory.marked, [])
 
@@ -231,7 +231,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             block = make_ok_block()
             h.engine._stack = [CondSkip(pre_delay_ms=0), block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Queue hides messaged users, so only "new" runs.
             self.assertEqual(block.calls, ["new"])
             self.assertEqual(h.memory.marked, ["new"])
@@ -257,7 +257,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             click = NeedsUser()
             h.engine._stack = [RepeatLoop(repeat_count=5), click]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(click.calls, [])
             self.assertTrue(any("Repeat Loop" in m for m in h.logs))
 
@@ -268,7 +268,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
             h.engine.label_filter = lambda n: n != "drop"
             block = make_ok_block()
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(block.calls, ["keep"])
             self.assertEqual(h.memory.marked, ["keep"])
 
@@ -284,7 +284,7 @@ class CycleModesCase(unittest.IsolatedAsyncioTestCase):
 
             block.on_run = stop_after_a
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Stop requested during final block of user a: with the C1
             # pre-mark gate, user a is NOT auto-marked.
             self.assertEqual(block.calls, ["a"])

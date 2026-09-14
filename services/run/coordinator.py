@@ -18,7 +18,6 @@ except Exception:
 if TYPE_CHECKING:
     from backend.cdp_client import CDPClient
     from backend.criteria_engine import CriteriaEngine
-    from backend.scroll_parser import ScrollParser
     from stores.user_memory import UserMemory
 from .cycle_loop import CycleLoopMixin
 from .collect_phase import CollectPhaseMixin
@@ -59,7 +58,7 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, CollectPhaseMixin,
     def pause(self) -> None: self._paused = True; self._state.mark_paused()
     def resume(self) -> None: self._paused = False; self._state.mark_resumed()
 
-    async def execute(self, scroll_parser: 'ScrollParser' | None = None) -> None:
+    async def execute(self) -> None:
         if self._running:
             self.log_msg.emit("⚠ Already running"); return
         cycles = self._begin_run()

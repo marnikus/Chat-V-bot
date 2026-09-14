@@ -28,7 +28,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
     async def test_external_cancel_propagates_after_cleanup(self):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SlowBlock(delay=5.0)]
-            task = asyncio.ensure_future(h.engine.execute(None))
+            task = asyncio.ensure_future(h.engine.execute())
             await asyncio.sleep(0.15)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
@@ -42,7 +42,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             # Restartable after cancel.
             h.engine._memory = FakeMemory([UserRecord(nick="b")])
             h.engine._stack = [make_ok_block()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(h.engine._state.state, RunState.DONE)
 
     async def test_cancel_restores_nick_expansion_and_ctx(self):
@@ -58,7 +58,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
 
             block.execute = hanging_execute  # type: ignore
             h.engine._stack = [block]
-            task = asyncio.ensure_future(h.engine.execute(None))
+            task = asyncio.ensure_future(h.engine.execute())
             await asyncio.sleep(0.15)
             # Expansion happened (block attr rewritten while running).
             self.assertIn("Zoe", getattr(block, "selector", ""))
@@ -87,7 +87,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             users=[UserRecord(nick="a")], hooks=Hooks()
         ) as h:
             h.engine._stack = [make_ok_block()]
-            await h.engine.execute(None)  # must not raise
+            await h.engine.execute()  # must not raise
             self.assertIn("pre", calls)
             self.assertTrue(any(c.startswith("post:") for c in calls))
             self.assertEqual(h.stack_complete, [True])
@@ -107,7 +107,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             block = make_ok_block()
             block.selector = 'x{{nick}}'
             h.engine._stack = [block]
-            await h.engine.execute(None)  # must not raise (ERROR path)
+            await h.engine.execute()  # must not raise (ERROR path)
             self.assertEqual(
                 block.selector, "x{{nick}}", "hook raise must still restore"
             )
@@ -127,7 +127,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
         ) as h:
             h.engine._stack = [make_ok_block()]
             with self.assertRaises(RuntimeError):
-                await h.engine.execute(None)
+                await h.engine.execute()
             self.assertFalse(h.engine.is_running)
             self.assertIsNone(h.engine._tracer)
             self.assertEqual(h.stack_complete, [True])
@@ -159,7 +159,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             # Body failure is contained per-user (fail, not raise); post_run
             # failure on this path must be reported, not mask the body error.
             with self.assertRaises(RuntimeError) as ctx:
-                await h.engine.execute(None)
+                await h.engine.execute()
             self.assertIn("post exploded", str(ctx.exception))
             self.assertEqual(h.stack_complete, [True])
             self.assertFalse(h.engine.is_running)
@@ -178,7 +178,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             users=[UserRecord(nick="a")], hooks=Hooks()
         ) as h:
             h.engine._stack = [make_ok_block()]
-            task = asyncio.ensure_future(h.engine.execute(None))
+            task = asyncio.ensure_future(h.engine.execute())
             await asyncio.sleep(0.3)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
@@ -221,7 +221,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_never_produces_success_trace_or_mark(self):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SlowBlock(delay=5.0)]
-            task = asyncio.ensure_future(h.engine.execute(None))
+            task = asyncio.ensure_future(h.engine.execute())
             await asyncio.sleep(0.15)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):

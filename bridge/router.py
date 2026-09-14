@@ -19,15 +19,15 @@ Legacy compatibility (the test suite is the contract):
   * grid-spec classmethods/constants and undo constants are re-exported.
 """
 
-# ideal-size: 508 lines reason=composition root, argued from measurement in
-# Round H step H5 rather than quoted from an earlier round.
+# ideal-size: 530 lines reason=composition root, re-derived by measurement in
+# Round I step I1 (the Round H figure of 508 had gone stale against the tree).
 #
 # Length here is a COUNT of domains, not depth of logic. The file defines 40
-# top-level functions whose MEAN body is 6.4 lines, mean cyclomatic complexity
+# top-level functions whose MEAN body is 6.0 lines, mean cyclomatic complexity
 # 2.0 and max 7 — every RULE 18 per-UNIT budget passes with room to spare, and
 # RULE 19's order (nesting -> cyclomatic -> cognitive -> size) bottoms out
-# before reaching size. MI is 44.9, and the corr(LOC, MI) = -0.819 measured
-# this round says that number is being driven by length alone.
+# before reaching size. MI is 46.6 (above the 45 gate), and the
+# corr(LOC, MI) = -0.819 measured in Round H says length alone drives it.
 #
 # Splitting was tested, not assumed, and each option loses information:
 #   * by domain — the ten imports ARE the routing table; separating them hides

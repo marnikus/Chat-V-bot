@@ -18,7 +18,9 @@ Four of them, in the order the window uses them:
 Everything answers a plain dict the bridge can serialise, or a `Result` for
 the two operations that can fail on the wire.
 
-ideal-size: 292 lines reason=just under RULE 18's 300 and holding. The
+ideal-size: 307 lines reason=re-derived in Round I step I1. Just over RULE
+18's 300-line guide; mean function body is 13.3 lines, mean cyclomatic 3.5 and
+max 8, so RULE 19's order bottoms out well before size. MI is 55.0. The
 separable parts are already out: transcript shaping (`bot_transcript`),
 prompt templates (`bot_prompts`), presets (`bot_presets`), connections
 (`bot_connections`), label rules (`bot_reactions`). What remains is the

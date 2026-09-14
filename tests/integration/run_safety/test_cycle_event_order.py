@@ -42,7 +42,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
             block = make_ok_block()
             block.custom_name = "Step"
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Per user: started → complete → marked → user-complete.
             self.assertEqual(
                 events,
@@ -70,7 +70,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
             h.engine.person_marked.connect(lambda n: events.append("marked"))
             block = make_ok_block()
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertIn(f"started:{STANDALONE_NICK}", events)
             self.assertNotIn("marked", events)
             self.assertEqual([e for e in events if e.startswith("user:")], [])
@@ -95,7 +95,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
             h.engine.progress.emit = spy_emit  # type: ignore
             h.engine._stack = [make_ok_block()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Total extended to 2, then done increments per user.
             self.assertIn((0, 2, 0, 0), seen)
             self.assertIn((1, 2, 0, 0), seen)
@@ -114,7 +114,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
             h1.engine._hooks = InjectingHooks()
             h1.engine._stack = [make_ok_block()]
-            await h1.engine.execute(None)
+            await h1.engine.execute()
             calls1 = list(injected.calls)
 
         with EngineHarness(users=[UserRecord(nick="a")]) as h2:
@@ -126,7 +126,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
             h2.engine._hooks = InjectingHooks2()
             h2.engine._stack = [make_ok_block()]
-            await h2.engine.execute(None)
+            await h2.engine.execute()
             calls2 = list(injected2.calls)
 
         self.assertEqual(calls1, calls2)
@@ -144,7 +144,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
             block.on_run = stop_on_a
             h.engine._stack = [block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             records = h.trace_records()
             ends = [r for r in records if r.get("type") == "run_end"]
             self.assertTrue(ends)
@@ -173,7 +173,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
             block.on_run = spy_run
             h.engine._stack = [take, block]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertTrue(order[0] == "take")
             self.assertIn("run:Anna", order)
 
@@ -182,7 +182,7 @@ class EventOrderCase(unittest.IsolatedAsyncioTestCase):
 
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SlowBlock(delay=5.0)]
-            task = asyncio.ensure_future(h.engine.execute(None))
+            task = asyncio.ensure_future(h.engine.execute())
             await asyncio.sleep(0.15)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):

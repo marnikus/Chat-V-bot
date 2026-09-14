@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import pkgutil
-from typing import Iterator, Optional, Type
+from typing import Optional, Type
 
 log = logging.getLogger("chatbot")
 

@@ -59,7 +59,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                     return ActionResult.OK
 
             h.engine._stack = [B1(pre_delay_ms=0), B2(pre_delay_ms=0)]
-            await asyncio.wait_for(h.engine.execute(None), timeout=5)
+            await asyncio.wait_for(h.engine.execute(), timeout=5)
             self.assertEqual(
                 calls, ["b1"], "stop during pause must not start the next block"
             )
@@ -86,7 +86,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                 h.engine.stop()
 
             await asyncio.wait_for(
-                asyncio.gather(h.engine.execute(None), controller()),
+                asyncio.gather(h.engine.execute(), controller()),
                 timeout=5,
             )
             self.assertEqual(block.calls, ["a"])
@@ -124,7 +124,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                     )
 
             h.engine._stack = [ScrollStop(pre_delay_ms=0)]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Must be stopped (trace/outcome), not empty/completed.
             records = h.trace_records()
             reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
@@ -153,7 +153,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                 return rows
 
             mem.get_all = hooked_get_all  # type: ignore
-            await h.engine.execute(None)
+            await h.engine.execute()
             records = h.trace_records()
             reasons = [r.get("reason") for r in records if r.get("type") == "run_end"]
             self.assertIn("stopped", reasons)
@@ -204,7 +204,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
     async def test_stop_on_final_ok_prevents_automatic_mark(self):
         with EngineHarness(users=[UserRecord(nick="solo")]) as h:
             h.engine._stack = [StopRequestBlock()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(
                 h.memory.marked, [], "stop before the mark boundary must not mark"
             )
@@ -248,7 +248,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                 mark,
                 StopAfter(pre_delay_ms=0),
             ]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Explicit mark completed before stop → stays marked.
             self.assertIn("Zoe", h.memory.marked)
             # But the automatic post-user mark must not double-add for a
@@ -331,7 +331,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                 PickAnna(pre_delay_ms=0),
                 click,
             ]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(
                 len(click.calls), 1, "stopped single-target must not repeat"
             )
@@ -345,12 +345,12 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
             users=[UserRecord(nick="a"), UserRecord(nick="b")]
         ) as h:
             h.engine._stack = [StopRequestBlock()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             self.assertEqual(h.engine._state.state, RunState.DONE)
             # Second run on fresh memory must start (no ValueError).
             h.engine._memory = FakeMemory([UserRecord(nick="c")])
             h.engine._stack = [make_ok_block()]
-            await h.engine.execute(None)  # must not raise
+            await h.engine.execute()  # must not raise
             self.assertEqual(h.engine._state.state, RunState.DONE)
             self.assertEqual(h.stack_complete, [True, True])
 
@@ -360,7 +360,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
             h.engine.stop()
             h.engine.stop()
             h.engine.stop()
-            await h.engine.execute(None)
+            await h.engine.execute()
             # Fresh run clears the stale stop (existing contract).
             self.assertEqual(h.engine._state.state, RunState.DONE)
 
@@ -386,7 +386,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
 
             t0 = time.monotonic()
             stop_task = asyncio.ensure_future(stopper())
-            run_task = asyncio.ensure_future(h.engine.execute(None))
+            run_task = asyncio.ensure_future(h.engine.execute())
             await asyncio.wait_for(
                 asyncio.gather(run_task, stop_task), timeout=5
             )
@@ -401,7 +401,7 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
             users=[UserRecord(nick="a"), UserRecord(nick="b")]
         ) as h:
             h.engine._stack = [StopRequestBlock()]
-            await h.engine.execute(None)
+            await h.engine.execute()
             # First user stopped before mark → failed+1; second never starts.
             self.assertEqual(h.engine.progress.failed, 1)
             self.assertEqual(h.engine.progress.done, 0)

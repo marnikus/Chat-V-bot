@@ -140,7 +140,7 @@ class TestRespectOrderSeekMode(unittest.TestCase):
         cdp = HighlightCDP(PAGES, page_height=100)
         eng = engine_for(mem, cdp)
         eng._stack = [scroll_block(), click]
-        await eng.execute(None)
+        await eng.execute()
         rows = {u.nick: u for u in await mem.get_all()}
         return cdp, rows
 
@@ -204,7 +204,7 @@ class TestRespectOrderSeekMode(unittest.TestCase):
                 cdp = HighlightCDP(PAGES, page_height=100)
                 eng = engine_for(mem, cdp)
                 eng._stack = [scroll_block(), off_disabled, plain]
-                await eng.execute(None)
+                await eng.execute()
                 return off_disabled.calls, plain.calls
 
         disabled_calls, plain_calls = in_tmp_cwd(go)
@@ -223,7 +223,7 @@ class TestRespectOrderSeekMode(unittest.TestCase):
                 cdp = HighlightCDP(PAGES, page_height=100)
                 eng = engine_for(mem, cdp)
                 eng._stack = [scroll_block(), click]
-                outcome = await eng.execute(None)
+                outcome = await eng.execute()
                 return click.calls, outcome
 
         calls, _ = in_tmp_cwd(go)
@@ -241,7 +241,7 @@ class TestRespectOrderSeekMode(unittest.TestCase):
                 eng = engine_for(mem, cdp)
                 eng._stack = [scroll_block(), click]
                 eng._repeat_cycles = lambda: 4   # pretend a Repeat Loop marker
-                await eng.execute(None)
+                await eng.execute()
                 return click.calls
 
         calls = in_tmp_cwd(go)
@@ -273,7 +273,7 @@ class TestRespectOrderMemoryQueue(unittest.TestCase):
                 # The # column BEFORE the run — the order it promises.
                 column = eng.queue_order(await mem.get_all())
                 eng._stack = [click]
-                await eng.execute(None)
+                await eng.execute()
                 return click.calls, column
 
         calls, column = in_tmp_cwd(go)
@@ -300,7 +300,7 @@ class TestRespectOrderCollectMode(unittest.TestCase):
                 cdp = HighlightCDP(PAGES, page_height=100)
                 eng = engine_for(mem, cdp)
                 eng._stack = [blk, click]
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return click.calls, rows
 

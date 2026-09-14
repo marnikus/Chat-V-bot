@@ -137,7 +137,7 @@ class TestLiveRefresh(unittest.TestCase):
                 cwd = os.getcwd()
                 os.chdir(h._tmp.name)
                 try:
-                    await h.engine.execute(None)
+                    await h.engine.execute()
                     await asyncio.sleep(0.2)   # let queued refreshes land
                 finally:
                     os.chdir(cwd)

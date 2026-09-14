@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from services.history.trash import open_world
 
@@ -20,14 +21,8 @@ log = logging.getLogger("chatbot")
 
 
 def _ensure_media_dir(service) -> None:
-    """Create the per-world media cache folder when the filesystem allows.
-
-    `os` stays a function-local import: this module's import header is a
-    frozen cross-file clone group (tools/metrics/rule16_gate.py
-    CLONE_BASELINE) and growing it would break that baseline entry.
-    """
+    """Create the per-world media cache folder when the filesystem allows."""
     try:
-        import os
         os.makedirs(service.world_media_dir(), exist_ok=True)
     except OSError as exc:
         log.warning("media cache folder unavailable: %s", exc)

@@ -54,57 +54,6 @@ def _probe(body: str, **fields) -> str:
                         "body": script.strip("\n")}
 
 
-@dataclass(frozen=True, slots=True)
-class ElementMatch:
-    """WHICH element a probe is looking for.
-
-    One CSS selector finds candidate nodes; `label_selector` optionally points
-    at a child holding the visible text, and `match_text` is compared against
-    it. This is the half of a probe that says *what*, as opposed to `Overlay`
-    which says *how it looks*. Both find-style builders take exactly these
-    four, which is why they are one value and not eight parameters.
-    """
-
-    selector: str
-    label_selector: Optional[str] = None
-    match_text: Optional[str] = None
-    match_mode: str = MATCH_CONTAINS
-
-    def as_js(self) -> dict:
-        """The four values as JS literals, ready for a probe template."""
-        return {
-            "selector": _js_str(self.selector),
-            "label_selector": (_js_str(self.label_selector)
-                               if self.label_selector else "null"),
-            "match_text": (_js_str(self.match_text)
-                           if self.match_text else "null"),
-            "exact": "true" if self.match_mode == MATCH_EXACT else "false",
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class Overlay:
-    """HOW the outline drawn on a matched element looks.
-
-    Colour and caption are what the user reads to tell the two phases apart
-    (RULE 1: red FOUND, orange CLICK), and `ms` is how long it stays. Each
-    builder supplies its own defaults for these — they are the phase's
-    identity, not a caller's choice.
-    """
-
-    color: str
-    caption: str
-    ms: int = 1200
-    enabled: bool = True
-
-    def as_js(self) -> dict:
-        return {
-            "color": _js_str(self.color),
-            "caption": _js_str(self.caption),
-            "hms": int(self.ms),
-            "highlight": "true" if self.enabled else "false",
-        }
-
 
 @dataclass(frozen=True, slots=True)
 class ElementMatch:

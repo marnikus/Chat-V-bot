@@ -300,7 +300,7 @@ class TestEngineSearchUsers(unittest.TestCase):
                 eng.debug_msg.connect(lambda m, lvl: details.append(m))
                 eng.load_stack([{"block_id": "SEARCH_USERS", "text": "Lena",
                                  "enabled": True}])
-                await eng.execute(None)
+                await eng.execute()
                 return cdp.value, cdp.writes, eng.is_running, logs, details
         value, writes, running, logs, details = in_tmp_cwd(go)
         self.assertEqual(value, "Lena", "the text must land in the search box")
@@ -328,7 +328,7 @@ class TestEngineSearchUsers(unittest.TestCase):
                 eng.load_stack([
                     {"block_id": "TAKE_PERSON", "pick_mode": "order_first"},
                     {"block_id": "SEARCH_USERS", "text": "find {{nick}}"}])
-                await eng.execute(None)
+                await eng.execute()
                 return cdp.writes
         writes = in_tmp_cwd(go)
         self.assertEqual(writes, ["find Anna", "find Anna"],

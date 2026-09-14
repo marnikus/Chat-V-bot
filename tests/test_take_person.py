@@ -179,7 +179,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 consumer = Consumer(match_text="hi {{nick}}")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [take, consumer]
-                await eng.execute(None)
+                await eng.execute()
                 return eng.selected_nick, consumer.seen
         nick, seen = in_tmp_cwd(go)
         self.assertIn(nick, {"Anna", "Bella"})
@@ -198,7 +198,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 consumer = Consumer(match_text="to {{nick}}")
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [take, consumer]
-                await eng.execute(None)
+                await eng.execute()
                 return eng.selected_nick, consumer.seen
         nick, seen = in_tmp_cwd(go)
         self.assertEqual(nick, "Cara")
@@ -219,7 +219,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 self.assertEqual(expected, "Bella",
                                  "precondition: #1 is Bella")
                 eng._stack = [take, consumer]
-                await eng.execute(None)
+                await eng.execute()
                 return eng.selected_nick, consumer.seen
         nick, seen = in_tmp_cwd(go)
         self.assertEqual(nick, "Bella")
@@ -239,7 +239,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 logs = []
                 eng.log_msg.connect(lambda m: logs.append(m))
                 eng._stack = [take_first, take_done, consumer]
-                await eng.execute(None)
+                await eng.execute()
                 return (eng.selected_nick, consumer.seen, logs)
         nick, seen, logs = in_tmp_cwd(go)
         self.assertEqual(nick, "Anna",
@@ -258,7 +258,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 take.enabled = False
                 eng = ActionEngine(cdp=None, memory=mem, criteria=None)
                 eng._stack = [take]
-                await eng.execute(None)
+                await eng.execute()
                 return eng.selected_nick
         nick = in_tmp_cwd(go)
         self.assertEqual(nick, "")

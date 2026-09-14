@@ -13,8 +13,9 @@ and the tests that swap `db._repair_tables` on the instance — keep working
 through the facade.
 """
 
-# ideal-size: 440 lines reason=append-only migration ledger, re-derived by
-# measurement in Round H step H5.
+# ideal-size: 461 lines reason=append-only migration ledger, re-derived by
+# measurement in Round I step I1 (the Round H figure of 440 had gone stale:
+# the ledger grew, which is the one thing this file is expected to do).
 #
 # Every method is one historical schema repair, kept because a database
 # written by an older build may still need it. The list only ever grows, and

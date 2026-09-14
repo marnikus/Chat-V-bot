@@ -211,7 +211,7 @@ class TestEngineFlow(unittest.TestCase):
                 steps = []
                 eng.step_started.connect(
                     lambda idx, bid, nick: steps.append(bid))
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return eng.selected_nick, steps, rows
         nick, steps, rows = in_tmp_cwd(go)
@@ -237,7 +237,7 @@ class TestEngineFlow(unittest.TestCase):
                 steps = []
                 eng.step_started.connect(
                     lambda idx, bid, nick: steps.append(bid))
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return steps, rows, logs
         steps, rows, logs = in_tmp_cwd(go)
@@ -259,7 +259,7 @@ class TestEngineFlow(unittest.TestCase):
                 eng._stack = [take, mark]
                 marked = []
                 eng.person_marked.connect(lambda nick: marked.append(nick))
-                await eng.execute(None)
+                await eng.execute()
                 rows = {u.nick: u for u in await mem.get_all()}
                 return eng.selected_nick, rows, marked
         nick, rows, marked = in_tmp_cwd(go)
