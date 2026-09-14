@@ -113,7 +113,7 @@ class TestLegacyAttributeSurface(unittest.TestCase):
         self.assertIs(br._ctx.engine, engine)
 
     def test_grid_spec_constants_and_classmethods(self):
-        self.assertEqual(Bridge.GRID_VERSION, 3)
+        self.assertEqual(Bridge.GRID_VERSION, 4)
         self.assertEqual(Bridge.MIN_GRID_SIZE, 4)
         self.assertEqual(sorted(Bridge.WINDOW_IDS),
                          sorted(Bridge._leaf_ids(Bridge._default_grid_tree())))

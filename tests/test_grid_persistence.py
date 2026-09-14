@@ -23,7 +23,8 @@ from backend.config_manager import (MAX_STACK_HISTORY,  # noqa: E402
 
 LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer", "people",
                   "log"]
-NEW_WINDOWS = ["history", "userdb", "collector", "labels", "dbconn"]
+NEW_WINDOWS = ["history", "userdb", "collector", "labels", "dbconn",
+               "botchat", "botprompt"]
 ALL_WINDOWS = set(LEGACY_WINDOWS + NEW_WINDOWS)
 GRID_VERSION = Bridge.GRID_VERSION
 

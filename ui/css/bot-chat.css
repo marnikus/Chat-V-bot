@@ -1,0 +1,421 @@
+/* ═══════════════════════════════════════════════════════════════
+   bot-chat.css — the AI Bot Chat window and the Grok Prompt Editor
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── AI Bot Chat ──────────────────────────────────────────────── */
+.botchat-panel { display: flex; flex-direction: column; min-height: 0; }
+.bot-person {
+  font-size: var(--font-size-xs); font-weight: 600;
+  color: var(--text-secondary); margin-right: 6px;
+}
+.bot-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px; margin-bottom: var(--gap-sm);
+}
+.bot-labels { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.bot-label {
+  padding: 2px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--text-muted); background: transparent;
+  color: var(--text-primary); font-size: 11px; font-weight: 600;
+}
+.bot-label:hover { filter: brightness(1.2); }
+.bot-label.active { color: var(--text-inverse); }
+
+.bot-chat-box {
+  flex: 1; min-height: 80px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 6px; border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.bot-msg { max-width: 82%; padding: 4px 8px; border-radius: var(--radius-sm); }
+.bot-msg.in  { align-self: flex-start; background: var(--bg-card); }
+.bot-msg.out { align-self: flex-end;   background: var(--accent-dim); }
+.bot-msg-who { display: block; font-size: 10px; color: var(--text-muted); }
+.bot-msg-text { font-size: var(--font-size-sm); white-space: pre-wrap; }
+
+.bot-card {
+  border: 1px dashed var(--accent); border-radius: var(--radius-sm);
+  padding: 6px 8px; background: var(--bg-card);
+}
+.bot-card.approved  { border-style: solid; border-color: #00c853; }
+.bot-card.confirmed { border-style: solid; border-color: #00c853; }
+.bot-card.rejected  { border-color: #ff3b30; opacity: .75; }
+.bot-card.reaction-positive  { border-left: 4px solid #00c853; }
+.bot-card.reaction-negative  { border-left: 4px solid #ff3b30; }
+.bot-card.reaction-uncertain { border-left: 4px solid #ffcc00; }
+.bot-card-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.bot-card-text { font-size: var(--font-size-sm); white-space: pre-wrap; }
+.bot-verify { display: flex; gap: 6px; margin-top: 5px; }
+
+.bot-approved { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.bot-hint { font-size: var(--font-size-xs); color: var(--text-muted); }
+.bot-direct { display: flex; gap: 6px; margin-top: 6px; }
+.bot-direct textarea {
+  flex: 1; resize: vertical; min-height: 34px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
+  padding: 4px 6px; font-size: var(--font-size-sm);
+}
+.bot-status {
+  margin-top: 4px; font-size: var(--font-size-xs); color: var(--text-secondary);
+}
+
+/* ── Grok Prompt Editor ───────────────────────────────────────── */
+.botprompt-panel { display: flex; flex-direction: column; min-height: 0; }
+.bot-prompt-tabs { display: flex; gap: 5px; margin-bottom: 5px; }
+.bot-prompt-tab {
+  padding: 3px 9px; border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid var(--accent-dim); background: transparent;
+  color: var(--text-secondary); font-size: 11px;
+}
+.bot-prompt-tab.active {
+  background: var(--accent-dim); color: var(--text-primary); font-weight: 600;
+}
+.bot-prompt-text {
+  flex: 1; min-height: 90px; resize: vertical;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
+  padding: 6px; font-family: monospace; font-size: var(--font-size-sm);
+}
+.bot-prompt-actions {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+}
+.bot-prompt-preview {
+  margin-top: 6px; max-height: 40%; overflow: auto; white-space: pre-wrap;
+  background: var(--bg-input); border-radius: var(--radius-sm);
+  padding: 6px; font-size: var(--font-size-xs); color: var(--text-secondary);
+}
+
+/* the Grok connection row in the Prompt Editor — the key is write-only */
+.bot-conn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #2a2f3a);
+}
+.bot-conn label { font-size: 11px; opacity: .75; }
+.bot-conn input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--input-bg, #11141b);
+  color: inherit;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 4px;
+}
+.bot-conn button { grid-column: 2; justify-self: start; }
+
+/* ── prompt variable library ──────────────────────────────────── */
+.bot-vars { margin: 4px 0; font-size: 11px; }
+.bot-vars summary { cursor: pointer; color: var(--muted, #8a8f98); }
+.bot-vars-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.bot-var {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  max-width: 220px; padding: 3px 6px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border, #2c2f36); border-radius: 4px;
+  background: var(--panel-2, #1b1e24); color: inherit; font: inherit;
+}
+.bot-var:hover { border-color: var(--accent, #4c8dff); }
+.bot-var-token { font-family: monospace; color: var(--accent, #4c8dff); }
+.bot-var-desc {
+  color: var(--muted, #8a8f98); font-size: 10px; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+.bot-prompt-warn {
+  padding: 3px 6px; border-radius: 4px; font-size: 11px;
+  background: rgba(255, 204, 0, .12); color: #ffcc00;
+}
+
+/* ── media inside a bot message ───────────────────────────────── */
+.bot-msg-media-note {
+  display: inline-block; margin-top: 2px; padding: 1px 5px; font-size: 11px;
+  border: 1px dashed var(--border, #2c2f36); border-radius: 4px;
+  color: var(--muted, #8a8f98);
+}
+
+/* ── "Choose AI connection" popup ─────────────────────────────── */
+/* An anchored popup, not a modal: `.layout-menu` (in sash-layout.css) already
+   supplies the fixed position, dark panel, border, radius and shadow the
+   Grid view / Bookmarks menu uses, so this popup speaks the same visual
+   language by inheriting it rather than by re-describing it. Only the width
+   differs — a two-column master/detail needs more room than a layout list. */
+/* Both dimensions are capped against the VIEWPORT, so the panel can never
+   be larger than the space place() has to fit it into. Without the height
+   cap a long connection list grew the popup past the bottom of the window
+   and took the footer buttons with it. */
+.bot-settings-backdrop {
+  width: min(760px, 95vw); max-height: 90vh; padding: 0;
+}
+.bot-settings-backdrop.hidden { display: none; }
+.bot-settings {
+  display: flex; flex-direction: column;
+  max-height: 90vh; overflow: hidden;
+}
+
+/* one button, three semantic colours
+   ----------------------------------
+   Every rule here is scoped to `.bot-settings`, and that is load-bearing
+   rather than tidiness. The popup reuses `.layout-menu` for its panel
+   chrome, which brings `.layout-menu button { display:block; width:100% }`
+   with it. That selector is (0,1,1); a bare `.ui-btn` is (0,1,0) and
+   LOSES, so every button in the popup was silently forced full-width and
+   stacked. Reusing another component's panel class means inheriting its
+   element selectors.
+   Every control in this popup is the same component: identical height,
+   radius, padding, font and focus ring, so a row of buttons reads as one
+   family and only COLOUR carries meaning (primary = commits, ghost =
+   reversible, danger = destroys). The older .btn-* classes elsewhere in the
+   app are deliberately left alone — restyling the whole app was not asked
+   for. */
+.bot-settings .ui-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; width: auto; height: 28px; padding: 0 12px; border-radius: 6px;
+  font-size: var(--font-size-sm); font-weight: 500; line-height: 1;
+  text-align: center; border: 1px solid transparent; cursor: pointer;
+  background: transparent; color: var(--text-primary);
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
+}
+.bot-settings .ui-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.bot-settings .ui-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bot-settings .ui-btn-ico { font-size: 14px; line-height: 1; }
+
+.bot-settings .ui-btn--primary {
+  background: var(--accent); color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.bot-settings .ui-btn--primary:hover:not(:disabled) { filter: brightness(1.1); }
+.bot-settings .ui-btn--ghost {
+  background: var(--bg-card); border-color: var(--border);
+}
+.bot-settings .ui-btn--ghost:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+.bot-settings .ui-btn--danger { background: transparent; color: var(--red); }
+.bot-settings .ui-btn--danger:hover:not(:disabled) {
+  background: var(--red-dim); border-color: var(--red);
+}
+.bot-settings .ui-btn--icon {
+  width: 28px; height: 28px; padding: 0; font-size: 13px;
+}
+.bot-settings .ui-btn--block { width: 100%; }
+
+/* header
+   The close button is pinned to the right by making the HEADINGS take all
+   the slack (flex:1) and the button rigid (flex:none) — not by pushing the
+   button with margin-left:auto, which only positions it relative to a text
+   block whose width follows however the title happens to wrap. That is why
+   the cross used to float and resize as the heading reflowed.
+   min-width:0 lets a long title ellipsize inside its own box instead of
+   widening it and shoving the button off the edge. */
+.bot-settings-head {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
+}
+.bot-settings-headings { flex: 1 1 auto; min-width: 0; }
+.bot-settings-head h3 {
+  margin: 0; font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bot-settings-sub {
+  margin: 3px 0 0; font-size: var(--font-size-xs); color: var(--text-muted);
+}
+.bot-settings-head .ui-btn { flex: none; }
+
+/* body: fixed rail + fluid detail */
+.bot-settings-body {
+  display: grid; grid-template-columns: 210px 1fr;
+  flex: 1 1 auto; min-height: 0;
+}
+
+/* LEFT rail — darker than the detail pane so the eye reads it as the
+   index and the right side as the subject. */
+.bot-conn-rail {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; overflow: auto;
+  background: var(--bg-header);
+  border-right: 1px solid var(--border);
+}
+.bot-rail-head {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bot-rail-count { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.bot-provider-list {
+  display: flex; flex-direction: column; gap: 4px;
+  flex: 1 1 auto; min-height: 0;
+}
+.bot-settings .bot-provider {
+  display: flex; flex-direction: column; gap: 2px; padding: 7px 9px;
+  cursor: pointer; text-align: left; font: inherit; color: inherit;
+  border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg-card);
+}
+.bot-settings .bot-provider:hover { background: var(--bg-card-hover); }
+/* "viewed" is the row the form is showing — NOT a commitment. It gets the
+   strong blue-violet fill and a visible border; "active" (the connection
+   prompts really run on) is marked by its tag instead, so the two states
+   can never be mistaken for one another. */
+.bot-settings .bot-provider.viewed {
+  background: var(--accent); border-color: var(--accent-hover);
+  color: var(--text-on-accent);
+}
+.bot-provider.viewed .bot-provider-tag { color: rgba(255, 255, 255, .85); }
+.bot-provider.error:not(.viewed) { border-color: var(--red); }
+.bot-settings .bot-provider:disabled { opacity: .45; cursor: not-allowed; }
+.bot-provider-name {
+  display: flex; align-items: center; gap: 5px; font-weight: 600;
+}
+.bot-provider-tag {
+  font-size: 10px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* status dots — semantic, never colour alone: each is paired with words */
+.bot-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  display: inline-block; background: var(--text-muted);
+}
+.bot-dot.ok { background: var(--green); }
+.bot-dot.warn { background: var(--yellow); }
+.bot-dot.bad { background: var(--red); }
+
+/* RIGHT detail pane */
+.bot-conn-detail {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; overflow: auto;
+}
+.bot-detail-head { display: flex; align-items: center; gap: 8px; }
+.bot-detail-head h4 {
+  margin: 0; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.bot-ready {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  font-size: var(--font-size-xs); color: var(--text-muted); white-space: nowrap;
+}
+
+/* preset card */
+.bot-preset-card {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 10px; border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-header);
+}
+.bot-preset-head {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bot-preset-options { display: flex; flex-wrap: wrap; gap: 5px; }
+.bot-settings .bot-preset-opt {
+  padding: 4px 10px; border-radius: 999px; cursor: pointer; font: inherit;
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-primary);
+}
+.bot-settings .bot-preset-opt:hover { background: var(--bg-card-hover); }
+.bot-settings .bot-preset-opt.chosen { border-color: var(--accent); color: var(--accent); }
+.bot-settings .bot-preset-opt.applied { background: var(--accent); color: var(--text-on-accent); }
+.bot-preset-desc { margin: 0; font-size: var(--font-size-xs); color: var(--text-muted); }
+.bot-preset-card .bot-hint { margin: 0; }
+
+/* form — a predictable two-column grid, so labels line up down the pane */
+.bot-provider-form {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px;
+}
+.bot-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bot-field--wide { grid-column: 1 / -1; }
+.bot-provider-form label { font-size: 11px; color: var(--text-muted); }
+/* This app has no global input rule — every window paints its own fields
+   by id or class — so a bare <input> here would fall back to the browser
+   default and render WHITE on a black app. These are the same tokens the
+   composer and the label editors use, so the popup matches by sharing the
+   palette rather than by approximating it. */
+.bot-provider-form input,
+.bot-settings input[type="text"],
+.bot-settings input[type="password"] {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 5px 8px; font-size: var(--font-size-sm); font-family: inherit;
+}
+.bot-settings input::placeholder { color: var(--text-muted); }
+.bot-settings input:focus {
+  outline: none; border-color: var(--border-focus);
+}
+.bot-key-row { display: flex; gap: 5px; align-items: center; }
+.bot-key-row input { flex: 1 1 auto; min-width: 0; }
+.bot-key-row .ui-btn { flex: none; }   /* same pin as the header cross */
+
+/* footer — always visible while the detail pane scrolls */
+.bot-settings-actions {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 10px 14px; border-top: 1px solid var(--border);
+  background: var(--bg-header);
+}
+.bot-settings-actions .bot-status { margin: 0 4px 0 0; }
+
+/* ── history scope toggle ─────────────────────────────────────── */
+.bot-scope {
+  display: flex; align-items: center; gap: 5px; margin: 2px 0;
+  font-size: 11px; color: var(--muted, #8a8f98); cursor: pointer;
+}
+
+/* ── prompt editor bars (preset + connection) ─────────────────── */
+.bot-prompt-bar {
+  display: flex; align-items: center; gap: 5px; margin: 3px 0;
+  font-size: 11px;
+}
+.bot-prompt-bar label { color: var(--muted, #8a8f98); }
+.bot-prompt-bar select { flex: 0 1 220px; min-width: 120px; }
+.bot-prompt-bar .bot-hint { color: #ffcc00; }
+
+
+/* ── dark dropdown (dark-select.js) ──────────────────────────────
+   The trigger is styled here; the OPEN list is a `.layout-menu`, so it is
+   the Bookmarks panel by inheritance rather than by duplicated rules. */
+.dark-select { position: relative; display: inline-block; }
+.dark-select-host { flex: 0 1 240px; min-width: 140px; }
+.dark-select-trigger {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 4px 8px; text-align: left;
+  border: 1px solid var(--border, #2c2f36);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-input, #12141c);
+  color: var(--text-primary, #e8eaf0);
+  font-size: var(--font-size-sm, 12px);
+}
+.dark-select-trigger:hover { background: var(--bg-card-hover, #252a40); }
+.dark-select-trigger[aria-expanded="true"] {
+  border-color: var(--border-focus, #6c8cff);
+}
+.dark-select-label {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dark-select-caret { color: var(--text-muted, #5a5f73); font-size: 10px; }
+.dark-select.warn .dark-select-trigger { border-color: var(--yellow, #fbbf24); }
+
+/* The menu: positioned under its own trigger, otherwise pure `.layout-menu`. */
+.dark-select-menu {
+  position: absolute; left: 0; top: calc(100% + 4px);
+  min-width: 100%; max-height: 320px; overflow: auto; z-index: 210;
+}
+.dark-select-menu.hidden { display: none; }
+.dark-select-option.selected {
+  background: var(--bg-card-hover, #252a40);
+  box-shadow: inset 2px 0 0 var(--accent, #6c8cff);
+}
+.dark-select-option.warn .lm-sub { color: var(--yellow, #fbbf24); }
+.dark-select-empty {
+  padding: 7px 10px; color: var(--text-muted, #5a5f73);
+  font-size: var(--font-size-sm, 12px);
+}
