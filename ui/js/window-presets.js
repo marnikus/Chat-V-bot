@@ -304,7 +304,8 @@ const WindowPresets = {
     const canvas = documentById('windowPresetPreviewCanvas');
     if (!modal || !title || !meta || !canvas) return;
     title.textContent = 'Preview: ' + result.document.name;
-    meta.textContent = this._previewMeta(result.document, result.warning);
+    meta.textContent = this._previewMeta(result.document, result.warning,
+                                         result.notice);
     canvas.replaceChildren();
     result.document.windows.forEach((item) => {
       const tile = document.createElement('div');
@@ -319,7 +320,7 @@ const WindowPresets = {
     modal.classList.remove('hidden');
   },
 
-  _previewMeta(document, warning) {
+  _previewMeta(document, warning, notice) {
     const resolution = document.screen.width + '×' + document.screen.height;
     const note = SashGrid._screenSnapshot(SashGrid.gridEl && SashGrid.gridEl.getBoundingClientRect
       ? SashGrid.gridEl.getBoundingClientRect() : { width: 1, height: 1 });
@@ -327,6 +328,8 @@ const WindowPresets = {
     if (note.width !== document.screen.width || note.height !== document.screen.height)
       parts.push('target screen differs; percentages will adapt');
     if (warning) parts.push(warning);
+    // What reconcile() had to change to fit this build, if anything.
+    if (notice) parts.push(notice);
     return parts.join(' · ');
   },
 

@@ -268,9 +268,11 @@ const SashGrid = {
     const state = doc.window_states;
     if (!state || !Array.isArray(state.closed) || !Array.isArray(state.minimized))
       return { ok: false, error: 'window_states must contain closed and minimized lists' };
-    const known = (id) => typeof id === 'string' && SashCore.WINDOW_IDS.includes(id);
-    if (!state.closed.every(known) || !state.minimized.every(known))
-      return { ok: false, error: 'window_states contains an unknown window' };
+    // Ids this build does not have are NOT fatal: reconcile() drops them
+    // along with their leaves. Only structurally impossible input is.
+    const named = (id) => typeof id === 'string' && id !== '';
+    if (!state.closed.every(named) || !state.minimized.every(named))
+      return { ok: false, error: 'window_states contains a nameless window' };
     if (new Set(state.closed).size !== state.closed.length || new Set(state.minimized).size !== state.minimized.length)
       return { ok: false, error: 'window_states contains a duplicate window' };
     if (state.closed.some((id) => state.minimized.includes(id)))
@@ -278,21 +280,22 @@ const SashGrid = {
     return { ok: true, states: { closed: state.closed.slice(), minimized: state.minimized.slice() } };
   },
 
+  /* Structural checks only. A preset naming a different window set is the
+     case reconcile() exists to handle, so it is no longer an error; a
+     self-contradictory document still is. */
   _portableWindows(doc, states) {
-    if (!Array.isArray(doc.windows) || doc.windows.length !== SashCore.WINDOW_IDS.length)
-      return { ok: false, error: 'windows do not contain the current window set' };
+    if (!Array.isArray(doc.windows) || !doc.windows.length)
+      return { ok: false, error: 'windows must be a non-empty list' };
     const seen = new Set();
     for (const item of doc.windows) {
-      if (!item || typeof item.id !== 'string' || seen.has(item.id) || !SashCore.WINDOW_IDS.includes(item.id))
-        return { ok: false, error: 'windows contain an unknown or duplicate id' };
+      if (!item || typeof item.id !== 'string' || !item.id || seen.has(item.id))
+        return { ok: false, error: 'windows contain a nameless or duplicate id' };
       const wanted = states.closed.includes(item.id) ? 'closed'
         : (states.minimized.includes(item.id) ? 'minimized' : 'open');
       if (item.state !== wanted || !this._validPortableBounds(item.bounds))
         return { ok: false, error: 'window state or normalized bounds are invalid' };
       seen.add(item.id);
     }
-    if (seen.size !== SashCore.WINDOW_IDS.length)
-      return { ok: false, error: 'windows do not contain the current window set' };
     return { ok: true };
   },
 
@@ -314,9 +317,14 @@ const SashGrid = {
     if (typeof doc.name !== 'string' || !doc.name.trim() || doc.name.trim().length > 80)
       return { ok: false, error: 'preset name must be 1–80 characters' };
     const grid = doc.grid;
-    if (!grid || grid.type !== 'sash-tree' || grid.sizes_unit !== 'percent' || grid.window_count !== SashCore.WINDOW_IDS.length)
+    if (!grid || grid.type !== 'sash-tree' || grid.sizes_unit !== 'percent' ||
+        !Number.isInteger(grid.window_count) || grid.window_count < 1)
       return { ok: false, error: 'grid metadata is invalid' };
-    const treeResult = SashCore.deserialize(JSON.stringify({ v: grid.version, tree: grid.tree }));
+    // The tree is checked against the windows IT names, not against this
+    // build's list; fitting the two together is reconcile()'s job below.
+    const treeResult = SashCore.deserialize(
+      JSON.stringify({ v: grid.version, tree: grid.tree }),
+      SashCore.leafIds(grid.tree || {}));
     if (!treeResult.ok) return { ok: false, error: 'invalid grid tree: ' + treeResult.error };
     const stateResult = this._portableStates(doc);
     if (!stateResult.ok) return stateResult;
@@ -334,10 +342,49 @@ const SashGrid = {
     clean.name = clean.name.trim();
     clean.app_version = clean.app_version.trim();
     clean.screen.device_pixel_ratio = dpr;
-    clean.grid.tree = treeResult.tree;
     clean.grid.version = SashCore.VERSION;
-    return { ok: true, document: clean,
+    const fit = this._reconcileDocument(clean, treeResult.tree);
+    return { ok: true, document: clean, reconciled: fit,
+      notice: PresetReconcile.summarize(fit),
       warning: clean.app_version === this.APP_VERSION ? '' : 'preset was created by app ' + clean.app_version };
+  },
+
+  /* Fit a validated document to the windows this build actually has, so a
+     preset from a different build restores instead of being rejected.
+     Mutates `clean` into something applyPortablePreset can use directly. */
+  _reconcileDocument(clean, tree) {
+    const fit = PresetReconcile.reconcile(tree, SashCore.WINDOW_IDS);
+    clean.grid.tree = fit.tree;
+    clean.grid.window_count = fit.matched.length + fit.extra.length;
+    clean.windows = this._reconciledWindows(clean, fit);
+    clean.window_states = this._reconciledStates(clean.window_states, fit);
+    return fit;
+  },
+
+  /* Saved entries for windows that survived, plus a default entry for each
+     window grafted in -- the preview draws straight off this list. */
+  _reconciledWindows(clean, fit) {
+    const saved = new Map(
+      (clean.windows || []).map((item) => [item.id, item]));
+    const live = new Set(fit.matched);
+    const kept = SashCore.WINDOW_IDS
+      .filter((id) => live.has(id) && saved.has(id))
+      .map((id) => saved.get(id));
+    return kept.concat(fit.extra.map((id) => this._graftedWindow(id)));
+  },
+
+  _graftedWindow(id) {
+    return { id, title: SashCore.WINDOW_TITLES[id] || id, state: 'open',
+      bounds: { x: 0, y: 0, width: 1, height: 1 } };
+  },
+
+  /* Drop skipped ids from the state lists; a grafted window defaults to
+     open, which is simply its absence from both lists. */
+  _reconciledStates(states, fit) {
+    const live = new Set(fit.matched);
+    const keep = (list) => (list || []).filter((id) => live.has(id));
+    return { closed: keep(states && states.closed),
+             minimized: keep(states && states.minimized) };
   },
 
   applyPortablePreset(raw) {
@@ -358,7 +405,11 @@ const SashGrid = {
     this.render();
     this._save();
     this._saveWindowStates();
-    if (typeof LogConsole !== 'undefined') LogConsole.log('✅ Window preset “' + doc.name + '” restored', 'success');
+    if (typeof LogConsole !== 'undefined') {
+      LogConsole.log('✅ Window preset “' + doc.name + '” restored', 'success');
+      // Say what was adapted; a silently different layout is worse than none.
+      if (result.notice) LogConsole.log('ℹ️ ' + result.notice, 'info');
+    }
     return true;
   },
 

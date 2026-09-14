@@ -43,6 +43,8 @@ global.document = {
 global.localStorage = { setItem() {}, getItem() { return null; } };
 global.BridgeReady = { ready() {} };
 global.SashCore = SashCore;
+// sash-grid delegates preset fitting to this module, as index.html loads it.
+global.PresetReconcile = require('../ui/js/core/preset-reconcile.js');
 vm.runInThisContext(fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
   '\nglobalThis.__SashGrid = SashGrid;');
 const SashGrid = global.__SashGrid;
@@ -81,14 +83,43 @@ test('valid portable document applies exact tree and window states', () => {
   assert(SashGrid.winEls.stats.style.display === '', 'stale hidden display cleared');
 });
 
-test('invalid portable document is rejected without changing the tree', () => {
+test('structurally invalid document is rejected without changing the tree', () => {
   const before = SashCore.serialize(SashGrid.root);
   const bad = SashGrid.createPortablePreset('Bad');
-  bad.grid.tree.children[0].children[0].children[0].id = 'unknown';
+  bad.grid.tree.children[0].children[0].children[0] = { t: 'mystery' };
   const result = SashGrid.validatePortablePreset(bad);
-  assert(!result.ok && /window|id|leaf/.test(result.error));
+  assert(!result.ok && /node type|tree/.test(result.error), result.error);
   assert(!SashGrid.applyPortablePreset(bad));
   assert(SashCore.serialize(SashGrid.root) === before);
+});
+
+// A preset naming a window this build does not have used to be rejected
+// outright -- the "layouts should adapt" ticket. It is now reconciled: the
+// unknown leaf is dropped and the window it displaced is grafted back.
+test('a preset from a build with a different window set still restores', () => {
+  const doc = SashGrid.createPortablePreset('Foreign');
+  const replaced = doc.grid.tree.children[0].children[0].children[0].id;
+  doc.grid.tree.children[0].children[0].children[0].id = 'retired-window';
+  const result = SashGrid.validatePortablePreset(doc);
+  assert(result.ok, 'should reconcile, got: ' + result.error);
+  assert(result.reconciled.skipped.includes('retired-window'),
+         'must report the window it dropped');
+  assert(result.reconciled.extra.includes(replaced),
+         'must graft back the live window the preset omitted');
+  assert(result.notice && result.notice.includes('retired-window'),
+         'must tell the user what changed: ' + result.notice);
+  const ids = SashCore.leafIds(result.document.grid.tree).slice().sort();
+  assert(JSON.stringify(ids) === JSON.stringify(SashCore.WINDOW_IDS.slice().sort()),
+         'reconciled tree must hold exactly this build\'s windows: ' + ids);
+  assert(SashGrid.applyPortablePreset(doc), 'must apply');
+});
+
+test('a preset needing no adaptation reports no notice', () => {
+  const doc = SashGrid.createPortablePreset('Native');
+  const result = SashGrid.validatePortablePreset(doc);
+  assert(result.ok, result.error);
+  assert(result.reconciled.changed === false, 'must not claim a change');
+  assert(!result.notice, 'must stay quiet: ' + result.notice);
 });
 
 test('invalid screen metadata is refused before a preset can be applied', () => {
