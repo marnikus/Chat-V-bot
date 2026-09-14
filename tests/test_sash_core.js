@@ -36,11 +36,13 @@ function near(a, b, tol, msg) {
   if (Math.abs(a - b) > (tol == null ? 0.01 : tol))
     throw new Error((msg || 'near') + ': ' + a + ' !~ ' + b);
 }
-// Layout version 3: the seven original windows, the message-archive windows
-// (Person History, Full User Database, Chat Message Collector) and the
-// management windows (Label Manager, DB Connection).
+// Layout version 4: the seven original windows, the message-archive windows
+// (Person History, Full User Database, Chat Message Collector), the
+// management windows (Label Manager, DB Connection) and the AI windows
+// (AI Bot Chat, Grok Prompt Editor).
 const ALL = ['stats', 'filters', 'stack', 'config', 'composer', 'people',
-             'log', 'history', 'userdb', 'collector', 'labels', 'dbconn']
+             'log', 'history', 'userdb', 'collector', 'labels', 'dbconn',
+             'botchat', 'botprompt']
   .slice().sort(); // sorted — compared against sorted leaf lists
 /** ALL minus the given ids — for trees a test deliberately shrinks. */
 const allBut = (...ids) => ALL.filter((i) => !ids.includes(i));
@@ -60,8 +62,8 @@ t('default tree validates & contains every window', () => {
   valid(d);
   eq(sorted(d), ALL);
   // col [ top utility row | composer | people|log row ]
-  ok(S.isSplit(d) && d.dir === 'col' && d.children.length === 5, 'root col, 5 children');
-  eq(d.sizes, [30, 15, 21, 20, 14]);
+  ok(S.isSplit(d) && d.dir === 'col' && d.children.length === 6, 'root col, 6 children');
+  eq(d.sizes, [26, 13, 18, 17, 12, 14]);
   const top = d.children[0];
   ok(S.isSplit(top) && top.dir === 'row' && top.children.length === 2, 'top row, 2 groups');
   eq(top.sizes, [17, 83]);
@@ -72,29 +74,32 @@ t('default tree validates & contains every window', () => {
   eq(d.children[2].sizes, [70, 30]);
   eq(S.leafIds(d.children[3]), ['history', 'userdb', 'collector']);
   eq(S.leafIds(d.children[4]), ['labels', 'dbconn']);
+  eq(S.leafIds(d.children[5]), ['botchat', 'botprompt']);
 });
 
 t('layout A: one stacked row per window, spec order', () => {
   const a = S.layoutA();
   valid(a);
   eq(sorted(a), ALL);
-  ok(S.isSplit(a) && a.dir === 'col' && a.children.length === 12, '12 rows');
+  ok(S.isSplit(a) && a.dir === 'col' && a.children.length === 14, '14 rows');
   eq(a.children.map((c) => c.id), ['stats', 'filters', 'stack', 'config',
                                     'composer', 'people', 'log',
                                     'history', 'userdb', 'collector',
-                                    'labels', 'dbconn']);
-  eq(a.sizes, [6, 6, 14, 10, 10, 10, 8, 9, 8, 7, 6, 6]);
+                                    'labels', 'dbconn',
+                                    'botchat', 'botprompt']);
+  eq(a.sizes, [5, 5, 12, 9, 9, 9, 7, 8, 7, 6, 5, 5, 8, 5]);
 });
 
 t('layout B: [composer|people] row, full-width log, utilities row', () => {
   const b = S.layoutB();
   valid(b);
   eq(sorted(b), ALL);
-  ok(S.isSplit(b) && b.dir === 'col' && b.children.length === 5, '5 rows');
-  eq(b.sizes, [26, 17, 24, 19, 14]);
+  ok(S.isSplit(b) && b.dir === 'col' && b.children.length === 6, '6 rows');
+  eq(b.sizes, [22, 15, 21, 16, 12, 14]);
   eq(S.leafIds(b.children[3]).slice().sort(),
      ['collector', 'history', 'userdb']);
   eq(S.leafIds(b.children[4]), ['labels', 'dbconn']);
+  eq(S.leafIds(b.children[5]), ['botchat', 'botprompt']);
   const top = b.children[0];
   ok(S.isSplit(top) && top.dir === 'row' && top.children.length === 2, 'top row');
   eq(S.leafIds(top), ['composer', 'people']);
@@ -116,9 +121,10 @@ t('layout C: log spans the full height of the hero row', () => {
   const c = S.layoutC();
   valid(c);
   eq(sorted(c), ALL);
-  ok(S.isSplit(c) && c.dir === 'col' && c.children.length === 4, '4 rows');
-  near(c.sizes[0], 34, 0.001); near(c.sizes[1], 25, 0.001);
-  near(c.sizes[2], 26, 0.001); near(c.sizes[3], 15, 0.001);
+  ok(S.isSplit(c) && c.dir === 'col' && c.children.length === 5, '5 rows');
+  near(c.sizes[0], 29, 0.001); near(c.sizes[1], 21, 0.001);
+  near(c.sizes[2], 22, 0.001); near(c.sizes[3], 13, 0.001);
+  near(c.sizes[4], 15, 0.001);
   const hero = c.children[0];
   ok(S.isSplit(hero) && hero.dir === 'row' && hero.children.length === 2, 'hero row');
   eq(hero.sizes, [70, 30]);
@@ -186,9 +192,9 @@ t('moveWindow: edge drop splits the target & removes the original row', () => {
   eq(S.leafIds(p), ['composer', 'people'], 'composer landed in people\'s row');
   eq(p.sizes, [50, 50]);
   // composer\'s old full-width row is gone → one row fewer, renormalised
-  ok(d.children.length === 4, 'root now 4 children');
-  near(d.sizes[0], 30 / 85 * 100, 0.1, 'top share renormalised');
-  near(d.sizes[1], 21 / 85 * 100, 0.1, 'bottom share renormalised');
+  ok(d.children.length === 5, 'root now 5 children');
+  near(d.sizes[0], 26 / 87 * 100, 0.1, 'top share renormalised');
+  near(d.sizes[1], 18 / 87 * 100, 0.1, 'bottom share renormalised');
   // bottom row = [ row[composer,people] | log ] — log kept its slot
   ok(S.isLeaf(d.children[1].children[1]) &&
      d.children[1].children[1].id === 'log', 'log stayed in the bottom row');
@@ -213,8 +219,8 @@ t('moveWindow: center drop into a 2-child sub-split → 3 children, sizes stay s
   eq(S.leafIds(inner), ['log', 'stats', 'filters']);
   near(inner.sizes[0], 22.5); near(inner.sizes[1], 22.5); near(inner.sizes[2], 55);
   // log left its full-width row → root now has one row fewer
-  ok(b.children.length === 4, 'root now 4 children');
-  near(b.sizes[0], 26 / 83 * 100, 0.1);
+  ok(b.children.length === 5, 'root now 5 children');
+  near(b.sizes[0], 22 / 85 * 100, 0.1);
 });
 
 t('moveWindow: sash drop lands between two sub-split groups', () => {
@@ -228,7 +234,7 @@ t('moveWindow: sash drop lands between two sub-split groups', () => {
   eq(S.leafIds(util.children[0]), ['stats', 'filters']);
   eq(S.leafIds(util.children[2]), ['stack', 'config']);
   near(util.sizes[0], 25); near(util.sizes[1], 37.5); near(util.sizes[2], 37.5);
-  ok(b.children.length === 4, 'log\'s old row collapsed away');
+  ok(b.children.length === 5, 'log\'s old row collapsed away');
 });
 
 t('moveWindow: sash drop between non-adjacent anchors throws', () => {

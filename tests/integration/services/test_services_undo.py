@@ -54,7 +54,8 @@ def _variant_tree():
 
 
 GRID_FULL_B = LayoutService.canonical_grid_payload(
-    json.dumps({"v": 3, "tree": _variant_tree()}))[0]
+    json.dumps({"v": LayoutService.GRID_VERSION,
+                "tree": _variant_tree()}))[0]
 
 
 class FakeArchive:
@@ -404,7 +405,8 @@ class TestMigration(UndoCase):
         self.assertEqual(len(history), 2)
         self.assertEqual(index, 1)
         self.assertEqual(history[1]["seq"], 7)
-        self.assertEqual(json.loads(history[1]["value"])["v"], 3)
+        self.assertEqual(json.loads(history[1]["value"])["v"],
+                         LayoutService.GRID_VERSION)
 
     def test_migration_caps_and_indexes(self):
         items = []

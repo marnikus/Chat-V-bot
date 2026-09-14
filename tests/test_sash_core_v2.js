@@ -1,8 +1,9 @@
 /* Tests for the grid's window set and the layout migrations.
 
    v2 added the three archive windows (Person History, User Database,
-   Chat Message Collector); v3 adds the two management windows (Label
-   Manager, DB Connection). A saved layout is validated against the
+   Chat Message Collector); v3 added the two management windows (Label
+   Manager, DB Connection); v4 adds the two AI windows (AI Bot Chat,
+   Grok Prompt Editor). A saved layout is validated against the
    window set and REJECTED on mismatch, so every user upgrading the app
    would lose their arrangement unless the stored older tree is
    migrated — from ANY earlier version, not just the last one.
@@ -32,9 +33,12 @@ function ok(cond, msg) { if (!cond) throw new Error(msg || 'ok'); }
 
 const LEGACY = ['stats', 'filters', 'stack', 'config', 'composer', 'people', 'log'];
 const ARCHIVE = ['history', 'userdb', 'collector'];
-const NEW = ['labels', 'dbconn'];
+const MANAGEMENT = ['labels', 'dbconn'];
+const AI = ['botchat', 'botprompt'];
+const NEW = MANAGEMENT.concat(AI);
 const V2 = LEGACY.concat(ARCHIVE);
-const ALL = V2.concat(NEW).slice().sort();
+const V3 = V2.concat(MANAGEMENT);
+const ALL = V3.concat(AI).slice().sort();
 const sorted = (tree) => S.leafIds(tree).slice().sort();
 
 const v1Tree = () => S.split('col', LEGACY.map(S.leaf),
@@ -72,9 +76,27 @@ t('the default tree and every preset show every window', () => {
   }
 });
 
-t('the serialised version is 3', () => {
-  eq(S.VERSION, 3);
-  eq(JSON.parse(S.serialize(S.defaultTree())).v, 3);
+t('the serialised version is 4', () => {
+  eq(S.VERSION, 4);
+  eq(JSON.parse(S.serialize(S.defaultTree())).v, 4);
+});
+
+t('a stored v3 layout keeps its arrangement and gains the AI windows', () => {
+  const v3Tree = S.split('col', [
+    S.split('row', [S.leaf('stats'), S.leaf('filters')], [40, 60]),
+    S.split('row', [S.leaf('stack'), S.leaf('config'), S.leaf('composer')],
+            [40, 30, 30]),
+    S.split('row', [S.leaf('people'), S.leaf('log')], [70, 30]),
+    S.split('row', [S.leaf('history'), S.leaf('userdb'), S.leaf('collector')],
+            [40, 35, 25]),
+    S.split('row', [S.leaf('labels'), S.leaf('dbconn')], [55, 45]),
+  ], [20, 20, 20, 20, 20]);
+  const res = S.deserialize(JSON.stringify({ v: 3, tree: v3Tree }));
+  ok(res.ok, 'v3 must be accepted: ' + res.error);
+  ok(res.migrated === true, 'the caller must be told it was migrated');
+  eq(sorted(res.tree), ALL);
+  ok(JSON.stringify(res.tree).indexOf('"id":"history"') > 0,
+     'the stored arrangement must survive the upgrade');
 });
 
 // ── migration ────────────────────────────────────────────────────
