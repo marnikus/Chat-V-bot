@@ -17,6 +17,78 @@
         "block_id": "CUSTOM_FIND"
       },
       "updated_at": "2026-09-11T11:49:07"
+    },
+    {
+      "name": "Clean Search bar",
+      "block": {
+        "custom_name": "Clean Search bar",
+        "selector": "button[matsuffix]",
+        "label_selector": "",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": "",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
+      },
+      "updated_at": "2026-09-14T15:31:31"
+    },
+    {
+      "name": "Text Area MSG",
+      "block": {
+        "custom_name": "Text Area MSG",
+        "selector": "textarea",
+        "label_selector": "",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": "",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
+      },
+      "updated_at": "2026-09-14T15:31:31"
+    },
+    {
+      "name": "Close Tab",
+      "block": {
+        "custom_name": "Close Tab",
+        "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+        "label_selector": "p.chat-title",
+        "match_text": "{{nick}}",
+        "click_enabled": true,
+        "click_selector": "button.tab-close-button",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
+      },
+      "updated_at": "2026-09-14T15:31:31"
+    },
+    {
+      "name": "Scroll viewport",
+      "block": {
+        "custom_name": "Scroll viewport",
+        "selector": "cdk-virtual-scroll-viewport",
+        "label_selector": "",
+        "match_text": "",
+        "click_enabled": true,
+        "click_selector": "",
+        "highlight_enabled": true,
+        "confirm_pause_ms": 700,
+        "highlight_ms": 1200,
+        "pre_delay_ms": 500,
+        "enabled": true,
+        "block_id": "CUSTOM_FIND"
+      },
+      "updated_at": "2026-09-14T15:31:31"
     }
   ]
 }

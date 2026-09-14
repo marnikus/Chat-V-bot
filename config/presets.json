@@ -201,6 +201,215 @@
         }
       ],
       "updated_at": "2026-09-11T11:49:07"
+    },
+    "stack": {
+      "blocks": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "sequential",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        }
+      ],
+      "updated_at": "2026-09-14T15:31:31"
     }
   },
   "template_presets": {},
@@ -211,6 +420,20 @@
       "api_key": "xai-V9ZXvKN44AnM2J18YOhyVBjU5o0tvlKhtr0OjgqjqIHhVIaGlrEtK8CWRKSzWS7EXjd3McUmSRL2f668",
       "model": "grok-4.3",
       "url": "https://api.x.ai/v1/chat/completions"
+    },
+    "google": {
+      "title": "Google Gemini",
+      "provider": "google",
+      "api_key": "",
+      "model": "gemini-2.0-flash",
+      "url": ""
+    },
+    "kimi": {
+      "title": "Kimi (Moonshot)",
+      "provider": "kimi",
+      "api_key": "",
+      "model": "kimi-k2.6",
+      "url": ""
     }
   },
   "prompt_presets": {
@@ -218,6 +441,16 @@
       "title": "all msg",
       "template": "suggest_reply",
       "text": "You are helping to continue a private chat with {nick}.\nHere is the conversation so far, oldest first:\n\n{all_msg}{last_msg}\n\nWrite ONE short next message that fits this conversation, in the same language the other person uses. Reply with the message text only — no quotes, no explanation. гз ещ 10 words max."
+    },
+    "suggest_reply:reply": {
+      "title": "reply",
+      "template": "suggest_reply",
+      "text": "You are helping to continue a private chat with {nick}.\nHere is the conversation so far, oldest first:\nYou gave only saggestion from the role Man side. The Person I a'm talking is always a female.\n{all_msg}\n\nWrite ONE short next message that fits this conversation, in the same language the other person uses. Reply with the message text only — no quotes, no explanation. гз ещ 15 - 25 words max."
+    },
+    "suggest_reply:to-action": {
+      "title": "to action",
+      "template": "suggest_reply",
+      "text": "You are helping to continue a private chat with {nick}.\nHere is the conversation so far, oldest first:\nYou gave only saggestion from the role Man side. The Person I a'm talking is always a female.\n{all_msg}\n\nWrite ONE short next message that fits this conversation, in the same language the other person uses. Reply with the message text only — no quotes, no explanation. \nThis next MSG should not reply previous and must bee variative. It should be \"call to action\" lead female person to do somesing next for me. Making plot continue.\n15 - 25 words max."
     }
   }
 }
