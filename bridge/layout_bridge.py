@@ -26,6 +26,7 @@ class LayoutBridge(QObject):
     V1_WINDOW_IDS = LayoutService.V1_WINDOW_IDS
     V2_WINDOW_IDS = LayoutService.V2_WINDOW_IDS
     V3_WINDOW_IDS = LayoutService.V3_WINDOW_IDS
+    V4_WINDOW_IDS = LayoutService.V4_WINDOW_IDS
     LEGACY_WINDOW_IDS = LayoutService.LEGACY_WINDOW_IDS
     NEW_WINDOW_IDS = LayoutService.NEW_WINDOW_IDS
     WINDOW_IDS = LayoutService.WINDOW_IDS

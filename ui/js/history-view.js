@@ -333,7 +333,10 @@ var HistoryView = (function () {
   return {
     renderRows, renderGroups, renderHeader, renderSearchGroups, renderNotice,
     appendHighlighted, messageNode, gapNode, dayNode, mediaSrc,
-    applyMediaPath, el,
+    // mediaNode is exported so the Bot Chat window draws media with THIS
+    // renderer rather than a second one: same loading/failed/restore states,
+    // same images-off badge, one place to fix.
+    mediaNode, applyMediaPath, el,
   };
 })();
 

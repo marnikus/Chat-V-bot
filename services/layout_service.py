@@ -25,10 +25,11 @@ class LayoutService:
                      "people", "log"}
     V2_WINDOW_IDS = V1_WINDOW_IDS | {"history", "userdb", "collector"}
     V3_WINDOW_IDS = V2_WINDOW_IDS | {"labels", "dbconn"}
+    V4_WINDOW_IDS = V3_WINDOW_IDS | {"botchat", "botprompt"}
     LEGACY_WINDOW_IDS = V1_WINDOW_IDS            # kept for older callers
-    NEW_WINDOW_IDS = V3_WINDOW_IDS - V1_WINDOW_IDS
-    WINDOW_IDS = V3_WINDOW_IDS
-    GRID_VERSION = 3
+    NEW_WINDOW_IDS = V4_WINDOW_IDS - V1_WINDOW_IDS
+    WINDOW_IDS = V4_WINDOW_IDS
+    GRID_VERSION = 4
     MIN_GRID_SIZE = 4
 
     # ── tree helpers ─────────────────────────────────────────────
@@ -132,7 +133,8 @@ class LayoutService:
     def _window_set_ok(cls, tree, version):
         """(tree, None) — possibly upgraded — or (None, mismatch error)."""
         got = sorted(i for i in cls.leaf_ids(tree) if i)
-        known = {1: sorted(cls.V1_WINDOW_IDS), 2: sorted(cls.V2_WINDOW_IDS)}
+        known = {1: sorted(cls.V1_WINDOW_IDS), 2: sorted(cls.V2_WINDOW_IDS),
+                 3: sorted(cls.V3_WINDOW_IDS)}
         if version < cls.GRID_VERSION and got == known.get(version):
             # A layout saved before newer windows existed. Rejecting it
             # would throw away the user's arrangement on first start
@@ -203,7 +205,8 @@ class LayoutService:
             split("row", [leaf("history"), leaf("userdb"),
                           leaf("collector")], [40, 35, 25]),
             split("row", [leaf("labels"), leaf("dbconn")], [55, 45]),
-        ], [30, 15, 21, 20, 14])
+            split("row", [leaf("botchat"), leaf("botprompt")], [62, 38]),
+        ], [26, 13, 18, 17, 12, 14])
 
     @classmethod
     def default_payload(cls) -> str:

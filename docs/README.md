@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **92 archived ones**. That is
+This repository has **three current docs** and **99 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 92 archived docs
+    ├── README.md                    ← index of all 99 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -31,7 +31,9 @@ docs/
     ├── 2026-09-12-round-f-size-tail/ ← Round F: the size tail + the two god classes
     ├── 2026-09-13-round-f/           ← Round F's F5 parameter-object step
     ├── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the executed steps G1–G6
-    └── 2026-09-13-rules-appendices/  ← RULE 19's ladder + case studies, extracted from the rules file (newest)
+    ├── 2026-09-13-rules-appendices/  ← RULE 19's ladder + case studies, extracted from the rules file
+    ├── 2026-09-13-ai-bot-chat/       ← the AI Bot Chat + Grok Prompt Editor feature (6 docs)
+    └── 2026-09-14-ai-bot-chat-port/  ← reapplying that feature on the post-Round-G tree (newest)
 ```
 
 Also in the repo, not under `docs/`:
@@ -40,7 +42,7 @@ Also in the repo, not under `docs/`:
 |---|---|
 | [`README.md`](../README.md) | User manual: install, Chrome flags, UI tour |
 | [`reports/`](../reports/) | Measured code-quality snapshots (the coverage/complexity **baseline** the rules compare against) |
-| `tests/` | The executable spec — 173 Python test files + 28 Node harness files |
+| `tests/` | The executable spec — 176 Python test files + 30 Node harness files |
 
 ---
 
@@ -75,6 +77,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Size, parameter and test-debt rounds (F, G) | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16 / 18 / 19, and this map | [`2026-09-12-round-f-size-tail/`](archive/2026-09-12-round-f-size-tail/) (the 500-line tail and the two god classes), [`2026-09-13-round-f/`](archive/2026-09-13-round-f/) (the parameter objects), [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the tail inventory and the executed steps G1–G6), [`2026-09-13-rules-appendices/`](archive/2026-09-13-rules-appendices/) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
 | Tests | system of record §7 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/) |
+| AI Bot Chat, prompt editor, connections | system of record §2, invariants I-23…I-33 | [`2026-09-13-ai-bot-chat/`](archive/2026-09-13-ai-bot-chat/) (the feature and its six design docs), [`2026-09-14-ai-bot-chat-port/`](archive/2026-09-14-ai-bot-chat-port/PORT_DESIGN_2026-09-14.md) (how it was reapplied on the refactored tree, and what the port had to adapt) |
 
 ---
 

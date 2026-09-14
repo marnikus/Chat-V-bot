@@ -146,6 +146,11 @@ const HistoryStore = {
                        preloadRows: this.preloadRows });
     this.renderHeader();
     this.renderEmpty('Loading “' + nick + '” …');
+    // The AI Bot Chat follows the same person: every nick click in the app
+    // already funnels through here, so this is the ONE place that decides
+    // who both windows are looking at (AGENT_RULES RULE 10).
+    if (typeof BotChat !== 'undefined' && BotChat.openPerson &&
+        BotChat.nick !== nick) BotChat.openPerson(nick);
     const request = this.model.requestInitial();
     if (options.around != null) request.around = options.around;
     this._open = this._send('history_open', request);

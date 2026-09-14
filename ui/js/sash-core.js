@@ -39,6 +39,9 @@
     // Labels + database management (added in layout version 3)
     { id: 'labels',    title: 'Label Manager' },
     { id: 'dbconn',    title: 'DB Connection' },
+    // AI assistant windows (added in layout version 4)
+    { id: 'botchat',   title: 'AI Bot Chat' },
+    { id: 'botprompt', title: 'Grok Prompt Editor' },
   ];
   /** Windows that existed in layout version 1 — used by migrate(). */
   const V1_WINDOW_IDS = ['stats', 'filters', 'stack', 'config', 'composer',
@@ -46,8 +49,10 @@
   /** Windows that existed in layout version 2. */
   const V2_WINDOW_IDS = V1_WINDOW_IDS.concat(['history', 'userdb',
                                               'collector']);
+  /** Windows that existed in layout version 3. */
+  const V3_WINDOW_IDS = V2_WINDOW_IDS.concat(['labels', 'dbconn']);
   /** Current serialisation version. Older layouts are migrated on load. */
-  const VERSION = 3;
+  const VERSION = 4;
   const WINDOW_IDS = WINDOWS.map((w) => w.id);
   const WINDOW_TITLES = Object.fromEntries(WINDOWS.map((w) => [w.id, w.title]));
 
@@ -88,7 +93,8 @@
       split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
             [40, 35, 25]),
       split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
-    ], [30, 15, 21, 20, 14]);
+      split('row', [leaf('botchat'), leaf('botprompt')], [62, 38]),
+    ], [26, 13, 18, 17, 12, 14]);
   }
 
   /**
@@ -101,7 +107,8 @@
       leaf('composer'), leaf('people'), leaf('log'),
       leaf('history'), leaf('userdb'), leaf('collector'),
       leaf('labels'), leaf('dbconn'),
-    ], [6, 6, 14, 10, 10, 10, 8, 9, 8, 7, 6, 6]);
+      leaf('botchat'), leaf('botprompt'),
+    ], [5, 5, 12, 9, 9, 9, 7, 8, 7, 6, 5, 5, 8, 5]);
   }
 
   /**
@@ -120,7 +127,8 @@
         leaf('userdb'),
       ], [55, 45]),
       split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
-    ], [26, 17, 24, 19, 14]);
+      split('row', [leaf('botchat'), leaf('botprompt')], [62, 38]),
+    ], [22, 15, 21, 16, 12, 14]);
   }
 
   /**
@@ -140,7 +148,8 @@
       split('row', [leaf('history'), leaf('userdb'), leaf('collector')],
             [38, 34, 28]),
       split('row', [leaf('labels'), leaf('dbconn')], [55, 45]),
-    ], [34, 25, 26, 15]);
+      split('row', [leaf('botchat'), leaf('botprompt')], [62, 38]),
+    ], [29, 21, 22, 13, 15]);
   }
 
   const PRESETS = {
@@ -617,7 +626,7 @@
 
   return {
     WINDOWS, WINDOW_IDS, WINDOW_TITLES, V1_WINDOW_IDS, V2_WINDOW_IDS,
-    VERSION,
+    V3_WINDOW_IDS, VERSION,
     MAX_DEPTH, MIN_SIZE, pruneTree, migrate,
     leaf, split, clone, firstLeafId,
     defaultTree, layoutA, layoutB, layoutC, PRESETS,

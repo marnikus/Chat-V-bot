@@ -38,9 +38,10 @@ from test_chat_parser_delta import FakePage, raw  # noqa: E402
 LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer",
                   "people", "log"]
 NEW_WINDOWS = ["history", "userdb", "collector"]
-# Layout v3 adds the two management windows.
+# Layout v3 adds the two management windows, v4 the two AI windows.
 MANAGEMENT_WINDOWS = ["labels", "dbconn"]
-ALL_WINDOWS = LEGACY_WINDOWS + NEW_WINDOWS + MANAGEMENT_WINDOWS
+AI_WINDOWS = ["botchat", "botprompt"]
+ALL_WINDOWS = LEGACY_WINDOWS + NEW_WINDOWS + MANAGEMENT_WINDOWS + AI_WINDOWS
 CURRENT_GRID_VERSION = Bridge.GRID_VERSION
 
 

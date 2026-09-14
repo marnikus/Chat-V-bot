@@ -82,6 +82,10 @@ _SECTION_ROUTES = {
     "labels": "labels_file",
     "stack_presets": "presets",
     "template_presets": "presets",
+    # named things the AI feature lets the user create, edit and delete;
+    # `presets.json` is this repo's ONE mechanism for exactly that.
+    "ai_connections": "presets",
+    "prompt_presets": "presets",
 }
 
 _UNSET = object()

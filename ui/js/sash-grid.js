@@ -64,6 +64,7 @@ const SashGrid = {
       people: 'winPeople', log: 'winLog',
       history: 'winHistory', userdb: 'winUserDb', collector: 'winCollector',
       labels: 'winLabels', dbconn: 'winDbconn',
+      botchat: 'winBotChat', botprompt: 'winBotPrompt',
     };
     for (const w of SashCore.WINDOWS) {
       const el = document.getElementById(winElIds[w.id]);
