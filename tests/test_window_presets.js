@@ -45,6 +45,7 @@ global.BridgeReady = { ready() {} };
 global.SashCore = SashCore;
 // sash-grid delegates preset fitting to this module, as index.html loads it.
 global.PresetReconcile = require('../ui/js/core/preset-reconcile.js');
+global.PresetValidate = require('../ui/js/core/preset-validate.js');
 vm.runInThisContext(fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
   '\nglobalThis.__SashGrid = SashGrid;');
 const SashGrid = global.__SashGrid;

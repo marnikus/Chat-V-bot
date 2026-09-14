@@ -72,6 +72,10 @@
     }
     const total = clean.reduce((s, v) => s + v, 0);
     if (!(total > 0)) return evenSizes(count);
+    // Already correct: return the values untouched rather than dividing and
+    // re-multiplying, which turns a clean 28 into 28.000000000000004 and
+    // makes a round trip look like a change when nothing moved.
+    if (Math.abs(total - 100) < 1e-9) return clean;
     return clean.map((v) => (v / total) * 100);
   }
 

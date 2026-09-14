@@ -68,6 +68,20 @@ t('an unchanged preset keeps its exact proportions', () => {
   eq(r.tree.children[0].sizes, [60, 40], 'nested sizes must survive');
 });
 
+// Rescaling sizes that already sum to 100 turns a clean 28 into
+// 28.000000000000004, so a save/load round trip reports a change when
+// nothing moved.
+t('untouched sizes are returned bit-for-bit, not re-scaled', () => {
+  eq(R.normalize([72, 28], 2), [72, 28]);
+  eq(R.normalize([26, 13, 18, 17, 12, 14], 6), [26, 13, 18, 17, 12, 14]);
+});
+
+t('sizes that do not sum to 100 are still rescaled', () => {
+  const out = R.normalize([50, 50, 50], 3);
+  ok(Math.abs(out.reduce((a, b) => a + b, 0) - 100) < 1e-9,
+     'must sum to 100, got ' + out.reduce((a, b) => a + b, 0));
+});
+
 t('reconcile is idempotent', () => {
   const live = ['chat', 'people', 'composer'];
   const once = R.reconcile(savedTree(), live);

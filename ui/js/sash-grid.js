@@ -264,89 +264,40 @@ const SashGrid = {
       windows, window_states: effectiveStates, screen };
   },
 
-  _portableStates(doc) {
-    const state = doc.window_states;
-    if (!state || !Array.isArray(state.closed) || !Array.isArray(state.minimized))
-      return { ok: false, error: 'window_states must contain closed and minimized lists' };
-    // Ids this build does not have are NOT fatal: reconcile() drops them
-    // along with their leaves. Only structurally impossible input is.
-    const named = (id) => typeof id === 'string' && id !== '';
-    if (!state.closed.every(named) || !state.minimized.every(named))
-      return { ok: false, error: 'window_states contains a nameless window' };
-    if (new Set(state.closed).size !== state.closed.length || new Set(state.minimized).size !== state.minimized.length)
-      return { ok: false, error: 'window_states contains a duplicate window' };
-    if (state.closed.some((id) => state.minimized.includes(id)))
-      return { ok: false, error: 'closed and minimized window states overlap' };
-    return { ok: true, states: { closed: state.closed.slice(), minimized: state.minimized.slice() } };
-  },
-
   /* Structural checks only. A preset naming a different window set is the
      case reconcile() exists to handle, so it is no longer an error; a
      self-contradictory document still is. */
-  _portableWindows(doc, states) {
-    if (!Array.isArray(doc.windows) || !doc.windows.length)
-      return { ok: false, error: 'windows must be a non-empty list' };
-    const seen = new Set();
-    for (const item of doc.windows) {
-      if (!item || typeof item.id !== 'string' || !item.id || seen.has(item.id))
-        return { ok: false, error: 'windows contain a nameless or duplicate id' };
-      const wanted = states.closed.includes(item.id) ? 'closed'
-        : (states.minimized.includes(item.id) ? 'minimized' : 'open');
-      if (item.state !== wanted || !this._validPortableBounds(item.bounds))
-        return { ok: false, error: 'window state or normalized bounds are invalid' };
-      seen.add(item.id);
-    }
-    return { ok: true };
+  /* The spec PresetValidate needs to check a document without knowing
+     anything about the grid model. */
+  _presetSpec() {
+    return {
+      format: this.PRESET_FORMAT,
+      schemaVersion: this.PRESET_SCHEMA_VERSION,
+      // Validate the tree against the windows IT names, not this build's
+      // list -- whether those windows still exist is environmental.
+      checkTree: (tree, version) => SashCore.deserialize(
+        JSON.stringify({ v: version, tree }), SashCore.leafIds(tree || {})),
+    };
   },
 
-  _validPortableBounds(bounds) {
-    if (!bounds || typeof bounds !== 'object') return false;
-    const values = ['x', 'y', 'width', 'height'].map((key) => bounds[key]);
-    if (!values.every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)) return false;
-    return bounds.x + bounds.width <= 1.001 && bounds.y + bounds.height <= 1.001;
+  /* Is this a well-formed preset FILE? No question about whether this build
+     can show the windows it names, so a document stays storable even when it
+     came from a build with a different window set. */
+  validatePortableStructure(raw) {
+    return PresetValidate.structural(raw, this._presetSpec());
   },
 
+  /* Structural check, then fit the result to the windows this build has. */
   validatePortablePreset(raw) {
-    let doc;
-    try { doc = typeof raw === 'string' ? JSON.parse(raw) : SashCore.clone(raw); }
-    catch (e) { return { ok: false, error: 'bad JSON: ' + e.message }; }
-    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return { ok: false, error: 'document must be an object' };
-    if (doc.format !== this.PRESET_FORMAT || doc.schema_version !== this.PRESET_SCHEMA_VERSION)
-      return { ok: false, error: 'unsupported window preset format or schema version' };
-    if (typeof doc.app_version !== 'string' || !doc.app_version.trim()) return { ok: false, error: 'app_version is required' };
-    if (typeof doc.name !== 'string' || !doc.name.trim() || doc.name.trim().length > 80)
-      return { ok: false, error: 'preset name must be 1–80 characters' };
-    const grid = doc.grid;
-    if (!grid || grid.type !== 'sash-tree' || grid.sizes_unit !== 'percent' ||
-        !Number.isInteger(grid.window_count) || grid.window_count < 1)
-      return { ok: false, error: 'grid metadata is invalid' };
-    // The tree is checked against the windows IT names, not against this
-    // build's list; fitting the two together is reconcile()'s job below.
-    const treeResult = SashCore.deserialize(
-      JSON.stringify({ v: grid.version, tree: grid.tree }),
-      SashCore.leafIds(grid.tree || {}));
-    if (!treeResult.ok) return { ok: false, error: 'invalid grid tree: ' + treeResult.error };
-    const stateResult = this._portableStates(doc);
-    if (!stateResult.ok) return stateResult;
-    const windowResult = this._portableWindows(doc, stateResult.states);
-    if (!windowResult.ok) return windowResult;
-    const screen = doc.screen;
-    const dpr = screen && screen.device_pixel_ratio === undefined
-      ? 1 : screen && screen.device_pixel_ratio;
-    if (!screen || typeof screen.width !== 'number' || !Number.isFinite(screen.width) ||
-        typeof screen.height !== 'number' || !Number.isFinite(screen.height) ||
-        screen.width <= 0 || screen.height <= 0 || typeof dpr !== 'number' ||
-        !Number.isFinite(dpr) || dpr <= 0)
-      return { ok: false, error: 'screen metadata is invalid' };
-    const clean = SashCore.clone(doc);
-    clean.name = clean.name.trim();
-    clean.app_version = clean.app_version.trim();
-    clean.screen.device_pixel_ratio = dpr;
+    const checked = this.validatePortableStructure(raw);
+    if (!checked.ok) return checked;
+    const clean = checked.document;
     clean.grid.version = SashCore.VERSION;
-    const fit = this._reconcileDocument(clean, treeResult.tree);
+    const fit = this._reconcileDocument(clean, clean.grid.tree);
     return { ok: true, document: clean, reconciled: fit,
       notice: PresetReconcile.summarize(fit),
-      warning: clean.app_version === this.APP_VERSION ? '' : 'preset was created by app ' + clean.app_version };
+      warning: clean.app_version === this.APP_VERSION ? ''
+        : 'preset was created by app ' + clean.app_version };
   },
 
   /* Fit a validated document to the windows this build actually has, so a

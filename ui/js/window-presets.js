@@ -71,7 +71,11 @@ const WindowPresets = {
   },
 
   _persistDocument(document, imported = false) {
-    const checked = SashGrid.validatePortablePreset(document);
+    // STRUCTURAL only. Whether this build can show every window in the file
+    // has no bearing on whether the file is worth storing -- and re-running
+    // the environmental check here is what used to reject an import the user
+    // had already accepted at the preview, as a confusing late failure.
+    const checked = SashGrid.validatePortableStructure(document);
     if (!checked.ok) {
       this._message('Preset was not saved: ' + checked.error, 'error');
       return;
@@ -222,7 +226,9 @@ const WindowPresets = {
   export(name) {
     const bridge = typeof App !== 'undefined' ? App.bridge : null;
     if (!bridge || !bridge.export_window_preset) {
-      this._message('Export requires the desktop bridge to choose a folder.', 'error');
+      // No native folder picker here, but saving to a file does not need
+      // one: fall back to a download instead of refusing to export.
+      this._exportAsDownload(name);
       return;
     }
     let handled = false;
@@ -249,6 +255,48 @@ const WindowPresets = {
       return;
     }
     this._message('Exported “' + name + '” to ' + result.path + '.', 'success');
+  },
+
+  /* Bridge-free export: hand the document to the host as a download. */
+  _exportAsDownload(name) {
+    this._getDocument(name, (document) => {
+      if (!document) {
+        this._message('Export failed: “' + name + '” could not be read.', 'error');
+        return;
+      }
+      const checked = SashGrid.validatePortableStructure(document);
+      if (!checked.ok) {
+        this._message('Export failed: ' + checked.error, 'error');
+        return;
+      }
+      const ok = this._downloadJson(this._exportFileName(name),
+                                    JSON.stringify(checked.document, null, 2));
+      this._message(ok ? 'Exported “' + name + '” to your downloads.'
+        : 'Export is not supported in this browser.', ok ? 'success' : 'error');
+    });
+  },
+
+  /* A filename that survives every filesystem. */
+  _exportFileName(name) {
+    const safe = String(name || 'preset').replace(/[^a-z0-9._-]+/gi, '-')
+      .replace(/^-+|-+$/g, '').slice(0, 64) || 'preset';
+    return safe + '.window-preset.json';
+  },
+
+  _downloadJson(filename, text) {
+    if (typeof Blob === 'undefined' || typeof URL === 'undefined' ||
+        !URL.createObjectURL) return false;
+    const url = URL.createObjectURL(
+      new Blob([text], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    if (document.body) document.body.appendChild(link);
+    link.click();
+    if (link.remove) link.remove();
+    // Revoking immediately can cancel the download in some hosts.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return true;
   },
 
   showInFolder(name) {
