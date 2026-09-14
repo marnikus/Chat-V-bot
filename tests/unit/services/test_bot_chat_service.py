@@ -49,6 +49,26 @@ def run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
+# Every real HistoryDB a test opens, closed again by BotTestCase.tearDown:
+# each carries an aiosqlite connection worker thread, those threads are
+# non-daemon, and threading._shutdown JOINS them — one leaked handle stalls
+# the whole suite at interpreter exit long after the last test passed.
+_OPEN_DBS = []
+
+
+class BotTestCase(unittest.TestCase):
+    """unittest.TestCase that releases the real database handles.
+
+    Closing from a fresh loop is safe: aiosqlite resolves each operation's
+    future against the calling loop, and close() only posts to the
+    connection's worker thread and joins it.
+    """
+
+    def tearDown(self):
+        while _OPEN_DBS:
+            run(_OPEN_DBS.pop().close())
+
+
 class FakeGrok:
     """A stand-in for GrokClient that records the prompt it was given."""
 
@@ -92,10 +112,11 @@ async def make_db(rows):
             "text, day, ts_display) VALUES (?,?,?,?,?,?,?)",
             (pid, ordinal, direction, who, text, day, "12:0%d" % (ordinal % 10)))
     await db.commit()
+    _OPEN_DBS.append(db)
     return db
 
 
-class TestTodaysMessages(unittest.TestCase):
+class TestTodaysMessages(BotTestCase):
     def service(self, rows, grok=None):
         db = run(make_db(rows))
         return BotChatService(archive=FakeArchive(db), config=None,
@@ -168,7 +189,7 @@ async def add_media_message(db, url, kind, cache_path, ordinal):
     return mid
 
 
-class TestMediaReachesTheWindow(unittest.TestCase):
+class TestMediaReachesTheWindow(BotTestCase):
     """The GIF bug: a media message used to arrive with no media at all.
 
     `today()` hand-wrote its own four-column SELECT with no `media` join, so
@@ -228,7 +249,7 @@ class TestMediaReachesTheWindow(unittest.TestCase):
             bot_chat.last_inbound(page["items"])), "[gif]")
 
 
-class TestItemText(unittest.TestCase):
+class TestItemText(BotTestCase):
     def test_text_wins_media_fills_in_and_plain_empty_stays_empty(self):
         self.assertEqual(bot_chat.item_text({"text": " hi "}), "hi")
         self.assertEqual(bot_chat.item_text(
@@ -239,7 +260,7 @@ class TestItemText(unittest.TestCase):
         self.assertEqual(bot_chat.item_text({}), "")
 
 
-class TestItemsOfDay(unittest.TestCase):
+class TestItemsOfDay(BotTestCase):
     def test_it_keeps_only_the_named_day(self):
         items = [{"day": TODAY, "text": "a"}, {"day": YESTERDAY, "text": "b"},
                  {"text": "c"}]
@@ -248,7 +269,7 @@ class TestItemsOfDay(unittest.TestCase):
         self.assertEqual(bot_chat.items_of_day(None, TODAY), [])
 
 
-class TestTranscriptHelpers(unittest.TestCase):
+class TestTranscriptHelpers(BotTestCase):
     ITEMS = [{"dir": "out", "from": "me", "text": "hi"},
              {"dir": "in", "from": "Anna", "text": "hello"},
              {"dir": "in", "from": "Anna", "text": "   "}]
@@ -263,7 +284,7 @@ class TestTranscriptHelpers(unittest.TestCase):
         self.assertEqual(last_inbound([{"dir": "out", "text": "hi"}]), {})
 
 
-class TestSuggestAndAnalyze(unittest.TestCase):
+class TestSuggestAndAnalyze(BotTestCase):
     def build(self, answer, rows=None):
         rows = rows if rows is not None else [
             ("out", "me", "hi", TODAY), ("in", "Anna", "hello you", TODAY)]
@@ -329,7 +350,7 @@ class FakeParser:
         return {"partner": self.partner}
 
 
-class TestDeliver(unittest.TestCase):
+class TestDeliver(BotTestCase):
     class FakeCdp:
         is_connected = True
 
@@ -382,7 +403,7 @@ class TestDeliver(unittest.TestCase):
         self.assertEqual(result.value, "hi")
 
 
-class TestTheRecipientIsVerified(unittest.TestCase):
+class TestTheRecipientIsVerified(BotTestCase):
     """Sending is the only irreversible act here — it must hit the right chat.
 
     The window's person is chosen in User Memory; the browser's open tab is
@@ -415,6 +436,7 @@ class TestTheRecipientIsVerified(unittest.TestCase):
     def tearDown(self):
         (self.injector.type_message,
          self.injector.click_send) = self._original
+        super().tearDown()
 
     def send(self, nick, parser):
         return run(bot_chat.deliver(self.FakeCdp(), nick, "hi", parser=parser))
@@ -472,7 +494,7 @@ class FakeSession:
         return False
 
 
-class TestGrokClient(unittest.TestCase):
+class TestGrokClient(BotTestCase):
     def config(self, **values):
         cfg = ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json"))
         for key, value in values.items():
@@ -527,7 +549,7 @@ class TestGrokClient(unittest.TestCase):
             "grok_empty")
 
 
-class TestTheGoogleCallEndToEnd(unittest.TestCase):
+class TestTheGoogleCallEndToEnd(BotTestCase):
     """The whole transport against a fake session — not just the parsers.
 
     Unit-testing the four differing functions would pass even if the client
@@ -577,7 +599,7 @@ class TestTheGoogleCallEndToEnd(unittest.TestCase):
         self.assertIn("api.x.ai", session.calls[0]["url"])
 
 
-class TestGoogleProvider(unittest.TestCase):
+class TestGoogleProvider(BotTestCase):
     """Gemini's wire format, which agrees with Grok's about nothing."""
 
     SPEC = bot_providers.spec_of("google")
@@ -640,7 +662,7 @@ class TestGoogleProvider(unittest.TestCase):
             "grok_empty")
 
 
-class TestProviderCatalog(unittest.TestCase):
+class TestProviderCatalog(BotTestCase):
     def test_both_providers_are_offered_with_a_title(self):
         ids = [p["id"] for p in bot_providers.catalog()]
         self.assertIn("grok", ids)
@@ -662,7 +684,7 @@ class TestProviderCatalog(unittest.TestCase):
             self.assertIn(spec.shape, ("openai", "gemini"))
 
 
-class TestMaskedKeys(unittest.TestCase):
+class TestMaskedKeys(BotTestCase):
     def test_a_key_is_shown_as_proof_not_as_a_secret(self):
         masked = mask("xai-abcdefghijklmnop")
         self.assertNotIn("efghij", masked)
@@ -674,7 +696,7 @@ class TestMaskedKeys(unittest.TestCase):
         self.assertEqual(mask(""), "")
 
 
-class TestGrokConnectionSettings(unittest.TestCase):
+class TestGrokConnectionSettings(BotTestCase):
     """The key must be settable from the app, and the error must not lie.
 
     Before this round the key existed only in `settings.json` — nothing in
@@ -716,7 +738,7 @@ class TestGrokConnectionSettings(unittest.TestCase):
         self.assertIn("Google", detail)
 
 
-class TestVariableLibrary(unittest.TestCase):
+class TestVariableLibrary(BotTestCase):
     """The placeholders the Prompt Editor offers and how they resolve."""
 
     CTX = {"person_name": "Anna", "last_msg": "yes!", "msg": "custom text",
@@ -788,7 +810,7 @@ class TestVariableLibrary(unittest.TestCase):
         self.assertEqual(bot_variables.fill("[{reaction_label}]", {}), "[]")
 
 
-class TestPromptContext(unittest.TestCase):
+class TestPromptContext(BotTestCase):
     """What the variables are resolved against — and what they cannot see."""
 
     def service(self):
@@ -820,7 +842,7 @@ class TestPromptContext(unittest.TestCase):
                                        "person_name", "reaction_label"])
 
 
-class TestPromptLibrary(unittest.TestCase):
+class TestPromptLibrary(BotTestCase):
     def setUp(self):
         self.cfg = ConfigManager(os.path.join(tempfile.mkdtemp(),
                                               "config.json"))
@@ -887,7 +909,7 @@ class TestPromptLibrary(unittest.TestCase):
 
 
 
-class TestHistoryScope(unittest.TestCase):
+class TestHistoryScope(BotTestCase):
     """The "today only" checkbox — item 5.
 
     It must reach the AI calls, not just the message list: a box that
@@ -972,7 +994,7 @@ class TestHistoryScope(unittest.TestCase):
         self.assertEqual(run(svc.today("Anna"))["scope"], "today")
 
 
-class TestConnections(unittest.TestCase):
+class TestConnections(BotTestCase):
     """Named connections — several may share one provider."""
 
     def config(self):
@@ -1049,7 +1071,7 @@ class TestConnections(unittest.TestCase):
         self.assertNotEqual(one, two)
 
 
-class TestLegacySettingsBecomeAConnection(unittest.TestCase):
+class TestLegacySettingsBecomeAConnection(BotTestCase):
     """An install configured before connections existed must keep working
     without the user re-typing a key."""
 
@@ -1090,7 +1112,7 @@ class TestLegacySettingsBecomeAConnection(unittest.TestCase):
                          "grok_no_key")
 
 
-class TestConnectionsAreSeededPerProvider(unittest.TestCase):
+class TestConnectionsAreSeededPerProvider(BotTestCase):
     """Every provider must be reachable from the connections window.
 
     The bug: the window offered Grok alone, because a connection is created
@@ -1143,7 +1165,7 @@ class TestConnectionsAreSeededPerProvider(unittest.TestCase):
         self.assertEqual(ConnectionStore(None).all(), [])
 
 
-class TestConnectionsWithoutAConfig(unittest.TestCase):
+class TestConnectionsWithoutAConfig(BotTestCase):
     """The services are built before a config exists (headless runs, several
     bridge tests). Every verb must answer, not raise."""
 
@@ -1163,7 +1185,7 @@ class TestConnectionsWithoutAConfig(unittest.TestCase):
         self.assertFalse(store.use("x"))
 
 
-class TestPresetLibrary(unittest.TestCase):
+class TestPresetLibrary(BotTestCase):
     def library(self):
         return PresetLibrary(
             ConfigManager(os.path.join(tempfile.mkdtemp(), "config.json")))
