@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**105 documents in 22 groups.**
+**106 documents in 23 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,6 +35,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
+| [`2026-09-14-round-h-area-d/`](#2026-09-14-round-h-area-d) | 1 | Round H Area D implementation (verification): mutation from 1 module to a platform measurement (widened job 159→910 reachable + second job over pure bot family), the RULE 8 double audit that would have caught FakeArchive.labels, a per-file coverage floor with ratchet so global average stops hiding message_injector_send.py at 21.1%, and baseline/doc currency (RULE 16 §16.3 re-quoted to 92.64/88.03, RULE 18.2 corrected). |
 
 ---
 
@@ -379,3 +380,13 @@ the repository has**, holding the largest file (1,361 lines), the largest class
 - [`AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md) — Area B: the four files over 500 lines in `backend/`+`bridge/`, the four-way responsibility split of `HistoryBridge` (reads / deletions / media / settings) with the QWebChannel slot surface kept on the facade, the search-vs-projection split of `history_query.py` plus its last mutation survivor, and the coverage-first steps for the two files the suite reaches worst (`history_bridge` 66.4%, `cdp_client` 65.2%).
 - [`AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md) — Area C: the measured separation between the 7 delegation facades (73–86% one-line methods — do not split) and the 17 genuinely incoherent classes; the run family, the undo family and the DB/world family decomposed by phase and by operation; the four store planners (cohesive but 306–407 LOC) extracted by named helper module; and the dense-file pass that a lines-only sort cannot see (`window_preset_service` MI 30.6 in 326 lines, `run/progress` 31.0, `history/mutate` 34.9).
 - [`AREA_D_VERIFICATION_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_D_VERIFICATION_DESIGN_2026-09-14.md) — Area D, no production files: mutation from one module to a platform measurement (the second job, and the measured 159 → 910 reachable-mutant widening sequenced after Area B), the RULE 8 double audit that would have caught the fake which hid the dead label store, a per-file coverage floor with a ratchet so the global average stops hiding `message_injector_send.py` at 26.3%, and the baseline/document currency work (RULE 16 §16.3 still quotes the 2026-09-10 floors).
+
+---
+
+## 2026-09-14-round-h-area-d
+
+Round H Area D implementation — verification debt closed without touching production.
+
+*1 doc.*
+
+- [`AREA_D_IMPLEMENTATION_2026-09-14.md`](2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md) — What landed: H-D1 mutation platform (job1 widened 159→910 reachable + job2 over pure bot family 9 files, report `reports/MUTATION_REPORT_2026-09-14.md` with explicit reachable arithmetic), H-D2 double audit (`tools/metrics/double_audit.py` + `tests/test_double_audit.py`, FakeArchive.labels pinned), H-D3 per-file floor (`file_coverage_floor.py` 208 lines + ratchet 15 files, test `test_file_coverage_floor.py`), H-D4 baseline/doc currency (AGENT_RULES §16.3 re-quoted 90.44/84.38→92.64/88.03, §18.2 corrected 186→208 files and 507→511, doc maps updated), H-D5 smell ratchet (`smell_inventory.py` 7 vulture findings with delete/protocol disposition, 13 clone groups, 4 boundary crossings, 11 wide params). All tools respect RULE 18 ideals and RULE 16 gates; verification battery included.

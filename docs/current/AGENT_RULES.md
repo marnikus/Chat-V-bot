@@ -382,8 +382,9 @@ Floor example: four independent binary outcomes cannot cost less than CC 5
 
 ### 16.3 Test coverage — new code must be tested
 
-Global floors (must not go down; measured 2026-09-10: line **90.44%**,
-branch **84.38%**):
+Global floors (must not go down; measured 2026-09-14 post-D: line **93.16%**
+(15,833/16,995 stmts), branch **88.85%** (3,547/3,992) — `coverage.json`
+post `tests/test_area_d_coverage_lift.py`, snapshot `reports/CODE_QUALITY_METRICS_2026-09-14.md` was 92.64%/88.03%):
 
 | Metric | Target | Tool | Fail rule |
 |---|---:|---|---|
@@ -580,18 +581,16 @@ reference implementation of that count is the AST walker in
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13, after Rounds G2/G3: **186 files, median 134, 4 still
-  over 500**: `backend/history_query.py` (601), `bridge/history_bridge.py` (544,
-  whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
-  (514), `backend/config_manager.py` (507) — still open after Round G, whose G7
-  took the scheduled backlog items instead (two of the four are §16.5
-  landmines). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
-  AREA-D freeze protecting three of the old seven; G2/G3 then split the two
-  worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
-  facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →
-  seam + 3): [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
-  F1–F3 family history: [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
-  §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
+  files move. 2026-09-14: **208 files, median 134, 4 still over 500**:
+  `backend/history_query.py` (601), `bridge/history_bridge.py` (544, Qt slot
+  contract §18.5), `backend/dom_highlight.py` (514), `backend/config_manager.py`
+  (511) — still open after Round G (G7 took backlog). Round G lifted the
+  AREA-D freeze (owner ruling 2026-09-13 §1c) and split `chat_sync.py` 807 → 5
+  + seam and `scroll_parser.py` 706 → 4 + facade; F1 split `db_deletion_flow.py`
+  509 → 3 + seam: [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
+  history [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
+  §8. Round H: A=JS gate + sash-grid/stack-dnd, B=spine, C=services/stores,
+  D=verification (this file). Known debt (§16.5): do not grow, extract on touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 
