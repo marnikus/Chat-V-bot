@@ -331,11 +331,21 @@ class TestReset(unittest.TestCase):
 
 # ── the UI wires all of it up ────────────────────────────────────
 class TestUIWiring(unittest.TestCase):
+    # Round H (H-A3): the sash-grid surface now spans a facade + part files;
+    # the UI contract is checked against the whole family (same load order as
+    # tests/js_family.js / ui/index.html).
+    SASH_FAMILY = [
+        "core/ui-helpers.js", "sash-core.js", "sash-grid-tree.js",
+        "sash-grid-windows.js", "sash-grid-presets.js", "sash-grid-drag.js",
+        "sash-grid.js",
+    ]
+
     def setUp(self):
         base = os.path.join(os.path.dirname(__file__), "..", "ui")
         self.html = open(os.path.join(base, "index.html"), encoding="utf-8").read()
-        self.grid = open(os.path.join(base, "js", "sash-grid.js"),
-                         encoding="utf-8").read()
+        self.grid = "".join(
+            open(os.path.join(base, "js", f), encoding="utf-8").read()
+            for f in self.SASH_FAMILY)
 
     def test_reset_and_global_undo_controls_exist(self):
         self.assertIn("resetLayoutBtn", self.html)

@@ -1,0 +1,274 @@
+{
+ "embedded_js": [
+  {
+   "dynamic": false,
+   "file": "actions/click_user.py",
+   "line": 26,
+   "span": 14
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_highlight.py",
+   "line": 39,
+   "span": 69
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_highlight.py",
+   "line": 203,
+   "span": 35
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_highlight.py",
+   "line": 242,
+   "span": 21
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_highlight.py",
+   "line": 267,
+   "span": 62
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_highlight.py",
+   "line": 403,
+   "span": 11
+  },
+  {
+   "dynamic": false,
+   "file": "backend/dom_probe.py",
+   "line": 75,
+   "span": 61
+  },
+  {
+   "dynamic": false,
+   "file": "backend/media_handler.py",
+   "line": 55,
+   "span": 53
+  },
+  {
+   "dynamic": false,
+   "file": "backend/message_injector_field.py",
+   "line": 34,
+   "span": 17
+  },
+  {
+   "dynamic": false,
+   "file": "backend/message_injector_send.py",
+   "line": 23,
+   "span": 26
+  },
+  {
+   "dynamic": false,
+   "file": "backend/message_injector_type.py",
+   "line": 31,
+   "span": 20
+  },
+  {
+   "dynamic": false,
+   "file": "backend/scroll_parser_dom.py",
+   "line": 24,
+   "span": 31
+  }
+ ],
+ "files": {
+  "backend/js/chat_agent.js": {
+   "covered": 766,
+   "executable": 803,
+   "lines": 803,
+   "pct": 95.39
+  },
+  "ui/js/app.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 510,
+   "pct": 0.0
+  },
+  "ui/js/bot-chat.js": {
+   "covered": 387,
+   "executable": 397,
+   "lines": 397,
+   "pct": 97.48
+  },
+  "ui/js/bot-connection-view.js": {
+   "covered": 237,
+   "executable": 238,
+   "lines": 238,
+   "pct": 99.58
+  },
+  "ui/js/bot-messages.js": {
+   "covered": 63,
+   "executable": 76,
+   "lines": 76,
+   "pct": 82.89
+  },
+  "ui/js/bot-prompt.js": {
+   "covered": 338,
+   "executable": 355,
+   "lines": 355,
+   "pct": 95.21
+  },
+  "ui/js/bot-settings.js": {
+   "covered": 375,
+   "executable": 395,
+   "lines": 395,
+   "pct": 94.94
+  },
+  "ui/js/collector-panel.js": {
+   "covered": 289,
+   "executable": 303,
+   "lines": 303,
+   "pct": 95.38
+  },
+  "ui/js/color-picker.js": {
+   "covered": 229,
+   "executable": 229,
+   "lines": 229,
+   "pct": 100.0
+  },
+  "ui/js/composer.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 81,
+   "pct": 0.0
+  },
+  "ui/js/core/bridge-ready.js": {
+   "covered": 73,
+   "executable": 74,
+   "lines": 74,
+   "pct": 98.65
+  },
+  "ui/js/core/dialog.js": {
+   "covered": 66,
+   "executable": 70,
+   "lines": 70,
+   "pct": 94.29
+  },
+  "ui/js/core/ui-helpers.js": {
+   "covered": 83,
+   "executable": 83,
+   "lines": 83,
+   "pct": 100.0
+  },
+  "ui/js/criteria-editor.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 85,
+   "pct": 0.0
+  },
+  "ui/js/dark-select.js": {
+   "covered": 193,
+   "executable": 195,
+   "lines": 195,
+   "pct": 98.97
+  },
+  "ui/js/db-panel.js": {
+   "covered": 349,
+   "executable": 354,
+   "lines": 354,
+   "pct": 98.59
+  },
+  "ui/js/history-db.js": {
+   "covered": 413,
+   "executable": 448,
+   "lines": 448,
+   "pct": 92.19
+  },
+  "ui/js/history-model.js": {
+   "covered": 376,
+   "executable": 412,
+   "lines": 412,
+   "pct": 91.26
+  },
+  "ui/js/history-store.js": {
+   "covered": 324,
+   "executable": 458,
+   "lines": 458,
+   "pct": 70.74
+  },
+  "ui/js/history-view.js": {
+   "covered": 323,
+   "executable": 345,
+   "lines": 345,
+   "pct": 93.62
+  },
+  "ui/js/labels.js": {
+   "covered": 747,
+   "executable": 779,
+   "lines": 779,
+   "pct": 95.89
+  },
+  "ui/js/log-console.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 39,
+   "pct": 0.0
+  },
+  "ui/js/presets-ui.js": {
+   "covered": 224,
+   "executable": 474,
+   "lines": 474,
+   "pct": 47.26
+  },
+  "ui/js/sash-core.js": {
+   "covered": 613,
+   "executable": 642,
+   "lines": 642,
+   "pct": 95.48
+  },
+  "ui/js/sash-grid.js": {
+   "covered": 874,
+   "executable": 1361,
+   "lines": 1361,
+   "pct": 64.22
+  },
+  "ui/js/stack-dnd.js": {
+   "covered": 909,
+   "executable": 1341,
+   "lines": 1341,
+   "pct": 67.79
+  },
+  "ui/js/stack-drag.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 356,
+   "pct": 0.0
+  },
+  "ui/js/url-toolbar.js": {
+   "covered": 0,
+   "executable": 0,
+   "lines": 168,
+   "pct": 0.0
+  },
+  "ui/js/user-table.js": {
+   "covered": 296,
+   "executable": 448,
+   "lines": 448,
+   "pct": 66.07
+  },
+  "ui/js/window-presets.js": {
+   "covered": 275,
+   "executable": 376,
+   "lines": 376,
+   "pct": 73.14
+  }
+ },
+ "never_loaded": [
+  "ui/js/app.js",
+  "ui/js/composer.js",
+  "ui/js/criteria-editor.js",
+  "ui/js/log-console.js",
+  "ui/js/stack-drag.js",
+  "ui/js/url-toolbar.js"
+ ],
+ "test_failures": [],
+ "totals": {
+  "covered": 8822,
+  "executable": 10656,
+  "files": 30,
+  "lines": 11895,
+  "pct": 82.79
+ }
+}

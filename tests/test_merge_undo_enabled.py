@@ -124,14 +124,26 @@ class TestSettingsCoexist(unittest.TestCase):
 
 # ── the merged UI must not lose either side ──────────────────────
 class TestMergedUI(unittest.TestCase):
+    STACK_DND_FAMILY = [
+        "core/ui-helpers.js", "stack-drag.js", "stack-dnd-history.js",
+        "stack-dnd-render.js", "stack-dnd-menu.js", "stack-dnd-config.js",
+        "stack-dnd-form.js", "stack-dnd.js",
+    ]
+
+    def _read_stack_family(self):
+        # Round H (H-A4): the stack-dnd surface spans facade + part files;
+        # UI contracts are asserted against the whole family (same order as
+        # ui/index.html / tests/js_family.js).
+        base = os.path.join(os.path.dirname(__file__), "..", "ui", "js")
+        return "".join(open(os.path.join(base, f), encoding="utf-8").read()
+                       for f in self.STACK_DND_FAMILY)
+
     def setUp(self):
-        with open(os.path.join(UI_DIR, "js", "stack-dnd.js"),
-                  encoding="utf-8") as fh:
-            self.js = fh.read()
+        self.js = self._read_stack_family()
 
     def test_no_conflict_markers_anywhere(self):
-        for name in ("js/stack-dnd.js", "js/app.js", "js/presets-ui.js",
-                     "css/stack.css", "index.html"):
+        for name in tuple("js/" + f for f in self.STACK_DND_FAMILY) + (
+                "js/app.js", "js/presets-ui.js", "css/stack.css", "index.html"):
             with open(os.path.join(UI_DIR, name), encoding="utf-8") as fh:
                 text = fh.read()
             for marker in ("<<<<<<<", ">>>>>>>", "=======\n<<<"):

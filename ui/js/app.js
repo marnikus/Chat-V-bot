@@ -1,6 +1,19 @@
-/* ═══════════════════════════════════════════════════════════════
-   app.js — Main initialization, QWebChannel bridge, session restore
-   ═══════════════════════════════════════════════════════════════ */
+/* app.js — App facade: state, boot, init (Round H)
+
+   Owns the App state (bridge / ready / tabs / globalHistory) and the
+   boot sequence. Behaviour lives in the part files (loaded before this
+   one — see index.html):
+     app-history.js   the one global undo/redo timeline (AppHistory)
+     app-bridge.js    QWebChannel signal wiring + header (AppBridge)
+     app-session.js   single-payload session restore (AppSession)
+
+   Parts are merged onto this host with UIHelpers.mergeParts: every part
+   method binds `this` to the App facade, so all `this.*` access (state +
+   sibling methods) resolves exactly as before the split. The public
+   surface is unchanged: App.*, initApp, restoreSession and
+   setupBridgeListeners all still exist (the last two as thin shims over
+   the parts).
+   */
 
 'use strict';
 
@@ -11,163 +24,9 @@ const App = {
   // One chronological history for stack edits and grid edits alike.
   globalHistory: [],
   globalHistoryIndex: -1,
-
-  _copy(value) {
-    try { return JSON.parse(JSON.stringify(value)); }
-    catch (e) { return value; }
-  },
-
-  loadGlobalHistory(state) {
-    state = state || {};
-    let history = Array.isArray(state.undo_history) ? state.undo_history : [];
-    if (!history.length && Array.isArray(state.stack_history)) {
-      history = state.stack_history.map((value) => ({ kind: 'stack', value }));
-      if (state.grid_layout) history.push({ kind: 'grid', value: state.grid_layout });
-    }
-    this.globalHistory = history.filter((entry) =>
-      entry && (entry.kind === 'stack' || entry.kind === 'grid' ||
-                entry.kind === 'people'))
-      .map((entry) => ({ kind: entry.kind, value: this._copy(entry.value) }));
-    const idx = Number.isInteger(state.undo_history_index)
-      ? state.undo_history_index
-      : this.globalHistory.length - 1;
-    this.globalHistoryIndex = Math.max(-1,
-      Math.min(idx, this.globalHistory.length - 1));
-    this._updateUndoButtons();
-  },
-
-  _same(a, b) {
-    try { return JSON.stringify(a) === JSON.stringify(b); }
-    catch (e) { return a === b; }
-  },
-
-  recordGlobal(kind, value, options) {
-    options = options || {};
-    const entry = { kind, value: this._copy(value) };
-    const current = this.globalHistory[this.globalHistoryIndex];
-    if (current && this._same(current, entry)) return;
-    if (this.globalHistoryIndex < this.globalHistory.length - 1) {
-      this.globalHistory = this.globalHistory.slice(0, this.globalHistoryIndex + 1);
-    }
-    this.globalHistory.push(entry);
-    this.globalHistoryIndex = this.globalHistory.length - 1;
-    if (this.globalHistory.length > 100) {
-      this.globalHistory.splice(0, this.globalHistory.length - 100);
-      this.globalHistoryIndex = this.globalHistory.length - 1;
-    }
-    this._updateUndoButtons();
-    if (!options.localOnly && this.bridge && this.bridge.push_global_history) {
-      try { this.bridge.push_global_history(kind, JSON.stringify(value)); }
-      catch (e) { /* local history still keeps the UI responsive */ }
-    }
-  },
-
-  /** Entry kinds the local mirror understands (the backend owns the list). */
-  UNDO_KINDS: ['stack', 'grid', 'people', 'labels', 'archive', 'dbconn'],
-
-  _peopleRowsOf(value) {
-    // People entries carry {"before": rows, "after": rows}; undo/redo return
-    // the matching half. A bare array is accepted too (defensive).
-    if (Array.isArray(value)) return value;
-    if (value && Array.isArray(value.after)) return value.after;
-    return null;
-  },
-
-  _applyGlobalResult(raw) {
-    if (!raw || raw === 'null') return false;
-    let result;
-    try { result = JSON.parse(raw); } catch (e) { return false; }
-    if (!result || !result.kind) return false;
-    if (Number.isInteger(result.index)) this.globalHistoryIndex = result.index;
-    else if (result.kind) {
-      // Old bridges did not return an index.
-      this.globalHistoryIndex = Math.max(-1, this.globalHistoryIndex - 1);
-    }
-    if (result.kind === 'stack' && typeof StackDnD !== 'undefined') {
-      StackDnD._isRestoringHistory = true;
-      StackDnD.setStack(result.value, { silent: true });
-      StackDnD._isRestoringHistory = false;
-    } else if (result.kind === 'grid' && typeof SashGrid !== 'undefined') {
-      SashGrid._applySerialized(result.value, false);
-    } else if (result.kind === 'people' && typeof UserTable !== 'undefined') {
-      const rows = this._peopleRowsOf(result.value);
-      if (rows) {
-        UserTable.render(rows);
-        // The backend applies the snapshot asynchronously and re-emits
-        // users_updated + stats_updated; a refresh keeps every panel in sync.
-        if (this.bridge && this.bridge.refresh_users) this.bridge.refresh_users();
-      }
-    } else if (result.kind === 'labels' && typeof Labels !== 'undefined') {
-      // The backend already re-emitted labels_changed; refreshing keeps the
-      // pills right even if that signal was missed.
-      Labels.refresh();
-    } else if (result.kind === 'archive') {
-      if (typeof HistoryDb !== 'undefined') HistoryDb.onChanged();
-      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
-        HistoryStore.reloadCurrent();
-      if (this.bridge && this.bridge.refresh_users) this.bridge.refresh_users();
-    } else if (result.kind === 'dbconn' && typeof DbPanel !== 'undefined') {
-      DbPanel.onChanged('{}');
-    }
-    this._updateUndoButtons();
-    return true;
-  },
-
-  /** Re-sync the local history mirror from the backend's authoritative
-      timeline (the backend records people-list edits itself). */
-  _syncGlobalHistory() {
-    if (!this.bridge || !this.bridge.get_undo_history) return;
-    this.bridge.get_undo_history((json) => {
-      try {
-        const state = JSON.parse(json);
-        if (state && Array.isArray(state.history)) {
-          this.globalHistory = state.history
-            .filter((e) => e && App.UNDO_KINDS.indexOf(e.kind) >= 0)
-            .map((e) => ({ kind: e.kind, value: this._copy(e.value) }));
-          this.globalHistoryIndex = Number.isInteger(state.index)
-            ? state.index : this.globalHistory.length - 1;
-          this._updateUndoButtons();
-        }
-      } catch (e) { /* ignore */ }
-    });
-  },
-
-  undoGlobal() {
-    if (!this.bridge || !this.bridge.undo) return false;
-    this.bridge.undo((raw) => {
-      if (!this._applyGlobalResult(raw)) LogConsole.log('⚠ Nothing to undo', 'warn');
-    });
-    return true;
-  },
-
-  redoGlobal() {
-    if (!this.bridge || !this.bridge.redo) return false;
-    this.bridge.redo((raw) => {
-      if (!raw || raw === 'null') LogConsole.log('⚠ Nothing to redo', 'warn');
-      else this._applyGlobalResult(raw);
-    });
-    return true;
-  },
-
-  _updateUndoButtons() {
-    const undo = document.getElementById('undoBtn');
-    const redo = document.getElementById('redoBtn');
-    const canUndo = this.globalHistoryIndex > 0;
-    // Redo is available whenever an entry exists past the pointer. Index -1
-    // (e.g. after undoing a sole people-list edit) still has entry 0 to
-    // re-apply, so it must count.
-    const canRedo = this.globalHistory.length > 0 &&
-                    this.globalHistoryIndex < this.globalHistory.length - 1;
-    if (undo) {
-      undo.disabled = !canUndo;
-      undo.title = canUndo ? 'Undo (Ctrl+Z) — global history' : 'Nothing to undo';
-    }
-    if (redo) {
-      redo.disabled = !canRedo;
-      redo.title = canRedo ? 'Redo (Ctrl+Y) — global history' : 'Nothing to redo';
-    }
-  },
 };
+
+UIHelpers.mergeParts(App, AppHistory, AppBridge, AppSession);
 
 // ── boot ───────────────────────────────────────────────────────
 // the QWebChannel handshake lives in js/core/bridge-ready.js now;
@@ -176,7 +35,12 @@ const App = {
   .ready(() => initApp());
 
 function initApp() {
-  setupHeader();
+  AppBridge.setupHeader();
+  initPanels();
+  if (App.bridge) initWithBridge();
+}
+
+function initPanels() {
   if (typeof WindowPresets !== 'undefined') WindowPresets.init();
   UserTable.init();
   // Message archive windows (Person History / Full User Database /
@@ -192,318 +56,37 @@ function initApp() {
   if (typeof BotSettings !== 'undefined') BotSettings.init();
   if (typeof BotPrompt !== 'undefined') BotPrompt.init();
   document.getElementById('clearLogBtn').addEventListener('click', () => LogConsole.clear());
-  if (App.bridge) {
-    setupBridgeListeners();
-    // sash-grid may have initialized before QWebChannel; load its
-    // authoritative config.json copy now that the bridge is available.
-    if (typeof SashGrid !== 'undefined' && SashGrid._loadFromBackend)
-      SashGrid._loadFromBackend();
-    // HistoryDb/DbPanel fired their first requests from init(), BEFORE the
-    // signal listeners above existed — the only two windows that ask before
-    // they listen (every other panel loads post-listener or via callback).
-    // Re-ask now that every answer has a connected handler: the backend
-    // waits for the world when it is still opening, and duplicate answers
-    // merge idempotently — so the person list is filled on start, never
-    // only after the first manual ↻ (2026-09-13).
-    if (typeof HistoryDb !== 'undefined') HistoryDb.reload();
-    if (typeof DbPanel !== 'undefined') DbPanel.refresh();
-    if (typeof WindowPresets !== 'undefined') WindowPresets.refresh();
-    // fill the people list on start, not only after connecting to a tab
-    App.bridge.refresh_users();
-    // single payload with everything needed to restore the session (BUG #2)
-    App.bridge.get_app_state((json) => restoreSession(json));
-  }
 }
 
-// ── Session restore (BUG #2 / single preset storage + history) ──
+function initWithBridge() {
+  setupBridgeListeners();
+  // sash-grid may have initialized before QWebChannel; load its
+  // authoritative config.json copy now that the bridge is available.
+  if (typeof SashGrid !== 'undefined' && SashGrid._loadFromBackend)
+    SashGrid._loadFromBackend();
+  // HistoryDb/DbPanel fired their first requests from init(), BEFORE the
+  // signal listeners above existed — the only two windows that ask before
+  // they listen (every other panel loads post-listener or via callback).
+  // Re-ask now that every answer has a connected handler: the backend
+  // waits for the world when it is still opening, and duplicate answers
+  // merge idempotently — so the person list is filled on start, never
+  // only after the first manual ↻ (2026-09-13).
+  if (typeof HistoryDb !== 'undefined') HistoryDb.reload();
+  if (typeof DbPanel !== 'undefined') DbPanel.refresh();
+  if (typeof WindowPresets !== 'undefined') WindowPresets.refresh();
+  // fill the people list on start, not only after connecting to a tab
+  App.bridge.refresh_users();
+  // single payload with everything needed to restore the session (BUG #2)
+  App.bridge.get_app_state((json) => restoreSession(json));
+}
+
+// ── stable public shims (Round H) ──────────────────────────────
+// The part implementations moved out of this file; these wrappers keep
+// the global surface (initApp callers, tests, other modules) unchanged.
 function restoreSession(json) {
-  let payload = {};
-  try { payload = JSON.parse(json); } catch (e) { payload = {}; }
-
-  // theme first — every later paint uses the right tokens
-  // (dark is the default; "light" flips the core palette in
-  //  ui/css/variables.css via <html data-theme="light">)
-  if (payload.theme === 'light')
-    document.documentElement.setAttribute('data-theme', 'light');
-  else
-    document.documentElement.removeAttribute('data-theme');
-
-  // seed chips from the single store
-  PresetsUI.setStackPresets(JSON.stringify(payload.stack_presets || []));
-  PresetsUI.setTemplatePresets(JSON.stringify(payload.template_presets || []));
-  PresetsUI.setCustomBlocks(payload.custom_blocks || []);
-  StackDnD.setCustomBlocks(payload.custom_blocks || []);
-  UrlToolbar.setPresets(JSON.stringify(payload.url_presets || []));
-
-  if (payload.labels && typeof Labels !== 'undefined')
-    Labels.applyState(payload.labels);
-
-  const state = payload.state || {};
-
-  // 0) restore the Block Config pin FIRST, before any history/stack step
-  // below that could throw and abort the tail of this restore. Applying it
-  // early is safe: setStack()/loadStack() below respect the pin and will
-  // keep a pinned (empty) panel open rather than closing it.
-  if (typeof state.block_config_pinned === 'boolean' &&
-      typeof StackDnD.applyConfigPin === 'function') {
-    StackDnD.applyConfigPin(state.block_config_pinned);
-  }
-
-  // 0b) restore the one global history (persisted across sessions)
-  App.loadGlobalHistory(state);
-  // Keep StackDnD's legacy projection populated for old integrations; its
-  // buttons and keyboard shortcuts delegate to App's global history below.
-  if (state.stack_history || state.stack_history_index !== undefined) {
-    StackDnD.loadHistoryFromState(state);
-  }
-
-  // 1) restore the last stack (snapshot or the named preset)
-  const lastStack = Array.isArray(state.last_stack) ? state.last_stack : null;
-  const lastPreset = state.last_stack_preset || '';
-  if (Array.isArray(lastStack) && lastStack.length) {
-    StackDnD.setStack(lastStack, { silent: true });
-    // ensure history contains this stack if history was empty
-    if (!StackDnD.history.length) {
-      StackDnD.pushHistory(lastStack, {force:true});
-    }
-    LogConsole.log(`♻ Restored last stack (${lastStack.length} block(s))`, 'info');
-    if (StackDnD.history.length > 1) {
-      LogConsole.log(`↩ History: ${StackDnD.history.length} steps, index ${StackDnD.historyIndex} — Undo/Redo available`, 'info');
-    }
-  } else if (lastPreset) {
-    PresetsUI.loadStack(lastPreset);
-  } else {
-    StackDnD.refreshPresets();
-  }
-
-  // 2) restore the last bookmark + try auto-connect with its URL
-  UrlToolbar.restoreSession(payload);
-
-  // refresh remaining lists
-  PresetsUI.refreshAll();
+  AppSession.restoreSession(json);
 }
 
-// ── Header: tabs + connect ────────────────────────────────────
-function setupHeader() {
-  const refreshBtn = document.getElementById('refreshTabsBtn');
-  const connectBtn = document.getElementById('connectBtn');
-  const tabSelect = document.getElementById('tabSelect');
-
-  refreshBtn.addEventListener('click', () => {
-    if (!App.bridge) return;
-    App.bridge.get_tabs();
-  });
-
-  connectBtn.addEventListener('click', () => {
-    if (!App.bridge) return;
-    const wsUrl = tabSelect.value;
-    if (!wsUrl) { LogConsole.log('⚠ Select a tab first', 'warn'); return; }
-    App.bridge.connect_tab(wsUrl);
-  });
-}
-
-// ── Bridge signal listeners ───────────────────────────────────
 function setupBridgeListeners() {
-  const b = App.bridge;
-
-  b.tabs_received.connect((json) => {
-    const tabs = JSON.parse(json);
-    App.tabs = tabs;
-    const sel = document.getElementById('tabSelect');
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— Select Chrome Tab —</option>';
-    tabs.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.ws_url || t.url;
-      opt.textContent = `${t.title} — ${t.url}`.substring(0, 80);
-      sel.appendChild(opt);
-    });
-    // re-select the previous choice if it still exists
-    if (prev && Array.prototype.some.call(sel.options, (o) => o.value === prev)) {
-      sel.value = prev;
-    }
-  });
-
-  b.connection_status.connect((status) => {
-    const dot = document.getElementById('connectionStatus');
-    dot.className = 'status-dot ' + status;
-    dot.title = status.charAt(0).toUpperCase() + status.slice(1);
-    if (status === 'connected') {
-      LogConsole.log('🔗 Connected to Chrome tab', 'success');
-    } else if (status === 'disconnected') {
-      LogConsole.log('🔴 Disconnected', 'error');
-    }
-  });
-
-  b.users_updated.connect((json) => {
-    let users = [];
-    try { users = JSON.parse(json); } catch (e) { users = []; }
-    UserTable.render(users);
-  });
-
-  // people list: deletions (single / selection / clear all)
-  b.users_deleted.connect((nicksJson, count) => {
-    UserTable.onDeleted(nicksJson);
-  });
-
-  // live collection: a person just matched the filter during Scroll & Parse.
-  // users_updated fires right after, so the row exists when we flash it.
-  b.person_found.connect((payload) => {
-    UserTable.onPersonFound(payload);
-  });
-
-  // a person failed the filter and was destroyed — drop the row immediately
-  b.person_removed.connect((payload) => {
-    UserTable.onPersonRemoved(payload);
-  });
-
-  b.stats_updated.connect((json) => {
-    const s = JSON.parse(json);
-    document.getElementById('statTotal').textContent = s.total || 0;
-    document.getElementById('statQueued').textContent = s.queued || 0;
-    document.getElementById('statDone').textContent = s.done || 0;
-  });
-
-  b.log_message.connect((msg, level) => {
-    LogConsole.log(msg, level);
-  });
-
-  // debugger: highlight the currently running block in the stack
-  b.step_started.connect((idx, blockId, nick) => {
-    StackDnD.setRunningBlock(idx - 1);
-  });
-
-  b.step_complete.connect(() => {
-    // (log lines for each step are streamed via log_message)
-  });
-
-  b.stack_complete.connect(() => {
-    StackDnD.setRunning(false);
-  });
-
-  // presets / templates / custom blocks live updates
-  b.preset_list_updated.connect((json) => PresetsUI.setStackPresets(json));
-  b.template_list_updated.connect((json) => PresetsUI.setTemplatePresets(json));
-  b.url_presets_updated.connect((json) => UrlToolbar.setPresets(json));
-  b.custom_blocks_updated.connect((json) => {
-    try {
-      const list = JSON.parse(json);
-      StackDnD.setCustomBlocks(list);
-      PresetsUI.setCustomBlocks(list);
-    } catch (e) { /* ignore */ }
-  });
-  if (b.window_preset_list_updated && b.window_preset_list_updated.connect)
-    b.window_preset_list_updated.connect((json) => WindowPresets.setPresets(json));
-  b.tab_match_result.connect((query, json) => UrlToolbar.onMatch(query, json));
-  // backend records people-list edits in the global timeline itself — keep
-  // the local mirror + undo/redo buttons in sync whenever it grows/moves.
-  if (b.history_changed && b.history_changed.connect) {
-    b.history_changed.connect(() => App._syncGlobalHistory());
-  }
-  b.stack_loaded.connect((name, json) => {
-    try {
-      const blocks = JSON.parse(json);
-      if (Array.isArray(blocks)) {
-        // backend undo/redo emits this; treat as history navigation
-        StackDnD._isRestoringHistory = true;
-        StackDnD.setStack(blocks, {silent:true});
-        StackDnD._isRestoringHistory = false;
-        StackDnD.updateHistoryButtons();
-      }
-    } catch (e) { /* ignore */ }
-  });
-
-  // ── message archive ───────────────────────────────────────
-  if (b.history_page_ready)
-    b.history_page_ready.connect((req, json) => HistoryStore.onPage(req, json));
-  if (b.history_stats_ready)
-    b.history_stats_ready.connect((req, json) => HistoryStore.onStats(req, json));
-  if (b.history_search_ready)
-    b.history_search_ready.connect((req, json) => HistoryStore.onSearch(req, json));
-  if (b.userdb_page_ready)
-    b.userdb_page_ready.connect((req, json) => HistoryDb.onPage(req, json));
-  if (b.userdb_changed) {
-    b.userdb_changed.connect((json) => {
-      HistoryDb.onChanged();
-      if (typeof CollectorPanel !== 'undefined' &&
-          CollectorPanel.onPeopleChanged)
-        CollectorPanel.onPeopleChanged(json);
-      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
-        HistoryStore.reloadCurrent();
-      if (typeof DbPanel !== 'undefined') DbPanel.refresh();
-    });
-  }
-
-  // ── labels + database management ──────────────────────────
-  if (b.labels_changed)
-    b.labels_changed.connect((json) => {
-      Labels.applyState(json);
-      HistoryDb.liveChanged('labels');   // the badges live in the DB table too
-    });
-  if (b.db_info_ready)
-    b.db_info_ready.connect((req, json) => DbPanel.onInfo(req, json));
-  if (b.db_changed) {
-    b.db_changed.connect((json) => {
-      DbPanel.onChanged(json);
-      HistoryDb.onChanged();
-      if (typeof CollectorPanel !== 'undefined' && CollectorPanel.onDbChanged)
-        CollectorPanel.onDbChanged();
-      if (typeof HistoryStore !== 'undefined' && HistoryStore.reloadCurrent)
-        HistoryStore.reloadCurrent();
-    });
-  }
-  // ── AI Bot Chat + Prompt Editor ───────────────────────────
-  if (b.bot_reply_ready) {
-    b.bot_reply_ready.connect((req, json) => {
-      BotChat.onReply(req, json);
-      BotPrompt.onReply(req, json);
-    });
-  }
-  if (b.bot_error)
-    b.bot_error.connect((req, message) => {
-      BotChat.onError(req, message);
-      LogConsole.log('⚠ Grok: ' + message, 'warn');
-    });
-  if (b.bot_prompts_changed)
-    b.bot_prompts_changed.connect((json) => BotPrompt.onPromptsChanged(json));
-
-  if (b.collector_status)
-    b.collector_status.connect((json) => CollectorPanel.onStatus(json));
-  if (b.collector_log)
-    b.collector_log.connect((json) => CollectorPanel.onLog(json));
-  if (b.history_appended) {
-    b.history_appended.connect((json) => {
-      HistoryStore.onLiveAppend(json);
-      CollectorPanel.onAppended(json);
-      HistoryDb.liveChanged('appended');   // a new person must appear here
-    });
-  }
-  if (b.media_ready)
-    b.media_ready.connect((req, json) => HistoryStore.onMediaReady(req, json));
-  if (b.my_nick_changed)
-    b.my_nick_changed.connect((nick) => HistoryStore.setMyNick(nick));
-  if (b.history_error) {
-    b.history_error.connect((scope, message) => {
-      LogConsole.log('⚠ ' + scope + ': ' + message, 'warn');
-      HistoryStore.onError(scope, message);
-      // A failed userdb read un-sticks the loader and re-asks on its own,
-      // so a lost boot answer heals without the user pressing ↻ (2026-09-13).
-      if (typeof HistoryDb !== 'undefined' && HistoryDb.onError)
-        HistoryDb.onError(scope);
-    });
-  }
-  if (b.get_history_settings) {
-    b.get_history_settings((json) => {
-      let settings = {};
-      try { settings = JSON.parse(json); } catch (e) { settings = {}; }
-      HistoryStore.applySettings(settings);
-      HistoryDb.applySettings(settings);
-    });
-  }
-
-  // Load initial criteria display
-  b.get_criteria((json) => {
-    CriteriaEditor.loadFromJson(json);
-    CriteriaEditor.renderDisplay();
-  });
+  AppBridge.setupListeners();
 }
