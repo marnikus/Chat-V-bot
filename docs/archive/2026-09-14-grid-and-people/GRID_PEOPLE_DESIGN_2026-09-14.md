@@ -270,3 +270,97 @@ because flipping a default is the change most likely to need discussion.
 * Node harnesses for every new unit; `rule16_gate.py --with-clones`,
   `dump_public_api.py --diff` and the full pytest suite green per step.
 * SLOC delta stated per step, round total ≤ 2% (§18.2b).
+
+---
+
+## 9. Round close (K6) — what was built and what it measured
+
+All five issues are implemented, one self-contained commit per step.
+
+| Step | Issue | Commit | Outcome |
+|---|---|---|---|
+| K1 | 5 — sashes go dead | `cef02c4` | `MIN_PX*2` lockout replaced by a floor that relaxes with the split |
+| K2 | 3 — adaptive restore | `0507d70` | `reconcile()` + matched/skipped/extra summary |
+| K3 | 2 — save/restore to file | `322ef8b` | structural vs environmental validation, bridge-free export |
+| K4 | 4 — between-row drops | `73d5873` | sashes hit-tested first, ~14px band, full-span preview |
+| K5 | 1 — people disappear | `74c05b1` | `purge_rejected` defaults to off, reasons reported |
+
+### Where the diagnosis changed the fix
+
+Three of the five turned out to be different problems from the ticket text,
+and investigating first is what kept the fixes small:
+
+* **Issue 4 needed no model change at all.** A probe showed the root is a
+  column, so a `{kind:'sash'}` drop between two children *already* creates a
+  full-width row (children 6 → 7). The feature was built; it was unreachable,
+  because `_computeSpec` tested window rectangles before sashes and returned
+  on the first hit. Fixing the hit order was the entire fix.
+* **Issue 5 was not the stale `sash-hidden` class** the first reading
+  suggested — every call site runs the toggling `_syncHidden()` first. It was
+  an arithmetic lockout that engaged after ~7 rows. The class bug was real but
+  latent, and was fixed alongside rather than instead.
+* **Issue 1's ticket text ("add people only after direct messaging") described
+  the opposite of the defect.** Parse-discovered people *do* reach the list;
+  the fault was that a second scroll then deleted them, because the default
+  filter rejects registered people and purging defaulted to on.
+
+### Verification (identical at every step)
+
+* pytest: **3169 passed, 7 skipped, 1 xfailed, 903 subtests** (baseline at
+  round start: 3164 — the 5 new tests are K5's).
+* **34 JS suites** green, each executing the shipped module in node (RULE 6).
+* `rule16_gate.py --with-clones`: all owned functions fit, ratchet intact,
+  0 new clone groups.
+* `dump_public_api.py --diff`: clean. The one intentional wire-format change
+  (`purge_rejected` default + label) was refreshed via `--write`, and the
+  snapshot diff contains that and nothing else.
+
+### RULE 18
+
+`sash-grid.js` finished at **1 384 lines, from 1 360** — but only because of
+the explanatory comments the fixes needed. Its *code* lines went **1 239 →
+1 226**: the file is smaller in substance than it started, having shed
+`_portableStates`, `_portableWindows`, `_validPortableBounds`, the document
+rebuilders, the bounds arithmetic and the drop-zone geometry.
+
+All new logic lives in four DOM-free modules, none over 225 lines:
+
+| Module | Lines | Owns |
+|---|---|---|
+| `ui/js/core/sash-resize-math.js` | 127 | how much room each child of a split may take |
+| `ui/js/core/preset-reconcile.js` | 224 | fitting a saved preset to the live window set |
+| `ui/js/core/preset-validate.js` | 195 | is this a well-formed preset *file* |
+| `ui/js/core/sash-hit.js` | 156 | which drop target is under the pointer |
+
+### SLOC budget
+
+Net production delta **+751 lines against a 47 844-line baseline = 1.57%**,
+inside the ≤ 2% budget (§18.2b). Tests are excluded from the budget and added
+1 300 lines across six harnesses.
+
+### Bugs the new tests caught while being written
+
+Both were found by tests failing against code I had just written, not by
+review:
+
+* `effectiveMin` measured its floor against the raw axis, ignoring the pixels
+  the sashes consume, so the dragged pair silently absorbed the deficit
+  (694.3 px allocated of 700).
+* `normalize()` divided and re-multiplied sizes that already summed to 100,
+  turning a clean `28` into `28.000000000000004` — a save/load round trip
+  reported a change when nothing had moved.
+
+### Two pinned tests were rewritten, deliberately
+
+Both asserted the buggy behaviour, so leaving them would have meant leaving
+the bug:
+
+* `test_sash_resize.js` — "an impossible pair refuses to resize" pinned the
+  lockout *itself*. Its real intent (do not collapse a child) is retained, and
+  a separate zero-extent case keeps the `null` path covered.
+* `test_window_presets.js` — the "invalid document" case mutated a leaf id to
+  `'unknown'`, which is exactly the case K2 exists to support. It now uses a
+  genuinely malformed node.
+
+`TestRejectedPeopleArePurged` was *not* rewritten: purging still works and is
+still fully tested, it simply opts in now.

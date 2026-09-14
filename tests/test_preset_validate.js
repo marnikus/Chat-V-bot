@@ -28,6 +28,11 @@ function eq(a, b, msg) {
                                ' !== ' + JSON.stringify(b));
 }
 function ok(v, msg) { if (!v) throw new Error(msg || 'expected truthy'); }
+function deepEq(a, b, msg) {
+  const x = JSON.stringify(a), y = JSON.stringify(b);
+  if (x !== y) throw new Error((msg || 'not equal') + '\n   got  ' + x +
+                               '\n   want ' + y);
+}
 
 // a tree checker that accepts any well-shaped tree, as the grid model does
 const SPEC = {
@@ -237,6 +242,50 @@ t('validation does not mutate the document it was given', () => {
   const before = JSON.stringify(d);
   check(d);
   eq(JSON.stringify(d), before, 'input must be left alone');
+});
+
+// ── normalised bounds ──────────────────────────────────────────────
+// Bounds are stored as a fraction of the grid so a preset re-projects onto a
+// different resolution instead of being displaced off-screen.
+t('bounds are expressed as a fraction of the grid', () => {
+  const grid = { left: 0, top: 0, width: 1000, height: 500 };
+  deepEq(V.normalizeBounds({ left: 0, top: 0, width: 500, height: 250 }, grid, null),
+         { x: 0, y: 0, width: 0.5, height: 0.5 });
+  deepEq(V.normalizeBounds({ left: 500, top: 250, width: 500, height: 250 }, grid, null),
+         { x: 0.5, y: 0.5, width: 0.5, height: 0.5 });
+});
+
+t('bounds are relative to the grid origin, not the viewport', () => {
+  const grid = { left: 100, top: 40, width: 1000, height: 500 };
+  const b = V.normalizeBounds({ left: 600, top: 290, width: 100, height: 50 },
+                              grid, null);
+  eq(b.x, 0.5, 'x must subtract the grid origin');
+  eq(b.y, 0.5, 'y must subtract the grid origin');
+});
+
+t('bounds outside the grid are clamped, never negative', () => {
+  const grid = { left: 0, top: 0, width: 1000, height: 500 };
+  const b = V.normalizeBounds({ left: -400, top: -100, width: 4000, height: 4000 },
+                              grid, null);
+  deepEq(b, { x: 0, y: 0, width: 1, height: 1 });
+});
+
+t('a zero-sized grid does not divide by zero', () => {
+  const b = V.normalizeBounds({ left: 0, top: 0, width: 10, height: 10 },
+                              { left: 0, top: 0, width: 0, height: 0 },
+                              { width: 800, height: 600 });
+  ok(Number.isFinite(b.x) && Number.isFinite(b.width), 'got ' + JSON.stringify(b));
+});
+
+t('measured bounds always satisfy validBounds', () => {
+  const grid = { left: 0, top: 0, width: 1200, height: 700 };
+  [[0, 0, 1200, 700], [600, 350, 600, 350], [-50, -50, 5000, 5000],
+   [0, 0, 0, 0]].forEach(([l, t_, w, h]) => {
+    const b = V.normalizeBounds({ left: l, top: t_, width: w, height: h },
+                                grid, null);
+    ok(V.validBounds(b), 'produced bounds its own validator rejects: ' +
+       JSON.stringify(b));
+  });
 });
 
 console.log('preset validate: ' + passed + ' passed, ' + failed + ' failed');

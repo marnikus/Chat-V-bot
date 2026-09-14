@@ -104,5 +104,53 @@
              width: parentRect.width, height: t };
   }
 
-  return { hitSash, expand, bandOf, insertionBar, inside, BAND, MAX_SHARE };
+  /**
+   * Which part of a window rectangle the pointer is over.
+   *
+   * 'left' | 'right' | 'top' | 'bottom' mean an edge drop (split that
+   * window); 'center' means "join its row/column instead". The edge band
+   * scales with the window so a small panel is not all edge.
+   */
+  function zoneOf(rect, x, y) {
+    const edge = Math.min(44, Math.max(20, 0.22 * Math.min(rect.width, rect.height)));
+    if (x < rect.left + edge) return 'left';
+    if (x > rect.right - edge) return 'right';
+    if (y < rect.top + edge) return 'top';
+    if (y > rect.bottom - edge) return 'bottom';
+    return 'center';
+  }
+
+  /** The drop spec for an edge zone. */
+  function edgeDrop(target, zone) {
+    const dir = (zone === 'left' || zone === 'right') ? 'row' : 'col';
+    return { kind: 'edge', target, zone, dir,
+             newFirst: zone === 'left' || zone === 'top' };
+  }
+
+  /**
+   * A centre drop on a window with no split parent: there is no row to join,
+   * so split the window along whichever axis the pointer is furthest out on.
+   */
+  function centerSplit(target, rect, x, y) {
+    const midX = rect.left + rect.width / 2, midY = rect.top + rect.height / 2;
+    const offX = Math.abs(x - midX) / (rect.width / 2 || 1);
+    const offY = Math.abs(y - midY) / (rect.height / 2 || 1);
+    const dir = offX >= offY ? 'row' : 'col';
+    const newFirst = dir === 'row' ? x < midX : y < midY;
+    const zone = dir === 'row' ? (newFirst ? 'left' : 'right')
+                               : (newFirst ? 'top' : 'bottom');
+    return { kind: 'edge', target, zone, dir, newFirst };
+  }
+
+  /** A centre drop inside a split: join that row/column beside the target. */
+  function siblingDrop(target, rect, x, y, isRow) {
+    const before = isRow ? x < rect.left + rect.width / 2
+                         : y < rect.top + rect.height / 2;
+    const side = before ? 'before' : 'after';
+    const zone = before ? (isRow ? 'left' : 'top') : (isRow ? 'right' : 'bottom');
+    return { kind: 'sibling', target, side, zone };
+  }
+
+  return { hitSash, expand, bandOf, insertionBar, inside, zoneOf, edgeDrop,
+           centerSplit, siblingDrop, BAND, MAX_SHARE };
 });

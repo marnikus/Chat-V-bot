@@ -79,6 +79,22 @@
   }
 
   /**
+   * A panel rectangle as a fraction of the grid, clamped to 0-1.
+   *
+   * Normalised bounds are what makes a preset survive a resolution change:
+   * the layout re-projects onto the new grid instead of being displaced.
+   */
+  function normalizeBounds(rect, gridRect, screen) {
+    const width = Math.max(1, gridRect.width || (screen && screen.width) || 1);
+    const height = Math.max(1, gridRect.height || (screen && screen.height) || 1);
+    const clamp = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+    return { x: clamp((rect.left - gridRect.left) / width),
+             y: clamp((rect.top - gridRect.top) / height),
+             width: clamp(rect.width / width),
+             height: clamp(rect.height / height) };
+  }
+
+  /**
    * The window list and the state lists must agree with each other.
    *
    * Note what is NOT checked: whether the ids are windows this build has.
@@ -175,5 +191,5 @@
   }
 
   return { structural, parse, checkIdentity, checkGrid, checkWindows,
-           checkScreen, validBounds, MAX_NAME };
+           checkScreen, validBounds, normalizeBounds, MAX_NAME };
 });

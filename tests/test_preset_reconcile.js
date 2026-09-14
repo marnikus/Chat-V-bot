@@ -232,6 +232,69 @@ t('the summary is singular for one window', () => {
   ok(!s.includes('1 windows'), 'bad pluralisation: ' + s);
 });
 
+// ── rewriting the whole document around the result ─────────────────
+function fullDoc() {
+  return {
+    grid: { type: 'sash-tree', window_count: 4, tree: savedTree() },
+    windows: [
+      { id: 'chat', title: 'Chat', state: 'open' },
+      { id: 'people', title: 'People', state: 'closed' },
+      { id: 'composer', title: 'Composer', state: 'open' },
+      { id: 'log', title: 'Log', state: 'minimized' },
+    ],
+    window_states: { closed: ['people'], minimized: ['log'] },
+  };
+}
+const TITLES = { chat: 'Chat', people: 'People', composer: 'Composer',
+                 log: 'Log', bot: 'Bot' };
+
+t('the document is rewritten around the reconciled tree', () => {
+  const live = ['chat', 'people', 'composer', 'bot'];
+  const d = fullDoc();
+  const out = R.applyToDocument(d, R.reconcile(d.grid.tree, live), TITLES, live);
+  eq(out.windows.map((w) => w.id).sort(), live.slice().sort(),
+     'the window list must match the live set');
+  eq(out.grid.window_count, 4, 'the count must be rewritten too');
+  eq(R.treeIds(out.grid.tree).sort(), live.slice().sort());
+});
+
+t('a grafted window arrives open, titled and full-bounds', () => {
+  const live = ['chat', 'people', 'composer', 'log', 'bot'];
+  const d = fullDoc();
+  const out = R.applyToDocument(d, R.reconcile(d.grid.tree, live), TITLES, live);
+  const added = out.windows.find((w) => w.id === 'bot');
+  eq(added.state, 'open', 'a new window must be visible');
+  eq(added.title, 'Bot', 'must be titled from the live map');
+  eq(added.bounds, { x: 0, y: 0, width: 1, height: 1 });
+  ok(!out.window_states.closed.includes('bot'));
+  ok(!out.window_states.minimized.includes('bot'));
+});
+
+t('a surviving window keeps its saved entry verbatim', () => {
+  const live = ['chat', 'people', 'composer', 'log'];
+  const d = fullDoc();
+  const out = R.applyToDocument(d, R.reconcile(d.grid.tree, live), TITLES, live);
+  eq(out.windows.find((w) => w.id === 'people').state, 'closed',
+     'a closed window must stay closed');
+  eq(out.window_states, { closed: ['people'], minimized: ['log'] });
+});
+
+t('state lists drop windows this build does not have', () => {
+  const live = ['chat', 'composer'];
+  const d = fullDoc();
+  const out = R.applyToDocument(d, R.reconcile(d.grid.tree, live), TITLES, live);
+  eq(out.window_states, { closed: [], minimized: [] },
+     'states for skipped windows must not linger');
+  eq(out.windows.map((w) => w.id), ['chat', 'composer']);
+});
+
+t('the window list follows the live order', () => {
+  const live = ['log', 'composer', 'people', 'chat'];
+  const d = fullDoc();
+  const out = R.applyToDocument(d, R.reconcile(d.grid.tree, live), TITLES, live);
+  eq(out.windows.map((w) => w.id), live, 'must match the display order');
+});
+
 console.log('preset reconcile: ' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);
 console.log('OK');

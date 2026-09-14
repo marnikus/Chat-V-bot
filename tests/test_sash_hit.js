@@ -186,6 +186,57 @@ t('a malformed sash list does not throw', () => {
   eq(H.hitSash([null, {}, { rect: null }], 10, 10), null);
 });
 
+// ── window zones: edge splits, centre joins ────────────────────────
+t('each edge of a window is its own zone', () => {
+  const r = rect(0, 0, 400, 400);
+  eq(H.zoneOf(r, 5, 200), 'left');
+  eq(H.zoneOf(r, 395, 200), 'right');
+  eq(H.zoneOf(r, 200, 5), 'top');
+  eq(H.zoneOf(r, 200, 395), 'bottom');
+  eq(H.zoneOf(r, 200, 200), 'center');
+});
+
+t('the edge band scales with the window but stays within 20-44px', () => {
+  // tiny window: the band must not become the whole panel
+  eq(H.zoneOf(rect(0, 0, 60, 60), 30, 30), 'center',
+     'a small window must keep a usable centre');
+  // huge window: the band must not grow without limit
+  eq(H.zoneOf(rect(0, 0, 4000, 4000), 100, 2000), 'center',
+     '100px into a 4000px window is not the edge');
+});
+
+t('an edge drop splits along the matching axis', () => {
+  eq(H.edgeDrop('chat', 'left'),
+     { kind: 'edge', target: 'chat', zone: 'left', dir: 'row', newFirst: true });
+  eq(H.edgeDrop('chat', 'right'),
+     { kind: 'edge', target: 'chat', zone: 'right', dir: 'row', newFirst: false });
+  eq(H.edgeDrop('chat', 'top'),
+     { kind: 'edge', target: 'chat', zone: 'top', dir: 'col', newFirst: true });
+  eq(H.edgeDrop('chat', 'bottom'),
+     { kind: 'edge', target: 'chat', zone: 'bottom', dir: 'col', newFirst: false });
+});
+
+t('a centre drop joins the row beside the target', () => {
+  const r = rect(0, 0, 400, 400);
+  eq(H.siblingDrop('chat', r, 100, 200, true).side, 'before', 'left half');
+  eq(H.siblingDrop('chat', r, 300, 200, true).side, 'after', 'right half');
+  eq(H.siblingDrop('chat', r, 200, 100, false).side, 'before', 'top half');
+  eq(H.siblingDrop('chat', r, 200, 300, false).side, 'after', 'bottom half');
+});
+
+t('a centre drop with no split parent splits the window itself', () => {
+  const r = rect(0, 0, 400, 200);
+  // furthest out horizontally -> a row split
+  eq(H.centerSplit('chat', r, 190, 100).dir, 'row');
+  // furthest out vertically -> a column split
+  eq(H.centerSplit('chat', r, 200, 20).dir, 'col');
+});
+
+t('a zero-sized window does not divide by zero', () => {
+  const spec = H.centerSplit('chat', rect(0, 0, 0, 0), 0, 0);
+  ok(spec.dir === 'row' || spec.dir === 'col', 'got ' + spec.dir);
+});
+
 // ── end to end: the drop really does create a row ──────────────────
 // Proves the target the widened band now reaches produces the insertion the
 // ticket asks for, at the first, a middle, and the last position.

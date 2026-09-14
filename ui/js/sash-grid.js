@@ -225,16 +225,13 @@ const SashGrid = {
       device_pixel_ratio: Number(dpr) || 1 };
   },
 
+  /* Measure one panel; PresetValidate.normalizeBounds does the arithmetic. */
   _portableBounds(id, gridRect, screen) {
     const panel = this.winEls[id];
     const rect = panel && typeof panel.getBoundingClientRect === 'function'
-      ? panel.getBoundingClientRect() : { left: gridRect.left, top: gridRect.top, width: 0, height: 0 };
-    const width = Math.max(1, gridRect.width || screen.width);
-    const height = Math.max(1, gridRect.height || screen.height);
-    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
-    const w = clamp(rect.width / width), h = clamp(rect.height / height);
-    return { x: clamp((rect.left - gridRect.left) / width), y: clamp((rect.top - gridRect.top) / height),
-      width: w, height: h };
+      ? panel.getBoundingClientRect()
+      : { left: gridRect.left, top: gridRect.top, width: 0, height: 0 };
+    return PresetValidate.normalizeBounds(rect, gridRect, screen);
   },
 
   createPortablePreset(name) {
@@ -264,9 +261,6 @@ const SashGrid = {
       windows, window_states: effectiveStates, screen };
   },
 
-  /* Structural checks only. A preset naming a different window set is the
-     case reconcile() exists to handle, so it is no longer an error; a
-     self-contradictory document still is. */
   /* The spec PresetValidate needs to check a document without knowing
      anything about the grid model. */
   _presetSpec() {
@@ -293,49 +287,15 @@ const SashGrid = {
     if (!checked.ok) return checked;
     const clean = checked.document;
     clean.grid.version = SashCore.VERSION;
-    const fit = this._reconcileDocument(clean, clean.grid.tree);
+    // Fit it to the windows this build has, so a preset from a different
+    // build restores instead of being rejected.
+    const fit = PresetReconcile.reconcile(clean.grid.tree, SashCore.WINDOW_IDS);
+    PresetReconcile.applyToDocument(clean, fit, SashCore.WINDOW_TITLES,
+                                    SashCore.WINDOW_IDS);
     return { ok: true, document: clean, reconciled: fit,
       notice: PresetReconcile.summarize(fit),
       warning: clean.app_version === this.APP_VERSION ? ''
         : 'preset was created by app ' + clean.app_version };
-  },
-
-  /* Fit a validated document to the windows this build actually has, so a
-     preset from a different build restores instead of being rejected.
-     Mutates `clean` into something applyPortablePreset can use directly. */
-  _reconcileDocument(clean, tree) {
-    const fit = PresetReconcile.reconcile(tree, SashCore.WINDOW_IDS);
-    clean.grid.tree = fit.tree;
-    clean.grid.window_count = fit.matched.length + fit.extra.length;
-    clean.windows = this._reconciledWindows(clean, fit);
-    clean.window_states = this._reconciledStates(clean.window_states, fit);
-    return fit;
-  },
-
-  /* Saved entries for windows that survived, plus a default entry for each
-     window grafted in -- the preview draws straight off this list. */
-  _reconciledWindows(clean, fit) {
-    const saved = new Map(
-      (clean.windows || []).map((item) => [item.id, item]));
-    const live = new Set(fit.matched);
-    const kept = SashCore.WINDOW_IDS
-      .filter((id) => live.has(id) && saved.has(id))
-      .map((id) => saved.get(id));
-    return kept.concat(fit.extra.map((id) => this._graftedWindow(id)));
-  },
-
-  _graftedWindow(id) {
-    return { id, title: SashCore.WINDOW_TITLES[id] || id, state: 'open',
-      bounds: { x: 0, y: 0, width: 1, height: 1 } };
-  },
-
-  /* Drop skipped ids from the state lists; a grafted window defaults to
-     open, which is simply its absence from both lists. */
-  _reconciledStates(states, fit) {
-    const live = new Set(fit.matched);
-    const keep = (list) => (list || []).filter((id) => live.has(id));
-    return { closed: keep(states && states.closed),
-             minimized: keep(states && states.minimized) };
   },
 
   applyPortablePreset(raw) {
@@ -1058,30 +1018,28 @@ const SashGrid = {
     for (const id of Object.keys(d.rects)) {
       if (id === d.id) continue;
       const r = d.rects[id];
-      if (x < r.left || x >= r.right || y < r.top || y >= r.bottom) continue;
-      const Z = Math.min(44, Math.max(20, 0.22 * Math.min(r.width, r.height)));
-      let zone = 'center';
-      if (x < r.left + Z) zone = 'left';
-      else if (x > r.right - Z) zone = 'right';
-      else if (y < r.top + Z) zone = 'top';
-      else if (y > r.bottom - Z) zone = 'bottom';
-      if (zone !== 'center') {
-        const dir = (zone === 'left' || zone === 'right') ? 'row' : 'col';
-        return { kind: 'edge', target: id, zone, dir, newFirst: (zone === 'left' || zone === 'top') };
-      }
-      const tEl = this.gridEl.querySelector('.sash-window[data-win=\"' + id + '\"]');
-      const pEl = tEl && tEl.parentElement;
-      if (!pEl || !pEl.classList.contains('sash-split')) {
-        const midX = r.left + r.width / 2, midY = r.top + r.height / 2;
-        const dir = Math.abs(x - midX) / (r.width / 2) >= Math.abs(y - midY) / (r.height / 2) ? 'row' : 'col';
-        const newFirst = dir === 'row' ? x < midX : y < midY;
-        return { kind: 'edge', target: id, zone: dir === 'row' ? (newFirst ? 'left' : 'right') : (newFirst ? 'top' : 'bottom'), dir, newFirst };
-      }
-      const isRow = pEl.classList.contains('sash-row');
-      const side = isRow ? (x < r.left + r.width / 2 ? 'before' : 'after') : (y < r.top + r.height / 2 ? 'before' : 'after');
-      return { kind: 'sibling', target: id, side, zone: side === 'before' ? (isRow ? 'left' : 'top') : (isRow ? 'right' : 'bottom') };
+      if (!SashHit.inside(r, x, y)) continue;
+      return this._windowSpec(id, r, x, y);
     }
     return null;
+  },
+
+  /* The drop spec for a pointer inside window `id`: an edge splits it, the
+     centre joins its row/column -- or splits it when it has none. */
+  _windowSpec(id, rect, x, y) {
+    const zone = SashHit.zoneOf(rect, x, y);
+    if (zone !== 'center') return SashHit.edgeDrop(id, zone);
+    const pEl = this._splitParentOf(id);
+    if (!pEl) return SashHit.centerSplit(id, rect, x, y);
+    return SashHit.siblingDrop(id, rect, x, y,
+                               pEl.classList.contains('sash-row'));
+  },
+
+  _splitParentOf(id) {
+    const el = this.gridEl.querySelector(
+      '.sash-window[data-win="' + id + '"]');
+    const pEl = el && el.parentElement;
+    return pEl && pEl.classList.contains('sash-split') ? pEl : null;
   },
 
   /* How much the panels either side of a sash can spare for its hit band.

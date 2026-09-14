@@ -184,5 +184,41 @@
     return 'Adapted to this build: ' + parts.join('; ') + '.';
   }
 
-  return { reconcile, summarize, prune, graft, treeIds, normalize, evenSizes };
+  /**
+   * Rewrite a whole preset document around a reconciliation result.
+   *
+   * `fit` comes from reconcile(); `titles` maps a window id to its label and
+   * `order` is the live id list, so the rebuilt window array matches the
+   * order this build displays. Mutates `doc` and returns it.
+   */
+  function applyToDocument(doc, fit, titles, order) {
+    doc.grid.tree = fit.tree;
+    doc.grid.window_count = fit.matched.length + fit.extra.length;
+    doc.windows = rebuildWindows(doc.windows, fit, titles, order);
+    doc.window_states = rebuildStates(doc.window_states, fit);
+    return doc;
+  }
+
+  /** Saved entries for the survivors, plus a default one per grafted window. */
+  function rebuildWindows(windows, fit, titles, order) {
+    const saved = new Map((windows || []).map((item) => [item.id, item]));
+    const live = new Set(fit.matched);
+    const kept = (order || []).filter((id) => live.has(id) && saved.has(id))
+      .map((id) => saved.get(id));
+    return kept.concat(fit.extra.map((id) => ({
+      id, title: (titles || {})[id] || id, state: 'open',
+      bounds: { x: 0, y: 0, width: 1, height: 1 },
+    })));
+  }
+
+  /** Drop skipped ids; a grafted window defaults to open, i.e. listed nowhere. */
+  function rebuildStates(states, fit) {
+    const live = new Set(fit.matched);
+    const keep = (list) => (list || []).filter((id) => live.has(id));
+    return { closed: keep(states && states.closed),
+             minimized: keep(states && states.minimized) };
+  }
+
+  return { reconcile, summarize, applyToDocument, rebuildWindows,
+           rebuildStates, prune, graft, treeIds, normalize, evenSizes };
 });
