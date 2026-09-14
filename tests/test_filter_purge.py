@@ -100,7 +100,8 @@ class TestOnlyPassingPeopleArePersisted(unittest.TestCase):
                     eng = ActionEngine(
                         cdp=HighlightCDP(MIXED, page_height=100),
                         memory=mem, criteria=None)
-                    eng.load_stack(stack(min_new_users=1))
+                    eng.load_stack(stack(min_new_users=1,
+                                         purge_rejected=True))
                     await eng.execute()
                     snapshots.append(await nicks_in(mem))
                 return snapshots
@@ -119,6 +120,12 @@ class TestOnlyPassingPeopleArePersisted(unittest.TestCase):
 
 # ── CAUSE B ──────────────────────────────────────────────────────
 class TestRejectedPeopleArePurged(unittest.TestCase):
+    """Purging still works -- it is now opt-in rather than the default.
+
+    See TestPurgeIsOptIn for why: with the default filter, purging-by-default
+    deleted every registered person from the list on an ordinary scroll.
+    """
+
     def test_preexisting_rejected_records_are_destroyed(self):
         """Damage left by an earlier / laxer run must be cleaned up."""
         async def go():
@@ -133,7 +140,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
                 removed = []
                 eng.person_removed.connect(
                     lambda p: removed.append(json.loads(p)))
-                eng.load_stack(stack())
+                eng.load_stack(stack(purge_rejected=True))
                 await eng.execute()
                 return before, await nicks_in(mem), removed
 
@@ -163,7 +170,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
                 # strict run: women only
                 eng2 = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
                                     memory=mem, criteria=None)
-                eng2.load_stack(stack())
+                eng2.load_stack(stack(purge_rejected=True))
                 await eng2.execute()
                 return lax, await nicks_in(mem)
 
@@ -314,7 +321,8 @@ class TestBlockWiring(unittest.TestCase):
 
         block = ScrollParse(scroll_pause_ms=0, load_timeout_ms=20,
                             min_new_users=0, pre_delay_ms=0,
-                            confirm_pause_ms=0, highlight_enabled=False)
+                            confirm_pause_ms=0, highlight_enabled=False,
+                            purge_rejected=True)
         run(block.run_pipeline(cdp, Eng()))
         self.assertEqual(added, ["Anna"])
         self.assertEqual(purged, [("Boris", "not female")])
@@ -327,7 +335,7 @@ class TestBlockWiring(unittest.TestCase):
         self.assertFalse(
             ScrollParse(**{k: v for k, v in d.items()
                            if k != "block_id"}).purge_rejected)
-        self.assertTrue(ScrollParse().purge_rejected, "on by default")
+        self.assertFalse(ScrollParse().purge_rejected, "OFF by default")
 
     def test_disabled_purge_detaches_the_callback(self):
         block = ScrollParse(purge_rejected=False)
@@ -335,9 +343,84 @@ class TestBlockWiring(unittest.TestCase):
         self.assertIsNone(parser._on_reject)
 
 
+class TestPurgeIsOptIn(unittest.TestCase):
+    """The reported bug: people are added to the list, then disappear.
+
+    The default filter is female=YES, guest=YES, registered=NO,
+    anonymous=NO, so an ordinary registered person fails it. While purging
+    defaulted to ON, an ordinary scroll therefore DELETED stored people
+    rather than merely declining to add them.
+    """
+
+    def test_a_default_scroll_does_not_delete_stored_people(self):
+        async def go():
+            async with MemHarness() as mem:
+                await mem.upsert_user(UserRecord(nick="Boris", gender="male"))
+                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
+                                   memory=mem, criteria=None)
+                removed = []
+                eng.person_removed.connect(
+                    lambda p: removed.append(json.loads(p)))
+                eng.load_stack(stack())          # no purge_rejected given
+                await eng.execute()
+                return await nicks_in(mem), removed
+
+        cwd = os.getcwd()
+        os.chdir(tempfile.mkdtemp())
+        try:
+            after, removed = run(go())
+        finally:
+            os.chdir(cwd)
+        self.assertIn("Boris", after,
+                      "a default scroll must not delete a stored person")
+        self.assertEqual(removed, [], "nothing may be purged by default")
+        self.assertIn("Anna", after, "matching people are still added")
+
+    def test_rejected_people_are_still_never_added_by_default(self):
+        async def go():
+            async with MemHarness() as mem:
+                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
+                                   memory=mem, criteria=None)
+                eng.load_stack(stack())
+                await eng.execute()
+                return await nicks_in(mem)
+
+        cwd = os.getcwd()
+        os.chdir(tempfile.mkdtemp())
+        try:
+            after = run(go())
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(after, ["Anna", "Zoe"],
+                         "only people passing the filter may be added")
+
+    def test_the_schema_default_matches_the_constructor(self):
+        schema = ScrollParse().config_schema()["purge_rejected"]
+        self.assertFalse(schema["default"],
+                         "the UI checkbox must default to off too")
+        self.assertFalse(ScrollParse().purge_rejected)
+
+    def test_the_log_says_why_people_were_filtered_out(self):
+        """"0 matched" must not look like a malfunction."""
+        from backend.scroll_parser.results import CollectResult
+        result = CollectResult()
+        result.rejected = {"not female": 38, "registered": 2}
+        self.assertEqual(result.reject_detail, "38× not female, 2× registered")
+
+    def test_the_reason_summary_is_empty_when_nobody_was_rejected(self):
+        from backend.scroll_parser.results import CollectResult
+        self.assertEqual(CollectResult().reject_detail, "")
+
+
 class TestInvariant(unittest.TestCase):
     def test_table_only_ever_holds_people_passing_the_filter(self):
-        """The overall invariant, across a stop/re-run cycle."""
+        """The overall invariant, across a stop/re-run cycle.
+
+        Stated with purging ON: that is the mode whose contract is "the table
+        contains nothing that fails the filter". With purging off (the
+        default) the weaker, non-destructive guarantee applies instead, and
+        TestPurgeIsOptIn pins it.
+        """
         async def go():
             async with MemHarness() as mem:
                 await mem.upsert_user(UserRecord(nick="Boris", gender="male"))
@@ -345,7 +428,8 @@ class TestInvariant(unittest.TestCase):
                     eng = ActionEngine(
                         cdp=HighlightCDP(MIXED, page_height=100),
                         memory=mem, criteria=None)
-                    eng.load_stack(stack(min_new_users=1))
+                    eng.load_stack(stack(min_new_users=1,
+                                         purge_rejected=True))
                     if i == 1:                       # stop mid-way once
                         eng.person_found.connect(lambda p: eng.stop())
                     await eng.execute()

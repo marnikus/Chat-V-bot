@@ -102,6 +102,12 @@ class CollectPhaseMixin:
         if result.seeking:
             return "🔎 Scroll-only: no un-messaged person from the list is currently on the page"
         msg = f"📜 Seen {len(result.all_people)} person(s), {len(result.collected)} matched the filter"
+        # Name the reason. "Seen 40, 0 matched" on its own reads like a bug;
+        # "38× not female" makes it obvious the filter is doing its job.
+        # getattr: the pipeline result is a duck-typed contract here.
+        detail = getattr(result, "reject_detail", "")
+        if detail:
+            msg += f" ({detail})"
         if result.purged:
             msg += f", {len(result.purged)} removed"
         return msg

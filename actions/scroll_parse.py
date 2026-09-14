@@ -61,7 +61,7 @@ class ScrollParse(BaseAction):
                  highlight_enabled: bool = True,
                  highlight_ms: int = 900,
                  confirm_pause_ms: int = 500,
-                 purge_rejected: bool = True,
+                 purge_rejected: bool = False,
                  scroll_only: bool = False,
                  filter_female: str = YES, filter_registered: str = NO,
                  filter_guest: str = YES, filter_anonymous: str = NO,
@@ -86,6 +86,13 @@ class ScrollParse(BaseAction):
         self.confirm_pause_ms = max(0, int(confirm_pause_ms))
         # Destroy stored records for people confirmed NOT to pass the filter,
         # so a re-run can never resurrect them.
+        #
+        # OFF by default. The default filter (female=YES, guest=YES,
+        # registered=NO, anonymous=NO) rejects every registered person, so
+        # purging on by default meant an ordinary scroll DELETED registered
+        # people from the Person List -- the reported "people are added, then
+        # disappear". Destroying stored records is now something you opt into,
+        # not something you inherit; rejected people are simply not added.
         self.purge_rejected = bool(purge_rejected)
         # Scroll-only / seek mode: never add new people; instead scroll the
         # page hunting for someone already in the list who is not yet
@@ -336,8 +343,9 @@ class ScrollParse(BaseAction):
                              "label": "Highlight duration (ms)"}
         s["confirm_pause_ms"] = {"type": "number", "default": 500,
                                  "label": "Pause after detecting a person (ms)"}
-        s["purge_rejected"] = {"type": "checkbox", "default": True,
-                               "label": "Remove people that fail the filter"}
+        s["purge_rejected"] = {
+            "type": "checkbox", "default": False,
+            "label": "Delete stored people that fail the filter"}
         s["scroll_only"] = {
             "type": "checkbox", "default": False,
             "label": "Only scroll, no people adding (find existing "

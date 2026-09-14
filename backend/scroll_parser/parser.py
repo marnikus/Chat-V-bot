@@ -226,9 +226,17 @@ class ScrollParser:
         result = run.result
         result.collected = sort_people(result.collected)
         if result.rejected:
-            detail = ", ".join(f"{n}× {reason}"
-                               for reason, n in sorted(result.rejected.items()))
-            self._say(f"🚫 Filtered out: {detail}", "info")
+            skipped = sum(result.rejected.values())
+            self._say(f"🚫 Filtered out {skipped} person(s): "
+                      f"{result.reject_detail}", "info")
+            # Say which of the two things happened to them, because
+            # "not added" and "deleted from your list" look identical in a
+            # count and only one of them loses data.
+            self._say("   ↳ they were not added; stored records were kept"
+                      if not result.purged else
+                      "   ↳ stored records for them were DELETED "
+                      "(‘Delete stored people that fail the filter’ is on)",
+                      "info" if not result.purged else "warn")
         if result.purged:
             self._say(f"🗑 Removed {len(result.purged)} stored record(s) for "
                       f"people that do not pass the filter: "

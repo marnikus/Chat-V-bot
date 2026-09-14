@@ -143,11 +143,21 @@ exactly how rejected people ended up in the users table and survived across
 runs.
 
 Symmetry is the rule: if there is an `on_collect` hook, there must be an
-`on_reject` hook that *destroys* any stored record for the rejected item. A
-re-run under a stricter filter must make the list **shrink**, never grow.
+`on_reject` hook *able* to destroy any stored record for the rejected item, so
+that a re-run under a stricter filter can make the list **shrink**.
 
-Invariant to preserve: *after any run, storage contains only entities that pass
-the currently configured filter.*
+**Destroying stored records is opt-in, not the default** (`purge_rejected`,
+default `False`). Never adding a rejected item is the unconditional half of
+this rule; deleting what the user already has is a separate, louder act. The
+two were once one, and the result was the reported bug: the default filter
+rejects every registered person, so an ordinary scroll silently deleted
+registered people from the Person List.
+
+Invariants to preserve:
+
+* *No run ever persists an entity that fails the current filter.* Always.
+* *With purging enabled, storage afterwards contains only entities that pass
+  the current filter.* A destructive guarantee needs a deliberate switch.
 
 ---
 

@@ -25,6 +25,16 @@ class CollectResult:
     purged: list = field(default_factory=list)       # nicks destroyed
 
     @property
+    def reject_detail(self) -> str:
+        """"3× not female, 1× registered" — why people were filtered out.
+
+        Ordered by count so the dominant reason reads first: the whole point
+        is to answer "why did almost nobody get added" at a glance.
+        """
+        pairs = sorted(self.rejected.items(), key=lambda kv: (-kv[1], kv[0]))
+        return ", ".join(f"{n}× {reason}" for reason, n in pairs)
+
+    @property
     def new_unmessaged(self) -> list:
         return [p for p in self.collected if not p.messaged]
 

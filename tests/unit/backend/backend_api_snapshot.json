@@ -568,7 +568,7 @@
   },
   "SCROLL_PARSE": {
    "class": "actions.scroll_parse.ScrollParse",
-   "init": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
+   "init": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = False, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
    "schema": {
     "confirm_pause_ms": {
      "default": "500",
@@ -640,8 +640,8 @@
      "type": "'number'"
     },
     "purge_rejected": {
-     "default": "True",
-     "label": "'Remove people that fail the filter'",
+     "default": "False",
+     "label": "'Delete stored people that fail the filter'",
      "type": "'checkbox'"
     },
     "scroll_delta_y": {
@@ -708,7 +708,7 @@
     "nick_selector": "'.primary-text'",
     "person_selector": "'user-item'",
     "pre_delay_ms": "300",
-    "purge_rejected": "True",
+    "purge_rejected": "False",
     "scroll_delta_y": "300",
     "scroll_only": "False",
     "scroll_pause_ms": "800",
@@ -1661,7 +1661,7 @@
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
-      "__init__": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
+      "__init__": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = False, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
       "build_filter": "(self, panel_criteria=None) -> backend.person_filter.PersonFilter",
       "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollParser",
       "config_schema": "(self) -> dict",
@@ -3430,7 +3430,8 @@
      "inherited": {},
      "methods": {
       "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
-      "new_unmessaged": "<property>"
+      "new_unmessaged": "<property>",
+      "reject_detail": "<property>"
      }
     },
     "Judge": {
@@ -3832,7 +3833,8 @@
      "inherited": {},
      "methods": {
       "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
-      "new_unmessaged": "<property>"
+      "new_unmessaged": "<property>",
+      "reject_detail": "<property>"
      }
     }
    },
