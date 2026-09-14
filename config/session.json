@@ -42,7 +42,7 @@
       "confirm_pause_ms": 700,
       "highlight_ms": 1200,
       "pre_delay_ms": 500,
-      "enabled": false,
+      "enabled": true,
       "block_id": "CUSTOM_FIND"
     },
     {
@@ -210,6 +210,12 @@
       "repeat_count": 20,
       "enabled": true,
       "block_id": "REPEAT_LOOP",
+      "pre_delay_ms": 500
+    },
+    {
+      "multiplier": 0.3,
+      "enabled": true,
+      "block_id": "SPEED_MULTIPLIER",
       "pre_delay_ms": 500
     }
   ],

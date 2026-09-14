@@ -1,762 +1,6 @@
 {
   "history": [
     {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.28908074864729,36.710919251352706]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[27.708006279434848,33.16326530612245,39.1287284144427]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 244
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.28908074864729,36.710919251352706]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[27.708006279434848,25.784929356357928,46.507064364207224]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 252
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[64.55927051671733,35.440729483282674]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[27.708006279434848,25.784929356357928,46.507064364207224]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 257
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[64.55927051671733,35.440729483282674]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[19.85871271585557,33.63422291993721,46.507064364207224]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 260
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[19.85871271585557,33.63422291993721,46.507064364207224]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 262
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"filters\"},{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"},{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"},{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"labels\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[6,6,14,10,10,10,8,9,8,7,6,6]}}",
-      "seq": 263
-    },
-    {
-      "kind": "grid",
-      "value": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[19.85871271585557,33.63422291993721,46.507064364207224]}],\"sizes\":[45.17973052714398,20.280536978756885,34.539732494099134]}}",
-      "seq": 264
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        }
-      ],
-      "seq": 265
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        },
-        {
-          "custom_name": "",
-          "selector": "div[role='tab'].tab-item",
-          "label_selector": "p.chat-title",
-          "match_text": "",
-          "click_enabled": true,
-          "click_selector": "",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "highlight_ms": 1200,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CUSTOM_FIND"
-        }
-      ],
-      "seq": 266
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        },
-        {
-          "custom_name": "Custom Klicer win",
-          "selector": "div[role='tab'].tab-item",
-          "label_selector": "p.chat-title",
-          "match_text": "",
-          "click_enabled": true,
-          "click_selector": "",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "highlight_ms": 1200,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CUSTOM_FIND"
-        }
-      ],
-      "seq": 267
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        }
-      ],
-      "seq": 268
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        },
-        {
-          "custom_name": "Custom Klicer win",
-          "selector": "div[role='tab'].tab-item",
-          "label_selector": "p.chat-title",
-          "match_text": "",
-          "click_enabled": true,
-          "click_selector": "",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "highlight_ms": 1200,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CUSTOM_FIND"
-        }
-      ],
-      "seq": 269
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        }
-      ],
-      "seq": 270
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 800,
-          "enabled": true,
-          "block_id": "CLICK_BACK"
-        },
-        {
-          "custom_name": "Custom Klicer win",
-          "selector": "div[role='tab'].tab-item",
-          "label_selector": "p.chat-title",
-          "match_text": "",
-          "click_enabled": true,
-          "click_selector": "",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "highlight_ms": 1200,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CUSTOM_FIND"
-        }
-      ],
-      "seq": 271
-    },
-    {
       "kind": "stack",
       "value": [
         {
@@ -6737,7 +5981,1297 @@
         }
       ],
       "seq": 535
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 536
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        },
+        {
+          "multiplier": 1,
+          "enabled": true,
+          "block_id": "SPEED_MULTIPLIER",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 537
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        },
+        {
+          "multiplier": 0.5,
+          "enabled": true,
+          "block_id": "SPEED_MULTIPLIER",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 538
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        },
+        {
+          "multiplier": 0.5,
+          "enabled": true,
+          "block_id": "SPEED_MULTIPLIER",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 541
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        },
+        {
+          "multiplier": 0.5,
+          "enabled": true,
+          "block_id": "SPEED_MULTIPLIER",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 542
+    },
+    {
+      "kind": "stack",
+      "value": [
+        {
+          "max_scrolls": 1000,
+          "scroll_pause_ms": 1000,
+          "scroll_delta_y": 1500,
+          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
+          "load_timeout_ms": 2500,
+          "stall_threshold": 100,
+          "min_new_users": 150,
+          "person_selector": "user-item",
+          "nick_selector": ".primary-text",
+          "highlight_enabled": true,
+          "highlight_ms": 900,
+          "confirm_pause_ms": 500,
+          "purge_rejected": true,
+          "scroll_only": true,
+          "filter_female": "yes",
+          "filter_registered": "no",
+          "filter_guest": "any",
+          "filter_anonymous": "any",
+          "pre_delay_ms": 300,
+          "enabled": false,
+          "block_id": "SCROLL_PARSE"
+        },
+        {
+          "custom_name": "Clean Search bar",
+          "selector": "button[matsuffix]",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "pick_mode": "random_new",
+          "enabled": true,
+          "block_id": "TAKE_PERSON",
+          "pre_delay_ms": 500
+        },
+        {
+          "text": "{{nick}}",
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "SEARCH_USERS"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "message": "{{nick}}",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": false,
+          "pre_delay_ms": 1000,
+          "enabled": false,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "MARK_MESSAGED"
+        },
+        {
+          "selector": "user-item",
+          "label_selector": ".primary-text",
+          "click_selector": ".user-container",
+          "tab_selector": "div[role='tab'].tab-item",
+          "tab_title_selector": "p.chat-title",
+          "verify_new_tab": true,
+          "tab_pause_ms": 800,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "respect_order": false,
+          "use_person_from_memory": true,
+          "pre_delay_ms": 1000,
+          "enabled": true,
+          "block_id": "CLICK_USER"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 500,
+          "enabled": false,
+          "block_id": "CLICK_MAIN_TAB"
+        },
+        {
+          "custom_name": "Text Area MSG",
+          "selector": "textarea",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "message": "Привеееет, скучаешь ... ?",
+          "use_composer": false,
+          "typing_speed_ms": 30,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "TYPE_MESSAGE"
+        },
+        {
+          "selector": "button[type='submit']",
+          "fallback_selector": "button:has(mat-icon)",
+          "fallback_text": "send",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 300,
+          "enabled": true,
+          "block_id": "CLICK_SEND"
+        },
+        {
+          "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+          "file_pattern": "gif",
+          "rotation_mode": "random",
+          "simulate_dialog": true,
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "verify_timeout_ms": 8000,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "ATTACH_IMAGE"
+        },
+        {
+          "duration_ms": 1000,
+          "enabled": true,
+          "block_id": "PAUSE",
+          "pre_delay_ms": 500
+        },
+        {
+          "custom_name": "Close Tab",
+          "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+          "label_selector": "p.chat-title",
+          "match_text": "{{nick}}",
+          "click_enabled": true,
+          "click_selector": "button.tab-close-button",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "selector": "div[role='tab'].tab-item",
+          "child_selector": "p.chat-title",
+          "tab_name": "Гостиная",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "pre_delay_ms": 800,
+          "enabled": true,
+          "block_id": "CLICK_BACK"
+        },
+        {
+          "custom_name": "Scroll viewport",
+          "selector": "cdk-virtual-scroll-viewport",
+          "label_selector": "",
+          "match_text": "",
+          "click_enabled": true,
+          "click_selector": "",
+          "highlight_enabled": true,
+          "confirm_pause_ms": 700,
+          "highlight_ms": 1200,
+          "pre_delay_ms": 500,
+          "enabled": true,
+          "block_id": "CUSTOM_FIND"
+        },
+        {
+          "repeat_count": 20,
+          "enabled": true,
+          "block_id": "REPEAT_LOOP",
+          "pre_delay_ms": 500
+        },
+        {
+          "multiplier": 0.3,
+          "enabled": true,
+          "block_id": "SPEED_MULTIPLIER",
+          "pre_delay_ms": 500
+        }
+      ],
+      "seq": 549
     }
   ],
-  "index": 85
+  "index": 77
 }
