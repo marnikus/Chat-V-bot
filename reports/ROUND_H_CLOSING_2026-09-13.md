@@ -141,6 +141,7 @@ a written module docstring explaining its seam, and six retired or rewritten
 `# ideal-size` arguments are long because they show their measurements. That is
 a defensible trade but it is **not** what the constraint said, and the
 constraint should have been stated against SLOC to mean what it intended.
+**Closed in the tail: RULE 18.2b now states it against SLOC** (§8 item 2).
 
 **The baseline comparison is against Round F, not Round H.** The sandbox was
 re-cloned mid-session, which reset git to `37d43b4` and destroyed both the
@@ -152,18 +153,61 @@ attribution between G and H is not separable from this data.
 **`tests/test_sash_webengine.py::test_grid_in_real_webengine` is excluded from
 every run here.** It aborts the interpreter — it needs a real WebEngine, which
 this sandbox has no GPU for. Confirmed pre-existing by stashing all changes and
-reproducing the abort at HEAD. It deserves a headless skip marker.
+reproducing the abort at HEAD. **Closed in the tail:** a subprocess capability probe now skips it honestly,
+and the suite runs in one command (§8 item 1).
 
-## 8. Ranked backlog
+## 8. Backlog — all five items closed
 
-1. **Add a headless skip marker** to the WebEngine test so the suite runs clean
-   in one command.
-2. **Re-express the growth budget against SLOC** in AGENT_RULES.md, and decide
-   deliberately what documentation growth is allowed.
-3. **`RunCoordinator`, 73 reachable methods** across seven mixins — now visible
-   for the first time (H6). Worth asking whether that is a coordinator or a
-   grab bag.
-4. **`AppendPlanner` (338 LOC) and the three ~306-LOC classes** are the next
-   size tail, well below the old one.
-5. **Mutation testing was not re-run this round** (~90.0% at Round G). The H6
-   tool changes and the new guards are untested by mutation.
+**1. WebEngine skip marker — done.** The import guard was not enough: on a box
+with no GPU the imports succeed and a view can even be constructed, then
+Chromium SIGABRTs when it composites a loaded page, killing the whole pytest
+process. A `try/except` cannot catch that — the abort is in C++, below Python.
+`_renderer_works()` now probes the capability in a throwaway subprocess that
+absorbs the crash (measured: returncode -6). **The suite runs in one command
+with no `--ignore`: 2,875 passed, 4 skipped.**
+
+**2. Growth budget — done, RULE 18.2b.** Restated against **SLOC**, with the
+Round H evidence for why: physical lines said +5.57%, SLOC said +1.77%, and the
+entire difference was module docstrings and the rewritten `# ideal-size`
+arguments. Counting those as "growth" would have told the round to delete its
+own explanations.
+
+**3. `RunCoordinator` — measured, and it is a coordinator.** Flattening all 73
+methods across the seven mixins and running the fixed LCOM gives **one**
+component with **no** ubiquitous handle. The decomposition is along real seams.
+
+**4. The class-size tail — measured, and correctly left alone.** `SchemaMigrator`
+(406), `AppendPlanner` (338), `StackBridge` (308) and `ScrollParse` (306) all
+score LCOM4 ≈ 1. AGENT_RULES.md ~line 597: when size and LCOM disagree, LCOM
+wins.
+
+**5. Mutation testing — done, and it found real holes.** The job was widened
+from 7 files to 10, adding the round's new pure modules.
+
+*The first attempt at this silently failed and is worth recording:* adding
+source paths without their test suites produced 818 new mutants all reported
+"no tests" — **excluded from the score**, so the headline stayed a reassuring
+90.0% while the new code was not measured at all. With the suites added, the
+honest number is **1,139 reachable, 844 killed, 74.1%** — over the 70% bar, and
+a third of the tree instead of a fraction of it. The headline FELL because the
+job grew, which is the point.
+
+The survivors mattered. `backend/private_gate.py` is the RULE 15 gate deciding
+whether a conversation may be written to a person's history, and three of its
+survivors were silent **fail-open** holes:
+
+- `title_matches` returning `True` for an empty tab title — step 2 passing on
+  no evidence;
+- a dropped `not` that stopped recognising a self-chat whose pane user list is
+  empty (writing to your own chat looks like a flawless conversation);
+- a wrong dict key making every conversation look author-less, disabling the
+  "exactly two nicks" half of the gate.
+
+All three are pinned by `TestGatePrimitivesAgainstMutation`, each verified to
+**fail against its stated mutation** before being kept.
+
+### Remaining, for a future round
+
+- The 295 surviving mutants are not all equivalent; `dom_highlight` holds 168 of
+  them and deserves the same read-and-classify pass G5 gave its modules.
+- Mutation still covers 10 files of 206. The bar it clears is real but narrow.

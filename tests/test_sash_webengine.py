@@ -17,6 +17,14 @@ Skips itself (instead of failing) when PySide6/QtWebEngine is not installed
 or cannot load (no GL in the environment), so the suite stays green on
 minimal machines.
 
+The import guard alone is NOT enough, and Round H found this the hard way.
+On a machine with no GPU the imports succeed, a QWebEngineView can even be
+constructed — and then Chromium SIGABRTs the moment it composites a loaded
+page, which kills the whole pytest process rather than failing one test. A
+`try/except` cannot catch that: the abort happens in C++, below Python. So
+the capability is probed in a THROWAWAY SUBPROCESS (`_renderer_works`)
+before this test is allowed to run, and the subprocess absorbs the crash.
+
 Run with:  python3 tests/test_sash_webengine.py
 """
 
@@ -155,7 +163,49 @@ class _FakeBridge(QObject):
     def delete_custom_block(self, _n): pass
 
 
+_RENDERER_PROBE = """
+import os, sys
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PySide6.QtCore import QUrl, QTimer
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app = QApplication.instance() or QApplication(sys.argv)
+view = QWebEngineView()
+view.resize(400, 300)
+view.show()
+view.loadFinished.connect(lambda ok: app.quit())
+view.load(QUrl.fromLocalFile(sys.argv[1]))
+QTimer.singleShot(20000, app.quit)
+app.exec()
+print("RENDERER_OK")
+"""
+
+
+def _renderer_works():
+    """True when Chromium can actually composite a page here.
+
+    Runs the probe in a subprocess on purpose: a headless box without GL
+    aborts the process (SIGABRT, exit 134) instead of raising, so the check
+    has to survive the crash rather than catch it.
+    """
+    if not (HAVE_QT and os.path.exists(INDEX_HTML)):
+        return False
+    try:
+        done = subprocess.run([sys.executable, "-c", _RENDERER_PROBE, INDEX_HTML],
+                              capture_output=True, text=True, timeout=120)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return done.returncode == 0 and "RENDERER_OK" in done.stdout
+
+
+HAVE_RENDERER = _renderer_works()
+
+
 @unittest.skipUnless(HAVE_QT, "PySide6/QtWebEngine not available: " + QT_IMPORT_ERROR)
+@unittest.skipUnless(HAVE_RENDERER,
+                     "QtWebEngine cannot composite a page here (no GL/GPU): "
+                     "Chromium aborts the process, so this test is skipped "
+                     "rather than allowed to take the suite down with it")
 class TestSashWebEngine(unittest.TestCase):
 
     def test_grid_in_real_webengine(self):

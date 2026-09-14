@@ -31,6 +31,7 @@ from backend.chat_parser import (  # noqa: E402
 )
 # H5 moved the gate to its own module; import it from the module that owns it.
 from backend.private_gate import verify_private  # noqa: E402
+import backend.private_gate as private_gate  # noqa: E402
 from backend.collector import Collector, CollectorState  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
@@ -389,3 +390,68 @@ class TestSyncConversationGate(GateCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestGatePrimitivesAgainstMutation(unittest.TestCase):
+    """Round H closing tail: mutants that survived on the RULE 15 safety gate.
+
+    Widening the mutation job to `backend/private_gate.py` (setup.cfg) found
+    67 survivors in the module that decides whether a conversation may be
+    WRITTEN to a person's history. These are the non-equivalent ones — each
+    test below fails against the stated mutation and passes against the real
+    code, so the gate's decisions are now pinned rather than assumed.
+    """
+
+    def test_an_empty_title_never_matches_a_nick(self):
+        """Mutant: `if not want or not have` -> `return True`.
+
+        The fail-open direction. A page that has not painted its tab title
+        yet reports an empty string; answering "yes, that title names this
+        person" lets step 2 pass on no evidence at all.
+        """
+        self.assertFalse(private_gate.title_matches("", "alice"))
+        self.assertFalse(private_gate.title_matches("alice", ""))
+        self.assertFalse(private_gate.title_matches("", ""))
+
+    def test_either_side_being_empty_is_enough_to_refuse(self):
+        """Mutant: `not want or not have` -> `not want and not have`.
+
+        With `and`, only the both-empty case short-circuits, so an empty nick
+        against a non-empty title would fall through to the substring test.
+        """
+        self.assertFalse(private_gate.title_matches("Chat with alice", ""))
+
+    def test_a_title_naming_the_person_still_matches(self):
+        """Non-vacuity: the guard above must not refuse everything."""
+        self.assertTrue(private_gate.title_matches("alice", "alice"))
+        self.assertTrue(private_gate.title_matches("Chat with alice", "alice"))
+
+    def test_a_blank_pane_me_still_counts_as_a_self_chat(self):
+        """Mutant: `(not names.me_state or ...)` -> `(names.me_state or ...)`.
+
+        Dropping the `not` inverts which pane states are accepted: a self-chat
+        whose pane user list is EMPTY would stop being recognised, and writing
+        to your own chat looks like a flawless conversation to every later
+        check. This is the dropped-`not` mutant that survived.
+        """
+        names = private_gate._GateNames(target="alice", me_cfg="alice",
+                                        me_state="")
+        self.assertTrue(private_gate._is_self_chat(names))
+
+    def test_a_pane_me_naming_someone_else_is_not_a_self_chat(self):
+        """Non-vacuity for the same guard, from the other side."""
+        names = private_gate._GateNames(target="alice", me_cfg="alice",
+                                        me_state="bob")
+        self.assertFalse(private_gate._is_self_chat(names))
+
+    def test_authors_are_read_from_the_authors_key(self):
+        """Mutant: `state.get("authors")` -> `state.get("XXauthorsXX")`.
+
+        Reading the wrong key makes every conversation look author-less, which
+        silently disables the "exactly two nicks" half of the gate.
+        """
+        names = private_gate._GateNames(target="alice", me_cfg="me")
+        ins, outs = private_gate._split_authors({"authors": ["alice", "me"]},
+                                                names)
+        self.assertEqual(ins, ["alice"])
+        self.assertEqual(outs, ["me"])

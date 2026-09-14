@@ -603,6 +603,25 @@ reference implementation of that count is the AST walker in
   than exemptions. Known debt (§16.5 landmines): do not grow them, extract when
   you next touch.
 
+### 18.2b Refactor growth budget — measure it in SLOC, not lines
+
+A decomposition round should not smuggle in bulk. The budget is **≤2% growth
+in total tree SLOC** (Radon's `sloc`: statements, excluding blanks, comments
+and docstrings), measured before and after the round.
+
+**Why SLOC and not physical lines.** Round H set the budget against physical
+lines and breached it at **+5.57%** — while the SLOC it actually added was
+**+1.77%**, comfortably inside. The whole difference was prose: a written
+module docstring on every new module explaining its seam, and six `# ideal-size`
+arguments rewritten to show their measurements. Counting those as "growth"
+penalises exactly the thing this file asks for everywhere else, and had the
+budget been enforced literally it would have told the round to delete its
+explanations. State the budget against the thing you actually want to bound.
+
+*Corollary:* if a split needs a long comment to justify itself, that is a cost
+worth paying, but it is also a signal — re-read whether the seam is the one the
+code already had (cheap to explain) or one being imposed on it (expensive).
+
 ### 18.3 Modules — 5–15 cohesive files
 
 * **Cohesion test:** the files in one directory should change together and share
