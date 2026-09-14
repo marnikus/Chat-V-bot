@@ -347,14 +347,26 @@ CLONE_BASELINE = frozenset({
     #     bridges' and MERGED two baselined groups into one.
     #   * the AI feature added bot_bridge.py, which shares the same header.
     # The exact membership is re-measured below, never hand-written.
+    # Round I: stack_bridge.py JOINED this group. Splitting its two preset
+    # domains out stranded a `from datetime import datetime` that nothing
+    # used any more; deleting that dead import (RULE 16.2) left the header
+    # identical to the other three bridges'. Membership re-measured, as the
+    # note above requires, never hand-extended.
     ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
-     "bridge/people_bridge.py"),
+     "bridge/people_bridge.py", "bridge/stack_bridge.py"),
     ("bridge/collector_bridge.py", "bridge/history_bridge.py",
      "bridge/label_bridge.py", "bridge/layout_bridge.py",
      "bridge/undo_bridge.py"),
     # H5 split the send-button half out of message_injector.py; the two halves
     # necessarily open with the same CDP + logger import header.
     ("backend/message_injector.py", "backend/send_button.py"),
+    # Round I split StackBridge's two self-contained preset domains into
+    # mixins. Both need exactly `json`, `logging`, Qt's `Slot`, `PresetsChanged`
+    # and a module logger, so their headers match — a match of IMPORTS, not of
+    # logic: the two bodies share no statement. The alternative is to delete a
+    # used import or reorder into a pylint C0411 warning, which is the cosmetic
+    # dodge §18.5 forbids (and which Round I step I1 had to undo elsewhere).
+    ("bridge/stack_blocks.py", "bridge/stack_templates.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     # H2 split the deletion pipeline at its irreversible boundary; the two

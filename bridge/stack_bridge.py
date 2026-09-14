@@ -1,8 +1,16 @@
-"""StackBridge — run control, presets, composer, criteria.
+"""StackBridge — run control, stack presets, composer, criteria.
 
 @Slot methods for the action-stack domain. Runs go through the engine
 (services/run_service.py); stack/template presets through the preset
 store; custom Find & Click blocks through the block store.
+
+Round I split the two self-contained preset domains into mixins —
+`bridge/stack_templates` (message templates) and `bridge/stack_blocks`
+(custom Find & Click blocks) — after LCOM4 measured this class at 21
+components once the ubiquitous `ctx`/`_log` were discounted. Mixins, not
+collaborators: QWebChannel exposes one object, so the `@Slot` names have to
+stay on this class's metaobject. `tests/unit/bridge/
+test_file_stack_bridge_wire_contract.py` pins all 29 of them.
 """
 
 from __future__ import annotations
@@ -10,17 +18,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from bridge.stack_blocks import StackBlocksMixin
+from bridge.stack_templates import StackTemplateMixin
 from core.events import (LogMessage, PresetsChanged, StackLoaded)
 from services.run import normalize_blocks
 
 log = logging.getLogger("chatbot")
 
 
-class StackBridge(QObject):
+class StackBridge(StackTemplateMixin, StackBlocksMixin, QObject):
     step_complete = Signal(str, str)
     step_started = Signal(int, str, str)     # index, block_id, user_nick
     stack_complete = Signal()
@@ -217,97 +226,6 @@ class StackBridge(QObject):
                 self._log(f"⚠ Preset “{name}” not found", "warn")
         except Exception as exc:                        # noqa: BLE001
             self._log(f"❌ Preset delete failed: {exc}", "error")
-
-    # ── message template presets ─────────────────────────────────
-    def _emit_templates(self) -> None:
-        payload = json.dumps(self.ctx.presets.list_templates(),
-                             ensure_ascii=False)
-        self.template_list_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="templates", payload=payload))
-
-    @Slot(str, str)
-    def save_template_preset(self, name, body):
-        try:
-            self.ctx.presets.save_template(name, body or "")
-        except Exception as exc:                        # noqa: BLE001
-            self._log(f"❌ Template save failed: {exc}", "error")
-            return
-        self._emit_templates()
-        self._log(f"💾 Template “{name}” saved", "success")
-
-    @Slot(str, result=str)
-    def load_template_preset(self, name):
-        body = self.ctx.presets.load_template(name)
-        if body is None:
-            self._log(f"❌ Template “{name}” not found", "error")
-            return ""
-        self.template_loaded.emit(name, body)
-        self._log(f"📂 Template “{name}” loaded", "success")
-        return body
-
-    @Slot(result=str)
-    def list_template_presets(self):
-        try:
-            return json.dumps(self.ctx.presets.list_templates(),
-                              ensure_ascii=False)
-        except Exception as exc:                        # noqa: BLE001
-            log.error("list templates failed: %s", exc)
-            return "[]"
-
-    @Slot(str)
-    def delete_template_preset(self, name):
-        try:
-            if self.ctx.presets.delete_template(name):
-                self._emit_templates()
-                self._log(f"🗑 Template “{name}” deleted", "warn")
-        except Exception as exc:                        # noqa: BLE001
-            self._log(f"❌ Template delete failed: {exc}", "error")
-
-    # ── custom Find & Click block presets ────────────────────────
-    def _emit_blocks(self) -> None:
-        payload = json.dumps(self.ctx.config.blocks.all(),
-                             ensure_ascii=False)
-        self.custom_blocks_updated.emit(payload)
-        self.ctx.bus.emit(PresetsChanged(kind="custom_blocks",
-                                         payload=payload))
-
-    @Slot(result=str)
-    def list_custom_blocks(self):
-        return json.dumps(self.ctx.config.blocks.all(), ensure_ascii=False)
-
-    @Slot(str, str)
-    def save_custom_block(self, name, block_json):
-        name = (name or "").strip()
-        try:
-            block = json.loads(block_json or "{}")
-        except json.JSONDecodeError:
-            self._log("❌ Block preset save aborted: bad JSON", "error")
-            return
-        if not isinstance(block, dict) or not name:
-            self._log("❌ Block preset needs a name and block config",
-                      "error")
-            return
-        result = self.ctx.config.blocks.save_custom_block(name, block)
-        if result.is_err:
-            err_ = result.err()
-            self._log(f"❌ Block preset save failed: "
-                      f"{err_.detail or err_.code}", "error")
-            return
-        self.ctx.config.save()
-        self._emit_blocks()
-        self._log(f"💾 Block preset “{name}” saved — reusable from "
-                  "the + Add menu and Custom Blocks chips", "success")
-
-    @Slot(str)
-    def delete_custom_block(self, name):
-        before = len(self.ctx.config.blocks.all())
-        self.ctx.config.blocks.delete_custom_block(name)
-        if len(self.ctx.config.blocks.all()) != before:
-            self.ctx.config.save()
-            self._emit_blocks()
-            self._log(f"🗑 Block preset “{name}” removed", "warn")
-        else:
-            self._log(f"⚠ Block preset “{name}” not found", "warn")
 
     # ── engine current stack (compat helper) ─────────────────────
     @Slot(result=str)
