@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-13 (this checkout) |
-| Test suite | `2829 passed, 6 skipped, 1 deselected, 1 xfailed, 894 subtests passed` + 27 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **91.83%** · branch **87.02%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-14 (this checkout) |
+| Test suite | `3172 passed, 2 skipped, 1 deselected, 1 xfailed, 902 subtests passed` + 29 green Node harness files (measured 2026-09-14) |
+| Coverage (measured, `--branch`, 8 production packages) | line **92.64%** · branch **88.03%** (floors: 80% / 75%; measured 2026-09-14) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -301,7 +301,7 @@ dict, and the collector status strings.
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC **10** (no function over the gate), mean 3.09 · cognitive > 15 only on the two frozen exemptions · nesting max 4 |
 | Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.83% / 87.02%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
-| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (63.6% in band) · median file 142 lines — RULE 18, re-measured 2026-09-12, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
+| Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (62.5% in band) · median file 132 lines · max function 107 (JS builder) — RULE 18, re-measured 2026-09-14 in [`reports/CODE_QUALITY_METRICS_2026-09-14.md`](../../reports/CODE_QUALITY_METRICS_2026-09-14.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
 
 ---

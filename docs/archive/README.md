@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**100 documents in 21 groups.**
+**101 documents in 22 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -34,6 +34,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-round-g-write-gate/`](#2026-09-13-round-g-write-gate) | 7 | Round G: the complete post-Round-F tail inventory with fresh measurements, the prioritised G1–G7 step plan, and the executed steps G1–G7 — the red suite at HEAD and the `WriteTurn` union fix (F3c), the two worst-file family splits under the lifted freezes, the flow/injector splits plus the ladder and constructor reductions, and the wide-parameter continuation that took the >4-param walker from 51 to its 18-entry floor, the test-debt step that took the three undo modules to 100% and paid the F6b module-wide mutation run, the hygiene step that zeroed the tree's cognitive-17 offenders and paid the rules file back inside its budget, and the backlog step that gave the JavaScript side its first coverage measurement, migrated all seven deferred stores wide-parameter offenders (the >4-param walker 18 → its documented 11-entry floor, the stores API baseline refreshed in-step), took `HistoryExportService` from 21 to 14 methods and split `StackBridge`/`ScrollParse` into wire facades plus cohesive parts with zero golden drift. |
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
+| [`2026-09-14-round-h/`](#2026-09-14-round-h) | 1 | Round H: the post-Round-G audit's finding that the RULE 16 gate enforces 164 functions in 20 files — 9.6% of the tree, 11.9% of its LOC — with 39/39 long functions, 33/36 oversized classes, 21/23 oversized files and 11/11 wide signatures outside it, and the ten-step plan (H1–H10, each ≈ 8–16 h) that makes the gate see the whole tree first, then burns the tail it reveals. |
 
 ---
 
@@ -356,3 +357,23 @@ the longest waits of all.
 *1 doc.*
 
 - [`SPEED_MULTIPLIER_DESIGN_2026-09-13.md`](2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) — The semantics decision and its rationale, the full inventory of which waits scale and which do not (stop slices, retry backoff, protocol gaps and cosmetic highlight durations are out of scope), the rejected `ScrollOptions.speed_multiplier` field (it would force a 20th parameter onto a RULE 16.5 legacy constructor), and the RULE 16 measurements.
+
+## 2026-09-14-round-h
+
+The round that starts from the fact that the quality gate cannot see the code it
+measures: the RULE 16 gate's hard checks cover 164 named functions in 20 files
+(9.6% of the files, 11.9% of production LOC), its class-size loop runs only over
+those files, nothing measures file size at all, and `RATCHET` is a ceiling rather
+than a floor — so `HistoryQuery` may grow 52 lines (+17%) with the gate green.
+The plan (no step started yet) is a tree-wide baseline with growth detection
+first, then the burn-down: the worst file in the tree on three axes at once
+(`bridge/history_bridge.py`, MI 24.9, 467-LOC class, 122 uncovered statements),
+the two largest remaining backend files, the highest-fan-in under-tested module
+(`backend/cdp_client.py`, Ca 21 at 63.14%), the long-but-cohesive `stores/`
+classes, the incoherent `services/` god classes, the function-length tail, the
+per-file coverage floors including the 12 embedded JS payloads, and a JavaScript
+floor for the six front-end files no test loads.
+
+*1 doc.*
+
+- [`ROUND_H_DESIGN_2026-09-14.md`](2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md) — The gate's blast radius measured (and the ratchet loophole that lets the worst class grow 17% silently), the prioritisation that puts visibility before mass, the H1–H10 step plan with the evidence, target, method and verification battery of each step, the anti-gaming rules every step inherits, and the RULE 16 / RULE 18 recheck of the plan itself. The measurements behind it are `reports/CODE_QUALITY_METRICS_2026-09-14.md`.
