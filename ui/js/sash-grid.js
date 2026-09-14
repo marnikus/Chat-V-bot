@@ -969,10 +969,17 @@ const SashGrid = {
     this.gridEl.querySelectorAll('.sash').forEach((s) => {
       if (!s.offsetWidth && !s.offsetHeight) return;
       if (s.classList.contains('sash-hidden')) return;
+      const before = s.parentElement.children[+s.dataset.idx * 2];
+      const after = s.parentElement.children[+s.dataset.idx * 2 + 2];
       d.sashes.push({
         el: s, rect: s.getBoundingClientRect(),
-        leftId: this._winIdOf(s.parentElement.children[+s.dataset.idx * 2]),
-        rightId: this._winIdOf(s.parentElement.children[+s.dataset.idx * 2 + 2]),
+        leftId: this._winIdOf(before),
+        rightId: this._winIdOf(after),
+        // how far the hit band may reach without swallowing a thin panel
+        room: this._sashRoom(s, before, after),
+        // a sash inside a column separates rows, and vice versa
+        inserts: s.parentElement.classList.contains('sash-row')
+          ? 'column' : 'row',
       });
     });
     const rect = d.winEl.getBoundingClientRect();
@@ -1040,6 +1047,14 @@ const SashGrid = {
 
   _computeSpec(x, y) {
     const d = this._drag;
+    // Sashes FIRST. The window loop below returns on its first hit, and the
+    // band around a sash necessarily overlaps the windows either side of it,
+    // so testing windows first made dropping between two rows unreachable.
+    const sash = SashHit.hitSash(d.sashes, x, y);
+    if (sash) {
+      return { kind: 'sash', left: sash.leftId, right: sash.rightId,
+               inserts: sash.inserts };
+    }
     for (const id of Object.keys(d.rects)) {
       if (id === d.id) continue;
       const r = d.rects[id];
@@ -1066,12 +1081,20 @@ const SashGrid = {
       const side = isRow ? (x < r.left + r.width / 2 ? 'before' : 'after') : (y < r.top + r.height / 2 ? 'before' : 'after');
       return { kind: 'sibling', target: id, side, zone: side === 'before' ? (isRow ? 'left' : 'top') : (isRow ? 'right' : 'bottom') };
     }
-    for (const s of d.sashes) {
-      const r = s.rect;
-      if (x < r.left || x >= r.right || y < r.top || y >= r.bottom) continue;
-      return { kind: 'sash', left: s.leftId, right: s.rightId };
-    }
     return null;
+  },
+
+  /* How much the panels either side of a sash can spare for its hit band.
+     A thin panel must stay droppable on its own account. */
+  _sashRoom(sashEl, before, after) {
+    const isRow = sashEl.parentElement
+      && sashEl.parentElement.classList.contains('sash-row');
+    const extent = (el) => {
+      if (!el || typeof el.getBoundingClientRect !== 'function') return 0;
+      const r = el.getBoundingClientRect();
+      return isRow ? r.width : r.height;
+    };
+    return { before: extent(before), after: extent(after) };
   },
 
   _showSpec(spec) {
@@ -1116,11 +1139,11 @@ const SashGrid = {
         sEl.classList.add('sash-target');
         const pEl = sEl.parentElement;
         const sr = hit.rect;
-        const pRect = pEl.getBoundingClientRect();
-        if (pEl.classList.contains('sash-row')) bar = { left: sr.left + sr.width / 2 - 1.5, top: pRect.top, width: 3, height: pRect.height };
-        else bar = { left: pRect.left, top: sr.top + sr.height / 2 - 1.5, width: pRect.width, height: 3 };
+        // Spans the whole split, so it reads as "a new row goes HERE"
+        // rather than as a mark on the sash itself.
+        bar = SashHit.insertionBar(sr, pEl.getBoundingClientRect(), 3);
       }
-      text = draggedTitle + ' → between ' + (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' + (SashCore.WINDOW_TITLES[spec.right] || spec.right);
+      text = draggedTitle + ' → ' + this._betweenText(spec);
     }
     d.badge.textContent = text;
     d.badge.style.transform = 'translate3d(' + (d.lastX + 16) + 'px,' + (d.lastY + 18) + 'px,0)';
@@ -1173,8 +1196,16 @@ const SashGrid = {
     this._drag = null;
   },
 
+  /* "new row between Log and Composer" -- say that a row is being created,
+     because that is the part users cannot see from the indicator alone. */
+  _betweenText(spec) {
+    const title = (id) => SashCore.WINDOW_TITLES[id] || id;
+    return 'new ' + (spec.inserts || 'row') + ' between ' +
+      title(spec.left) + ' and ' + title(spec.right);
+  },
+
   _specText(spec) {
-    if (spec.kind === 'sash') return 'between ' + (SashCore.WINDOW_TITLES[spec.left] || spec.left) + ' and ' + (SashCore.WINDOW_TITLES[spec.right] || spec.right);
+    if (spec.kind === 'sash') return this._betweenText(spec);
     return spec.zone + ' of ' + (SashCore.WINDOW_TITLES[spec.target] || spec.target);
   },
 
