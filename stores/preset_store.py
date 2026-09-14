@@ -16,6 +16,7 @@ AREA B1 (plan P1-3) put this store on the shared `JsonFileStore` lifecycle:
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 from datetime import datetime

@@ -1,37 +1,27 @@
 """DbLifecycle — the write half of `services.db_service.DbManager` (AREA C).
-
 Owns every MUTATION of the world databases: create, load, delete, clean
 and restore_backup, together with the media-reference scans and the
 clean-break bookkeeping those operations need. The registry reads (paths,
 remembered list, scans, info) live in `services.db_registry.DbRegistry`;
 this collaborator calls them through its host.
-
 Every rule from the ONE DB = ONE WORLD design is preserved verbatim
 (permanent delete, last-world protection, fail-closed switching, clean
 with a trash backup).
-
 AREA A (2026-09-10): deletion is fail-closed and serialized. Scans happen
 before any switch/unlink; any incomplete scan refuses; per-file keep is never
 bypassed by rmtree; partial work is reported truthfully; overlapping lifecycle
 ops serialize via per-manager + root-global locks with unlocked delegates.
 """
-
 from __future__ import annotations
-
 import asyncio
 import logging
 import os
 import shutil
 from datetime import datetime
-
 from services.db_service import SUFFIXES, db_stem
-
 log = logging.getLogger("chatbot")
-
-
 def _copy_backup_trio(source: str, destination: str) -> dict | None:
     """Copy a backup's db+wal+shm into place; an err-dict when that failed.
-
     Module-level because it is a pure filesystem move between two paths —
     it reads nothing from the lifecycle object.
     """
@@ -45,31 +35,23 @@ def _copy_backup_trio(source: str, destination: str) -> dict | None:
     except OSError as exc:
         return {"ok": False, "error": str(exc)}
     return None
-
 # Root-keyed global locks for cross-manager serialization (same process).
 _GLOBAL_LOCKS: dict[str, asyncio.Lock] = {}
-
-
 class DbLifecycle:
     """Create / load / delete / clean / restore world database files."""
-
     def __init__(self, host):
         self._host = host
         self._op_lock: asyncio.Lock | None = None
-
     # ── convenience over the host ────────────────────────────────
     @property
     def _registry(self):
         return self._host.registry
-
     @property
     def _service(self):
         return self._host._service
-
     @property
     def _config(self):
         return self._host._config
-
     # ── serialization ────────────────────────────────────────────
     def _get_locks(self):
         """(global_root_lock, local_manager_lock), created lazily."""
@@ -84,43 +66,34 @@ class DbLifecycle:
         if self._op_lock is None:
             self._op_lock = asyncio.Lock()
         return g, self._op_lock
-
     async def _guarded(self, coro_fn, *args, **kwargs):
         """Run one lifecycle op under global+local locks (fixed order)."""
         g, l = self._get_locks()
         async with g:
             async with l:
                 return await coro_fn(*args, **kwargs)
-
     # ── lifecycle (public, serialized) ───────────────────────────
     async def create(self, name: str) -> dict:
         """Create an EMPTY world (the full schema) and connect to it.
-
         The fresh world is seeded with the app-template settings (D9) —
         nothing is copied from the world being left.
         """
         return await self._guarded(self._create_unlocked, name)
-
     async def load(self, path: str, create: bool = False) -> dict:
         """Switch the running world over to another database file."""
         return await self._guarded(self._load_unlocked, path, create)
-
     async def delete(self, path: str) -> dict:
         """PERMANENTLY delete a world (file + media + every reference).
-
         Fail-closed phases: validate → scan → switch → detach → database →
         media → finalize. See _delete_unlocked for the full contract.
         """
         return await self._guarded(self._delete_unlocked, path)
-
     async def clean(self) -> dict:
         """Empty every table, keeping the file (a backup goes to the trash)."""
         return await self._guarded(self._clean_unlocked)
-
     async def restore_backup(self, backup: str, target: str = "") -> dict:
         """Put a trashed/backed-up file back (the undo half of clean)."""
         return await self._guarded(self._restore_unlocked, backup, target)
-
     # ── unlocked delegates (internal; delete calls _load_unlocked) ─
     async def _create_unlocked(self, name: str) -> dict:
         path = self._registry.resolve(name)
@@ -148,7 +121,6 @@ class DbLifecycle:
                     log.warning("could not seed settings into %s: %s",
                                 os.path.basename(path), exc)
         return result
-
     async def _load_unlocked(self, path: str, create: bool = False) -> dict:
         target = self._registry.resolve(path)
         if not target:
@@ -172,16 +144,13 @@ class DbLifecycle:
         self._persist_path(target)
         self._registry._remember(target)
         return {"ok": True, "op": "load", "path": target, "before_path": before}
-
     async def _delete_unlocked(self, path: str) -> dict:
         """Fail-closed permanent deletion with truthful partial results.
-
         Contract (master plan §3.2): ok only when fully completed; phase in
         validate/scan/switch/detach/database/media/finalize; partial True when
         some irreversible work happened but not all; world_changed distinct
         from partial; active_path observed; removed/retained/failed exact;
         media_files_removed counts actual unlinks.
-
         The read-only scan phase lives in `services.db_deletion_scan` and
         the mutating phases in `services.db_deletion_flow` (one small
         function per phase); this delegate stays thin so the irreversible
@@ -191,7 +160,6 @@ class DbLifecycle:
         # the previous inline version (db_service imports lifecycle lazily).
         from services.db_deletion_flow import delete_world
         return await delete_world(self, path)
-
     def _forget(self, path: str) -> None:
         """Clean break: no reference to the deleted file survives."""
         self._registry._prune_remembered()
@@ -210,7 +178,6 @@ class DbLifecycle:
                 history["db_path"] = replacement
                 self._config.set("history", history)
                 self._config.save()
-
     async def _clean_unlocked(self) -> dict:
         """Empty every table, keeping the file (a backup goes to the trash)."""
         path = self._registry.active_path()
@@ -253,7 +220,6 @@ class DbLifecycle:
         return {"ok": True, "op": "clean", "path": path, "backup": backup,
                 "removed": removed, "before_path": path,
                 "media_moved": media_moved}
-
     async def _restore_unlocked(self, backup: str, target: str = "") -> dict:
         """Put a trashed/backed-up file back (the undo half of clean)."""
         source = str(backup or "")
@@ -272,11 +238,9 @@ class DbLifecycle:
         self._persist_path(destination)
         self._registry._remember(destination)
         return {"ok": True, "path": destination, "backup": source}
-
     # ── helpers ──────────────────────────────────────────────────
     async def _detach_if_active(self, destination: str) -> dict | None:
         """Detach the live world when the restore target IS it.
-
         Returns an err-dict when detaching failed (the restore must then
         stop, fail-closed), and None both when there was nothing to detach
         and when the detach worked.
@@ -290,7 +254,6 @@ class DbLifecycle:
         except Exception as exc:                       # noqa: BLE001
             return {"ok": False, "error": str(exc)}
         return None
-
     def _persist_path(self, path: str) -> None:
         if self._config is None:
             return
@@ -301,7 +264,6 @@ class DbLifecycle:
         history["db_path"] = path
         self._config.set("history", history)
         self._config.save()
-
     def _pick_fallback(self, deleted: str) -> str:
         """Which database to open after the active one is deleted."""
         for item in self._registry.list_dbs():
@@ -309,10 +271,8 @@ class DbLifecycle:
                     and item.get("exists")):
                 return item["path"]
         return ""
-
     def _stamp(self, tag: str, name: str) -> str:
         return (f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{tag}_{name}")
-
     def _copy_to_trash(self, path: str, tag: str = "backup") -> str:
         trash = self._registry.trash_dir()
         try:
