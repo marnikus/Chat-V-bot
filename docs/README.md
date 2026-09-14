@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **100 archived ones**. That is
+This repository has **three current docs** and **105 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 100 archived docs
+    ├── README.md                    ← index of all 105 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -33,7 +33,8 @@ docs/
     ├── 2026-09-13-round-f/           ← Round F's F5 parameter-object step
     ├── 2026-09-13-round-g-write-gate/  ← Round G: the tail inventory + the executed steps G1–G7
     ├── 2026-09-13-rules-appendices/  ← RULE 19's ladder + case studies, extracted from the rules file
-    └── 2026-09-13-speed-multiplier/  ← global wait-speed multiplier (newest)
+    ├── 2026-09-13-speed-multiplier/  ← global wait-speed multiplier
+    └── 2026-09-14-round-h/           ← Round H: the four-area plan (JS gate, spine, cohesion, verification) (newest)
 ```
 
 Also in the repo, not under `docs/`:
@@ -75,6 +76,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Undo, locking, DB-window refresh, session trash | system of record §2, invariants I-10, I-17…I-20 | [`2026-09-11-db-undo-restore/`](archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md), [`2026-09-12-db-undo-restore-port/`](archive/2026-09-12-db-undo-restore-port/PORT_NOTES_2026-09-12.md) (how it was ported here, and the `init()` bug the port exposed) |
 | Code complexity / size debt | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16, 18, 19 | [`2026-09-11-cc-tail/`](archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) (the round that took CC > 10 from 63 functions to 0), [`2026-09-11-rules-appendices/`](archive/2026-09-11-rules-appendices/) |
 | Size, parameter and test-debt rounds (F, G) | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16 / 18 / 19, and this map | [`2026-09-12-round-f-size-tail/`](archive/2026-09-12-round-f-size-tail/) (the 500-line tail and the two god classes), [`2026-09-13-round-f/`](archive/2026-09-13-round-f/) (the parameter objects), [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the tail inventory and the executed steps G1–G7), [`2026-09-13-rules-appendices/`](archive/2026-09-13-rules-appendices/) |
+| Where Round H will work (JS gate, spine, cohesion, verification) | [`archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md`](archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md), and [`reports/CODE_QUALITY_METRICS_2026-09-14.md`](../reports/CODE_QUALITY_METRICS_2026-09-14.md) for the numbers it is based on | [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the round whose tail it inherits), [`2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md`](archive/2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md) (the fake-double defect that motivates the verification area) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
 | Tests | system of record §7 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/) |
 

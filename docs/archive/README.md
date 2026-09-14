@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**101 documents in 22 groups.**
+**106 documents in 23 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,6 +35,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-grid-rows-adaptive-restore/`](#2026-09-14-grid-rows-adaptive-restore) | 1 | Row creation by drag & drop (above/below/between), the minimum-size reflow that fixed the disappearing horizontal sashes, and the adaptive preset restore that repairs and reports a drifted window set instead of refusing it. |
+| [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
 
 ---
 
@@ -372,3 +373,25 @@ deviation is explained in a `restore_report`, mirrored 1:1 between `ui/js/preset
 *1 doc.*
 
 - [`GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md`](2026-09-14-grid-rows-adaptive-restore/GRID_ROWS_ADAPTIVE_RESTORE_DESIGN_2026-09-14.md) — The feasibility mathematics (the default tree needs ≈708 px of grid height, each extra stacked pair ≈102 px, and why the "regression" at 800 px was an infeasible scenario degrading fairly rather than a bug), the enforcement call-site rationale, the shared REASON-string contract between the two mirrors, the refusal-vs-repair boundary, and §5's executed verification (3192-test battery, 100 % line+branch on both adaptive modules, 82.7 %/75.7 % mutation spot-checks, and the sandbox-specific instrumentation note).
+
+---
+
+## 2026-09-14-round-h
+
+Round H — the plan for the round after G, written from a fresh measurement of the
+whole tree against the six metric categories the owner works from (complexity,
+size/volume, coupling/cohesion, tests, smells, maintainability). **Plan only: no
+production code was changed to produce it.** The headline finding is that the
+Python side has been driven to a clean state (0 functions over CC 10, 0 over
+cognitive 15, mean MI 68.05, 3,172 tests green, mutation 99.37%) while the
+**JavaScript frontend — 30 files / 11,865 lines — sits outside every size gate
+the repository has**, holding the largest file (1,361 lines), the largest class
+(69 methods) and the largest function (205 lines) in the project.
+
+*5 docs.*
+
+- [`ROUND_H_DESIGN_2026-09-14.md`](2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md) — The prioritisation: the frontend first (un-gated mass and the weakest verification floor), then the backend/bridge spine (`bridge/history_bridge.py` MI 24.9 / 66.4% covered and `backend/history_query.py` 601 lines), then services/stores cohesion (17 genuinely incoherent classes as distinct from 7 delegation facades), then verification debt. Defines the four areas, their disjoint file ownership, the frozen interfaces between them, the shared-file protocol for `tools/metrics/rule16_gate.py`, the three owner decisions the evidence forces, and what is deliberately out of scope.
+- [`AREA_A_FRONTEND_JS_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_A_FRONTEND_JS_DESIGN_2026-09-14.md) — Area A, all 30 JS files measured: the two god objects (`SashGrid` 1,331 LOC / 69 methods, `StackDnD` 1,168 / 58, `_showConfig` 180 LOC), the 50 functions over 30 lines (9.2% against Python's 1.7%), the six files never loaded by any test (1,220 LOC including `app.js`), and the six steps — a JS size tool, a JS gate mirroring RULE 16, the two splits, harnesses for the never-loaded files, and the coverage lift — with the load-order constraint `ui/index.html` imposes on every split.
+- [`AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md) — Area B: the four files over 500 lines in `backend/`+`bridge/`, the four-way responsibility split of `HistoryBridge` (reads / deletions / media / settings) with the QWebChannel slot surface kept on the facade, the search-vs-projection split of `history_query.py` plus its last mutation survivor, and the coverage-first steps for the two files the suite reaches worst (`history_bridge` 66.4%, `cdp_client` 65.2%).
+- [`AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md) — Area C: the measured separation between the 7 delegation facades (73–86% one-line methods — do not split) and the 17 genuinely incoherent classes; the run family, the undo family and the DB/world family decomposed by phase and by operation; the four store planners (cohesive but 306–407 LOC) extracted by named helper module; and the dense-file pass that a lines-only sort cannot see (`window_preset_service` MI 30.6 in 326 lines, `run/progress` 31.0, `history/mutate` 34.9).
+- [`AREA_D_VERIFICATION_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_D_VERIFICATION_DESIGN_2026-09-14.md) — Area D, no production files: mutation from one module to a platform measurement (the second job, and the measured 159 → 910 reachable-mutant widening sequenced after Area B), the RULE 8 double audit that would have caught the fake which hid the dead label store, a per-file coverage floor with a ratchet so the global average stops hiding `message_injector_send.py` at 26.3%, and the baseline/document currency work (RULE 16 §16.3 still quotes the 2026-09-10 floors).
