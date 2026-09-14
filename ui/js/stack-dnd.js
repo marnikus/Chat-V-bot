@@ -261,8 +261,10 @@ const StackDnD = {
   },};
 
 UIHelpers.mergeParts(StackDnD,
-  StackDnDMigration, StackDnDHistory, StackDnDRender, StackDnDListOps,
-  StackDnDMenu, StackDnDConfig, StackDnDConfigRows, StackDnDSpeed);
+  StackDnDMigration, StackDnDHistory, StackDnDHistoryUI,
+  StackDnDRender, StackDnDRenderWire, StackDnDListOps,
+  StackDnDMenu, StackDnDMenuActions, StackDnDConfig,
+  StackDnDConfigForm, StackDnDConfigRows, StackDnDSpeed);
 
 (window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
   .ready(() => StackDnD.init());

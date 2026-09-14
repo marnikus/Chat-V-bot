@@ -102,8 +102,10 @@ const SashGrid = {
   },};
 
 UIHelpers.mergeParts(SashGrid,
-  SashGridTree, SashGridWindowStore, SashGridWindows, SashGridMenus,
-  SashGridPresets, SashGridDrag, SashGridSpec, SashGridResize);
+  SashGridTree, SashGridTreeVisibility, SashGridWindowStore, SashGridWindows,
+  SashGridMenus, SashGridDock, SashGridLayoutMenu,
+  SashGridPresets, SashGridPresetsImport, SashGridDrag, SashGridDragVisual,
+  SashGridSpec, SashGridResize);
 
 (window.BridgeReady || { ready: (fn) => document.addEventListener('DOMContentLoaded', () => fn(null)) })
   .ready(() => SashGrid.init());

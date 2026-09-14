@@ -1,4 +1,10 @@
-/* sash-grid part — sash-grid-presets.js (Round H, H-A3) */
+/* sash-grid part — sash-grid-presets.js (Round H, H-A3)
+
+   Two collaborating objects (H-A6, RULE 16 object cap):
+     SashGridPresets        the portable-preset CREATE path (export snapshot)
+     SashGridPresetsImport  the portable-preset VALIDATE + APPLY path (import)
+   Both merge onto the SashGrid facade — see ui/js/sash-grid.js.
+   */
 
 const SashGridPresets = {
   _screenSnapshot(rect) {
@@ -47,7 +53,9 @@ const SashGridPresets = {
         sizes_unit: 'percent', tree: SashCore.clone(this.root) },
       windows, window_states: effectiveStates, screen };
   },
+};
 
+const SashGridPresetsImport = {
   _portableStates(doc) {
     const state = doc.window_states;
     if (!state || !Array.isArray(state.closed) || !Array.isArray(state.minimized))

@@ -1,4 +1,12 @@
-/* stack-dnd part — stack-dnd-menu.js (Round H, H-A4) */
+/* stack-dnd part — stack-dnd-menu.js (Round H, H-A4)
+
+   Two collaborating objects (H-A6, RULE 16 object cap):
+     StackDnDMenu          the + Add-Block menu (built-in + custom rows) and
+                           the custom-block preset save/label
+     StackDnDMenuActions   the run/pause/stop controls and the stack
+                           preset save/load + import/export buttons
+   Both merge onto the StackDnD facade — see ui/js/stack-dnd.js.
+   */
 
 const StackDnDMenu = {
   setCustomBlocks(list) {
@@ -95,6 +103,29 @@ const StackDnDMenu = {
     });
   },
 
+  _saveBlockPreset(block) {
+    if (!App.bridge) return;
+    const finish = () => {
+      this._renderStack();
+      this._showConfig(this.selectedIdx);
+      this.pushHistory();
+      this.notifyEdited();
+    };
+    const useName = (name) => {
+      block.custom_name = name;
+      App.bridge.save_custom_block(name, JSON.stringify(block));
+      finish();
+    };
+    if (block.custom_name && String(block.custom_name).trim()) {
+      useName(String(block.custom_name).trim());
+    } else {
+      PresetsUI.promptName('Save block as preset (also used as the block name)',
+        'e.g. Find Settings Button', 'Save', useName);
+    }
+  },
+};
+
+const StackDnDMenuActions = {
   _setupButtons() {
     this._wireRunButton();
     this._wirePauseButton();
@@ -188,27 +219,6 @@ const StackDnDMenu = {
     if (importBlockBtn) importBlockBtn.addEventListener('click', () => {
       PresetsUI.importBlock();
     });
-  },
-
-  _saveBlockPreset(block) {
-    if (!App.bridge) return;
-    const finish = () => {
-      this._renderStack();
-      this._showConfig(this.selectedIdx);
-      this.pushHistory();
-      this.notifyEdited();
-    };
-    const useName = (name) => {
-      block.custom_name = name;
-      App.bridge.save_custom_block(name, JSON.stringify(block));
-      finish();
-    };
-    if (block.custom_name && String(block.custom_name).trim()) {
-      useName(String(block.custom_name).trim());
-    } else {
-      PresetsUI.promptName('Save block as preset (also used as the block name)',
-        'e.g. Find Settings Button', 'Save', useName);
-    }
   },
 
   setRunning(val) {

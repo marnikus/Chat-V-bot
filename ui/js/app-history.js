@@ -5,10 +5,12 @@
    The backend is the authoritative store; this mirror keeps the UI
    responsive and drives the undo/redo buttons.
 
-   Part pattern: members bind onto the App facade
-   (UIHelpers.mergeParts in app.js), so `this` is App and the shared
-   state (globalHistory, globalHistoryIndex, bridge) lives on the host.
-   Loaded before the facade — see ui/index.html.
+   Two collaborating objects (H-A6, RULE 16 object cap):
+     AppHistory        recording + state (load / record / button paint)
+     AppHistoryApply   backend result application + undo/redo transport
+   Both bind onto the App facade (UIHelpers.mergeParts in app.js), so
+   `this` is App and the shared state (globalHistory, globalHistoryIndex,
+   bridge) lives on the host. Loaded before the facade — see ui/index.html.
    */
 'use strict';
 
@@ -66,6 +68,27 @@ const AppHistory = {
   /** Entry kinds the local mirror understands (the backend owns the list). */
   UNDO_KINDS: ['stack', 'grid', 'people', 'labels', 'archive', 'dbconn'],
 
+  _updateUndoButtons() {
+    const undo = document.getElementById('undoBtn');
+    const redo = document.getElementById('redoBtn');
+    const canUndo = this.globalHistoryIndex > 0;
+    // Redo is available whenever an entry exists past the pointer. Index -1
+    // (e.g. after undoing a sole people-list edit) still has entry 0 to
+    // re-apply, so it must count.
+    const canRedo = this.globalHistory.length > 0 &&
+                    this.globalHistoryIndex < this.globalHistory.length - 1;
+    if (undo) {
+      undo.disabled = !canUndo;
+      undo.title = canUndo ? 'Undo (Ctrl+Z) — global history' : 'Nothing to undo';
+    }
+    if (redo) {
+      redo.disabled = !canRedo;
+      redo.title = canRedo ? 'Redo (Ctrl+Y) — global history' : 'Nothing to redo';
+    }
+  },
+};
+
+const AppHistoryApply = {
   _peopleRowsOf(value) {
     // People entries carry {"before": rows, "after": rows}; undo/redo return
     // the matching half. A bare array is accepted too (defensive).
@@ -152,24 +175,5 @@ const AppHistory = {
       else this._applyGlobalResult(raw);
     });
     return true;
-  },
-
-  _updateUndoButtons() {
-    const undo = document.getElementById('undoBtn');
-    const redo = document.getElementById('redoBtn');
-    const canUndo = this.globalHistoryIndex > 0;
-    // Redo is available whenever an entry exists past the pointer. Index -1
-    // (e.g. after undoing a sole people-list edit) still has entry 0 to
-    // re-apply, so it must count.
-    const canRedo = this.globalHistory.length > 0 &&
-                    this.globalHistoryIndex < this.globalHistory.length - 1;
-    if (undo) {
-      undo.disabled = !canUndo;
-      undo.title = canUndo ? 'Undo (Ctrl+Z) — global history' : 'Nothing to undo';
-    }
-    if (redo) {
-      redo.disabled = !canRedo;
-      redo.title = canRedo ? 'Redo (Ctrl+Y) — global history' : 'Nothing to redo';
-    }
   },
 };

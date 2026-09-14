@@ -628,210 +628,234 @@
    }
   },
   {
-   "file": "ui/js/app.js",
+   "file": "ui/js/app-bridge.js",
    "functions": [
     {
-     "end": 509,
-     "line": 306,
-     "loc": 204,
-     "name": "setupBridgeListeners"
+     "end": 291,
+     "line": 265,
+     "loc": 27,
+     "name": "wireHistorySettings"
     },
     {
-     "end": 284,
-     "line": 219,
-     "loc": 66,
-     "name": "restoreSession"
+     "end": 207,
+     "line": 187,
+     "loc": 21,
+     "name": "wireArchiveSignals"
     },
     {
-     "end": 114,
-     "line": 76,
-     "loc": 39,
-     "name": "_applyGlobalResult"
-    },
-    {
-     "end": 216,
-     "line": 178,
-     "loc": 39,
-     "name": "initApp"
-    },
-    {
-     "end": 63,
-     "line": 44,
+     "end": 184,
+     "line": 165,
      "loc": 20,
-     "name": "recordGlobal"
+     "name": "wireHistorySignals"
     },
     {
-     "end": 37,
-     "line": 20,
-     "loc": 18,
-     "name": "loadGlobalHistory"
+     "end": 75,
+     "line": 57,
+     "loc": 19,
+     "name": "wireTabsReceived"
     },
     {
-     "end": 169,
-     "line": 152,
-     "loc": 18,
-     "name": "_updateUndoButtons"
+     "end": 228,
+     "line": 210,
+     "loc": 19,
+     "name": "wireLabelDbSignals"
     },
     {
-     "end": 303,
-     "line": 287,
+     "end": 38,
+     "line": 22,
      "loc": 17,
      "name": "setupHeader"
     },
     {
-     "end": 325,
-     "line": 309,
+     "end": 74,
+     "line": 58,
      "loc": 17,
      "name": "(arrow)"
     },
     {
-     "end": 133,
-     "line": 118,
+     "end": 263,
+     "line": 247,
+     "loc": 17,
+     "name": "wireCollectorSignals"
+    },
+    {
+     "end": 55,
+     "line": 40,
      "loc": 16,
-     "name": "_syncGlobalHistory"
+     "name": "setupListeners"
     },
     {
-     "end": 132,
-     "line": 120,
-     "loc": 13,
-     "name": "(arrow)"
+     "end": 163,
+     "line": 148,
+     "loc": 16,
+     "name": "wirePresetSignals"
     },
     {
-     "end": 414,
-     "line": 403,
+     "end": 245,
+     "line": 231,
+     "loc": 15,
+     "name": "wireBotSignals"
+    },
+    {
+     "end": 116,
+     "line": 103,
+     "loc": 14,
+     "name": "wirePersonSignals"
+    },
+    {
+     "end": 144,
+     "line": 131,
+     "loc": 14,
+     "name": "wireStepSignals"
+    },
+    {
+     "end": 88,
+     "line": 77,
+     "loc": 12,
+     "name": "wireConnectionStatus"
+    },
+    {
+     "end": 101,
+     "line": 90,
+     "loc": 12,
+     "name": "wireUsersTable"
+    },
+    {
+     "end": 129,
+     "line": 118,
+     "loc": 12,
+     "name": "wireStatsLog"
+    },
+    {
+     "end": 183,
+     "line": 172,
      "loc": 12,
      "name": "(arrow)"
     },
     {
-     "end": 336,
-     "line": 327,
+     "end": 87,
+     "line": 78,
      "loc": 10,
      "name": "(arrow)"
     },
     {
-     "end": 434,
-     "line": 426,
+     "end": 205,
+     "line": 197,
      "loc": 9,
      "name": "(arrow)"
     },
     {
-     "end": 150,
-     "line": 143,
-     "loc": 8,
-     "name": "redoGlobal"
-    },
-    {
-     "end": 453,
-     "line": 446,
+     "end": 226,
+     "line": 219,
      "loc": 8,
      "name": "(arrow)"
     },
     {
-     "end": 493,
-     "line": 486,
+     "end": 274,
+     "line": 267,
      "loc": 8,
      "name": "(arrow)"
     },
     {
-     "end": 74,
-     "line": 68,
-     "loc": 7,
-     "name": "_peopleRowsOf"
-    },
-    {
-     "end": 141,
-     "line": 135,
-     "loc": 7,
-     "name": "undoGlobal"
-    },
-    {
-     "end": 394,
-     "line": 388,
+     "end": 159,
+     "line": 153,
      "loc": 7,
      "name": "(arrow)"
     },
     {
-     "end": 302,
-     "line": 297,
+     "end": 37,
+     "line": 32,
      "loc": 6,
      "name": "(arrow)"
     },
     {
-     "end": 320,
-     "line": 315,
+     "end": 69,
+     "line": 64,
      "loc": 6,
      "name": "(arrow)"
     },
     {
-     "end": 365,
-     "line": 360,
+     "end": 124,
+     "line": 119,
      "loc": 6,
      "name": "(arrow)"
     },
     {
-     "end": 501,
-     "line": 496,
+     "end": 283,
+     "line": 278,
      "loc": 6,
      "name": "(arrow)"
     },
     {
-     "end": 342,
-     "line": 338,
+     "end": 95,
+     "line": 91,
      "loc": 5,
      "name": "(arrow)"
     },
     {
-     "end": 479,
-     "line": 475,
+     "end": 257,
+     "line": 253,
      "loc": 5,
      "name": "(arrow)"
     },
     {
-     "end": 18,
-     "line": 15,
-     "loc": 4,
-     "name": "_copy"
-    },
-    {
-     "end": 42,
-     "line": 39,
-     "loc": 4,
-     "name": "_same"
-    },
-    {
-     "end": 148,
-     "line": 145,
+     "end": 30,
+     "line": 27,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 295,
-     "line": 292,
+     "end": 215,
+     "line": 212,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 442,
-     "line": 439,
+     "end": 236,
+     "line": 233,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 460,
-     "line": 457,
+     "end": 242,
+     "line": 239,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 466,
-     "line": 463,
+     "end": 290,
+     "line": 287,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 508,
-     "line": 505,
-     "loc": 4,
+     "end": 100,
+     "line": 98,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 109,
+     "line": 107,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 115,
+     "line": 113,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 128,
+     "line": 126,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 135,
+     "line": 133,
+     "loc": 3,
      "name": "(arrow)"
     },
     {
@@ -841,67 +865,283 @@
      "name": "(arrow)"
     },
     {
-     "end": 347,
-     "line": 345,
+     "end": 143,
+     "line": 141,
      "loc": 3,
      "name": "(arrow)"
-    },
-    {
-     "end": 353,
-     "line": 351,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 358,
-     "line": 356,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 369,
-     "line": 367,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 374,
-     "line": 372,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 378,
-     "line": 376,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 382,
-     "line": 380,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 175,
-     "line": 175,
-     "loc": 1,
-     "name": "ready"
     }
    ],
-   "lines": 510,
+   "lines": 293,
    "objects": [
     {
-     "end": 170,
+     "end": 292,
      "gated": true,
-     "line": 7,
-     "loc": 164,
-     "methods": 10
+     "line": 147,
+     "loc": 146,
+     "methods": 7
+    },
+    {
+     "end": 145,
+     "gated": true,
+     "line": 20,
+     "loc": 126,
+     "methods": 8
+    },
+    {
+     "end": 178,
+     "gated": false,
+     "line": 178,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 279,
+     "gated": false,
+     "line": 279,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 280,
+     "gated": false,
+     "line": 280,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 40,
+    "max_object_loc": 146,
+    "max_object_methods": 8,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app-history.js",
+   "functions": [
+    {
+     "end": 142,
+     "line": 115,
+     "loc": 28,
+     "name": "_applyGlobalKind"
+    },
+    {
+     "end": 66,
+     "line": 47,
+     "loc": 20,
+     "name": "recordGlobal"
+    },
+    {
+     "end": 40,
+     "line": 23,
+     "loc": 18,
+     "name": "loadGlobalHistory"
+    },
+    {
+     "end": 88,
+     "line": 71,
+     "loc": 18,
+     "name": "_updateUndoButtons"
+    },
+    {
+     "end": 161,
+     "line": 146,
+     "loc": 16,
+     "name": "_syncGlobalHistory"
+    },
+    {
+     "end": 113,
+     "line": 100,
+     "loc": 14,
+     "name": "_applyGlobalResult"
+    },
+    {
+     "end": 160,
+     "line": 148,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 178,
+     "line": 171,
+     "loc": 8,
+     "name": "redoGlobal"
+    },
+    {
+     "end": 98,
+     "line": 92,
+     "loc": 7,
+     "name": "_peopleRowsOf"
+    },
+    {
+     "end": 169,
+     "line": 163,
+     "loc": 7,
+     "name": "undoGlobal"
     },
     {
      "end": 21,
+     "line": 18,
+     "loc": 4,
+     "name": "_copy"
+    },
+    {
+     "end": 45,
+     "line": 42,
+     "loc": 4,
+     "name": "_same"
+    },
+    {
+     "end": 176,
+     "line": 173,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 167,
+     "line": 165,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 180,
+   "objects": [
+    {
+     "end": 179,
+     "gated": true,
+     "line": 91,
+     "loc": 89,
+     "methods": 6
+    },
+    {
+     "end": 89,
+     "gated": true,
+     "line": 17,
+     "loc": 73,
+     "methods": 5
+    },
+    {
+     "end": 24,
      "gated": false,
-     "line": 21,
+     "line": 24,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 48,
+     "gated": false,
+     "line": 48,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 49,
+     "gated": false,
+     "line": 49,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 118,
+     "gated": false,
+     "line": 118,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 154,
+     "gated": false,
+     "line": 154,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 89,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app-session.js",
+   "functions": [
+    {
+     "end": 91,
+     "line": 72,
+     "loc": 20,
+     "name": "_restoreLastStack"
+    },
+    {
+     "end": 32,
+     "line": 15,
+     "loc": 18,
+     "name": "restoreSession"
+    },
+    {
+     "end": 70,
+     "line": 53,
+     "loc": 18,
+     "name": "_restoreStackStep"
+    },
+    {
+     "end": 42,
+     "line": 34,
+     "loc": 9,
+     "name": "_applyTheme"
+    },
+    {
+     "end": 51,
+     "line": 44,
+     "loc": 8,
+     "name": "_seedPresets"
+    }
+   ],
+   "lines": 93,
+   "objects": [
+    {
+     "end": 92,
+     "gated": true,
+     "line": 14,
+     "loc": 79,
+     "methods": 5
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
      "loc": 1,
      "methods": 0
     },
@@ -913,118 +1153,93 @@
      "methods": 0
     },
     {
-     "end": 25,
+     "end": 77,
      "gated": false,
-     "line": 25,
+     "line": 77,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 30,
+     "end": 80,
      "gated": false,
-     "line": 30,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 45,
-     "gated": false,
-     "line": 45,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 46,
-     "gated": false,
-     "line": 46,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 88,
-     "gated": false,
-     "line": 88,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 126,
-     "gated": false,
-     "line": 126,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 175,
-     "gated": true,
-     "line": 175,
-     "loc": 1,
-     "methods": 1
-    },
-    {
-     "end": 220,
-     "gated": false,
-     "line": 220,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 221,
-     "gated": false,
-     "line": 221,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 241,
-     "gated": false,
-     "line": 241,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 264,
-     "gated": false,
-     "line": 264,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 267,
-     "gated": false,
-     "line": 267,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 409,
-     "gated": false,
-     "line": 409,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 497,
-     "gated": false,
-     "line": 497,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 498,
-     "gated": false,
-     "line": 498,
+     "line": 80,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 43,
-    "max_object_loc": 164,
-    "max_object_methods": 10,
-    "over_100": 1,
-    "over_30": 4,
-    "over_60": 2
+    "functions": 5,
+    "max_object_loc": 79,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/app.js",
+   "functions": [
+    {
+     "end": 82,
+     "line": 62,
+     "loc": 21,
+     "name": "initWithBridge"
+    },
+    {
+     "end": 60,
+     "line": 44,
+     "loc": 17,
+     "name": "initPanels"
+    },
+    {
+     "end": 96,
+     "line": 91,
+     "loc": 6,
+     "name": "setupBridgeListeners"
+    },
+    {
+     "end": 42,
+     "line": 38,
+     "loc": 5,
+     "name": "initApp"
+    },
+    {
+     "end": 89,
+     "line": 87,
+     "loc": 3,
+     "name": "restoreSession"
+    },
+    {
+     "end": 35,
+     "line": 35,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 97,
+   "objects": [
+    {
+     "end": 27,
+     "gated": false,
+     "line": 20,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 35,
+     "gated": true,
+     "line": 35,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 6,
+    "max_object_loc": 8,
+    "max_object_methods": 1,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
    }
   },
   {
@@ -3150,63 +3365,69 @@
    "file": "ui/js/core/ui-helpers.js",
    "functions": [
     {
-     "end": 75,
-     "line": 38,
+     "end": 77,
+     "line": 40,
      "loc": 38,
      "name": "chip"
     },
     {
-     "end": 22,
-     "line": 15,
+     "end": 103,
+     "line": 94,
+     "loc": 10,
+     "name": "mergeParts"
+    },
+    {
+     "end": 24,
+     "line": 17,
      "loc": 8,
      "name": "esc"
     },
     {
-     "end": 31,
-     "line": 24,
+     "end": 33,
+     "line": 26,
      "loc": 8,
      "name": "el"
     },
     {
-     "end": 66,
-     "line": 63,
+     "end": 68,
+     "line": 65,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 72,
-     "line": 69,
+     "end": 74,
+     "line": 71,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 81,
-     "line": 78,
+     "end": 83,
+     "line": 80,
      "loc": 4,
      "name": "sortArrow"
     }
    ],
-   "lines": 83,
+   "lines": 105,
    "objects": [
     {
-     "end": 82,
+     "end": 104,
      "gated": true,
-     "line": 14,
-     "loc": 69,
-     "methods": 4
+     "line": 16,
+     "loc": 89,
+     "methods": 5
     },
     {
-     "end": 39,
+     "end": 41,
      "gated": false,
-     "line": 39,
+     "line": 41,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 6,
-    "max_object_loc": 69,
-    "max_object_methods": 4,
+    "functions": 7,
+    "max_object_loc": 89,
+    "max_object_methods": 5,
     "over_100": 0,
     "over_30": 1,
     "over_60": 0
@@ -6702,2229 +6923,146 @@
    }
   },
   {
-   "file": "ui/js/sash-grid.js",
+   "file": "ui/js/sash-grid-drag.js",
    "functions": [
     {
-     "end": 898,
-     "line": 841,
-     "loc": 58,
-     "name": "_renderWindowsMenu"
-    },
-    {
-     "end": 1113,
-     "line": 1056,
-     "loc": 58,
-     "name": "_showSpec"
-    },
-    {
-     "end": 653,
-     "line": 604,
-     "loc": 50,
-     "name": "_ensureWindowControls"
-    },
-    {
-     "end": 652,
-     "line": 606,
-     "loc": 47,
-     "name": "(arrow)"
-    },
-    {
-     "end": 839,
-     "line": 793,
-     "loc": 47,
-     "name": "_setupWindowsMenu"
-    },
-    {
-     "end": 559,
-     "line": 517,
-     "loc": 43,
-     "name": "_renderDock"
-    },
-    {
-     "end": 338,
-     "line": 303,
-     "loc": 36,
-     "name": "validatePortablePreset"
-    },
-    {
-     "end": 558,
-     "line": 523,
-     "loc": 36,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1054,
-     "line": 1020,
-     "loc": 35,
-     "name": "_computeSpec"
-    },
-    {
-     "end": 1319,
-     "line": 1285,
-     "loc": 35,
-     "name": "_setupLayoutMenu"
-    },
-    {
-     "end": 743,
-     "line": 710,
-     "loc": 34,
-     "name": "_syncEmptySplits"
-    },
-    {
-     "end": 877,
-     "line": 844,
-     "loc": 34,
-     "name": "(arrow)"
-    },
-    {
-     "end": 88,
-     "line": 56,
-     "loc": 33,
-     "name": "init"
-    },
-    {
-     "end": 969,
-     "line": 938,
-     "loc": 32,
-     "name": "_beginDrag"
-    },
-    {
-     "end": 204,
-     "line": 176,
-     "loc": 29,
-     "name": "_loadFromBackend"
-    },
-    {
-     "end": 1203,
-     "line": 1176,
-     "loc": 28,
-     "name": "_startResize"
-    },
-    {
-     "end": 262,
-     "line": 237,
-     "loc": 26,
-     "name": "createPortablePreset"
-    },
-    {
-     "end": 596,
-     "line": 571,
-     "loc": 26,
-     "name": "_buildNode"
-    },
-    {
-     "end": 127,
-     "line": 103,
-     "loc": 25,
-     "name": "_loadWindowStates"
-    },
-    {
-     "end": 704,
-     "line": 680,
-     "loc": 25,
-     "name": "_syncHidden"
-    },
-    {
-     "end": 1018,
-     "line": 994,
+     "end": 99,
+     "line": 75,
      "loc": 25,
      "name": "_dragMove"
     },
     {
-     "end": 766,
-     "line": 745,
-     "loc": 22,
-     "name": "_checkEmptyGrid"
-    },
-    {
-     "end": 789,
-     "line": 768,
-     "loc": 22,
-     "name": "_setupVisibilityWatch"
-    },
-    {
-     "end": 1254,
-     "line": 1233,
-     "loc": 22,
-     "name": "_resizeUp"
-    },
-    {
-     "end": 360,
-     "line": 340,
-     "loc": 21,
-     "name": "applyPortablePreset"
-    },
-    {
-     "end": 392,
-     "line": 374,
+     "end": 73,
+     "line": 55,
      "loc": 19,
-     "name": "resetToDefault"
+     "name": "_cacheDragRects"
     },
     {
-     "end": 294,
-     "line": 278,
-     "loc": 17,
-     "name": "_portableWindows"
-    },
-    {
-     "end": 730,
-     "line": 714,
-     "loc": 17,
-     "name": "(arrow)"
-    },
-    {
-     "end": 785,
-     "line": 769,
-     "loc": 17,
-     "name": "(arrow)"
-    },
-    {
-     "end": 936,
-     "line": 920,
+     "end": 41,
+     "line": 25,
      "loc": 17,
      "name": "_startDrag"
     },
     {
-     "end": 1221,
-     "line": 1205,
-     "loc": 17,
-     "name": "_resizePixelAllocation"
-    },
-    {
-     "end": 160,
-     "line": 145,
-     "loc": 16,
-     "name": "flushPersistence"
-    },
-    {
-     "end": 1153,
-     "line": 1138,
+     "end": 139,
+     "line": 124,
      "loc": 16,
      "name": "_cleanupDrag"
     },
     {
-     "end": 1356,
-     "line": 1341,
-     "loc": 16,
-     "name": "simulateResize"
-    },
-    {
-     "end": 143,
-     "line": 129,
-     "loc": 15,
-     "name": "_saveWindowStates"
-    },
-    {
-     "end": 437,
-     "line": 423,
-     "loc": 15,
-     "name": "openWindow"
-    },
-    {
-     "end": 669,
-     "line": 655,
-     "loc": 15,
-     "name": "_updateWindowControlIcons"
-    },
-    {
-     "end": 985,
-     "line": 971,
-     "loc": 15,
-     "name": "_buildDragVisual"
-    },
-    {
-     "end": 1129,
-     "line": 1115,
+     "end": 115,
+     "line": 101,
      "loc": 15,
      "name": "_dragUp"
     },
     {
-     "end": 1270,
-     "line": 1256,
+     "end": 183,
+     "line": 169,
      "loc": 15,
-     "name": "_cancelResize"
+     "name": "_buildDragVisual"
     },
     {
-     "end": 1310,
-     "line": 1297,
-     "loc": 14,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1339,
-     "line": 1326,
+     "end": 154,
+     "line": 141,
      "loc": 14,
      "name": "simulateDrop"
     },
     {
-     "end": 174,
-     "line": 162,
-     "loc": 13,
-     "name": "_save"
-    },
-    {
-     "end": 276,
-     "line": 264,
-     "loc": 13,
-     "name": "_portableStates"
-    },
-    {
-     "end": 453,
-     "line": 441,
-     "loc": 13,
-     "name": "showWindow"
-    },
-    {
-     "end": 918,
-     "line": 906,
+     "end": 23,
+     "line": 11,
      "loc": 13,
      "name": "_pointerDown"
     },
     {
-     "end": 101,
-     "line": 90,
-     "loc": 12,
-     "name": "_loadTree"
-    },
-    {
-     "end": 201,
-     "line": 190,
-     "loc": 12,
-     "name": "(arrow)"
-    },
-    {
-     "end": 405,
-     "line": 394,
-     "loc": 12,
-     "name": "setLayout"
-    },
-    {
-     "end": 421,
-     "line": 410,
-     "loc": 12,
-     "name": "closeWindow"
-    },
-    {
-     "end": 515,
-     "line": 504,
-     "loc": 12,
-     "name": "_ensureDock"
-    },
-    {
-     "end": 693,
-     "line": 682,
-     "loc": 12,
-     "name": "(arrow)"
-    },
-    {
-     "end": 727,
-     "line": 716,
-     "loc": 12,
-     "name": "checkVisible"
-    },
-    {
-     "end": 1283,
-     "line": 1272,
-     "loc": 12,
-     "name": "_onDblClick"
-    },
-    {
-     "end": 235,
-     "line": 225,
+     "end": 53,
+     "line": 43,
      "loc": 11,
-     "name": "_portableBounds"
+     "name": "_beginDrag"
     },
     {
-     "end": 372,
-     "line": 362,
-     "loc": 11,
-     "name": "showAllWindows"
-    },
-    {
-     "end": 594,
-     "line": 584,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 742,
-     "line": 732,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 815,
-     "line": 805,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 897,
-     "line": 887,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 215,
-     "line": 206,
+     "end": 167,
+     "line": 158,
      "loc": 10,
-     "name": "_applySerialized"
+     "name": "_createDragVisuals"
     },
     {
-     "end": 474,
-     "line": 465,
-     "loc": 10,
-     "name": "minimizeWindow"
-    },
-    {
-     "end": 703,
-     "line": 694,
-     "loc": 10,
-     "name": "(arrow)"
-    },
-    {
-     "end": 835,
-     "line": 826,
-     "loc": 10,
-     "name": "(arrow)"
-    },
-    {
-     "end": 485,
-     "line": 477,
-     "loc": 9,
-     "name": "restoreMinimized"
-    },
-    {
-     "end": 896,
-     "line": 888,
+     "end": 72,
+     "line": 64,
      "loc": 9,
      "name": "(arrow)"
     },
     {
-     "end": 956,
-     "line": 948,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1231,
-     "line": 1223,
-     "loc": 9,
-     "name": "_resizeMove"
-    },
-    {
-     "end": 187,
-     "line": 180,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 778,
-     "line": 771,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 804,
-     "line": 797,
-     "loc": 8,
-     "name": "place"
-    },
-    {
-     "end": 824,
-     "line": 817,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 886,
-     "line": 879,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1167,
-     "line": 1160,
+     "end": 192,
+     "line": 185,
      "loc": 8,
      "name": "_flashLanded"
     },
     {
-     "end": 1296,
-     "line": 1289,
-     "loc": 8,
-     "name": "place"
-    },
-    {
-     "end": 223,
-     "line": 217,
-     "loc": 7,
-     "name": "_screenSnapshot"
-    },
-    {
-     "end": 500,
-     "line": 494,
-     "loc": 7,
-     "name": "_applyStates"
-    },
-    {
-     "end": 569,
-     "line": 563,
-     "loc": 7,
-     "name": "render"
-    },
-    {
-     "end": 702,
-     "line": 696,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 741,
-     "line": 735,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 254,
-     "line": 249,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 301,
-     "line": 296,
-     "loc": 6,
-     "name": "_validPortableBounds"
-    },
-    {
-     "end": 678,
-     "line": 673,
-     "loc": 6,
-     "name": "_panelIsHidden"
-    },
-    {
-     "end": 885,
-     "line": 880,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 992,
-     "line": 987,
-     "loc": 6,
-     "name": "_winIdOf"
-    },
-    {
-     "end": 1136,
-     "line": 1131,
+     "end": 122,
+     "line": 117,
      "loc": 6,
      "name": "_cancelDrag"
     },
     {
-     "end": 1174,
-     "line": 1169,
-     "loc": 6,
-     "name": "_applyDrop"
-    },
-    {
-     "end": 1249,
-     "line": 1244,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 247,
-     "line": 243,
+     "end": 62,
+     "line": 58,
      "loc": 5,
      "name": "(arrow)"
     },
     {
-     "end": 354,
-     "line": 350,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 369,
-     "line": 365,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 459,
-     "line": 455,
-     "loc": 5,
-     "name": "toggleWindow"
-    },
-    {
-     "end": 764,
-     "line": 760,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 904,
-     "line": 900,
-     "loc": 5,
-     "name": "_updateWindowsMenu"
-    },
-    {
-     "end": 946,
-     "line": 942,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 490,
-     "line": 487,
-     "loc": 4,
-     "name": "toggleMinimize"
-    },
-    {
-     "end": 548,
-     "line": 545,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 552,
-     "line": 549,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 556,
-     "line": 553,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 646,
-     "line": 643,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 650,
-     "line": 647,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1158,
-     "line": 1155,
-     "loc": 4,
-     "name": "_specText"
-    },
-    {
-     "end": 111,
-     "line": 109,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 120,
-     "line": 118,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 600,
-     "line": 598,
-     "loc": 3,
-     "name": "_parsePath"
-    },
-    {
-     "end": 788,
-     "line": 786,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 838,
-     "line": 836,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1201,
-     "line": 1199,
-     "loc": 3,
-     "name": "_onResizeKey"
-    },
-    {
-     "end": 1313,
-     "line": 1311,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1318,
-     "line": 1316,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1324,
-     "line": 1322,
-     "loc": 3,
-     "name": "getWindowStates"
-    },
-    {
-     "end": 231,
-     "line": 231,
-     "loc": 1,
-     "name": "clamp"
-    },
-    {
-     "end": 268,
-     "line": 268,
-     "loc": 1,
-     "name": "known"
-    },
-    {
-     "end": 383,
-     "line": 383,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 407,
-     "line": 407,
-     "loc": 1,
-     "name": "isClosed"
-    },
-    {
-     "end": 408,
-     "line": 408,
-     "loc": 1,
-     "name": "isMinimized"
-    },
-    {
-     "end": 830,
-     "line": 830,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 931,
-     "line": 931,
+     "end": 36,
+     "line": 36,
      "loc": 1,
      "name": "_onDragKey"
     },
     {
-     "end": 1183,
-     "line": 1183,
-     "loc": 1,
-     "name": "axisSize"
-    },
-    {
-     "end": 1198,
-     "line": 1198,
-     "loc": 1,
-     "name": "_onResizeCancel"
-    },
-    {
-     "end": 1230,
-     "line": 1230,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1263,
-     "line": 1263,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1312,
-     "line": 1312,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1315,
-     "line": 1315,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1321,
-     "line": 1321,
-     "loc": 1,
-     "name": "getTree"
-    },
-    {
-     "end": 1334,
-     "line": 1334,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1359,
-     "line": 1359,
-     "loc": 1,
-     "name": "ready"
-    }
-   ],
-   "lines": 1361,
-   "objects": [
-    {
-     "end": 1357,
-     "gated": true,
-     "line": 27,
-     "loc": 1331,
-     "methods": 69
-    },
-    {
-     "end": 68,
-     "gated": false,
-     "line": 61,
-     "loc": 8,
-     "methods": 0
-    },
-    {
-     "end": 928,
-     "gated": false,
-     "line": 921,
-     "loc": 8,
-     "methods": 0
-    },
-    {
-     "end": 54,
-     "gated": false,
-     "line": 49,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 261,
-     "gated": false,
-     "line": 256,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 955,
-     "gated": false,
-     "line": 951,
-     "loc": 5,
-     "methods": 0
-    },
-    {
-     "end": 139,
-     "gated": false,
-     "line": 136,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 1172,
-     "gated": false,
-     "line": 1170,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 222,
-     "gated": true,
-     "line": 221,
-     "loc": 2,
-     "methods": 1
-    },
-    {
-     "end": 234,
-     "gated": false,
-     "line": 233,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 253,
-     "gated": false,
-     "line": 252,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 260,
-     "gated": false,
-     "line": 259,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 337,
-     "gated": false,
-     "line": 336,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 42,
-     "gated": false,
-     "line": 42,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 158,
-     "gated": false,
-     "line": 158,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 172,
-     "gated": false,
-     "line": 172,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 228,
-     "gated": false,
-     "line": 228,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 239,
-     "gated": false,
-     "line": 239,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 248,
-     "gated": false,
-     "line": 248,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 267,
-     "gated": false,
-     "line": 267,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 270,
-     "gated": false,
-     "line": 270,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 272,
-     "gated": false,
-     "line": 272,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 274,
-     "gated": false,
-     "line": 274,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 275,
-     "gated": false,
-     "line": 275,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 275,
-     "gated": false,
-     "line": 275,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 280,
-     "gated": false,
-     "line": 280,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 284,
-     "gated": false,
-     "line": 284,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 288,
-     "gated": false,
-     "line": 288,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 292,
-     "gated": false,
-     "line": 292,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 293,
-     "gated": false,
-     "line": 293,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 306,
-     "gated": false,
-     "line": 306,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 307,
-     "gated": false,
-     "line": 307,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 309,
-     "gated": false,
-     "line": 309,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 310,
-     "gated": false,
-     "line": 310,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 312,
-     "gated": false,
-     "line": 312,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 315,
-     "gated": false,
-     "line": 315,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 316,
-     "gated": false,
-     "line": 316,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 317,
-     "gated": false,
-     "line": 317,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 329,
-     "gated": false,
-     "line": 329,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 385,
-     "gated": false,
-     "line": 385,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 401,
-     "gated": false,
-     "line": 401,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 787,
-     "gated": false,
-     "line": 787,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 932,
-     "gated": false,
-     "line": 932,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 941,
-     "gated": false,
-     "line": 941,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1034,
-     "gated": true,
-     "line": 1034,
-     "loc": 1,
-     "methods": 1
-    },
-    {
-     "end": 1042,
-     "gated": false,
-     "line": 1042,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1046,
-     "gated": false,
-     "line": 1046,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1051,
-     "gated": false,
-     "line": 1051,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1074,
-     "gated": false,
-     "line": 1074,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1075,
-     "gated": false,
-     "line": 1075,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1086,
-     "gated": false,
-     "line": 1086,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1089,
-     "gated": false,
-     "line": 1089,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1099,
-     "gated": false,
-     "line": 1099,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1100,
-     "gated": false,
-     "line": 1100,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1141,
-     "gated": false,
-     "line": 1141,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1186,
-     "gated": false,
-     "line": 1186,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1186,
-     "gated": false,
-     "line": 1186,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1196,
-     "gated": false,
-     "line": 1196,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1259,
-     "gated": false,
-     "line": 1259,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1323,
-     "gated": false,
-     "line": 1323,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1328,
-     "gated": false,
-     "line": 1328,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1329,
-     "gated": false,
-     "line": 1329,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1330,
-     "gated": false,
-     "line": 1330,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1331,
-     "gated": false,
-     "line": 1331,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1332,
-     "gated": false,
-     "line": 1332,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1333,
-     "gated": false,
-     "line": 1333,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1359,
-     "gated": true,
-     "line": 1359,
-     "loc": 1,
-     "methods": 1
-    }
-   ],
-   "summary": {
-    "functions": 127,
-    "max_object_loc": 1331,
-    "max_object_methods": 69,
-    "over_100": 0,
-    "over_30": 14,
-    "over_60": 0
-   }
-  },
-  {
-   "file": "ui/js/stack-dnd.js",
-   "functions": [
-    {
-     "end": 1257,
-     "line": 1079,
-     "loc": 179,
-     "name": "_showConfig"
-    },
-    {
-     "end": 832,
-     "line": 756,
-     "loc": 77,
-     "name": "_setupButtons"
-    },
-    {
-     "end": 617,
-     "line": 544,
-     "loc": 74,
-     "name": "_renderStack"
-    },
-    {
-     "end": 510,
-     "line": 470,
-     "loc": 41,
-     "name": "_summary"
-    },
-    {
-     "end": 318,
-     "line": 281,
-     "loc": 38,
-     "name": "pushHistory"
-    },
-    {
-     "end": 754,
-     "line": 719,
-     "loc": 36,
-     "name": "_renderMenu"
-    },
-    {
-     "end": 904,
-     "line": 874,
-     "loc": 31,
-     "name": "_setupConfigPin"
-    },
-    {
-     "end": 699,
-     "line": 671,
-     "loc": 29,
-     "name": "_setupKeyboardReorder"
-    },
-    {
-     "end": 1066,
-     "line": 1038,
-     "loc": 29,
-     "name": "removeBlock"
-    },
-    {
-     "end": 669,
-     "line": 642,
-     "loc": 28,
-     "name": "moveBlock"
-    },
-    {
-     "end": 698,
-     "line": 672,
-     "loc": 27,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1315,
-     "line": 1289,
-     "loc": 27,
-     "name": "_wireSpeedControls"
-    },
-    {
-     "end": 352,
-     "line": 328,
-     "loc": 25,
-     "name": "undo"
-    },
-    {
-     "end": 425,
-     "line": 401,
-     "loc": 25,
-     "name": "loadHistoryFromState"
-    },
-    {
-     "end": 377,
-     "line": 354,
-     "loc": 24,
-     "name": "redo"
-    },
-    {
-     "end": 987,
-     "line": 964,
-     "loc": 24,
-     "name": "setStack"
-    },
-    {
-     "end": 1230,
-     "line": 1207,
-     "loc": 24,
-     "name": "(arrow)"
-    },
-    {
-     "end": 573,
-     "line": 551,
-     "loc": 23,
-     "name": "(arrow)"
-    },
-    {
-     "end": 614,
-     "line": 592,
-     "loc": 23,
-     "name": "(arrow)"
-    },
-    {
-     "end": 468,
-     "line": 449,
-     "loc": 20,
-     "name": "_findDesc"
-    },
-    {
-     "end": 1227,
-     "line": 1208,
-     "loc": 20,
-     "name": "handler"
-    },
-    {
-     "end": 1336,
-     "line": 1317,
-     "loc": 20,
-     "name": "_saveBlockPreset"
-    },
-    {
-     "end": 952,
-     "line": 934,
-     "loc": 19,
-     "name": "_updateConfigVisibility"
-    },
-    {
-     "end": 1013,
-     "line": 995,
-     "loc": 19,
-     "name": "setRunning"
-    },
-    {
-     "end": 610,
-     "line": 593,
-     "loc": 18,
-     "name": "(arrow)"
-    },
-    {
-     "end": 210,
-     "line": 194,
-     "loc": 17,
-     "name": "init"
-    },
-    {
-     "end": 717,
-     "line": 701,
-     "loc": 17,
-     "name": "_setupAddMenu"
-    },
-    {
-     "end": 789,
-     "line": 773,
-     "loc": 17,
-     "name": "(arrow)"
-    },
-    {
-     "end": 394,
-     "line": 379,
-     "loc": 16,
-     "name": "updateHistoryButtons"
-    },
-    {
-     "end": 640,
-     "line": 625,
-     "loc": 16,
-     "name": "_attachDrag"
-    },
-    {
-     "end": 226,
-     "line": 212,
-     "loc": 15,
-     "name": "_initDefaultStack"
-    },
-    {
-     "end": 533,
-     "line": 520,
-     "loc": 14,
-     "name": "_refreshSaveLabel"
-    },
-    {
-     "end": 589,
-     "line": 576,
-     "loc": 14,
-     "name": "(arrow)"
-    },
-    {
-     "end": 771,
-     "line": 758,
-     "loc": 14,
-     "name": "(arrow)"
-    },
-    {
-     "end": 588,
-     "line": 577,
-     "loc": 12,
-     "name": "(arrow)"
-    },
-    {
-     "end": 866,
-     "line": 855,
-     "loc": 12,
-     "name": "_persistConfigPin"
-    },
-    {
-     "end": 255,
-     "line": 245,
-     "loc": 11,
-     "name": "_migrateBlock"
-    },
-    {
-     "end": 806,
-     "line": 796,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 925,
-     "line": 915,
-     "loc": 11,
-     "name": "_updateConfigPinButton"
-    },
-    {
-     "end": 1307,
-     "line": 1297,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 436,
-     "line": 427,
-     "loc": 10,
-     "name": "_setupHistoryButtons"
-    },
-    {
-     "end": 714,
-     "line": 705,
-     "loc": 10,
-     "name": "open"
-    },
-    {
-     "end": 886,
-     "line": 877,
-     "loc": 10,
-     "name": "onclick"
-    },
-    {
-     "end": 902,
-     "line": 893,
-     "loc": 10,
-     "name": "onclick"
-    },
-    {
-     "end": 1024,
-     "line": 1015,
-     "loc": 10,
-     "name": "setRunningBlock"
-    },
-    {
-     "end": 1077,
-     "line": 1068,
-     "loc": 10,
-     "name": "_configKeys"
-    },
-    {
-     "end": 237,
-     "line": 229,
-     "loc": 9,
-     "name": "_deepCopy"
-    },
-    {
-     "end": 962,
-     "line": 954,
-     "loc": 9,
-     "name": "notifyEdited"
-    },
-    {
-     "end": 1306,
-     "line": 1298,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 542,
-     "line": 535,
-     "loc": 8,
-     "name": "addBlockConfig"
-    },
-    {
-     "end": 730,
-     "line": 723,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 746,
-     "line": 739,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 913,
-     "line": 906,
-     "loc": 8,
-     "name": "_toggleConfigPin"
-    },
-    {
-     "end": 1245,
-     "line": 1238,
-     "loc": 8,
-     "name": "onclick"
-    },
-    {
-     "end": 272,
-     "line": 266,
-     "loc": 7,
-     "name": "_stacksEqual"
-    },
-    {
-     "end": 753,
-     "line": 747,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 815,
-     "line": 809,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 841,
-     "line": 835,
-     "loc": 7,
-     "name": "_loadConfigPin"
-    },
-    {
-     "end": 1279,
-     "line": 1273,
-     "loc": 7,
-     "name": "_speedDesc"
-    },
-    {
-     "end": 1287,
-     "line": 1281,
-     "loc": 7,
-     "name": "_speedPreviewHtml"
-    },
-    {
-     "end": 279,
-     "line": 274,
-     "loc": 6,
-     "name": "_getCurrentHistoryStack"
-    },
-    {
-     "end": 518,
-     "line": 513,
-     "loc": 6,
-     "name": "setCustomBlocks"
-    },
-    {
-     "end": 745,
-     "line": 740,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 932,
-     "line": 927,
-     "loc": 6,
-     "name": "_clearConfigPanel"
-    },
-    {
-     "end": 1324,
-     "line": 1319,
-     "loc": 6,
-     "name": "finish"
-    },
-    {
-     "end": 447,
-     "line": 443,
-     "loc": 5,
-     "name": "_displayName"
-    },
-    {
-     "end": 623,
-     "line": 619,
-     "loc": 5,
-     "name": "_esc"
-    },
-    {
-     "end": 637,
-     "line": 633,
-     "loc": 5,
-     "name": "labelOf"
-    },
-    {
-     "end": 752,
-     "line": 748,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 847,
-     "line": 843,
-     "loc": 5,
-     "name": "_applyConfigPin"
-    },
-    {
-     "end": 961,
-     "line": 957,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 993,
-     "line": 989,
-     "loc": 5,
-     "name": "refreshPresets"
-    },
-    {
-     "end": 1030,
-     "line": 1026,
-     "loc": 5,
-     "name": "selectBlock"
-    },
-    {
-     "end": 1036,
-     "line": 1032,
-     "loc": 5,
-     "name": "deselectBlock"
-    },
-    {
-     "end": 1163,
-     "line": 1159,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1266,
-     "line": 1262,
-     "loc": 5,
-     "name": "_speedValue"
-    },
-    {
-     "end": 1296,
-     "line": 1292,
-     "loc": 5,
-     "name": "refresh"
-    },
-    {
-     "end": 1329,
-     "line": 1325,
-     "loc": 5,
-     "name": "useName"
-    },
-    {
-     "end": 264,
-     "line": 261,
-     "loc": 4,
-     "name": "_normalizeStack"
-    },
-    {
-     "end": 399,
-     "line": 396,
-     "loc": 4,
-     "name": "saveHistoryToBackend"
-    },
-    {
-     "end": 530,
-     "line": 527,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 814,
-     "line": 811,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1023,
-     "line": 1020,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1189,
-     "line": 1186,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1271,
-     "line": 1268,
-     "loc": 4,
-     "name": "_speedCoef"
-    },
-    {
-     "end": 1312,
-     "line": 1309,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 259,
-     "line": 257,
-     "loc": 3,
-     "name": "_normalizeBlock"
-    },
-    {
-     "end": 322,
-     "line": 320,
-     "loc": 3,
-     "name": "canUndo"
-    },
-    {
-     "end": 326,
-     "line": 324,
-     "loc": 3,
-     "name": "canRedo"
-    },
-    {
-     "end": 441,
-     "line": 439,
-     "loc": 3,
-     "name": "_meta"
-    },
-    {
-     "end": 793,
-     "line": 791,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 805,
-     "line": 803,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 823,
-     "line": 821,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 827,
-     "line": 825,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 831,
-     "line": 829,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 853,
-     "line": 851,
-     "loc": 3,
-     "name": "applyConfigPin"
-    },
-    {
-     "end": 872,
-     "line": 870,
-     "loc": 3,
-     "name": "flushPersistence"
-    },
-    {
-     "end": 250,
-     "line": 250,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 638,
-     "line": 638,
-     "loc": 1,
-     "name": "onReorder"
-    },
-    {
-     "end": 1071,
-     "line": 1071,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1074,
-     "line": 1074,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1075,
-     "line": 1075,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 1252,
-     "line": 1252,
-     "loc": 1,
-     "name": "onclick"
-    },
-    {
-     "end": 1339,
-     "line": 1339,
-     "loc": 1,
-     "name": "ready"
-    }
-   ],
-   "lines": 1341,
-   "objects": [
-    {
-     "end": 1337,
-     "gated": true,
-     "line": 170,
-     "loc": 1168,
-     "methods": 58
-    },
-    {
-     "end": 69,
-     "gated": false,
-     "line": 42,
-     "loc": 28,
-     "methods": 0
-    },
-    {
-     "end": 90,
-     "gated": false,
-     "line": 71,
-     "loc": 20,
-     "methods": 0
-    },
-    {
-     "end": 69,
-     "gated": false,
-     "line": 53,
-     "loc": 17,
-     "methods": 0
-    },
-    {
-     "end": 163,
-     "gated": false,
+     "end": 149,
      "line": 149,
-     "loc": 15,
-     "methods": 0
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 194,
+   "objects": [
+    {
+     "end": 155,
+     "gated": true,
+     "line": 10,
+     "loc": 146,
+     "methods": 9
     },
     {
-     "end": 122,
-     "gated": false,
-     "line": 109,
-     "loc": 14,
-     "methods": 0
+     "end": 193,
+     "gated": true,
+     "line": 157,
+     "loc": 37,
+     "methods": 3
     },
     {
-     "end": 38,
+     "end": 33,
      "gated": false,
      "line": 26,
-     "loc": 13,
-     "methods": 0
-    },
-    {
-     "end": 90,
-     "gated": false,
-     "line": 79,
-     "loc": 12,
-     "methods": 0
-    },
-    {
-     "end": 639,
-     "gated": true,
-     "line": 628,
-     "loc": 12,
-     "methods": 2
-    },
-    {
-     "end": 38,
-     "gated": false,
-     "line": 28,
-     "loc": 11,
-     "methods": 0
-    },
-    {
-     "end": 108,
-     "gated": false,
-     "line": 98,
-     "loc": 11,
-     "methods": 0
-    },
-    {
-     "end": 141,
-     "gated": false,
-     "line": 133,
-     "loc": 9,
-     "methods": 0
-    },
-    {
-     "end": 163,
-     "gated": false,
-     "line": 155,
-     "loc": 9,
-     "methods": 0
-    },
-    {
-     "end": 50,
-     "gated": false,
-     "line": 43,
      "loc": 8,
      "methods": 0
     },
     {
-     "end": 122,
+     "end": 71,
      "gated": false,
-     "line": 115,
-     "loc": 8,
+     "line": 67,
+     "loc": 5,
      "methods": 0
     },
     {
-     "end": 78,
+     "end": 37,
      "gated": false,
-     "line": 72,
-     "loc": 7,
-     "methods": 0
-    },
-    {
-     "end": 108,
-     "gated": false,
-     "line": 103,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 97,
-     "gated": false,
-     "line": 94,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 102,
-     "gated": false,
-     "line": 99,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 113,
-     "gated": false,
-     "line": 110,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 132,
-     "gated": false,
-     "line": 129,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 139,
-     "gated": false,
-     "line": 136,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 139,
-     "gated": false,
-     "line": 136,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 145,
-     "gated": false,
-     "line": 142,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 153,
-     "gated": false,
-     "line": 150,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 167,
-     "gated": false,
-     "line": 164,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 41,
-     "gated": false,
-     "line": 39,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 93,
-     "gated": false,
-     "line": 91,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 125,
-     "gated": false,
-     "line": 123,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 128,
-     "gated": false,
-     "line": 126,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 148,
-     "gated": false,
-     "line": 146,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 497,
-     "gated": false,
-     "line": 495,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 52,
-     "gated": false,
-     "line": 51,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 97,
-     "gated": false,
-     "line": 96,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 132,
-     "gated": false,
-     "line": 131,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 141,
-     "gated": false,
-     "line": 140,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 145,
-     "gated": false,
-     "line": 144,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 167,
-     "gated": false,
-     "line": 166,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 27,
-     "gated": false,
-     "line": 27,
+     "line": 37,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 40,
+     "end": 57,
      "gated": false,
-     "line": 40,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 41,
-     "gated": false,
-     "line": 41,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 70,
-     "gated": false,
-     "line": 70,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 70,
-     "gated": false,
-     "line": 70,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 70,
-     "gated": false,
-     "line": 70,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 92,
-     "gated": false,
-     "line": 92,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 93,
-     "gated": false,
-     "line": 93,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 95,
-     "gated": false,
-     "line": 95,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 114,
-     "gated": false,
-     "line": 114,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 124,
-     "gated": false,
-     "line": 124,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 125,
-     "gated": false,
-     "line": 125,
+     "line": 57,
      "loc": 1,
      "methods": 0
     },
@@ -8936,37 +7074,30 @@
      "methods": 0
     },
     {
-     "end": 128,
-     "gated": false,
-     "line": 128,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 130,
-     "gated": false,
-     "line": 130,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 134,
-     "gated": false,
-     "line": 134,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 135,
-     "gated": false,
-     "line": 135,
-     "loc": 1,
-     "methods": 0
-    },
-    {
      "end": 143,
      "gated": false,
      "line": 143,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 144,
+     "gated": false,
+     "line": 144,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 145,
+     "gated": false,
+     "line": 145,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 146,
      "loc": 1,
      "methods": 0
     },
@@ -8983,6 +7114,1964 @@
      "line": 148,
      "loc": 1,
      "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 16,
+    "max_object_loc": 146,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-menus.js",
+   "functions": [
+    {
+     "end": 220,
+     "line": 192,
+     "loc": 29,
+     "name": "_setupLayoutMenu"
+    },
+    {
+     "end": 35,
+     "line": 10,
+     "loc": 26,
+     "name": "_setupWindowsMenu"
+    },
+    {
+     "end": 58,
+     "line": 37,
+     "loc": 22,
+     "name": "_wireWindowsMenuActions"
+    },
+    {
+     "end": 112,
+     "line": 92,
+     "loc": 21,
+     "name": "_wireWindowsMenu"
+    },
+    {
+     "end": 187,
+     "line": 168,
+     "loc": 20,
+     "name": "_dockChipButtons"
+    },
+    {
+     "end": 90,
+     "line": 73,
+     "loc": 18,
+     "name": "_windowsMenuRow"
+    },
+    {
+     "end": 166,
+     "line": 149,
+     "loc": 18,
+     "name": "_dockChip"
+    },
+    {
+     "end": 217,
+     "line": 204,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 134,
+     "line": 123,
+     "loc": 12,
+     "name": "_ensureDock"
+    },
+    {
+     "end": 147,
+     "line": 136,
+     "loc": 12,
+     "name": "_renderDock"
+    },
+    {
+     "end": 32,
+     "line": 22,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 111,
+     "line": 101,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 57,
+     "line": 48,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 110,
+     "line": 102,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 21,
+     "line": 14,
+     "loc": 8,
+     "name": "place"
+    },
+    {
+     "end": 46,
+     "line": 39,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 100,
+     "line": 93,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 203,
+     "line": 196,
+     "loc": 8,
+     "name": "place"
+    },
+    {
+     "end": 228,
+     "line": 222,
+     "loc": 7,
+     "name": "_wireLayoutMenuActions"
+    },
+    {
+     "end": 65,
+     "line": 60,
+     "loc": 6,
+     "name": "_renderWindowsMenu"
+    },
+    {
+     "end": 99,
+     "line": 94,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 71,
+     "line": 67,
+     "loc": 5,
+     "name": "_windowsMenuState"
+    },
+    {
+     "end": 118,
+     "line": 114,
+     "loc": 5,
+     "name": "_updateWindowsMenu"
+    },
+    {
+     "end": 146,
+     "line": 142,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 234,
+     "line": 230,
+     "loc": 5,
+     "name": "_dismissOutside"
+    },
+    {
+     "end": 164,
+     "line": 161,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 182,
+     "line": 179,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 186,
+     "line": 183,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 225,
+     "line": 223,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 233,
+     "line": 231,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 52,
+     "line": 52,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 224,
+     "line": 224,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 227,
+     "line": 227,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 236,
+   "objects": [
+    {
+     "end": 119,
+     "gated": true,
+     "line": 9,
+     "loc": 111,
+     "methods": 7
+    },
+    {
+     "end": 188,
+     "gated": true,
+     "line": 122,
+     "loc": 67,
+     "methods": 4
+    },
+    {
+     "end": 235,
+     "gated": true,
+     "line": 191,
+     "loc": 45,
+     "methods": 3
+    },
+    {
+     "end": 68,
+     "gated": false,
+     "line": 68,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 69,
+     "gated": false,
+     "line": 69,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 33,
+    "max_object_loc": 111,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-presets.js",
+   "functions": [
+    {
+     "end": 55,
+     "line": 30,
+     "loc": 26,
+     "name": "createPortablePreset"
+    },
+    {
+     "end": 143,
+     "line": 123,
+     "loc": 21,
+     "name": "validatePortablePreset"
+    },
+    {
+     "end": 165,
+     "line": 145,
+     "loc": 21,
+     "name": "applyPortablePreset"
+    },
+    {
+     "end": 89,
+     "line": 73,
+     "loc": 17,
+     "name": "_portableWindows"
+    },
+    {
+     "end": 71,
+     "line": 59,
+     "loc": 13,
+     "name": "_portableStates"
+    },
+    {
+     "end": 121,
+     "line": 110,
+     "loc": 12,
+     "name": "_cleanPortablePreset"
+    },
+    {
+     "end": 28,
+     "line": 18,
+     "loc": 11,
+     "name": "_portableBounds"
+    },
+    {
+     "end": 108,
+     "line": 98,
+     "loc": 11,
+     "name": "_portableScreen"
+    },
+    {
+     "end": 16,
+     "line": 10,
+     "loc": 7,
+     "name": "_screenSnapshot"
+    },
+    {
+     "end": 47,
+     "line": 42,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 96,
+     "line": 91,
+     "loc": 6,
+     "name": "_validPortableBounds"
+    },
+    {
+     "end": 40,
+     "line": 36,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 159,
+     "line": 155,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "clamp"
+    },
+    {
+     "end": 63,
+     "line": 63,
+     "loc": 1,
+     "name": "known"
+    }
+   ],
+   "lines": 167,
+   "objects": [
+    {
+     "end": 166,
+     "gated": true,
+     "line": 58,
+     "loc": 109,
+     "methods": 7
+    },
+    {
+     "end": 56,
+     "gated": true,
+     "line": 9,
+     "loc": 48,
+     "methods": 3
+    },
+    {
+     "end": 54,
+     "gated": false,
+     "line": 49,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": true,
+     "line": 14,
+     "loc": 2,
+     "methods": 1
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 26,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 45,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 52,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 120,
+     "gated": false,
+     "line": 119,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 21,
+     "gated": false,
+     "line": 21,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 32,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 62,
+     "gated": false,
+     "line": 62,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 65,
+     "gated": false,
+     "line": 65,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 67,
+     "gated": false,
+     "line": 67,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 69,
+     "gated": false,
+     "line": 69,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 75,
+     "gated": false,
+     "line": 75,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 79,
+     "gated": false,
+     "line": 79,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 83,
+     "gated": false,
+     "line": 83,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 87,
+     "gated": false,
+     "line": 87,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 88,
+     "gated": false,
+     "line": 88,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 112,
+     "gated": false,
+     "line": 112,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 126,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 127,
+     "gated": false,
+     "line": 127,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 129,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 130,
+     "gated": false,
+     "line": 130,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 132,
+     "gated": false,
+     "line": 132,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 135,
+     "gated": false,
+     "line": 135,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 136,
+     "gated": false,
+     "line": 136,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 137,
+     "gated": false,
+     "line": 137,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 15,
+    "max_object_loc": 109,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-spec.js",
+   "functions": [
+    {
+     "end": 112,
+     "line": 84,
+     "loc": 29,
+     "name": "_specGeometry"
+    },
+    {
+     "end": 176,
+     "line": 149,
+     "loc": 28,
+     "name": "_startResize"
+    },
+    {
+     "end": 227,
+     "line": 206,
+     "loc": 22,
+     "name": "_resizeUp"
+    },
+    {
+     "end": 82,
+     "line": 64,
+     "loc": 19,
+     "name": "_showSpec"
+    },
+    {
+     "end": 194,
+     "line": 178,
+     "loc": 17,
+     "name": "_resizePixelAllocation"
+    },
+    {
+     "end": 273,
+     "line": 258,
+     "loc": 16,
+     "name": "simulateResize"
+    },
+    {
+     "end": 243,
+     "line": 229,
+     "loc": 15,
+     "name": "_cancelResize"
+    },
+    {
+     "end": 46,
+     "line": 34,
+     "loc": 13,
+     "name": "_centerSpec"
+    },
+    {
+     "end": 20,
+     "line": 9,
+     "loc": 12,
+     "name": "_computeSpec"
+    },
+    {
+     "end": 256,
+     "line": 245,
+     "loc": 12,
+     "name": "_onDblClick"
+    },
+    {
+     "end": 32,
+     "line": 22,
+     "loc": 11,
+     "name": "_edgeZoneSpec"
+    },
+    {
+     "end": 122,
+     "line": 114,
+     "loc": 9,
+     "name": "_siblingBar"
+    },
+    {
+     "end": 132,
+     "line": 124,
+     "loc": 9,
+     "name": "_placeIndicator"
+    },
+    {
+     "end": 204,
+     "line": 196,
+     "loc": 9,
+     "name": "_resizeMove"
+    },
+    {
+     "end": 62,
+     "line": 55,
+     "loc": 8,
+     "name": "_sashSpec"
+    },
+    {
+     "end": 53,
+     "line": 48,
+     "loc": 6,
+     "name": "_winIdOf"
+    },
+    {
+     "end": 144,
+     "line": 139,
+     "loc": 6,
+     "name": "_applyDrop"
+    },
+    {
+     "end": 222,
+     "line": 217,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 137,
+     "line": 134,
+     "loc": 4,
+     "name": "_specText"
+    },
+    {
+     "end": 174,
+     "line": 172,
+     "loc": 3,
+     "name": "_onResizeKey"
+    },
+    {
+     "end": 156,
+     "line": 156,
+     "loc": 1,
+     "name": "axisSize"
+    },
+    {
+     "end": 171,
+     "line": 171,
+     "loc": 1,
+     "name": "_onResizeCancel"
+    },
+    {
+     "end": 203,
+     "line": 203,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 236,
+     "line": 236,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 275,
+   "objects": [
+    {
+     "end": 145,
+     "gated": true,
+     "line": 8,
+     "loc": 138,
+     "methods": 11
+    },
+    {
+     "end": 274,
+     "gated": true,
+     "line": 148,
+     "loc": 127,
+     "methods": 7
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 140,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 31,
+     "gated": true,
+     "line": 31,
+     "loc": 1,
+     "methods": 1
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 45,
+     "gated": false,
+     "line": 45,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 59,
+     "gated": false,
+     "line": 59,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 91,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 92,
+     "gated": false,
+     "line": 92,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 107,
+     "gated": false,
+     "line": 107,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 108,
+     "gated": false,
+     "line": 108,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 111,
+     "gated": false,
+     "line": 111,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 118,
+     "gated": false,
+     "line": 118,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 121,
+     "gated": false,
+     "line": 121,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 159,
+     "gated": false,
+     "line": 159,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 159,
+     "gated": false,
+     "line": 159,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 169,
+     "gated": false,
+     "line": 169,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 232,
+     "gated": false,
+     "line": 232,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 24,
+    "max_object_loc": 138,
+    "max_object_methods": 11,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-tree.js",
+   "functions": [
+    {
+     "end": 87,
+     "line": 61,
+     "loc": 27,
+     "name": "_createWindowControls"
+    },
+    {
+     "end": 36,
+     "line": 11,
+     "loc": 26,
+     "name": "_buildNode"
+    },
+    {
+     "end": 154,
+     "line": 130,
+     "loc": 25,
+     "name": "_syncHidden"
+    },
+    {
+     "end": 225,
+     "line": 204,
+     "loc": 22,
+     "name": "_checkEmptyGrid"
+    },
+    {
+     "end": 248,
+     "line": 227,
+     "loc": 22,
+     "name": "_setupVisibilityWatch"
+    },
+    {
+     "end": 177,
+     "line": 161,
+     "loc": 17,
+     "name": "_splitHasVisibleDescendant"
+    },
+    {
+     "end": 244,
+     "line": 228,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 44,
+     "loc": 16,
+     "name": "_ensureWindowControls"
+    },
+    {
+     "end": 117,
+     "line": 103,
+     "loc": 15,
+     "name": "_updateWindowControlIcons"
+    },
+    {
+     "end": 58,
+     "line": 46,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 101,
+     "line": 89,
+     "loc": 13,
+     "name": "_attachWindowControls"
+    },
+    {
+     "end": 202,
+     "line": 190,
+     "loc": 13,
+     "name": "_hideTouchedSashes"
+    },
+    {
+     "end": 143,
+     "line": 132,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 174,
+     "line": 163,
+     "loc": 12,
+     "name": "checkVisible"
+    },
+    {
+     "end": 34,
+     "line": 24,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 201,
+     "line": 191,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 153,
+     "line": 144,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 188,
+     "line": 179,
+     "loc": 10,
+     "name": "_syncEmptySplits"
+    },
+    {
+     "end": 237,
+     "line": 230,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 152,
+     "line": 146,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 200,
+     "line": 194,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 128,
+     "line": 123,
+     "loc": 6,
+     "name": "_panelIsHidden"
+    },
+    {
+     "end": 223,
+     "line": 219,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 81,
+     "line": 78,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 85,
+     "line": 82,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 40,
+     "line": 38,
+     "loc": 3,
+     "name": "_parsePath"
+    },
+    {
+     "end": 185,
+     "line": 183,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 247,
+     "line": 245,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 250,
+   "objects": [
+    {
+     "end": 249,
+     "gated": true,
+     "line": 120,
+     "loc": 130,
+     "methods": 7
+    },
+    {
+     "end": 118,
+     "gated": true,
+     "line": 10,
+     "loc": 109,
+     "methods": 6
+    },
+    {
+     "end": 246,
+     "gated": false,
+     "line": 246,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 28,
+    "max_object_loc": 130,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-windows.js",
+   "functions": [
+    {
+     "end": 124,
+     "line": 96,
+     "loc": 29,
+     "name": "_loadFromBackend"
+    },
+    {
+     "end": 64,
+     "line": 40,
+     "loc": 25,
+     "name": "_loadWindowStates"
+    },
+    {
+     "end": 170,
+     "line": 152,
+     "loc": 19,
+     "name": "resetToDefault"
+    },
+    {
+     "end": 25,
+     "line": 11,
+     "loc": 15,
+     "name": "_collectPanels"
+    },
+    {
+     "end": 80,
+     "line": 66,
+     "loc": 15,
+     "name": "_saveWindowStates"
+    },
+    {
+     "end": 216,
+     "line": 202,
+     "loc": 15,
+     "name": "openWindow"
+    },
+    {
+     "end": 94,
+     "line": 82,
+     "loc": 13,
+     "name": "_save"
+    },
+    {
+     "end": 232,
+     "line": 220,
+     "loc": 13,
+     "name": "showWindow"
+    },
+    {
+     "end": 38,
+     "line": 27,
+     "loc": 12,
+     "name": "_loadTree"
+    },
+    {
+     "end": 121,
+     "line": 110,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 183,
+     "line": 172,
+     "loc": 12,
+     "name": "setLayout"
+    },
+    {
+     "end": 200,
+     "line": 189,
+     "loc": 12,
+     "name": "closeWindow"
+    },
+    {
+     "end": 150,
+     "line": 140,
+     "loc": 11,
+     "name": "showAllWindows"
+    },
+    {
+     "end": 135,
+     "line": 126,
+     "loc": 10,
+     "name": "_applySerialized"
+    },
+    {
+     "end": 253,
+     "line": 244,
+     "loc": 10,
+     "name": "minimizeWindow"
+    },
+    {
+     "end": 264,
+     "line": 256,
+     "loc": 9,
+     "name": "restoreMinimized"
+    },
+    {
+     "end": 107,
+     "line": 100,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 147,
+     "line": 143,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 238,
+     "line": 234,
+     "loc": 5,
+     "name": "toggleWindow"
+    },
+    {
+     "end": 269,
+     "line": 266,
+     "loc": 4,
+     "name": "toggleMinimize"
+    },
+    {
+     "end": 48,
+     "line": 46,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 57,
+     "line": 55,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 161,
+     "line": 161,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 185,
+     "line": 185,
+     "loc": 1,
+     "name": "isClosed"
+    },
+    {
+     "end": 187,
+     "line": 187,
+     "loc": 1,
+     "name": "isMinimized"
+    }
+   ],
+   "lines": 271,
+   "objects": [
+    {
+     "end": 270,
+     "gated": true,
+     "line": 139,
+     "loc": 132,
+     "methods": 12
+    },
+    {
+     "end": 136,
+     "gated": true,
+     "line": 10,
+     "loc": 127,
+     "methods": 7
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 12,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 76,
+     "gated": false,
+     "line": 73,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 92,
+     "gated": false,
+     "line": 92,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 163,
+     "gated": false,
+     "line": 163,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 179,
+     "gated": false,
+     "line": 179,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 25,
+    "max_object_loc": 132,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid.js",
+   "functions": [
+    {
+     "end": 64,
+     "line": 48,
+     "loc": 17,
+     "name": "init"
+    },
+    {
+     "end": 80,
+     "line": 65,
+     "loc": 16,
+     "name": "flushPersistence"
+    },
+    {
+     "end": 87,
+     "line": 81,
+     "loc": 7,
+     "name": "render"
+    },
+    {
+     "end": 96,
+     "line": 90,
+     "loc": 7,
+     "name": "_applyStates"
+    },
+    {
+     "end": 102,
+     "line": 100,
+     "loc": 3,
+     "name": "getWindowStates"
+    },
+    {
+     "end": 99,
+     "line": 99,
+     "loc": 1,
+     "name": "getTree"
+    },
+    {
+     "end": 110,
+     "line": 110,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 112,
+   "objects": [
+    {
+     "end": 102,
+     "gated": true,
+     "line": 19,
+     "loc": 84,
+     "methods": 6
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 41,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": false,
+     "line": 34,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 78,
+     "gated": false,
+     "line": 78,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 101,
+     "gated": false,
+     "line": 101,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 110,
+     "gated": true,
+     "line": 110,
+     "loc": 1,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 84,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-config.js",
+   "functions": [
+    {
+     "end": 123,
+     "line": 105,
+     "loc": 19,
+     "name": "_updateConfigVisibility"
+    },
+    {
+     "end": 54,
+     "line": 39,
+     "loc": 16,
+     "name": "_setupConfigPin"
+    },
+    {
+     "end": 33,
+     "line": 22,
+     "loc": 12,
+     "name": "_persistConfigPin"
+    },
+    {
+     "end": 75,
+     "line": 64,
+     "loc": 12,
+     "name": "_configCloseHandler"
+    },
+    {
+     "end": 96,
+     "line": 86,
+     "loc": 11,
+     "name": "_updateConfigPinButton"
+    },
+    {
+     "end": 51,
+     "line": 42,
+     "loc": 10,
+     "name": "onclick"
+    },
+    {
+     "end": 74,
+     "line": 65,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 84,
+     "line": 77,
+     "loc": 8,
+     "name": "_toggleConfigPin"
+    },
+    {
+     "end": 10,
+     "line": 4,
+     "loc": 7,
+     "name": "_loadConfigPin"
+    },
+    {
+     "end": 62,
+     "line": 56,
+     "loc": 7,
+     "name": "_wireConfigCloseButton"
+    },
+    {
+     "end": 103,
+     "line": 98,
+     "loc": 6,
+     "name": "_clearConfigPanel"
+    },
+    {
+     "end": 16,
+     "line": 12,
+     "loc": 5,
+     "name": "_applyConfigPin"
+    },
+    {
+     "end": 20,
+     "line": 18,
+     "loc": 3,
+     "name": "applyConfigPin"
+    },
+    {
+     "end": 37,
+     "line": 35,
+     "loc": 3,
+     "name": "flushPersistence"
+    }
+   ],
+   "lines": 125,
+   "objects": [
+    {
+     "end": 124,
+     "gated": true,
+     "line": 3,
+     "loc": 122,
+     "methods": 12
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 122,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-form.js",
+   "functions": [
+    {
+     "end": 91,
+     "line": 63,
+     "loc": 29,
+     "name": "_wireConfigForm"
+    },
+    {
+     "end": 293,
+     "line": 267,
+     "loc": 27,
+     "name": "_wireSpeedControls"
+    },
+    {
+     "end": 149,
+     "line": 125,
+     "loc": 25,
+     "name": "_configRowHtml"
+    },
+    {
+     "end": 90,
+     "line": 67,
+     "loc": 24,
+     "name": "(arrow)"
+    },
+    {
+     "end": 173,
+     "line": 151,
+     "loc": 23,
+     "name": "_speedRowHtml"
+    },
+    {
+     "end": 32,
+     "line": 11,
+     "loc": 22,
+     "name": "_showConfig"
+    },
+    {
+     "end": 87,
+     "line": 68,
+     "loc": 20,
+     "name": "handler"
+    },
+    {
+     "end": 50,
+     "line": 34,
+     "loc": 17,
+     "name": "_configBodyHtml"
+    },
+    {
+     "end": 213,
+     "line": 200,
+     "loc": 14,
+     "name": "_checkboxRowHtml"
+    },
+    {
+     "end": 198,
+     "line": 187,
+     "loc": 12,
+     "name": "_radioRowHtml"
+    },
+    {
+     "end": 103,
+     "line": 93,
+     "loc": 11,
+     "name": "_wireCustomBlockActions"
+    },
+    {
+     "end": 185,
+     "line": 175,
+     "loc": 11,
+     "name": "_messageRowHtml"
+    },
+    {
+     "end": 285,
+     "line": 275,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 61,
+     "line": 52,
+     "loc": 10,
+     "name": "_configKeys"
+    },
+    {
+     "end": 224,
+     "line": 215,
+     "loc": 10,
+     "name": "_selectRowHtml"
+    },
+    {
+     "end": 235,
+     "line": 226,
+     "loc": 10,
+     "name": "_inputRowHtml"
+    },
+    {
+     "end": 284,
+     "line": 276,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 257,
+     "line": 251,
+     "loc": 7,
+     "name": "_speedDesc"
+    },
+    {
+     "end": 265,
+     "line": 259,
+     "loc": 7,
+     "name": "_speedPreviewHtml"
+    },
+    {
+     "end": 118,
+     "line": 113,
+     "loc": 6,
+     "name": "_configConstructorHint"
+    },
+    {
+     "end": 111,
+     "line": 107,
+     "loc": 5,
+     "name": "_configHeadHtml"
+    },
+    {
+     "end": 193,
+     "line": 189,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 244,
+     "line": 240,
+     "loc": 5,
+     "name": "_speedValue"
+    },
+    {
+     "end": 274,
+     "line": 270,
+     "loc": 5,
+     "name": "refresh"
+    },
+    {
+     "end": 219,
+     "line": 216,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 249,
+     "line": 246,
+     "loc": 4,
+     "name": "_speedCoef"
+    },
+    {
+     "end": 290,
+     "line": 287,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 55,
+     "line": 55,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 58,
+     "line": 58,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 59,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 98,
+     "line": 98,
+     "loc": 1,
+     "name": "onclick"
+    }
+   ],
+   "lines": 295,
+   "objects": [
+    {
+     "end": 236,
+     "gated": true,
+     "line": 106,
+     "loc": 131,
+     "methods": 9
+    },
+    {
+     "end": 104,
+     "gated": true,
+     "line": 10,
+     "loc": 95,
+     "methods": 5
+    },
+    {
+     "end": 294,
+     "gated": true,
+     "line": 239,
+     "loc": 56,
+     "methods": 5
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 53,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 188,
+     "gated": false,
+     "line": 188,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 31,
+    "max_object_loc": 131,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-history.js",
+   "functions": [
+    {
+     "end": 141,
+     "line": 117,
+     "loc": 25,
+     "name": "undo"
+    },
+    {
+     "end": 217,
+     "line": 193,
+     "loc": 25,
+     "name": "loadHistoryFromState"
+    },
+    {
+     "end": 166,
+     "line": 143,
+     "loc": 24,
+     "name": "redo"
+    },
+    {
+     "end": 88,
+     "line": 73,
+     "loc": 16,
+     "name": "pushHistory"
+    },
+    {
+     "end": 191,
+     "line": 176,
+     "loc": 16,
+     "name": "updateHistoryButtons"
+    },
+    {
+     "end": 59,
+     "line": 45,
+     "loc": 15,
+     "name": "_initDefaultStack"
+    },
+    {
+     "end": 228,
+     "line": 219,
+     "loc": 10,
+     "name": "_setupHistoryButtons"
+    },
+    {
+     "end": 19,
+     "line": 11,
+     "loc": 9,
+     "name": "_deepCopy"
+    },
+    {
+     "end": 43,
+     "line": 37,
+     "loc": 7,
+     "name": "_stacksEqual"
+    },
+    {
+     "end": 107,
+     "line": 101,
+     "loc": 7,
+     "name": "_enforceMaxHistory"
+    },
+    {
+     "end": 68,
+     "line": 63,
+     "loc": 6,
+     "name": "_getCurrentHistoryStack"
+    },
+    {
+     "end": 99,
+     "line": 95,
+     "loc": 5,
+     "name": "_truncateHistoryFuture"
+    },
+    {
+     "end": 35,
+     "line": 32,
+     "loc": 4,
+     "name": "_normalizeStack"
+    },
+    {
+     "end": 93,
+     "line": 90,
+     "loc": 4,
+     "name": "_historyTipEquals"
+    },
+    {
+     "end": 171,
+     "line": 168,
+     "loc": 4,
+     "name": "saveHistoryToBackend"
+    },
+    {
+     "end": 30,
+     "line": 28,
+     "loc": 3,
+     "name": "_normalizeBlock"
+    },
+    {
+     "end": 111,
+     "line": 109,
+     "loc": 3,
+     "name": "canUndo"
+    },
+    {
+     "end": 115,
+     "line": 113,
+     "loc": 3,
+     "name": "canRedo"
+    }
+   ],
+   "lines": 230,
+   "objects": [
+    {
+     "end": 172,
+     "gated": true,
+     "line": 72,
+     "loc": 101,
+     "methods": 9
+    },
+    {
+     "end": 69,
+     "gated": true,
+     "line": 10,
+     "loc": 60,
+     "methods": 6
+    },
+    {
+     "end": 229,
+     "gated": true,
+     "line": 175,
+     "loc": 55,
+     "methods": 3
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 50,
+     "gated": false,
+     "line": 50,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 51,
+     "gated": false,
+     "line": 51,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 52,
+     "gated": false,
+     "line": 52,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 53,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 54,
+     "gated": false,
+     "line": 54,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 55,
+     "gated": false,
+     "line": 55,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 56,
+     "gated": false,
+     "line": 56,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 57,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 74,
+     "gated": false,
+     "line": 74,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 128,
+     "gated": false,
+     "line": 128,
+     "loc": 1,
+     "methods": 0
     },
     {
      "end": 154,
@@ -8990,11 +9079,965 @@
      "line": 154,
      "loc": 1,
      "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 18,
+    "max_object_loc": 101,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-menu.js",
+   "functions": [
+    {
+     "end": 204,
+     "line": 183,
+     "loc": 22,
+     "name": "_wireSaveLoadButtons"
     },
     {
-     "end": 165,
+     "end": 125,
+     "line": 106,
+     "loc": 20,
+     "name": "_saveBlockPreset"
+    },
+    {
+     "end": 174,
+     "line": 155,
+     "loc": 20,
+     "name": "_wirePauseButton"
+    },
+    {
+     "end": 242,
+     "line": 224,
+     "loc": 19,
+     "name": "setRunning"
+    },
+    {
+     "end": 59,
+     "line": 43,
+     "loc": 17,
+     "name": "_setupAddMenu"
+    },
+    {
+     "end": 104,
+     "line": 88,
+     "loc": 17,
+     "name": "_wireMenu"
+    },
+    {
+     "end": 153,
+     "line": 137,
+     "loc": 17,
+     "name": "_wireRunButton"
+    },
+    {
+     "end": 173,
+     "line": 157,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 222,
+     "line": 206,
+     "loc": 17,
+     "name": "_wireImportExportButtons"
+    },
+    {
+     "end": 75,
+     "line": 61,
+     "loc": 15,
+     "name": "_renderMenu"
+    },
+    {
+     "end": 32,
+     "line": 19,
+     "loc": 14,
+     "name": "_refreshSaveLabel"
+    },
+    {
+     "end": 152,
+     "line": 139,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 195,
+     "line": 185,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 56,
+     "line": 47,
+     "loc": 10,
+     "name": "open"
+    },
+    {
+     "end": 86,
+     "line": 77,
+     "loc": 10,
+     "name": "_customMenuRows"
+    },
+    {
+     "end": 253,
+     "line": 244,
+     "loc": 10,
+     "name": "setRunningBlock"
+    },
+    {
+     "end": 41,
+     "line": 34,
+     "loc": 8,
+     "name": "addBlockConfig"
+    },
+    {
+     "end": 85,
+     "line": 78,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 96,
+     "line": 89,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 103,
+     "line": 97,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 135,
+     "line": 129,
+     "loc": 7,
+     "name": "_setupButtons"
+    },
+    {
+     "end": 203,
+     "line": 197,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 17,
+     "line": 12,
+     "loc": 6,
+     "name": "setCustomBlocks"
+    },
+    {
+     "end": 95,
+     "line": 90,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 113,
+     "line": 108,
+     "loc": 6,
+     "name": "finish"
+    },
+    {
+     "end": 181,
+     "line": 176,
+     "loc": 6,
+     "name": "_wireStopButton"
+    },
+    {
+     "end": 102,
+     "line": 98,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 118,
+     "line": 114,
+     "loc": 5,
+     "name": "useName"
+    },
+    {
+     "end": 29,
+     "line": 26,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 202,
+     "line": 199,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 252,
+     "line": 249,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 180,
+     "line": 178,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 194,
+     "line": 192,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 213,
+     "line": 211,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 217,
+     "line": 215,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 221,
+     "line": 219,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 255,
+   "objects": [
+    {
+     "end": 254,
+     "gated": true,
+     "line": 128,
+     "loc": 127,
+     "methods": 8
+    },
+    {
+     "end": 126,
+     "gated": true,
+     "line": 11,
+     "loc": 116,
+     "methods": 8
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 79,
+     "gated": false,
+     "line": 79,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 93,
+     "gated": false,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 93,
+     "gated": false,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 36,
+    "max_object_loc": 127,
+    "max_object_methods": 8,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd-render.js",
+   "functions": [
+    {
+     "end": 247,
+     "line": 219,
+     "loc": 29,
+     "name": "_setupKeyboardReorder"
+    },
+    {
+     "end": 289,
+     "line": 261,
+     "loc": 29,
+     "name": "removeBlock"
+    },
+    {
+     "end": 217,
+     "line": 190,
+     "loc": 28,
+     "name": "moveBlock"
+    },
+    {
+     "end": 246,
+     "line": 220,
+     "loc": 27,
+     "name": "(arrow)"
+    },
+    {
+     "end": 168,
+     "line": 143,
+     "loc": 26,
+     "name": "_wireToggles"
+    },
+    {
+     "end": 107,
+     "line": 85,
+     "loc": 23,
+     "name": "_stackItemHtml"
+    },
+    {
+     "end": 167,
+     "line": 145,
+     "loc": 23,
+     "name": "(arrow)"
+    },
+    {
+     "end": 41,
+     "line": 22,
+     "loc": 20,
+     "name": "_findDesc"
+    },
+    {
+     "end": 77,
+     "line": 58,
+     "loc": 20,
+     "name": "_summaryPart"
+    },
+    {
+     "end": 141,
+     "line": 123,
+     "loc": 19,
+     "name": "_wireStackList"
+    },
+    {
+     "end": 163,
+     "line": 146,
+     "loc": 18,
+     "name": "(arrow)"
+    },
+    {
+     "end": 188,
+     "line": 173,
+     "loc": 16,
+     "name": "_attachDrag"
+    },
+    {
+     "end": 56,
+     "line": 43,
+     "loc": 14,
+     "name": "_summary"
+    },
+    {
+     "end": 139,
+     "line": 126,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 138,
+     "line": 127,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 121,
+     "line": 111,
+     "loc": 11,
+     "name": "_renderStack"
+    },
+    {
+     "end": 20,
+     "line": 16,
+     "loc": 5,
+     "name": "_displayName"
+    },
+    {
+     "end": 83,
+     "line": 79,
+     "loc": 5,
+     "name": "_esc"
+    },
+    {
+     "end": 185,
+     "line": 181,
+     "loc": 5,
+     "name": "labelOf"
+    },
+    {
+     "end": 253,
+     "line": 249,
+     "loc": 5,
+     "name": "selectBlock"
+    },
+    {
+     "end": 259,
+     "line": 255,
+     "loc": 5,
+     "name": "deselectBlock"
+    },
+    {
+     "end": 14,
+     "line": 12,
+     "loc": 3,
+     "name": "_meta"
+    },
+    {
+     "end": 186,
+     "line": 186,
+     "loc": 1,
+     "name": "onReorder"
+    }
+   ],
+   "lines": 291,
+   "objects": [
+    {
+     "end": 290,
+     "gated": true,
+     "line": 172,
+     "loc": 119,
+     "methods": 6
+    },
+    {
+     "end": 108,
+     "gated": true,
+     "line": 11,
+     "loc": 98,
+     "methods": 7
+    },
+    {
+     "end": 169,
+     "gated": true,
+     "line": 110,
+     "loc": 60,
+     "methods": 3
+    },
+    {
+     "end": 187,
+     "gated": true,
+     "line": 176,
+     "loc": 12,
+     "methods": 2
+    },
+    {
+     "end": 69,
+     "gated": false,
+     "line": 67,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 13,
+     "gated": false,
+     "line": 13,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 23,
+    "max_object_loc": 119,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-dnd.js",
+   "functions": [
+    {
+     "end": 247,
+     "line": 224,
+     "loc": 24,
+     "name": "setStack"
+    },
+    {
+     "end": 212,
+     "line": 196,
+     "loc": 17,
+     "name": "init"
+    },
+    {
+     "end": 223,
+     "line": 213,
+     "loc": 11,
+     "name": "_migrateBlock"
+    },
+    {
+     "end": 256,
+     "line": 248,
+     "loc": 9,
+     "name": "notifyEdited"
+    },
+    {
+     "end": 255,
+     "line": 251,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 261,
+     "line": 257,
+     "loc": 5,
+     "name": "refreshPresets"
+    },
+    {
+     "end": 218,
+     "line": 218,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 269,
+     "line": 269,
+     "loc": 1,
+     "name": "ready"
+    }
+   ],
+   "lines": 271,
+   "objects": [
+    {
+     "end": 261,
+     "gated": true,
+     "line": 172,
+     "loc": 90,
+     "methods": 5
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 43,
+     "loc": 28,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 72,
+     "loc": 20,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 54,
+     "loc": 17,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 150,
+     "loc": 15,
+     "methods": 0
+    },
+    {
+     "end": 123,
+     "gated": false,
+     "line": 110,
+     "loc": 14,
+     "methods": 0
+    },
+    {
+     "end": 39,
+     "gated": false,
+     "line": 27,
+     "loc": 13,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 80,
+     "loc": 12,
+     "methods": 0
+    },
+    {
+     "end": 39,
+     "gated": false,
+     "line": 29,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 99,
+     "loc": 11,
+     "methods": 0
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 134,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 164,
+     "gated": false,
+     "line": 156,
+     "loc": 9,
+     "methods": 0
+    },
+    {
+     "end": 51,
+     "gated": false,
+     "line": 44,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 123,
+     "gated": false,
+     "line": 116,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 79,
+     "gated": false,
+     "line": 73,
+     "loc": 7,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 104,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 95,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 103,
+     "gated": false,
+     "line": 100,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 114,
+     "gated": false,
+     "line": 111,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 130,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 140,
+     "gated": false,
+     "line": 137,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 140,
+     "gated": false,
+     "line": 137,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 143,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 154,
+     "gated": false,
+     "line": 151,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 168,
      "gated": false,
      "line": 165,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 42,
+     "gated": false,
+     "line": 40,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 94,
+     "gated": false,
+     "line": 92,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 124,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 127,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 149,
+     "gated": false,
+     "line": 147,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 53,
+     "gated": false,
+     "line": 52,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 97,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 133,
+     "gated": false,
+     "line": 132,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 142,
+     "gated": false,
+     "line": 141,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 145,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 168,
+     "gated": false,
+     "line": 167,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 41,
+     "gated": false,
+     "line": 41,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 42,
+     "gated": false,
+     "line": 42,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 71,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 93,
+     "gated": false,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 94,
+     "gated": false,
+     "line": 94,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 96,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 115,
+     "gated": false,
+     "line": 115,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 125,
+     "gated": false,
+     "line": 125,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 126,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 128,
+     "gated": false,
+     "line": 128,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 129,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 131,
+     "gated": false,
+     "line": 131,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 135,
+     "gated": false,
+     "line": 135,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 136,
+     "gated": false,
+     "line": 136,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 144,
+     "gated": false,
+     "line": 144,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 148,
+     "gated": false,
+     "line": 148,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 149,
+     "gated": false,
+     "line": 149,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 155,
+     "gated": false,
+     "line": 155,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 166,
+     "gated": false,
+     "line": 166,
      "loc": 1,
      "methods": 0
     },
@@ -9006,209 +10049,41 @@
      "methods": 0
     },
     {
-     "end": 218,
+     "end": 217,
      "gated": false,
-     "line": 218,
+     "line": 217,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 219,
+     "end": 226,
      "gated": false,
-     "line": 219,
+     "line": 226,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 220,
+     "end": 243,
      "gated": false,
-     "line": 220,
+     "line": 243,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 221,
-     "gated": false,
-     "line": 221,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 222,
-     "gated": false,
-     "line": 222,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 223,
-     "gated": false,
-     "line": 223,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 224,
-     "gated": false,
-     "line": 224,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 234,
-     "gated": false,
-     "line": 234,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 235,
-     "gated": false,
-     "line": 235,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 249,
-     "gated": false,
-     "line": 249,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 249,
-     "gated": false,
-     "line": 249,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 282,
-     "gated": false,
-     "line": 282,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 339,
-     "gated": false,
-     "line": 339,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 365,
-     "gated": false,
-     "line": 365,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 440,
-     "gated": false,
-     "line": 440,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 515,
-     "gated": false,
-     "line": 515,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 515,
-     "gated": false,
-     "line": 515,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 515,
-     "gated": false,
-     "line": 515,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 528,
-     "gated": false,
-     "line": 528,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 724,
-     "gated": false,
-     "line": 724,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 743,
-     "gated": false,
-     "line": 743,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 743,
-     "gated": false,
-     "line": 743,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 966,
-     "gated": false,
-     "line": 966,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 983,
-     "gated": false,
-     "line": 983,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1069,
-     "gated": false,
-     "line": 1069,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1091,
-     "gated": false,
-     "line": 1091,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1158,
-     "gated": false,
-     "line": 1158,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 1339,
+     "end": 269,
      "gated": true,
-     "line": 1339,
+     "line": 269,
      "loc": 1,
      "methods": 1
     }
    ],
    "summary": {
-    "functions": 104,
-    "max_object_loc": 1168,
-    "max_object_methods": 58,
-    "over_100": 1,
-    "over_30": 7,
-    "over_60": 3
+    "functions": 8,
+    "max_object_loc": 90,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
    }
   },
   {
@@ -10236,11 +11111,11 @@
   }
  ],
  "totals": {
-  "files": 30,
-  "functions": 1075,
-  "lines": 11895,
-  "over_100": 7,
-  "over_30": 73,
-  "over_60": 13
+  "files": 44,
+  "functions": 1145,
+  "lines": 12340,
+  "over_100": 5,
+  "over_30": 48,
+  "over_60": 8
  }
 }

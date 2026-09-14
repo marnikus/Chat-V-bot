@@ -80,11 +80,29 @@
    "lines": 803,
    "pct": 95.39
   },
+  "ui/js/app-bridge.js": {
+   "covered": 291,
+   "executable": 293,
+   "lines": 293,
+   "pct": 99.32
+  },
+  "ui/js/app-history.js": {
+   "covered": 155,
+   "executable": 180,
+   "lines": 180,
+   "pct": 86.11
+  },
+  "ui/js/app-session.js": {
+   "covered": 90,
+   "executable": 93,
+   "lines": 93,
+   "pct": 96.77
+  },
   "ui/js/app.js": {
-   "covered": 0,
-   "executable": 0,
-   "lines": 510,
-   "pct": 0.0
+   "covered": 97,
+   "executable": 97,
+   "lines": 97,
+   "pct": 100.0
   },
   "ui/js/bot-chat.js": {
    "covered": 387,
@@ -105,10 +123,10 @@
    "pct": 82.89
   },
   "ui/js/bot-prompt.js": {
-   "covered": 338,
+   "covered": 342,
    "executable": 355,
    "lines": 355,
-   "pct": 95.21
+   "pct": 96.34
   },
   "ui/js/bot-settings.js": {
    "covered": 375,
@@ -129,10 +147,10 @@
    "pct": 100.0
   },
   "ui/js/composer.js": {
-   "covered": 0,
-   "executable": 0,
+   "covered": 77,
+   "executable": 81,
    "lines": 81,
-   "pct": 0.0
+   "pct": 95.06
   },
   "ui/js/core/bridge-ready.js": {
    "covered": 73,
@@ -141,22 +159,22 @@
    "pct": 98.65
   },
   "ui/js/core/dialog.js": {
-   "covered": 66,
+   "covered": 70,
    "executable": 70,
    "lines": 70,
-   "pct": 94.29
+   "pct": 100.0
   },
   "ui/js/core/ui-helpers.js": {
-   "covered": 83,
-   "executable": 83,
-   "lines": 83,
+   "covered": 105,
+   "executable": 105,
+   "lines": 105,
    "pct": 100.0
   },
   "ui/js/criteria-editor.js": {
-   "covered": 0,
-   "executable": 0,
+   "covered": 85,
+   "executable": 85,
    "lines": 85,
-   "pct": 0.0
+   "pct": 100.0
   },
   "ui/js/dark-select.js": {
    "covered": 193,
@@ -177,16 +195,16 @@
    "pct": 92.19
   },
   "ui/js/history-model.js": {
-   "covered": 376,
+   "covered": 382,
    "executable": 412,
    "lines": 412,
-   "pct": 91.26
+   "pct": 92.72
   },
   "ui/js/history-store.js": {
-   "covered": 324,
+   "covered": 453,
    "executable": 458,
    "lines": 458,
-   "pct": 70.74
+   "pct": 98.91
   },
   "ui/js/history-view.js": {
    "covered": 323,
@@ -201,74 +219,133 @@
    "pct": 95.89
   },
   "ui/js/log-console.js": {
-   "covered": 0,
-   "executable": 0,
+   "covered": 39,
+   "executable": 39,
    "lines": 39,
-   "pct": 0.0
+   "pct": 100.0
   },
   "ui/js/presets-ui.js": {
-   "covered": 224,
+   "covered": 459,
    "executable": 474,
    "lines": 474,
-   "pct": 47.26
+   "pct": 96.84
   },
   "ui/js/sash-core.js": {
-   "covered": 613,
+   "covered": 625,
    "executable": 642,
    "lines": 642,
-   "pct": 95.48
+   "pct": 97.35
+  },
+  "ui/js/sash-grid-drag.js": {
+   "covered": 194,
+   "executable": 194,
+   "lines": 194,
+   "pct": 100.0
+  },
+  "ui/js/sash-grid-menus.js": {
+   "covered": 235,
+   "executable": 236,
+   "lines": 236,
+   "pct": 99.58
+  },
+  "ui/js/sash-grid-presets.js": {
+   "covered": 167,
+   "executable": 167,
+   "lines": 167,
+   "pct": 100.0
+  },
+  "ui/js/sash-grid-spec.js": {
+   "covered": 269,
+   "executable": 275,
+   "lines": 275,
+   "pct": 97.82
+  },
+  "ui/js/sash-grid-tree.js": {
+   "covered": 229,
+   "executable": 250,
+   "lines": 250,
+   "pct": 91.6
+  },
+  "ui/js/sash-grid-windows.js": {
+   "covered": 263,
+   "executable": 271,
+   "lines": 271,
+   "pct": 97.05
   },
   "ui/js/sash-grid.js": {
-   "covered": 874,
-   "executable": 1361,
-   "lines": 1361,
-   "pct": 64.22
+   "covered": 111,
+   "executable": 112,
+   "lines": 112,
+   "pct": 99.11
+  },
+  "ui/js/stack-dnd-config.js": {
+   "covered": 122,
+   "executable": 125,
+   "lines": 125,
+   "pct": 97.6
+  },
+  "ui/js/stack-dnd-form.js": {
+   "covered": 295,
+   "executable": 295,
+   "lines": 295,
+   "pct": 100.0
+  },
+  "ui/js/stack-dnd-history.js": {
+   "covered": 230,
+   "executable": 230,
+   "lines": 230,
+   "pct": 100.0
+  },
+  "ui/js/stack-dnd-menu.js": {
+   "covered": 255,
+   "executable": 255,
+   "lines": 255,
+   "pct": 100.0
+  },
+  "ui/js/stack-dnd-render.js": {
+   "covered": 289,
+   "executable": 291,
+   "lines": 291,
+   "pct": 99.31
   },
   "ui/js/stack-dnd.js": {
-   "covered": 909,
-   "executable": 1341,
-   "lines": 1341,
-   "pct": 67.79
+   "covered": 265,
+   "executable": 271,
+   "lines": 271,
+   "pct": 97.79
   },
   "ui/js/stack-drag.js": {
-   "covered": 0,
-   "executable": 0,
+   "covered": 110,
+   "executable": 356,
    "lines": 356,
-   "pct": 0.0
+   "pct": 30.9
   },
   "ui/js/url-toolbar.js": {
-   "covered": 0,
-   "executable": 0,
+   "covered": 168,
+   "executable": 168,
    "lines": 168,
-   "pct": 0.0
+   "pct": 100.0
   },
   "ui/js/user-table.js": {
-   "covered": 296,
+   "covered": 448,
    "executable": 448,
    "lines": 448,
-   "pct": 66.07
+   "pct": 100.0
   },
   "ui/js/window-presets.js": {
-   "covered": 275,
+   "covered": 375,
    "executable": 376,
    "lines": 376,
-   "pct": 73.14
+   "pct": 99.73
   }
  },
- "never_loaded": [
-  "ui/js/app.js",
-  "ui/js/composer.js",
-  "ui/js/criteria-editor.js",
-  "ui/js/log-console.js",
-  "ui/js/stack-drag.js",
-  "ui/js/url-toolbar.js"
- ],
+ "never_loaded": [],
  "test_failures": [],
  "totals": {
-  "covered": 8822,
-  "executable": 10656,
-  "files": 30,
-  "lines": 11895,
-  "pct": 82.79
+  "covered": 11739,
+  "executable": 12340,
+  "files": 44,
+  "lines": 12340,
+  "pct": 95.13
  }
 }

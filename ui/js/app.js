@@ -26,7 +26,8 @@ const App = {
   globalHistoryIndex: -1,
 };
 
-UIHelpers.mergeParts(App, AppHistory, AppBridge, AppSession);
+UIHelpers.mergeParts(App, AppHistory, AppHistoryApply, AppBridge,
+  AppBridgeStores, AppSession);
 
 // ── boot ───────────────────────────────────────────────────────
 // the QWebChannel handshake lives in js/core/bridge-ready.js now;
@@ -88,5 +89,8 @@ function restoreSession(json) {
 }
 
 function setupBridgeListeners() {
-  AppBridge.setupListeners();
+  // Route through the facade: setupListeners dispatches to wire* groups
+  // that live on BOTH part objects (AppBridge + AppBridgeStores), so
+  // `this` must be the merged host, not a single part.
+  App.setupListeners();
 }

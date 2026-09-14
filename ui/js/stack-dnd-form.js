@@ -1,6 +1,13 @@
-/* stack-dnd part — stack-dnd-form.js (Round H, H-A4) */
+/* stack-dnd part — stack-dnd-form.js (Round H, H-A4)
 
-const StackDnDConfigRows = {
+   Three collaborating objects (H-A6, RULE 16 object cap):
+     StackDnDConfigForm    the config panel behaviour (open / wire / save)
+     StackDnDConfigRows    the per-control row builders (pure HTML)
+     StackDnDSpeed         Speed Multiplier rows + live preview controls
+   All merge onto the StackDnD facade — see ui/js/stack-dnd.js.
+   */
+
+const StackDnDConfigForm = {
   _showConfig(idx) {
     const form = document.getElementById('blockConfigForm');
     const block = this.stack[idx];
@@ -12,7 +19,19 @@ const StackDnDConfigRows = {
     }
     // Marks the panel as populated so its empty-state hint hides.
     this._updateConfigVisibility(block);
-    const meta = this._meta(block.block_id);
+    form.innerHTML = this._configBodyHtml(block, this._meta(block.block_id));
+    this._wireConfigForm(form, block);
+    if (block.block_id === 'SPEED_MULTIPLIER') {
+      this._wireSpeedControls(form, block);
+    }
+    // Keep the close handler bound even when _showConfig is called without a
+    // full init (defensive; the pin setup also binds it once at startup).
+    const closeBtn = document.getElementById('closeConfigBtn');
+    if (closeBtn) closeBtn.onclick = this._configCloseHandler();
+    this._wireCustomBlockActions(block);
+  },
+
+  _configBodyHtml(block, meta) {
     let html = this._configHeadHtml(block, meta);
     if (block.block_id === 'CUSTOM_FIND') html += this._configConstructorHint();
     // Zebra counter for two-column field rows (even rows get a slightly
@@ -27,16 +46,7 @@ const StackDnDConfigRows = {
       if (RETIRED_KEYS.includes(key)) continue;
       html += this._configRowHtml(key, block[key], block, meta, (zebra++) % 2);
     }
-    form.innerHTML = html;
-    this._wireConfigForm(form, block);
-    if (block.block_id === 'SPEED_MULTIPLIER') {
-      this._wireSpeedControls(form, block);
-    }
-    // Keep the close handler bound even when _showConfig is called without a
-    // full init (defensive; the pin setup also binds it once at startup).
-    const closeBtn = document.getElementById('closeConfigBtn');
-    if (closeBtn) closeBtn.onclick = this._configCloseHandler();
-    this._wireCustomBlockActions(block);
+    return html;
   },
 
   _configKeys(block, meta) {
@@ -50,6 +60,50 @@ const StackDnDConfigRows = {
     return ordered;
   },
 
+  _wireConfigForm(form, block) {
+    // NOTE: must include select[data-key] and textarea[data-key] — the
+    // tri-state filter dropdowns are <select> and the Type Message text is
+    // a <textarea>; binding only inputs would silently drop their edits.
+    form.querySelectorAll('input[data-key], select[data-key], textarea[data-key]').forEach(inp => {
+      const handler = () => {
+        const k = inp.dataset.key;
+        if (inp.tagName === 'SELECT') block[k] = inp.value;
+        else if (inp.type === 'checkbox') block[k] = inp.checked;
+        else block[k] = inp.type === 'number' ? Number(inp.value) : inp.value;
+        this._renderStack();
+        this.pushHistory();
+        this.notifyEdited();
+        if (k === 'enabled') {
+          const name = this._displayName(block);
+          if (typeof LogConsole !== 'undefined') {
+            LogConsole.log(block.enabled ? `✅ Enabled “${name}”` : `⏸ Disabled “${name}” — will be skipped`, block.enabled ? 'success' : 'warn');
+          }
+        }
+        // “Use Message Composer” toggles the own-text field: re-render the
+        // panel so the textarea follows (enabled/disabled).
+        if (block.block_id === 'TYPE_MESSAGE' && k === 'use_composer') {
+          this._showConfig(this.selectedIdx);
+        }
+      };
+      inp.addEventListener('change', handler);
+      // also listen to input for text to update summary live? but history on change only
+    });
+  },
+
+  _wireCustomBlockActions(block) {
+    const actions = document.getElementById('customBlockActions');
+    if (block.block_id === 'CUSTOM_FIND' && App.bridge) {
+      actions.classList.remove('hidden');
+      const btn = document.getElementById('saveCustomBlockBtn');
+      btn.onclick = () => this._saveBlockPreset(block);
+      this._refreshSaveLabel();
+    } else {
+      actions.classList.add('hidden');
+    }
+  },
+};
+
+const StackDnDConfigRows = {
   _configHeadHtml(block, meta) {
     return `<div class="form-row form-row--head">
         <label>Block</label><span style="font-weight:600">${meta.icon || ''} ${this._esc(this._displayName(block))}</span>
@@ -178,48 +232,6 @@ const StackDnDConfigRows = {
       <label>${labelText}</label>
       <input data-key="${key}" value="${safeVal}" type="${inputType}">
     </div>`;
-  },
-
-  _wireConfigForm(form, block) {
-    // NOTE: must include select[data-key] and textarea[data-key] — the
-    // tri-state filter dropdowns are <select> and the Type Message text is
-    // a <textarea>; binding only inputs would silently drop their edits.
-    form.querySelectorAll('input[data-key], select[data-key], textarea[data-key]').forEach(inp => {
-      const handler = () => {
-        const k = inp.dataset.key;
-        if (inp.tagName === 'SELECT') block[k] = inp.value;
-        else if (inp.type === 'checkbox') block[k] = inp.checked;
-        else block[k] = inp.type === 'number' ? Number(inp.value) : inp.value;
-        this._renderStack();
-        this.pushHistory();
-        this.notifyEdited();
-        if (k === 'enabled') {
-          const name = this._displayName(block);
-          if (typeof LogConsole !== 'undefined') {
-            LogConsole.log(block.enabled ? `✅ Enabled “${name}”` : `⏸ Disabled “${name}” — will be skipped`, block.enabled ? 'success' : 'warn');
-          }
-        }
-        // “Use Message Composer” toggles the own-text field: re-render the
-        // panel so the textarea follows (enabled/disabled).
-        if (block.block_id === 'TYPE_MESSAGE' && k === 'use_composer') {
-          this._showConfig(this.selectedIdx);
-        }
-      };
-      inp.addEventListener('change', handler);
-      // also listen to input for text to update summary live? but history on change only
-    });
-  },
-
-  _wireCustomBlockActions(block) {
-    const actions = document.getElementById('customBlockActions');
-    if (block.block_id === 'CUSTOM_FIND' && App.bridge) {
-      actions.classList.remove('hidden');
-      const btn = document.getElementById('saveCustomBlockBtn');
-      btn.onclick = () => this._saveBlockPreset(block);
-      this._refreshSaveLabel();
-    } else {
-      actions.classList.add('hidden');
-    }
   },
 };
 

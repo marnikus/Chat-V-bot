@@ -1,4 +1,12 @@
-/* stack-dnd part — stack-dnd-render.js (Round H, H-A4) */
+/* stack-dnd part — stack-dnd-render.js (Round H, H-A4)
+
+   Three collaborating objects (H-A6, RULE 16 object cap):
+     StackDnDRender        item content (summary text, item HTML)
+     StackDnDRenderWire    the list render pass + click/toggle wiring
+     StackDnDListOps       user-initiated list ops (move / remove / select,
+                           drag attach, Alt+Arrow reorder, Ctrl+Z/Y)
+   All merge onto the StackDnD facade — see ui/js/stack-dnd.js.
+   */
 
 const StackDnDRender = {
   _meta(blockId) {
@@ -74,18 +82,6 @@ const StackDnDRender = {
     return d.innerHTML;
   },
 
-  _renderStack() {
-    const list = document.getElementById('stackList');
-    if (!this.stack.length) {
-      list.innerHTML = '<div class="stack-empty">Drag blocks here or click + to add</div>';
-      this._attachDrag();
-      return;
-    }
-    list.innerHTML = this.stack.map((b, i) => this._stackItemHtml(b, i)).join('');
-    this._wireStackList();
-    this._attachDrag();
-  },
-
   _stackItemHtml(b, i) {
     const meta = this._meta(b.block_id);
     const title = this._esc(this._displayName(b));
@@ -108,6 +104,20 @@ const StackDnDRender = {
       </div>
       <span class="block-remove" data-remove="${i}" title="Remove block">✕</span>
     </div>`;
+  },
+};
+
+const StackDnDRenderWire = {
+  _renderStack() {
+    const list = document.getElementById('stackList');
+    if (!this.stack.length) {
+      list.innerHTML = '<div class="stack-empty">Drag blocks here or click + to add</div>';
+      this._attachDrag();
+      return;
+    }
+    list.innerHTML = this.stack.map((b, i) => this._stackItemHtml(b, i)).join('');
+    this._wireStackList();
+    this._attachDrag();
   },
 
   _wireStackList() {

@@ -1,4 +1,11 @@
-/* sash-grid part — sash-grid-tree.js (Round H, H-A3) */
+/* sash-grid part — sash-grid-tree.js (Round H, H-A3)
+
+   Two collaborating objects (H-A6, RULE 16 object cap):
+     SashGridTree             node building + the per-window title controls
+     SashGridTreeVisibility   hidden/closed/minimized sync, empty-split and
+                              empty-grid state, the visibility watch
+   Both merge onto the SashGrid facade — see ui/js/sash-grid.js.
+   */
 
 const SashGridTree = {
   _buildNode(node, path) {
@@ -108,7 +115,9 @@ const SashGridTree = {
     closeBtn.textContent = '✕';
     closeBtn.title = 'Close ' + name;
   },
+};
 
+const SashGridTreeVisibility = {
   // ── hidden windows ──────────────────────────────────────────,
 
   _panelIsHidden(panel) {
@@ -237,6 +246,4 @@ const SashGridTree = {
       mo.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
     });
   },
-
-  // ── windows menu — CLEAN ICONS ───────────────────────────────,
 };

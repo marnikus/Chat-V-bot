@@ -1,4 +1,11 @@
-/* stack-dnd part — stack-dnd-history.js (Round H, H-A4) */
+/* stack-dnd part — stack-dnd-history.js (Round H, H-A4)
+
+   Three collaborating objects (H-A6, RULE 16 object cap):
+     StackDnDMigration     block/stack normalization (retired keys, defaults)
+     StackDnDHistory       the history state machine (push / undo / redo)
+     StackDnDHistoryUI     button wiring, button paint, state restore
+   All merge onto the StackDnD facade — see ui/js/stack-dnd.js.
+   */
 
 const StackDnDMigration = {
   _deepCopy(obj) {
@@ -158,6 +165,14 @@ const StackDnDHistory = {
     return true;
   },
 
+  saveHistoryToBackend() {
+    // Retained as a no-op compatibility hook. App.recordGlobal() persists
+    // every stack edit in the single global history immediately.
+  },
+};
+
+
+const StackDnDHistoryUI = {
   updateHistoryButtons() {
     if (typeof App !== 'undefined' && App._updateUndoButtons) {
       App._updateUndoButtons();
@@ -173,11 +188,6 @@ const StackDnDHistory = {
       redoBtn.disabled = !this.canRedo();
       redoBtn.title = this.canRedo() ? `Redo (Ctrl+Y) — ${this.historyIndex+1}/${this.history.length-1}` : 'Nothing to redo';
     }
-  },
-
-  saveHistoryToBackend() {
-    // Retained as a no-op compatibility hook. App.recordGlobal() persists
-    // every stack edit in the single global history immediately.
   },
 
   loadHistoryFromState(state) {
@@ -216,6 +226,4 @@ const StackDnDHistory = {
       redoBtn.addEventListener('click', () => App.redoGlobal());
     }
   },
-
-  // ── display helpers ──────────────────────────────────────────,
 };

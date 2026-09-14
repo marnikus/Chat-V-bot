@@ -5,9 +5,15 @@
    controls (refresh tabs / connect). setupListeners() is the single
    entry point; the group methods wire one cluster of signals each.
 
-   Part pattern: methods bind onto the App facade
-   (UIHelpers.mergeParts in app.js), so `this` is App (`this.bridge`).
-   Loaded before the facade — see ui/index.html.
+   Two collaborating objects (H-A6, RULE 16 object cap):
+     AppBridge         header + dispatcher + the live/streaming signals
+                       (tabs, connection, people table, stats, stepping)
+     AppBridgeStores   the data-store signals (presets, history, archive,
+                       labels/db, bot, collector, settings/criteria fetch)
+   Methods bind onto the App facade (UIHelpers.mergeParts in app.js), so
+   `this` is App (`this.bridge`) and the dispatcher resolves every
+   wire* group across both objects. Loaded before the facade — see
+   ui/index.html.
    */
 'use strict';
 
@@ -136,7 +142,9 @@ const AppBridge = {
       StackDnD.setRunning(false);
     });
   },
+};
 
+const AppBridgeStores = {
   wirePresetSignals(b) {
     // presets / templates / custom blocks live updates
     b.preset_list_updated.connect((json) => PresetsUI.setStackPresets(json));
@@ -265,6 +273,7 @@ const AppBridge = {
           HistoryDb.onError(scope);
       });
     }
+
     if (b.get_history_settings) {
       b.get_history_settings((json) => {
         let settings = {};

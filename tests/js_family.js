@@ -39,8 +39,10 @@ const FAMILIES = {
     'sash-core.js',
     'sash-grid-tree.js',
     'sash-grid-windows.js',
+    'sash-grid-menus.js',
     'sash-grid-presets.js',
     'sash-grid-drag.js',
+    'sash-grid-spec.js',
     'sash-grid.js',
   ],
   // stack-dnd facade + its parts (+ the StackDrag engine it drives).
@@ -67,21 +69,27 @@ const FAMILIES = {
 // Top-level consts per file that later files resolve by name. core/*.js and
 // sash-core.js self-register (window.UIHelpers / UMD root) — no exports.
 const FILE_EXPORTS = {
-  'sash-grid-tree.js': ['SashGridTree'],
-  'sash-grid-windows.js': ['SashGridWindowStore', 'SashGridWindows', 'SashGridMenus'],
-  'sash-grid-presets.js': ['SashGridPresets'],
-  'sash-grid-drag.js': ['SashGridDrag', 'SashGridSpec', 'SashGridResize'],
+  'sash-grid-tree.js': ['SashGridTree', 'SashGridTreeVisibility'],
+  'sash-grid-windows.js': ['SashGridWindowStore', 'SashGridWindows'],
+  'sash-grid-menus.js': ['SashGridMenus', 'SashGridDock', 'SashGridLayoutMenu'],
+  'sash-grid-presets.js': ['SashGridPresets', 'SashGridPresetsImport'],
+  'sash-grid-drag.js': ['SashGridDrag', 'SashGridDragVisual'],
+  'sash-grid-spec.js': ['SashGridSpec', 'SashGridResize'],
   'sash-grid.js': ['SashGrid'],
-  'stack-dnd-history.js': ['StackDnDMigration', 'StackDnDHistory'],
-  'stack-dnd-render.js': ['StackDnDRender', 'StackDnDListOps'],
-  'stack-dnd-menu.js': ['StackDnDMenu'],
+  'stack-dnd-history.js': ['StackDnDMigration', 'StackDnDHistory',
+    'StackDnDHistoryUI'],
+  'stack-dnd-render.js': ['StackDnDRender', 'StackDnDRenderWire',
+    'StackDnDListOps'],
+  'stack-dnd-menu.js': ['StackDnDMenu', 'StackDnDMenuActions'],
   'stack-dnd-config.js': ['StackDnDConfig'],
-  'stack-dnd-form.js': ['StackDnDConfigRows', 'StackDnDSpeed'],
+  'stack-dnd-form.js': ['StackDnDConfigForm', 'StackDnDConfigRows',
+    'StackDnDSpeed'],
   'stack-dnd.js': ['StackDnD', 'BUILTIN_BLOCKS', 'RETIRED_KEYS'],
-  'app-bridge.js': ['AppBridge'],
-  'app-history.js': ['AppHistory'],
+  'app-bridge.js': ['AppBridge', 'AppBridgeStores'],
+  'app-history.js': ['AppHistory', 'AppHistoryApply'],
   'app-session.js': ['AppSession'],
   'app.js': ['App'],
+  'user-table.js': ['UserTable'],
 };
 
 // Evaluate the family file-by-file against the real (stubbed) DOM globals
