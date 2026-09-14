@@ -94,7 +94,32 @@ class TestFileSize(unittest.TestCase):
         # dataclasses F5's first attempt added alongside an uncalled
         # `append_v2()` were dropped as dead code, so this file is not a
         # fragment parking unused types.
-        self.assertLessEqual(len(py_files()), 38)
+        # 38 -> 40 (2026-09-14, Round H Area C step H-C5): the label writes
+        # left `label_assignments.py`, which had MI 35.5 in 229 lines and an
+        # 18-method class (over RULE 16's 15-method cap). Two new leaves join
+        # the `label_*` prefix family — `label_defs.py` (create/update/delete
+        # a definition) and `label_people.py` (assign/unassign/set_for/forget)
+        # — both mixed into `LabelAssignments`, so `LabelStore`'s delegators
+        # and every `store.assignments.<m>()` call site are unchanged. Neither
+        # imports Qt, `backend/` or `services/`. §18.3's real module count is
+        # unchanged at 15 because the family counts as one module
+        # (`label_*` 6 -> 8); verified with `tools/metrics/stores_modules.py`.
+        # 40 -> 45 (2026-09-14, Round H Area C step H-C4): the four store
+        # planners were over the class caps (`SchemaMigrator` 407 LOC / 25
+        # methods, `PersonLifecycle` 375 / 19, `AppendPlanner` 325 / 18) and
+        # `media_fetch.py` was the densest file in the area (464 lines,
+        # MI 31.5). Each gave up one named concept to a new leaf:
+        # `history_schema_legacy.py` (the legacy-`messages` rebuild ladder),
+        # `history_soft_delete.py` (message tombstone/restore/purge),
+        # `history_prepend.py` (the prepend / empty-slot planner) and the
+        # `media_download.py` + `media_network.py` pair (the wire vs the
+        # decision). All four are mixins inherited by the class that kept the
+        # orchestration, so `HistoryDB`, `HistoryRepo` and `MediaStore`
+        # delegators resolve unchanged; every moved method body was diffed
+        # against the pre-split file and is byte-identical. All join an
+        # existing prefix family, so §18.3's effective count stays at 15
+        # (`tools/metrics/stores_modules.py`).
+        self.assertLessEqual(len(py_files()), 45)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

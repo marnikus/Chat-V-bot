@@ -387,3 +387,123 @@ Raw evidence for this session lives **outside** the Git checkout
 (`/tmp/audit_h.json`, `/tmp/coverage_h.json`, `/tmp/js_cov_h.json`,
 `/tmp/mutmut_results.txt`): coverage and mutmut artefacts are not gitignored, and
 `mutmut` leaves an untracked `mutants/` directory that was removed after the run.
+
+## Round H Area C — after H-C1…H-C5 (same day, later)
+
+Measured with the same commands on branch `arena/01a0a136-chat-v-bot`. Area C
+owns `services/`, `stores/`, `actions/`, `app/`.
+
+### What moved
+
+| Step | Before | After |
+|---|---|---|
+| H-C1 `services/run/` | `RunQueueMixin` 227 LOC / 22 methods, `RunCoordinator` 182 / 17; 10 files | `RunCoordinator` 60 LOC / 8 methods; **15 files**, largest 201 lines, max 11 methods; `queue_select.py` / `single_target.py` / `cycle_body.py` / `step_report.py` |
+| H-C2 `services/history/mutate.py` | 294 lines, MI 34.9 | 35-line composition root + 3 mixins, MI 63–68 |
+| H-C3 `services/db_lifecycle.py` | 328 lines, `DbLifecycle` 276 / 22, `_clean_unlocked` 42 LOC | 115 lines, `DbLifecycle` 110 / 11, `_clean_unlocked` **14 LOC**, + `db_lifecycle_ops.py` / `db_lifecycle_files.py` |
+| H-C4 planners | `SchemaMigrator` 407 / 25, `PersonLifecycle` 375 / 19, `AppendPlanner` 325 / 18, `media_fetch.py` 464 lines MI 31.5 | `SchemaMigrator` 210 / **15**, `PersonLifecycle` 240 / **12**, `AppendPlanner` 171 / **10**, `MediaFetcher` 188 / **10**; `media_fetch.py` 242 lines MI **54.7** |
+| H-C5 dense files | six files MI 30.6–35.5 | **all ≥ MI 50** (see below) |
+
+### H-C5, the six §2c files
+
+`services/run/progress.py` 31.0 → **71.8** (314 → 79 lines) · `services/window_preset_service.py` 30.6 → **77.6** (+ 5 files, MI 58.0–80.1) · `app/window.py` 33.7 → **58.6** · `services/collector_tick.py` 33.0 → **82.7** (+ `collector_probe.py` 53.2, `collector_archive.py` 52.2) · `services/history/mutate.py` 34.9 → 3 mixins at 63–68 · `stores/label_assignments.py` 35.5 → **68.8** (+ `label_defs.py` 62.6, `label_people.py` 64.5).
+
+The plan's wording for H-C5 was "extract named predicates/helpers, not new
+files". **That cannot raise MI.** radon's MI is
+`(171 − 5.2·ln(V) − 0.23·CC − 16.2·ln(LLOC) + comment term) · 100/171`;
+extracting a helper inside one file leaves V, CC and LLOC unchanged (it
+usually *adds* LLOC). Every number above came from splitting the file, which
+is also what H-C1 already did to `run/progress.py`. Round F §6 said the
+opposite about these same files; H-C5 is the newer in-force plan and it
+measures. The reasoning is recorded in each new module docstring.
+
+### Classes still over the RULE 16 caps, with reasons
+
+* `UndoService` 178 LOC / **28 methods** — not reducible this round. Three
+  independent pins hold it: `tests/unit/services/test_undo_structure.py::MOVED`
+  pins 21 delegators on the class; `bridge/router.py` reads three of its
+  statics as class attributes; `tests/test_world_write_gate.py` monkeypatches
+  the **module-level** `undo_service.MAX_STACK_HISTORY`, so `push` cannot move.
+  Cutting it to 15 would break Area B's frozen interface. **Verdict: facade,
+  kept, recorded here and in `docs/archive/2026-09-14-round-h/AREA_C_...md`.**
+* `HistoryRepo` 44 methods, `Collector` 40, `LabelStore` 38, `MediaStore` 33,
+  `HistoryDB` 30, `ScrollParser` — all facades whose delegators *are* the
+  public API their bridges call. H-C6 verdict: keep.
+* `LegacyCopyMixin` 163 LOC and `SchemaMigrator` 210 LOC are over the 150-LOC
+  class line but are **legacy offenders strictly reduced** (407 → 210), which
+  §16.5 permits; both are now at or under the 15-method cap.
+
+### A latent bug found by measuring, not by reading
+
+`actions/base.py:260` called `_shared_runner()`, a name that has never existed
+in that module — the shared visual-confirmation runner is `_click_runner()`
+(line 45). Every click block in `actions/` imports `find_and_click` at module
+level, so `getattr(module, "find_and_click", None)` always short-circuited and
+the broken branch was unreachable in every test. `pyflakes` (installed to
+verify the H-C4/H-C5 moves resolved their free variables) reported it as
+`undefined name`.
+
+Fixed to `_click_runner()`, with a gate that drives the fallback directly
+(`tests/test_scroll_parse_pipeline.py::TestSharedModuleRule::test_the_fallback_runner_resolves_when_a_block_has_no_own_import`).
+Verified in both directions: it passes on the fix and fails with
+`NameError: name '_shared_runner' is not defined` when the old name is
+restored.
+
+`pyflakes` over `stores/ services/ app/ actions/` is otherwise clean; the only
+remaining reports are the deliberate `from actions.find_click_runner import
+find_and_click` re-imports (the lookup pattern `click_runner` documents) and
+one pre-existing unused local in `stores/label_world.py:135`.
+
+### Final measured state (branch `arena/01a0a136-chat-v-bot`)
+
+`tools/metrics/current_audit.py` over Area C: **162 files / 22 599 lines**
+(was 139 / 21 726 — 23 new leaf modules, +873 lines, most of it docstrings).
+
+* **Files > 300 LOC: 5** (was 12). Worst is now `stores/history_repo_identity.py`
+  at 365. Gone from the list: `media_fetch` 464, `history_repo_lifecycle` 441,
+  `history_schema_repair` 441, `collector_tick` 425, `history_repo_append` 366,
+  `db_lifecycle` 328, `window_preset_service` 326, `run/progress` 314.
+* **All six §2c dense files are ≥ MI 50.** None of them appears in the
+  MI < 50 list any more.
+* `rule16_gate.py --with-clones`: **green** — 0 new clone groups, 0 stale
+  baseline entries, "All owned functions fit. Ratchet intact."
+* `stores_modules.py`: 45 raw files → **15 effective §18.3 modules, in band**.
+* Full suite: **3186 passed, 0 failed** (baseline at HEAD: 3169 passed).
+
+### A second real bug, found by the suite going red
+
+`services/history/mutate_settings.py::_persist_app_settings` called
+`asyncio.get_running_loop().create_task(work())` and dropped the result.
+CPython's event loop holds only a **weak** reference to a pending task, so the
+task can be collected before it runs and the `app_settings` write is silently
+lost. `tests/test_history_service_lifecycle.py::TestSettings` had already
+written this off in its own docstring as "Ledger #9 (minor): the task is
+neither awaited nor reference-held".
+
+It was latent until the larger Round H suite raised allocation pressure enough
+to collect the task: `test_patch_lands_in_the_worlds_app_settings` then failed
+**twice in a row** on this branch while a pristine-HEAD worktree ran the same
+suite clean (3169 passed, 0 failed). Holding the task in a per-service set
+made the branch green (3186 passed). `app/lifecycle.py::start` had the same
+unreferenced-`create_task` pattern and was fixed the same way.
+
+Honest caveat: forcing the collection with `gc.collect()` did **not** reproduce
+it in isolation, so the new gate
+(`test_the_persist_task_is_referenced_until_it_finishes`) asserts the
+invariant that changed rather than the race itself. Verified in both
+directions — it fails with `AssertionError: None is not true : the persist
+task is unreferenced and can be collected` when the reference is removed.
+
+### What is NOT done
+
+* **Coverage was not re-measured.** The DoD asks for ≥ 92.64 % line /
+  88.03 % branch; no post-change coverage run was completed, so that number is
+  unverified.
+* `services/db_registry.py` (302 lines, MI 43.8, coverage 70.7 %) — H-C3's
+  "coverage first" target, untouched.
+* `stores/history_db.py::HistoryDB` (232 LOC / 30 methods) — left as a facade
+  with the reason recorded in the area doc §14; `WriteTurn` untouched as
+  required.
+* Area-wide **MI floor ≥ 45 is not met**: 17 Area C files are still below
+  MI 50, including `services/run/hooks.py` 32.2, `services/history/query.py`
+  36.9, `services/layout_service.py` 38.7. None of these was in the plan's
+  §2c list, but the floor is a round-level DoD and it is not satisfied.

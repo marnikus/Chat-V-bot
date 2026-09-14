@@ -103,10 +103,16 @@ class TestCollectorDecomposition(unittest.TestCase):
                         "a collaborator is built from the aggregate only — "
                         "state stays on the aggregate")
 
-    def test_the_tick_host_protocol_stays_reachable_on_the_facade(self):
-        """Every `host.<name>` collector_tick.py uses must still resolve.
+    #: Round H step H-C5 split the tick state machine into three modules.
+    #: The gate below reads all of them, or moving a phase out of
+    #: collector_tick.py would silently shrink the protocol it checks.
+    TICK_FAMILY = ("collector_tick.py", "collector_probe.py",
+                   "collector_archive.py")
 
-        Read straight out of collector_tick.py, so the gate follows the
+    def test_the_tick_host_protocol_stays_reachable_on_the_facade(self):
+        """Every `host.<name>` the tick family uses must still resolve.
+
+        Read straight out of the three tick modules, so the gate follows the
         protocol instead of freezing a copy of it. The protocol mixes two kinds
         of name and each is checked the way it can actually exist:
 
@@ -119,15 +125,16 @@ class TestCollectorDecomposition(unittest.TestCase):
             left all of it on the aggregate instead of moving it into the
             collaborators.
         """
-        path = os.path.join(ROOT, "services", "collector_tick.py")
-        with open(path, encoding="utf-8") as fh:
-            tick = ast.parse(fh.read())
         wanted = set()
-        for node in ast.walk(tick):
-            if (isinstance(node, ast.Attribute)
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id == "host"):
-                wanted.add(node.attr)
+        for name in self.TICK_FAMILY:
+            path = os.path.join(ROOT, "services", name)
+            with open(path, encoding="utf-8") as fh:
+                tick = ast.parse(fh.read())
+            for node in ast.walk(tick):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "host"):
+                    wanted.add(node.attr)
         self.assertGreater(len(wanted), 25,
                            "expected the tick state machine to use the host "
                            f"protocol, found only {sorted(wanted)}")

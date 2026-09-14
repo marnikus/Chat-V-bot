@@ -433,6 +433,33 @@ class TestSharedModuleRule(unittest.TestCase):
             self.assertNotIn("click=True", src,
                              f"{name} must not build its own clicking probe")
 
+    def test_the_fallback_runner_resolves_when_a_block_has_no_own_import(self):
+        """`click_runner` must fall back to a name that actually exists.
+
+        Found by pyflakes on 2026-09-14 (Round H Area C): the fallback called
+        `_shared_runner()`, which was never defined — the module's shared
+        runner is `_click_runner()`. Every block in `actions/` imports
+        `find_and_click`, so the broken branch was never reached and no test
+        could fail. This drives it directly: a block whose module does NOT
+        import the runner must still get the shared one.
+        """
+        import sys
+        import types
+        from actions.base import FindClickBlock
+
+        class _Bare:
+            pass
+        _Bare.__module__ = "tests_bare_block_module"
+        sys.modules["tests_bare_block_module"] = types.ModuleType(
+            "tests_bare_block_module")          # deliberately no find_and_click
+        try:
+            from backend.visual_click import find_and_click as real
+            got = FindClickBlock.click_runner(_Bare())
+            self.assertIs(got, real,
+                          "the fallback must be the shared visual runner")
+        finally:
+            del sys.modules["tests_bare_block_module"]
+
     def test_shim_still_exports_the_runner(self):
         from actions.find_click_runner import find_and_click as shim
         from backend.visual_click import find_and_click as real

@@ -393,6 +393,15 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # dropping or reordering an import to dissolve the window would either delete a
 # used name or reintroduce pylint C0411 — the cosmetic span-shrinking §18.5
 # forbids.
+# Maintenance 2026-09-14 (Round H, Area C step H-C1): one entry DISSOLVED —
+# ('services/run/coordinator.py', 'services/run/progress.py'). The cloned
+# window was the `try: from stores.user_memory import UserRecord / except
+# Exception: @dataclass class UserRecord …` import guard, which coordinator.py
+# and progress.py each carried a byte-identical copy of. H-C1 splits the run
+# ladder's queue half out of progress.py, and the guard now exists once, in
+# services/run/requests.py (the module that already owns the run family's
+# value objects); progress.py re-exports the name so the P0-2 runtime pin
+# still holds. Nothing was added to reach this: the group is simply gone.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector_field.py"),
@@ -410,10 +419,30 @@ CLONE_BASELINE = frozenset({
     ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_world.py"),
-    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("services/run/error_recovery.py", "services/run/step_report.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),
+    # Round H Area C, 2026-09-14 — the H-C2/H-C4 splits each left a module
+    # beside the file it was cut out of, and both halves import the same
+    # schema/request constants. The scanner's MIN_SPAN is 6 statements, so a
+    # shared import list of that length reads as a clone. Inspected on the
+    # day: all three matches are imports only, no shared logic.
+    #
+    #   history_schema_legacy.py:26 | history_schema_repair.py:24
+    #       the seven `stores.history_schema` constants both halves need
+    #   history_prepend.py:19       | history_repo_append.py:17
+    #       the history_models / history_requests names both halves need
+    #   mutate_import.py:16         | preset_store.py:16
+    #       a coincidence: `copy`, `logging`, `os`, `datetime` in that order
+    #
+    # The alternatives were considered and rejected as cosmetic dodges under
+    # §18.5: reordering or splitting an import list to break the window would
+    # make the code worse to read while hiding the match instead of recording
+    # it. Re-check these three if either file's imports change.
+    ("stores/history_prepend.py", "stores/history_repo_append.py"),
+    ("stores/history_schema_legacy.py", "stores/history_schema_repair.py"),
+    ("services/history/mutate_import.py", "stores/preset_store.py"),
 })
 
 

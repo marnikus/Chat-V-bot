@@ -90,4 +90,7 @@ class ApplicationLifecycle:
             self.app.quit()
 
     def start(self, loop) -> None:
-        loop.create_task(self.startup())
+        # Referenced for the same reason as the settings persist: the loop
+        # holds only a weak reference to a pending task, so an unreferenced
+        # startup task can be collected before it ever runs.
+        self._startup_task = loop.create_task(self.startup())

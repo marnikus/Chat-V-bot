@@ -1,3 +1,19 @@
+"""Getting one step done: the retry policy and the per-user walk.
+
+Two things live here. `RetryPolicy` is the attempt policy — backoff over the
+transient errors, never over a cooperative stop or an external cancel (the
+stop is checked before every attempt and between retries, RULE 7).
+`RunExecutionMixin` is the walk: one user against the whole stack, with the
+per-block verdicts, the between-blocks stop/pause gate and the all-disabled
+guard that stops a queue person being marked messaged when nothing ran.
+
+The *reporting* of a step's outcome is a separate policy and lives in
+`step_report.py`; the collect phase in `collect_phase.py`.
+
+Import direction: `actions.*` inside methods only, so `import services.run`
+never triggers the actions package scan.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -74,13 +90,14 @@ class RunExecutionMixin:
     """One user against the whole stack: the verdicts, the boundaries, the step.
 
     The collect phase lives in `services/run/collect_phase.py`
-    (`CollectPhaseMixin`); this mixin is the per-user execution half.
+    (`CollectPhaseMixin`) and a step's outcome report in
+    `services/run/step_report.py` (`StepReportMixin`); this mixin is the
+    per-user execution half between them.
     """
 
     def _stack_stopped_status(self) -> str:
         """The per-user stop verdict, announced + traced on every boundary."""
-        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-        self._tracer.note({"type": "run_end", "reason": "stopped"})
+        self._announce_stopped()
         return "stop"
 
     def _all_disabled_guard(self) -> str | None:
@@ -183,39 +200,6 @@ class RunExecutionMixin:
                 return status
         self.debug_msg.emit(f"      ✅ All steps done for {user.nick}", "success")
         return "ok"
-
-    async def _step_failed(self, block, nick: str, exc: Exception):
-        log.exception("Block error")
-        self._tracer.note({"type": "step_end", "status": "exception", "error": str(exc), **self._ctx})
-        self.debug_msg.emit(f"      ❌ {block.display_name} raised: {exc}", "error")
-        self.step_complete.emit(block.display_name, nick)
-        raise exc
-
-    def _handle_step_result(self, block, result, step: StepContext) -> str:
-        from actions.base_action import ActionResult
-        nick, idx = step.nick, step.idx
-        elapsed = time.monotonic() - step.started
-        if result == ActionResult.OK:
-            self.debug_msg.emit(f"      ✓ Step {idx} OK ({elapsed:.2f}s)", "success")
-            self._tracer.note({"type": "step_end", "status": "ok", "duration_s": round(elapsed, 3), **self._ctx})
-            self.step_complete.emit(block.display_name, nick)
-            return "ok"
-        if result == ActionResult.SKIP:
-            self.debug_msg.emit(f"      ⏭ Step {idx} skipped", "warn")
-            self._tracer.note({"type": "step_end", "status": "skip", **self._ctx})
-            self.step_complete.emit(block.display_name, nick)
-            return "skip"
-        self.debug_msg.emit(f"      ✗ Step {idx} FAILED after {elapsed:.2f}s — stopping this user", "error")
-        self._tracer.note({"type": "step_end", "status": "fail", "duration_s": round(elapsed, 3), **self._ctx})
-        self.step_complete.emit(block.display_name, nick)
-        return "fail"
-
-    async def _call_action_hook(self, block, nick: str, status: str) -> None:
-        hook = getattr(self._hooks, "on_action_complete", None)
-        if hook is not None:
-            result = hook(self, block, nick, status)
-            if asyncio.iscoroutine(result):
-                await result
 
     async def mark_person_messaged(self, nick: str) -> str:
         if not nick:

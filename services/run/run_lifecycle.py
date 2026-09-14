@@ -61,6 +61,21 @@ class RunLifecycleMixin:
                                 "info")
         return value
 
+    def _announce_stopped(self) -> None:
+        """Emit the one stopped announcement (debug line + trace note).
+
+        Every stop boundary in the run ladder — the cycle gate, the queue
+        loop, the single-target cycle, the per-user step — announces a stop
+        the same way, so the two lines live here once instead of five times.
+        The trace write is guarded like the other lifecycle notes: a closed or
+        missing tracer must not turn a clean stop into a run error.
+        """
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        try:
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+        except Exception:  # noqa: BLE001
+            pass
+
     def _announce_repeat(self, cycles: int) -> None:
         if cycles > 1:
             self.log_msg.emit(

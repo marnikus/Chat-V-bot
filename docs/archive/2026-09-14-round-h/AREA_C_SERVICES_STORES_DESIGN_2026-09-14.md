@@ -223,3 +223,33 @@ exists, keep `dump_public_api` unaffected (it covers `backend`/`actions` only).
   renaming commit; the `OWNED` rows for `actions/speed.py`,
   `services/run/run_lifecycle.py::_resolve_run_speed` and `actions/base.py`
   must keep passing (they are covered by the speed-multiplier feature tests).
+
+## 14. H-C6 — the facade verdicts (written, as §3 required)
+
+Each class in §3's list was measured, not assumed. A "facade" verdict means:
+the method count is high *because* the class is the single entry point a bridge
+or a window calls, and every extra method is one line of delegation whose name
+is part of a frozen interface. Splitting one moves the count, not the
+complexity, and breaks the caller.
+
+| Class | LOC / methods / LCOM\* | Verdict | Evidence |
+|---|---|---|---|
+| `UndoService` | 178 / **28** / 0.95 | **Facade, kept — cannot reach 15 this round** | `tests/unit/services/test_undo_structure.py::MOVED` pins 21 delegators on the class; `bridge/router.py:163-165` reads three of its statics as class attributes; `bridge/undo_bridge.py:178` calls `_clean_history`; `bridge/stack_bridge.py:54` exposes `_clean_blocks`; `tests/test_world_write_gate.py` monkeypatches the **module-level** `undo_service.MAX_STACK_HISTORY`, so `push` cannot move either. Reducing it to 15 breaks Area B's frozen interface (`UndoService.push/undo/redo/apply_command/attach/rewind_after_failure`). What *was* done: its raw handlers already live in `undo_apply/archive/db/history/timeline/world`, and `services/history/mutate.py` (the other H-C2 target) went 294 → 35 lines. |
+| `HistoryRepo` | 225 / **44** / 0.89 | **Facade, kept** | 44 delegators, 86 % of the body, all named by `bridge/history_bridge.py`. Its *collaborators* were fixed instead: `PersonLifecycle` 375/19 → 240/**12**, `AppendPlanner` 325/18 → 171/**10**. |
+| `Collector` | 216 / **40** / 0.95 | **Facade, kept** | Its tick state machine is what H-C5 split (`collector_tick.py` 425 → 80 lines, MI 33.0 → 82.7); `test_collector_structure.py` now reads the whole three-module family so the host-protocol gate did not shrink with the split. |
+| `LabelStore` | 222 / **38** / 0.89 | **Facade, kept** | `LabelAssignments` was the real offender: 18 methods → **11**, via `label_defs.py` + `label_people.py`. |
+| `MediaStore` | 214 / **33** / 0.93 | **Facade, kept** | `MediaFetcher` 306/15 → 188/**10**; `media_fetch.py` was the densest file in the area (464 lines, MI 31.5 → 242 lines, MI **54.7**). |
+| `HistoryDB` | 232 / **30** / 0.86 | **Facade, kept — `WriteTurn` untouched** | As §3 required: `tests/test_world_write_gate.py` (826 lines) pins `WriteTurn`, so only its collaborator moved — `SchemaMigrator` 407/25 → 210/**15**. |
+| `HistoryExportService` | 80 / 14 / 0.99 | **Facade, kept** | Already inside both caps; LCOM\* 0.99 is 14 unrelated public exports, which is what an export service is. |
+| `ScrollParser` | — | **Facade, kept** | Pinned by `actions/scroll_parse_run.py` (an existing `RATCHET` entry). |
+
+### What this means for RULE 16
+
+The 15-method cap is now met by **every class Area C was asked to fix**
+(`RunQueueMixin` dissolved, `RunCoordinator` 17→8, `DbLifecycle` 22→11,
+`LabelAssignments` 18→11, `SchemaMigrator` 25→15, `PersonLifecycle` 19→12,
+`AppendPlanner` 18→10, `MediaFetcher` 15→10, `CollectorArchive` 12→7). It is
+**not** met by the seven facades above, and this section is the recorded
+reason §16.5 asks for. Two classes remain over the 150-LOC class line as
+strictly-reduced legacy offenders: `SchemaMigrator` 407→210 and
+`LegacyCopyMixin` 163.

@@ -314,9 +314,19 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # stores.media_store import line for MediaOptions (+0). No area had
         # to edit an import to keep WORKING — these are the deliberate new
         # call shapes, ledgered here.
-        self.assertEqual(count, 44,
+        # 44 -> 43 (2026-09-14, Round H Area C step H-C1): the run ladder's
+        # `try: from stores.user_memory import UserRecord / except Exception:
+        # @dataclass class UserRecord …` guard was carried byte-identically by
+        # BOTH services/run/coordinator.py and services/run/progress.py (it was
+        # a recorded clone group until this step). H-C1 splits the queue half
+        # out of progress.py, so the guard now exists once, in
+        # services/run/requests.py — the module that already owns the run
+        # family's value objects — and progress.py re-exports the name to keep
+        # the P0-2 runtime pin. The stores/ surface is untouched; this is the
+        # services-side shrinking case, same shape as the 42 -> 41 entry.
+        self.assertEqual(count, 43,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 44)")
+                         "import in another area (integrated baseline: 43)")
 
 
 if __name__ == "__main__":

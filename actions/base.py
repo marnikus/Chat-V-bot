@@ -257,7 +257,7 @@ class FindClickBlock(DeclaredSettings):
         here. RULE 1 is unaffected: every path leads to `visual_click`.
         """
         module = sys.modules.get(type(self).__module__)
-        return getattr(module, "find_and_click", None) or _shared_runner()
+        return getattr(module, "find_and_click", None) or _click_runner()
 
     def find_kwargs(self, engine: Optional[object] = None) -> dict:
         """The runner's keyword arguments, read off the declared fields."""

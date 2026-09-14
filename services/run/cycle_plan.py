@@ -108,6 +108,17 @@ class CycleDecision:
     reason: str
 
 
+def _take_miss(facts: StackFacts, has_queue: bool, take_matched: bool) -> bool:
+    """Pick Person is in the stack, matched nobody, and nothing else can run.
+
+    Named because it is one decision, not four: the cycle is empty *because
+    the memory-driven path found no one* — which ends a Repeat Loop exactly
+    like an empty queue does, and must be reported as such (RULE 4).
+    """
+    return (facts.has_take and not take_matched
+            and not facts.user_scoped_ids and not has_queue)
+
+
 def choose_cycle_mode(
     facts: StackFacts,
     *,
@@ -125,12 +136,7 @@ def choose_cycle_mode(
         return CycleDecision(mode="stopped", reason="stopped")
     if facts.has_mem_click:
         return CycleDecision(mode="single_target", reason="mem_click")
-    if (
-        facts.has_take
-        and not take_matched
-        and not facts.user_scoped_ids
-        and not has_queue
-    ):
+    if _take_miss(facts, has_queue, take_matched):
         return CycleDecision(mode="empty", reason="no_take_match")
     if has_queue:
         return CycleDecision(mode="queued", reason="queue")
