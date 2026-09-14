@@ -1,20 +1,11 @@
 from __future__ import annotations
 import asyncio
 import logging
-from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
 from core.events import EventBus
 from actions.base_action import BaseAction, get_action_class
 from actions.cancellation import RunStopped, check_stopped, is_stop_requested
-try:
-    from stores.user_memory import UserRecord
-except Exception:
-    @dataclass
-    class UserRecord:
-        nick: str
-        messaged: bool = False
 if TYPE_CHECKING:
     from backend.cdp_client import CDPClient
     from backend.criteria_engine import CriteriaEngine
@@ -23,9 +14,9 @@ from .cycle_loop import CycleLoopMixin
 from .collect_phase import CollectPhaseMixin
 from .cycle_plan import choose_cycle_mode, inspect_stack
 from .error_recovery import RetryPolicy, RunExecutionMixin
-from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, RunTracer, maybe_await, normalize_blocks
+from .hooks import STANDALONE_NICK, RunHooks, RunHooksMixin, maybe_await, normalize_blocks
 from .progress import RunProgress
-from .queue import RunQueueMixin
+from .queue import RunQueueMixin, UserRecord  # noqa: F401  (re-exported)
 from .run_lifecycle import RunLifecycleMixin
 from .state_machine import RunStateMachine
 log = logging.getLogger("chatbot")

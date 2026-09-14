@@ -14,6 +14,8 @@ import logging
 import os
 from typing import Any
 
+from stores.atomic import discard_temp
+
 log = logging.getLogger("chatbot")
 
 
@@ -51,11 +53,7 @@ def save_json(path: str, data: Any) -> bool:
         # target must keep its previous good content — the dump happens
         # into the tmp file, so nothing below has touched the target yet.
         log.error("config save failed for %s: %s", path, exc)
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError:
-            pass
+        discard_temp(tmp)
         return False
 
 

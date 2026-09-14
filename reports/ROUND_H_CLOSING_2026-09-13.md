@@ -31,19 +31,38 @@ exemption argued from this round's own measurements (§3).
 
 ## 2. What each step did
 
-| Step | File | Before → after | Shape |
-|---|---|---|---|
-| H1 | `bridge/history_bridge.py` | 563 → 278 | (b) mixins, class identity kept for Qt |
-| H2 | `services/db_deletion_flow.py` | 527 → 99 | (a) split at the irreversible boundary |
-| H3 | `services/collector_tick.py` | 446 → 35 | (b) three layers it already had |
-| H3 | `stores/media_fetch.py` | 462 → 150 | (a) queue vs. download strategies |
-| H4 | `backend/config_manager.py` | 509 → 181 | (a) five private section owners |
-| H5 | `backend/message_injector.py` | 482 → 260 | (a) typing vs. sending |
-| H5 | `backend/chat_parser.py` | 441 → 151 | (a) page driving vs. the private-chat gate |
-| H5 | `backend/dom_highlight.py` | 590 → 175 | (a) 219 lines of JS payload |
-| H5 | `backend/media_handler.py` | 480 → ~190 | (a) file choice vs. CDP attach |
-| H5 | `stores/history_repo_lifecycle.py` | 450 → 182 | (b) restore/merge/purge mixin |
-| H6 | `tools/metrics/current_audit.py` | three metric fixes | — |
+> **Corrected in Round I (step I5). The "after" column below was wrong.**
+> A Round I audit could not reproduce 8 of these 10 figures, and the cause is
+> worse than drift: checking each file *at Round H's own commit* (`54dad00`)
+> gives the same numbers as today, so the claimed sizes were **already wrong
+> when they were written** — they were the plan's targets, not measurements of
+> the result. Both columns are shown below so the error stays visible. The
+> splits themselves are all real and all still in place; only the arithmetic
+> was fiction.
+
+| Step | File | Before → after (**as measured**) | Claimed at the time | Shape |
+|---|---|---|---|---|
+| H1 | `bridge/history_bridge.py` | 563 → **280** | 278 | (b) mixins, class identity kept for Qt |
+| H2 | `services/db_deletion_flow.py` | 527 → **99** | 99 ✓ | (a) split at the irreversible boundary |
+| H3 | `services/collector_tick.py` | 446 → **69** | 35 | (b) three layers it already had |
+| H3 | `stores/media_fetch.py` | 462 → **233** | 150 | (a) queue vs. download strategies |
+| H4 | `backend/config_manager.py` | 509 → **285** | 181 | (a) five private section owners |
+| H5 | `backend/message_injector.py` | 482 → **380** | 260 | (a) typing vs. sending |
+| H5 | `backend/chat_parser.py` | 441 → **263** | 151 | (a) page driving vs. the private-chat gate |
+| H5 | `backend/dom_highlight.py` | 590 → **308** | 175 | (a) 219 lines of JS payload |
+| H5 | `backend/media_handler.py` | 480 → **231** | ~190 | (a) file choice vs. CDP attach |
+| H5 | `stores/history_repo_lifecycle.py` | 450 → **264** | 182 | (b) restore/merge/purge mixin |
+| H6 | `tools/metrics/current_audit.py` | three metric fixes | — | — |
+
+Only `db_deletion_flow.py` matched. The measured reductions are still
+substantial — 563→280, 527→99, 590→308 — so the round's conclusion holds; what
+failed was the discipline of re-measuring after the work instead of restating
+the intent. That is precisely the failure mode RULE 16.6 exists to prevent,
+and it is why Round I re-measures every target on the current tree before
+touching it and records before/after from the same command.
+
+(`dom_highlight.py` reads 308 at H5's commit and 309 today: Round I step I1
+deleted 51 lines of duplicate definitions and added a two-line comment.)
 
 Three seam principles, one per shape, now established:
 

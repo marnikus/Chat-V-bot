@@ -55,11 +55,17 @@ class LabelBridge(QObject):
 
     @staticmethod
     def _values_equal(a, b) -> bool:
-        try:
-            return json.dumps(a, sort_keys=True, ensure_ascii=False) == \
-                   json.dumps(b, sort_keys=True, ensure_ascii=False)
-        except Exception:                               # noqa: BLE001
-            return a == b
+        """Order-insensitive value equality — the undo timeline's rule.
+
+        Delegates rather than re-implementing: `services.undo_apply` owns
+        this comparison (router.py injects the same function into other
+        bridges as `_values_equal`/`_stacks_equal`), and two copies of
+        "are these two label values the same edit" can disagree about
+        whether an edit is worth recording. Imported locally because this
+        module is a leaf that `services` must be free to import.
+        """
+        from services.undo_apply import _values_equal
+        return _values_equal(a, b)
 
     # ── engine guard ─────────────────────────────────────────────
     def install_label_guard(self) -> None:

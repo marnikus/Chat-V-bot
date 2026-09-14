@@ -27,6 +27,7 @@ from typing import Any, Optional
 from actions.registry import all_action_ids
 from core.result import Err, Result, err, ok
 from core.version import APP_VERSION
+from stores.atomic import discard_temp
 
 #: the two known file shapes
 STACK_PRESET_FORMAT = "chat-v-bot/stack-preset"
@@ -121,11 +122,7 @@ def write_export(path: Any, payload: dict) -> Result[None]:
         os.replace(tmp, os.fspath(path))
         return ok(None)
     except (OSError, TypeError, ValueError) as exc:  # noqa: BLE001
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError:
-            pass
+        discard_temp(tmp)
         return err("write_failed", str(exc))
 
 

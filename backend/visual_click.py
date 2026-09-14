@@ -47,7 +47,14 @@ def _report(engine, message: str, level: str = "info") -> None:
         engine.report(message, level)
 
 
-def _parse(raw) -> Optional[dict]:
+def parse_probe_json(raw) -> Optional[dict]:
+    """A probe's raw JSON as a dict, or None if it is unusable.
+
+    Public because `actions/click_user.py` reads probe output the same way and
+    had its own copy. "Unusable" folds together three cases the callers all
+    treat alike: nothing came back, it was not JSON, or it was JSON but not an
+    object.
+    """
     try:
         res = json.loads(raw) if raw else None
     except (json.JSONDecodeError, TypeError):
@@ -131,7 +138,7 @@ async def find_phase(cdp: CDPClient, request: ClickRequest,
                 "error")
         log.error("visual_click CDP error (find): %s", exc)
         return None
-    res = _parse(raw)
+    res = parse_probe_json(raw)
     if res is None:
         _report(engine, f"❌ FIND failed: {request.label} — no data returned "
                         "from the page (page context unavailable?)", "error")
@@ -199,7 +206,7 @@ async def _stage(cdp, request, engine) -> Optional[dict]:
         _report(engine, f"❌ CLICK failed: CDP error while resolving the click "
                         f"target: {exc}", "error")
         return None
-    pre = _parse(raw)
+    pre = parse_probe_json(raw)
     if pre is None:
         _report(engine, "❌ CLICK failed: no data returned while resolving the "
                         "click target", "error")
@@ -223,7 +230,7 @@ async def _dispatch(cdp, request, engine) -> Optional[dict]:
         _report(engine, f"❌ CLICK failed: CDP error during click: {exc}",
                 "error")
         return None
-    done = _parse(raw)
+    done = parse_probe_json(raw)
     if done is None:
         _report(engine, "❌ CLICK failed: no data returned from the click",
                 "error")

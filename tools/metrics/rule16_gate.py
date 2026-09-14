@@ -374,7 +374,10 @@ CLONE_BASELINE = frozenset({
     ("services/db_deletion_remove.py", "services/db_deletion_scan.py"),
     ("services/history/query.py", "services/undo_world.py"),
     ("services/run/__init__.py", "services/run_service/__init__.py"),
-    ("services/run/coordinator.py", "services/run/queue.py"),
+    # ("services/run/coordinator.py", "services/run/queue.py") was RESOLVED in
+    # Round I step I6, not re-baselined: the duplicated `UserRecord` optional-
+    # import shim would have produced two different UserRecord classes in one
+    # process if stores.user_memory were ever absent. `queue` owns it now.
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),

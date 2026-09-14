@@ -24,6 +24,11 @@ import logging
 
 from dataclasses import dataclass
 
+# `stores.user_memory` is optional at import time: the run package must stay
+# importable when the memory store is absent (a fresh checkout, or a test that
+# stubs stores/). This package's copy of the fallback lives HERE, and
+# `coordinator` imports it from this module rather than repeating the shim —
+# two copies could drift into two different UserRecord shapes in one process.
 try:
     from stores.user_memory import UserRecord
 except Exception:                                    # noqa: BLE001

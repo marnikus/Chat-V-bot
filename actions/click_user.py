@@ -14,7 +14,7 @@ from typing import Optional
 
 from actions.base_action import BaseAction, ActionResult
 from backend.cdp_client import CDPClient
-from backend.visual_click import find_and_click_exact
+from backend.visual_click import find_and_click_exact, parse_probe_json
 
 log = logging.getLogger("chatbot")
 
@@ -79,11 +79,7 @@ class ClickUser(BaseAction):
         except Exception as exc:
             log.warning("Tab count probe failed: %s", exc)
             return None
-        try:
-            res = json.loads(raw) if raw else None
-        except (json.JSONDecodeError, TypeError):
-            return None
-        return res if isinstance(res, dict) else None
+        return parse_probe_json(raw)
 
     # ── execution ────────────────────────────────────────────────
     async def execute(self, user_nick: str, cdp: CDPClient,

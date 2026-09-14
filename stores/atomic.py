@@ -45,6 +45,24 @@ def _coerce_path(value: Any, default: str = "config.json") -> str:
         f"expected a path or an AtomicJsonStore, got {type(value).__name__}")
 
 
+def discard_temp(tmp: str) -> None:
+    """Remove a half-written temp file, ignoring a failure to remove it.
+
+    Every atomic write here follows the same shape: write `tmp`, fsync,
+    `os.replace` onto the real path. If any of that fails the temp file must
+    not be left behind — but a failure to CLEAN UP must not mask the original
+    error, which is the one the caller is about to report.
+
+    Public and owned by this module because `services/preset_io.py` performs
+    the same atomic-write dance and had its own copy; one rule, one place.
+    """
+    try:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    except OSError:
+        pass
+
+
 class AtomicJsonStore:
     """Lowest layer: load / atomic save of one JSON file."""
 
@@ -110,11 +128,7 @@ class AtomicJsonStore:
             # not a raise — and the previous good file is untouched (the
             # dump failed before os.replace).
             log.error("Store save failed: %s", exc)
-            try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except OSError:
-                pass
+            discard_temp(tmp)
             return err(str(exc))
 
     # ── reads ────────────────────────────────────────────────────

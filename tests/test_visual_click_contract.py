@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.base_action import ActionResult  # noqa: E402
 from backend.visual_click import (  # noqa: E402
-    _parse,
+    parse_probe_json,
     find_and_click,
     find_and_click_exact,
 )
@@ -180,13 +180,13 @@ class TestExactWrapper(unittest.TestCase):
 class TestParse(unittest.TestCase):
 
     def test_parse_matrix(self):
-        self.assertIsNone(_parse(None))
-        self.assertIsNone(_parse(""))
-        self.assertIsNone(_parse("not json"))
-        self.assertIsNone(_parse('["list"]'))
-        self.assertIsNone(_parse(42))
-        self.assertEqual(_parse('{"found": true}'), {"found": True})
-        self.assertEqual(_parse('  {"a": 1}  '), {"a": 1})
+        self.assertIsNone(parse_probe_json(None))
+        self.assertIsNone(parse_probe_json(""))
+        self.assertIsNone(parse_probe_json("not json"))
+        self.assertIsNone(parse_probe_json('["list"]'))
+        self.assertIsNone(parse_probe_json(42))
+        self.assertEqual(parse_probe_json('{"found": true}'), {"found": True})
+        self.assertEqual(parse_probe_json('  {"a": 1}  '), {"a": 1})
 
 
 if __name__ == "__main__":
