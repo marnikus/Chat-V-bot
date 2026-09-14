@@ -34,6 +34,9 @@ const SashGrid = {
 
   THRESHOLD: 4,
   MIN_PX: 96,
+  //: children per split above which the 96px floor is relaxed (6 fit in a
+  //: 700px column; the 7th is where the old resize guard used to die)
+  CROWDED_AT: 6,
   SASH_W: 6,
 
   gridEl: null,
@@ -592,7 +595,20 @@ const SashGrid = {
         el.appendChild(sash);
       }
     });
+    this._relaxCrowdedSplit(el, n);
     return el;
+  },
+
+  /* Publish the relaxed CSS floor for a crowded split; without it the
+     browser re-imposes the minimum the resize maths just relaxed. */
+  _relaxCrowdedSplit(el, count) {
+    const style = el && el.style;
+    // Custom properties need the CSSOM long form; guard it so the module
+    // still renders under a minimal style shim (the Node DOM harnesses).
+    if (!style || typeof style.setProperty !== 'function') return;
+    const value = this._resizeMath()
+      .cssFloorFor(count, this.CROWDED_AT, this.MIN_PX);
+    style.setProperty('--sash-min-panel', value);
   },
 
   _parsePath(p) {
@@ -737,7 +753,10 @@ const SashGrid = {
         const prev = kids[i - 1], next = kids[i + 1];
         const prevHidden = prev && (prev.classList.contains('sash-win-hidden') || prev.classList.contains('sash-win-closed') || prev.classList.contains('sash-split-hidden'));
         const nextHidden = next && (next.classList.contains('sash-win-hidden') || next.classList.contains('sash-win-closed') || next.classList.contains('sash-split-hidden'));
-        if (prevHidden || nextHidden) el.classList.add('sash-hidden');
+        // TOGGLE, never add-only: an add-only pass leaves a sash display:none
+        // for good once its neighbour comes back, and a hidden sash is also
+        // skipped as a drop target by _beginDrag.
+        el.classList.toggle('sash-hidden', !!(prevHidden || nextHidden));
       });
     });
   },
@@ -1202,22 +1221,33 @@ const SashGrid = {
     ev.preventDefault();
   },
 
+  /* Pixel sizes for this drag frame. The arithmetic lives in
+     SashResizeMath so a crowded split relaxes its 96px floor instead of
+     freezing (the sash-death bug); this method only measures the DOM. */
   _resizePixelAllocation(z, pointer, rect) {
     const axis = z.isRow ? rect.width : rect.height;
-    const sashTotal = z.sashSizes.reduce((sum, size) => sum + Math.max(0, size), 0);
-    let others = 0;
-    for (const k of Object.keys(z.otherWidths)) others += Math.max(0, z.otherWidths[k]);
-    const span = axis - others - sashTotal;
-    if (span < this.MIN_PX * 2) return null;
-    let prefix = 0;
-    for (let i = 0; i < z.sIdx; i++) { prefix += Math.max(0, z.childSizes[i]); prefix += Math.max(0, z.sashSizes[i] || 0); }
-    const start = (z.isRow ? rect.left : rect.top) + prefix;
-    const requested = pointer - start;
-    const first = Math.min(Math.max(requested, this.MIN_PX), span - this.MIN_PX);
-    const allocation = z.childSizes.slice();
-    allocation[z.sIdx] = first;
-    allocation[z.sIdx + 1] = span - first;
-    return allocation;
+    const math = this._resizeMath();
+    const prefix = math.prefixBefore(z.childSizes, z.sashSizes, z.sIdx);
+    return math.allocate({
+      axis,
+      childSizes: z.childSizes,
+      sashSizes: z.sashSizes,
+      index: z.sIdx,
+      pointerOffset: pointer - ((z.isRow ? rect.left : rect.top) + prefix),
+      preferredMin: this.MIN_PX,
+    });
+  },
+
+  /* The shared floor for one split, so _resizeUp's percentages agree with
+     the pixels _resizeMove just painted. */
+  _effectiveMin(axis, count, sashTotal) {
+    return this._resizeMath().floorFor(axis, count, sashTotal || 0,
+                                       this.MIN_PX);
+  },
+
+  _resizeMath() {
+    if (typeof SashResizeMath !== 'undefined') return SashResizeMath;
+    throw new Error('sash-resize-math.js must load before sash-grid.js');
   },
 
   _resizeMove(ev) {
@@ -1241,10 +1271,13 @@ const SashGrid = {
     const path = this._parsePath(z.pEl.dataset.path);
     const p = SashCore.nodeAtPath(this.root, path);
     const prev = p ? p.sizes : null;
+    // Same relaxed floor the drag just used — clamping back up to a flat
+    // MIN_PX here would re-inflate a crowded split and undo the gesture.
+    const floor = this._effectiveMin(total, z.childEls.length, sashTotal);
     const sizes = z.childEls.map((el, i) => {
       const r = el.getBoundingClientRect();
       const w = z.isRow ? r.width : r.height;
-      if (w > 1) return (Math.max(w, this.MIN_PX) / denom) * 100;
+      if (w > 1) return (Math.max(w, floor) / denom) * 100;
       return prev ? prev[i] : 100 / z.childEls.length;
     });
     this.root = SashCore.setSplitSizesByPath(this.root, path, sizes);

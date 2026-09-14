@@ -12,6 +12,9 @@ const vm = require('vm');
 global.window = global;
 global.document = { addEventListener() {} };
 global.SashCore = {};
+// sash-grid delegates its geometry to this module, exactly as index.html
+// loads it ahead of sash-grid.js.
+vm.runInThisContext(fs.readFileSync('ui/js/core/sash-resize-math.js', 'utf8'));
 vm.runInThisContext(
   fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
   '\nglobalThis.__SashGridForResizeTests = SashGrid;'
@@ -73,7 +76,11 @@ test('horizontal resize uses the same complete-pixel allocation', () => {
     { left: 50, top: 0, width: 720, height: 500 }), [180, 264, 264]);
 });
 
-test('an impossible pair refuses to resize instead of collapsing a child', () => {
+// A pair with less room than the nominal 96px floor used to return null, i.e.
+// the sash went dead and never came back — the reported "sash lines disappear
+// and i can not move lines anymore" bug. The requirement was only ever "do not
+// collapse a child"; the pair now shares the space it actually has.
+test('a cramped pair still resizes, without collapsing a child', () => {
   const z = {
     isRow: false,
     sIdx: 0,
@@ -82,7 +89,26 @@ test('an impossible pair refuses to resize instead of collapsing a child', () =>
     otherWidths: { 2: 700 },
   };
   const result = SashGrid._resizePixelAllocation(z, 100, rootRect);
-  if (result !== null) throw new Error('expected null allocation');
+  if (result === null) throw new Error('sash went dead on a cramped pair');
+  if (result.some((v) => v <= 0)) {
+    throw new Error('collapsed a child: ' + JSON.stringify(result));
+  }
+  eq(result[2], 700, 'an uninvolved row must keep its size');
+});
+
+// The one case that genuinely has nothing to allocate: a split that is not
+// rendered yet (zero extent). Null is correct here and must stay reachable.
+test('a zero-extent split still refuses to allocate', () => {
+  const z = {
+    isRow: false,
+    sIdx: 0,
+    childSizes: [0, 0],
+    sashSizes: [6],
+    otherWidths: {},
+  };
+  const result = SashGrid._resizePixelAllocation(
+    z, 0, { left: 0, top: 0, width: 0, height: 0 });
+  if (result !== null) throw new Error('expected null for an unrendered split');
 });
 
 console.log(`sash_resize: ${passed} passed, ${failed} failed`);
