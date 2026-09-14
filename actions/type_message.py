@@ -29,7 +29,7 @@ class TypeMessage(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         report = engine.report if engine else None
         text = self._source_text(engine, report)
         if text is None:                      # composer on, composer empty

@@ -29,7 +29,7 @@ class SearchUsers(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         report = engine.report if engine else None
         ok = await type_search(cdp, self.text, report)
         return ActionResult.OK if ok else ActionResult.FAIL

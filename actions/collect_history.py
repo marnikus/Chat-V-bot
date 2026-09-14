@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional
 
 from actions.base_action import ActionResult, BaseAction
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.chat_parser import sync_conversation
 
@@ -95,7 +96,7 @@ class CollectHistory(BaseAction):
         is a property of the reporting step, not something every branch has to
         remember.
         """
-        await self.pre_delay()
+        await self.pre_delay(engine)
         run = _CollectRun(self, engine)
         if not run.attach_service():
             return ActionResult.FAIL
@@ -210,8 +211,9 @@ class _CollectRun:
     # ── step 3: read it ──────────────────────────────────────────
     async def collect(self) -> None:
         block, repo, parser = self.block, self.repo, self.parser
+        chunk_pause_ms = scale_ms(block.chunk_pause_ms, self.engine)
         parser.chunk_size = block.chunk_size
-        parser.chunk_pause_ms = block.chunk_pause_ms
+        parser.chunk_pause_ms = chunk_pause_ms
         if block.mode == "full":
             await repo.reset_cursor(self.nick)
         self.say(f"🗃 Collecting message history with “{self.nick}” "
@@ -221,7 +223,7 @@ class _CollectRun:
             parser, repo, self.nick, my_nick=self.my_nick,
             require_private=block.require_private, verify_partner=self.verify,
             max_messages=block.max_messages or None,
-            chunk_pause_ms=block.chunk_pause_ms, should_stop=stopping,
+            chunk_pause_ms=chunk_pause_ms, should_stop=stopping,
             on_progress=self._progress, now=block.now(),
             backfill_older=(block.mode == "full"),
             media=repo.media if block.download_media else None)

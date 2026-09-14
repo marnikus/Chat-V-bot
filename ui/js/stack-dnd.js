@@ -126,6 +126,10 @@ const BUILTIN_BLOCKS = [
   { block_id:'PAUSE',          name:'Custom Pause',      icon:'⏸️',
     defaults:{duration_ms:1000, enabled:true},
     labels:{duration_ms:'Duration (ms)', enabled:'Enabled'} },
+  { block_id:'SPEED_MULTIPLIER', name:'Speed Multiplier', icon:'⏩',
+    defaults:{multiplier:1.0, enabled:true},
+    labels:{multiplier:'Speed coefficient — 1.0 = normal, 0.5 = 2× faster, 2.0 = 2× slower',
+            enabled:'Enabled'} },
   { block_id:'TAKE_PERSON',    name:'Pick Person',       icon:'🎯',
     defaults:{pick_mode:'random_new', enabled:true},
     radios:{pick_mode:['random_new','random_done','order_first']},
@@ -465,6 +469,10 @@ const StackDnD = {
 
   _summary(b) {
     if (b.block_id === 'CUSTOM_FIND') return this._findDesc(b);
+    if (b.block_id === 'SPEED_MULTIPLIER') {
+      const base = 'All waits ' + this._speedDesc(b.multiplier);
+      return b.enabled === false ? base + ' · OFF' : base;
+    }
     const parts = [];
     for (const [k, v] of Object.entries(b)) {
       if (['block_id','pre_delay_ms','enabled'].includes(k)) continue;
@@ -1109,6 +1117,30 @@ const StackDnD = {
       const safeVal = String(val).replace(/"/g, '&quot;');
       const choices = (meta.options && meta.options[key]) || null;
       const stripe = ` zebra-${(zebra++) % 2}`;
+      // Speed Multiplier: stepped coefficient input, quick presets and a
+      // live faster/slower preview (the generic number row cannot carry
+      // buttons, hence the custom row — same as TYPE_MESSAGE above).
+      if (block.block_id === 'SPEED_MULTIPLIER' && key === 'multiplier') {
+        html += `<div class="form-row${stripe}">
+          <label>${labelText}</label>
+          <input data-key="multiplier" value="${safeVal}" type="number"
+            step="0.1" min="0.1" max="10">
+        </div>
+        <div class="form-row">
+          <label>Quick presets</label>
+          <div class="speed-presets">
+            <button type="button" data-speed="0.5">0.5×</button>
+            <button type="button" data-speed="1">1×</button>
+            <button type="button" data-speed="2">2×</button>
+            <button type="button" data-speed="3">3×</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Effect</label>
+          <div data-speed-preview>${this._speedPreviewHtml(block.multiplier)}</div>
+        </div>`;
+        continue;
+      }
       // Type Message's own text is a real multi-line textarea; with the
       // “use composer” checkbox on it is disabled because the Message
       // Composer window supplies the text at run time.
@@ -1196,6 +1228,9 @@ const StackDnD = {
       inp.addEventListener('change', handler);
       // also listen to input for text to update summary live? but history on change only
     });
+    if (block.block_id === 'SPEED_MULTIPLIER') {
+      this._wireSpeedControls(form, block);
+    }
     // Keep the close handler bound even when _showConfig is called without a
     // full init (defensive; the pin setup also binds it once at startup).
     const closeBtn = document.getElementById('closeConfigBtn');
@@ -1218,6 +1253,64 @@ const StackDnD = {
       this._refreshSaveLabel();
     } else {
       actions.classList.add('hidden');
+    }
+  },
+
+  // ── Speed Multiplier preview + presets ─────────────────────────
+  // Mirrors actions/speed.py describe(): ×1.0 (normal speed),
+  // ×0.5 (2× faster), ×2.0 (2× slower). Garbage fails open to ×1.0.
+  _speedValue(v) {
+    const m = Number(v);
+    if (!isFinite(m) || m <= 0) return 1.0;
+    return Math.min(10, Math.max(0.1, m));
+  },
+
+  _speedCoef(m) {
+    if (Number.isInteger(m)) return m.toFixed(1);
+    return String(Math.round(m * 100) / 100);
+  },
+
+  _speedDesc(v) {
+    const m = this._speedValue(v);
+    const coef = this._speedCoef(m);
+    if (m === 1) return `×${coef} (normal speed)`;
+    if (m < 1) return `×${coef} (${Math.round(100 / m) / 100}× faster)`;
+    return `×${coef} (${Math.round(m * 100) / 100}× slower)`;
+  },
+
+  _speedPreviewHtml(v) {
+    const m = this._speedValue(v);
+    const mark = m < 1 ? '🐇' : (m > 1 ? '🐢' : '➖');
+    const color = m < 1 ? '#2e7d32' : (m > 1 ? '#e65100' : 'inherit');
+    const desc = this._speedDesc(m);
+    return `<span style="color:${color};font-weight:600">${mark} All waits ${desc}</span>`;
+  },
+
+  _wireSpeedControls(form, block) {
+    const input = form.querySelector('input[data-key="multiplier"]');
+    const preview = form.querySelector('[data-speed-preview]');
+    const refresh = () => {
+      if (preview) {
+        preview.innerHTML = this._speedPreviewHtml(block.multiplier);
+      }
+    };
+    form.querySelectorAll('[data-speed]').forEach((btn) => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        block.multiplier = Number(btn.dataset.speed);
+        if (input) input.value = block.multiplier;
+        refresh();
+        this._renderStack();
+        this.pushHistory();
+        this.notifyEdited();
+      });
+    });
+    if (input) {
+      input.addEventListener('input', () => {
+        block.multiplier = Number(input.value);
+        refresh();
+      });
+      input.addEventListener('change', refresh);
     }
   },
 

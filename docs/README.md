@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **78 archived ones**. That is
+This repository has **three current docs** and **97 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 82 archived docs
+    ├── README.md                    ← index of all 97 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -20,14 +20,21 @@ docs/
     ├── 2026-09-08-one-db-one-world/
     ├── 2026-09-09-four-area-refactor/
     ├── 2026-09-09-test-suite/
-    ├── 2026-09-10-safety-refactor/
-    ├── 2026-09-10-quality-gates/
-    ├── 2026-09-10-history-push-and-sort/
     ├── 2026-09-10-agent-rules-v1/
+    ├── 2026-09-10-history-push-and-sort/
+    ├── 2026-09-10-quality-gates/
+    ├── 2026-09-10-safety-refactor/
     ├── 2026-09-11-cc-tail/
-    ├── 2026-09-11-db-undo-restore/   ← the write gate + verified undo
+    ├── 2026-09-11-db-undo-restore/
     ├── 2026-09-11-rules-appendices/
-    └── 2026-09-12-db-undo-restore-port/  ← porting it here (newest)
+    ├── 2026-09-12-db-undo-restore-port/
+    ├── 2026-09-12-round-f-size-tail/
+    ├── 2026-09-13-ai-bot-chat/
+    ├── 2026-09-13-round-f/
+    ├── 2026-09-13-round-g/
+    ├── 2026-09-13-round-h/
+    ├── 2026-09-13-speed-multiplier/
+    └── 2026-09-14-round-i/   ← global wait-speed multiplier (newest)
 ```
 
 Also in the repo, not under `docs/`:
@@ -36,7 +43,7 @@ Also in the repo, not under `docs/`:
 |---|---|
 | [`README.md`](../README.md) | User manual: install, Chrome flags, UI tour |
 | [`reports/`](../reports/) | Measured code-quality snapshots (the coverage/complexity **baseline** the rules compare against) |
-| `tests/` | The executable spec — 193 Python test files + 30 Node harness files |
+| `tests/` | The executable spec — 194 Python test files + 31 Node harness files |
 
 ---
 

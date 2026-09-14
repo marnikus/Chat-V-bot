@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**96 documents in 21 groups.**
+**97 documents in 22 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -34,6 +34,8 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-round-h/`](#2026-09-13-round-h) | 1 | Round H: the god-class round, ten files split by cohesion rather than by size. (Its closing report's size table was later found wrong and is corrected in place — see `reports/ROUND_H_CLOSING_2026-09-13.md`.) |
 | [`2026-09-13-ai-bot-chat/`](#2026-09-13-ai-bot-chat) | 6 | The AI Bot Chat feature across six rounds: the four `bot_*` services and their bridges, the defect round, providers/variables/media, connections as named provider instances, the dark-select component, and the browse-vs-choose redesign. |
 | [`2026-09-14-round-i/`](#2026-09-14-round-i) | 1 | Round I: detail extracted from `AGENT_RULES.md` §18.2 to keep it inside its §18.4 reading budget — the per-file size history and the AREA D unfreezing argument. |
+
+| [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 
 ---
 
@@ -311,3 +313,14 @@ answer as a *pending* card behind an explicit ✅ / ❌ / 🔄 verification step
 ## 2026-09-14-round-i
 
 - [`FILE_SIZE_HISTORY_2026-09-14.md`](2026-09-14-round-i/FILE_SIZE_HISTORY_2026-09-14.md) — The per-file size history and the AREA D unfreezing argument, extracted from `AGENT_RULES.md` §18.2 so the rules file stays inside its own §18.4 reading budget. Carries the round-by-round snapshot table (files, median LOC, files over 500, mean MI) and the note that the tree has had no file over 500 lines since Round H.
+
+## 2026-09-13-speed-multiplier
+
+The SPEED_MULTIPLIER action block and the `actions/speed.py` helpers behind it: one float coefficient
+(1.0 = normal, 0.5 = 2x faster, 2.0 = 2x slower) scaling every user-facing wait of the run — pre-delays,
+pauses, visual-confirmation holds, page waits, scroll pacing, attach verification and history chunk pauses.
+The semantics are global (last enabled SPEED block wins, resolved at run start) rather than positional,
+because Scroll & Parse runs at cycle level before the per-user loop, so "blocks below it" could never scale
+it. Stop-check slices, retry backoff and CDP protocol gaps are deliberately left unscaled.
+
+- [`SPEED_MULTIPLIER_DESIGN_2026-09-13.md`](2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) — the design: scale/no-scale table, the four rejected alternatives, and the measurements. Ported onto this branch on 2026-09-14 by hand (unrelated histories); the only adaptation was `ScrollOptions` having moved into the `backend/scroll_parser/` package, where `dataclasses.replace` is now the established in-tree idiom.

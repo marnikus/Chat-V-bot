@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from actions.base_action import ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.dom_highlight import (
     build_click_probe,
@@ -167,7 +168,8 @@ async def click_phase(cdp: CDPClient, request: ClickRequest, found: dict,
     if pre is None or not pre.get("clickable"):
         return ActionResult.FAIL
     if request.highlight_enabled and CLICK_PAUSE_MS > 0:
-        await asyncio.sleep(CLICK_PAUSE_MS / 1000.0)
+        beat_ms = scale_ms(CLICK_PAUSE_MS, engine)
+        await asyncio.sleep(beat_ms / 1000.0)
     done = await _dispatch(cdp, request, engine)
     if done is None:
         return ActionResult.FAIL
@@ -248,9 +250,10 @@ async def run_click(cdp: CDPClient, request: ClickRequest,
     if found is None:
         return ActionResult.FAIL
     if request.holds_confirmation():
-        _report(engine, f"⏸ Holding {request.confirm_pause_ms} ms for visual "
+        hold_ms = scale_ms(request.confirm_pause_ms, engine)
+        _report(engine, f"⏸ Holding {hold_ms} ms for visual "
                         "confirmation…", "info")
-        await asyncio.sleep(request.confirm_pause_ms / 1000.0)
+        await asyncio.sleep(hold_ms / 1000.0)
     return await click_phase(cdp, request, found, engine)
 
 

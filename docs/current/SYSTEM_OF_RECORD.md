@@ -6,8 +6,8 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-12 (this checkout) |
-| Test suite | `2707 passed, 6 skipped, 1 deselected, 1 xfailed, 777 subtests passed` + 26 green Node harness files |
+| Last verified against code | 2026-09-14 (this checkout) |
+| Test suite | `3164 passed, 7 skipped, 1 xfailed, 903 subtests passed` + 31 green Node harness files |
 | Coverage (measured, `--branch`, 8 production packages) | line **91.43%** · branch **86.32%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
@@ -46,7 +46,7 @@ collector** archives whatever private conversation is on screen.
 
 | Surface | What it does today | Implementation | Pinned by |
 |---|---|---|---|
-| **Action stack** | 16 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
+| **Action stack** | 17 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` `SPEED_MULTIPLIER` (one coefficient scaling every wait of the run; last enabled SPEED block wins, resolved at run start) | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
 | **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/test_visual_click_contract.py`, `tests/test_find_click_visual.py` |
 | **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
@@ -236,7 +236,7 @@ non-destructive).
 | Layer | Package | Responsibility |
 |---|---|---|
 | Contracts | `core/` (5 files) | DI container, EventBus, interfaces, `Result` — no Qt, no I/O |
-| Blocks | `actions/` (23) | The 16 action blocks + `BaseAction`, registry, cancellation |
+| Blocks | `actions/` (25) | The 17 action blocks + `BaseAction`, registry, cancellation, wait-speed scaling |
 | Page-facing | `backend/` (30) | CDP client, DOM probes, chat parser + private gate, chat sync, scroll parser, visual click, media handler; **compatibility shims** for the pre-split names |
 | Wire | `bridge/` (14) | `bridge/router.py` — ONE QObject on the QWebChannel, assembled from eleven domain bridges: cdp · stack · people · history · label · db · collector · undo · layout · file · window-preset |
 | Orchestration | `services/` (55) | `run/` (engine), `history/` (service + `trash.py` session-sized trash + `migrate.py` install migration), collector (the `collector_*` family), db lifecycle + deletion (the `db_deletion_*` family), layout, people, undo (the `undo_*` family: `undo_service.py` facade + `undo_history.py` / `undo_apply.py` / `undo_db.py` / `undo_world.py` + `undo_archive.py` verified archive commands + `undo_timeline.py` timeline commit + `undo_support.py`) + `world_events.py` (the world's clock: wait for it, announce it live) |
@@ -258,7 +258,7 @@ connects them to the window and starts the qasync loop.
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (26 Node harness files)
+# Front-end (31 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)

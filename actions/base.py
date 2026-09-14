@@ -27,6 +27,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Optional
 
+from actions.speed import scale_ms
+
 _SIGNATURES: dict = {}          # class -> its __init__ parameters, computed once
 
 
@@ -100,9 +102,16 @@ class BaseAction(ABC):
         """
         ...
 
-    async def pre_delay(self) -> None:
-        if self.pre_delay_ms > 0:
-            await asyncio.sleep(self.pre_delay_ms / 1000.0)
+    async def pre_delay(self, engine=None) -> None:
+        """Wait this block's configured pre-delay, scaled by the run's rate.
+
+        `engine` is optional so a block executed outside a run (a test, a
+        direct call) still waits its unscaled delay rather than failing —
+        `scale_ms` reads the rate fail-open.
+        """
+        wait_ms = scale_ms(self.pre_delay_ms, engine)
+        if wait_ms > 0:
+            await asyncio.sleep(wait_ms / 1000.0)
 
     def config_schema(self) -> dict:
         return {"pre_delay_ms": {"type": "number", "default": 500,
@@ -279,7 +288,7 @@ class FindClickBlock(DeclaredSettings):
     async def execute(self, user_nick: str, cdp,
                       engine: Optional[object] = None) -> str:
         find_and_click = self.click_runner()
-        await self.pre_delay()
+        await self.pre_delay(engine)
         kwargs = self.find_kwargs(engine)
         outcome = await find_and_click(cdp, **kwargs)
         for notice, extra in self.fallback_attempts():

@@ -34,6 +34,7 @@ class RunCoordinator(QObject, RunHooksMixin, RunQueueMixin, CollectPhaseMixin,
         self._tracer = None; self._ctx: dict = {}; self._run_seq = 0; self._state = RunStateMachine()
         self._hooks = hooks or RunHooks(); self._retry = retry_policy or RetryPolicy(); self.progress = progress or RunProgress(bus)
         self.composer_text = self.selected_nick = ""; self.history = None; self.label_filter = self.label_reason = None
+        self.speed_multiplier = 1.0  #: global wait-speed rate, resolved per run (SPEED_MULTIPLIER)
 
     def load_stack(self, blocks: list[dict]) -> None:
         self._stack.clear()
