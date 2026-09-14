@@ -28,9 +28,10 @@ from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector  # noqa: E402
 from services.collector_states import CollectorDeps  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from backend.media_store import MediaStore, MediaOptions  # noqa: E402
+from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 7, 16, 30, 0)
 ME = "Хорошо Все"
@@ -43,7 +44,7 @@ GIF2 = "https://images.virt-chat.com/images/m_Piterk7_7a86_.gif"
 def raw(text="", direction="in", from_nick=PARTNER, time="16:22",
         kind="text", media=None, occ=0, idx=0):
     payload = media["url"] if media else text
-    return {"fp": fingerprint(direction, from_nick, time, kind, payload, occ),
+    return {"fp": fingerprint(LineIdentity(direction, from_nick, time, kind, payload), occ),
             "dir": direction, "from": from_nick, "kind": kind, "text": text,
             "media": media, "time": time, "occ": occ, "idx": idx}
 
@@ -101,8 +102,7 @@ class FakeChatPage:
                 media = dict(m["media"])
                 media["url"] = ""            # <img> not in the DOM yet
                 out.append(dict(m, media=media, kind="text", text="",
-                                fp=fingerprint(m["dir"], m["from"], m["time"],
-                                               "text", "", m.get("occ") or 0)))
+                                fp=fingerprint(LineIdentity(m["dir"], m["from"], m["time"], "text", ""), m.get("occ") or 0)))
             else:
                 out.append(m)
         if self.top_window and self.top_view is not None:
@@ -176,9 +176,7 @@ class E2ECase(unittest.IsolatedAsyncioTestCase):
         await self.db.close()
 
     def _collector(self, page, cap_mb=25, **settings):
-        self.store = MediaStore(self.db, cdp=page,
-                                cache_dir=os.path.join(self.dir, "saved_media"),
-                                max_file_mb=cap_mb, max_cache_mb=200)
+        self.store = MediaStore(self.db, cdp=page, options=MediaOptions(cache_dir=os.path.join(self.dir, "saved_media"), max_file_mb=cap_mb, max_cache_mb=200))
         self.repo = HistoryRepo(self.db, media=self.store, session_id="e2e")
         parser = ChatParser(page, chunk_size=80, chunk_pause_ms=0)
         col = Collector(CollectorDeps(cdp=page, repo=self.repo, parser=parser, media=self.store, settings={"my_nick": ME, "auto_backfill": False,
@@ -250,9 +248,7 @@ class TestBackfillRecoversFailedMedia(E2ECase):
         db2 = HistoryDB(os.path.join(self.dir, "h2.db"))
         await db2.init()
         self.addAsyncCleanup(db2.close)
-        store2 = MediaStore(db2, cdp=page2,
-                            cache_dir=os.path.join(self.dir, "m2"),
-                            max_file_mb=2)
+        store2 = MediaStore(db2, cdp=page2, options=MediaOptions(cache_dir=os.path.join(self.dir, "m2"), max_file_mb=2))
         await store2.register(GIF2, "gif", nick=PARTNER, day="2026-09-07")
         await store2.process_pending()
         row = await store2.get_by_url(GIF2)
@@ -360,15 +356,15 @@ class TestRecoveryScoping(E2ECase):
         await self.store.process_pending()
         self.assertEqual((await self.store.get(mid))["state"], "failed")
 
-        await self.repo.append(PARTNER, [MessageRecord(
+        await self.repo.append(AppendRequest(PARTNER, [MessageRecord(
             direction="in", from_nick=PARTNER, kind="gif",
-            ts_display="16:24")], my_nick=ME, now=NOW)
+            ts_display="16:24")], my_nick=ME, now=NOW))
         pid = await self.repo.ensure_person(PARTNER)
-        stats = await self.repo.recover_media(
+        stats = await self.repo.recover_media(MediaRecoveryRequest(
             pid, [MessageRecord(direction="in", from_nick=PARTNER,
                                 ts_display="16:24", kind="gif",
                                 media_url=GIF1, media_kind="gif")],
-            media=self.store, nick=PARTNER, now=NOW)
+            media=self.store, nick=PARTNER, now=NOW))
         self.assertEqual(stats["repaired"], 1)
         self.assertEqual(stats["requeued"], 1,
                          "linking a message to a failed row must re-queue it")
@@ -384,9 +380,9 @@ class TestRecoveryScoping(E2ECase):
             "SELECT id FROM media WHERE state='failed'")
         self.assertEqual(len(failed), 2)
 
-        stats = await self.repo.recover_media(
+        stats = await self.repo.recover_media(MediaRecoveryRequest(
             await self.repo.ensure_person(PARTNER), [], media=self.store,
-            nick=PARTNER, now=NOW, requeue_failed=False)
+            nick=PARTNER, now=NOW, requeue_failed=False))
         self.assertEqual(stats["requeued"], 0,
                          "ordinary ticks repair, they do not hammer a dead "
                          "URL every heartbeat")
@@ -435,18 +431,18 @@ class TestRecoveryScoping(E2ECase):
         col = self._collector(page)
         await col.tick()
         # a message the DOM can no longer supply (deleted on the site)
-        await self.repo.append(PARTNER, [MessageRecord(
+        await self.repo.append(AppendRequest(PARTNER, [MessageRecord(
             direction="in", from_nick=PARTNER, kind="text",
-            ts_display="10:00")], my_nick=ME, now=NOW)
+            ts_display="10:00")], my_nick=ME, now=NOW))
         pid = await self.repo.ensure_person(PARTNER)
         self.assertTrue(await self.repo.has_repairable_media(
             pid, include_failed=False))
         # real "now" (not the frozen NOW): the scan marker must land inside
         # the grace window relative to the REAL clock the check compares
         # against, whatever day this test runs on
-        stats = await self.repo.recover_media(
+        stats = await self.repo.recover_media(MediaRecoveryRequest(
             pid, [], media=self.store, nick=PARTNER,
-            requeue_failed=False)
+            requeue_failed=False))
         self.assertEqual(stats["scanned"], 1)
         self.assertFalse(await self.repo.has_repairable_media(
             pid, include_failed=False),
@@ -501,9 +497,9 @@ class TestRecoveryScoping(E2ECase):
         dom = [MessageRecord(direction="in", from_nick=PARTNER,
                              ts_display="16:24", kind="gif",
                              media_url=GIF1, media_kind="gif")]
-        stats = await self.repo.recover_media(
+        stats = await self.repo.recover_media(MediaRecoveryRequest(
             pid, dom, media=self.store, nick=PARTNER, now=NOW,
-            requeue_failed=True)
+            requeue_failed=True))
         self.assertEqual(stats["repaired"], 0,
                          "the payload row already exists — nothing to repair")
         leftovers = await self.db.fetchall(

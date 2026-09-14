@@ -609,6 +609,20 @@
      "kind": "attribute"
     }
    },
+   "LineIdentity": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "direction",
+      "from_nick",
+      "ts_display",
+      "kind",
+      "payload"
+     ],
+     "sig": "(self, direction: 'str', from_nick: 'str', ts_display: 'str', kind: 'str', payload: 'str') -> None"
+    }
+   },
    "MessageRecord": {
     "__init__": {
      "kind": "function",
@@ -768,30 +782,107 @@
    "dedupe_key": {
     "kind": "function",
     "params": [
-     "direction",
-     "from_nick",
-     "ts_display",
-     "kind",
-     "payload"
+     "line"
     ],
-    "sig": "(direction: 'str', from_nick: 'str', ts_display: 'str', kind: 'str', payload: 'str') -> 'str'"
+    "sig": "(line: 'LineIdentity') -> 'str'"
    },
    "fingerprint": {
     "kind": "function",
     "params": [
-     "direction",
-     "from_nick",
-     "ts_display",
-     "kind",
-     "payload",
+     "line",
      "occ"
     ],
-    "sig": "(direction: 'str', from_nick: 'str', ts_display: 'str', kind: 'str', payload: 'str', occ: 'int' = 0) -> 'str'"
+    "sig": "(line: 'LineIdentity', occ: 'int' = 0) -> 'str'"
    }
   }
  },
  "stores.history_repo": {
   "classes": {
+   "Alignment": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "start",
+      "gap",
+      "reason",
+      "overlap",
+      "matched"
+     ],
+     "sig": "(self, start: 'int' = 0, gap: 'bool' = False, reason: 'str' = '', overlap: 'int' = 0, matched: 'bool' = False) -> None"
+    },
+    "gap": {
+     "kind": "attribute"
+    },
+    "matched": {
+     "kind": "attribute"
+    },
+    "overlap": {
+     "kind": "attribute"
+    },
+    "reason": {
+     "kind": "attribute"
+    },
+    "start": {
+     "kind": "attribute"
+    },
+    "to_dict": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    }
+   },
+   "AppendResult": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "added",
+      "skipped",
+      "gap",
+      "first_ord",
+      "last_ord",
+      "total",
+      "person_id",
+      "reason",
+      "records"
+     ],
+     "sig": "(self, added: 'int' = 0, skipped: 'int' = 0, gap: 'bool' = False, first_ord: 'int' = 0, last_ord: 'int' = 0, total: 'int' = 0, person_id: 'int' = 0, reason: 'str' = '', records: 'list' = <factory>) -> None"
+    },
+    "added": {
+     "kind": "attribute"
+    },
+    "first_ord": {
+     "kind": "attribute"
+    },
+    "gap": {
+     "kind": "attribute"
+    },
+    "last_ord": {
+     "kind": "attribute"
+    },
+    "person_id": {
+     "kind": "attribute"
+    },
+    "reason": {
+     "kind": "attribute"
+    },
+    "skipped": {
+     "kind": "attribute"
+    },
+    "to_dict": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "total": {
+     "kind": "attribute"
+    }
+   },
    "HistoryRepo": {
     "__init__": {
      "kind": "function",
@@ -815,21 +906,9 @@
      "kind": "function",
      "params": [
       "self",
-      "nick",
-      "records",
-      "my_nick",
-      "align",
-      "expect_idx",
-      "dom_count",
-      "head_sig",
-      "tail_sig",
-      "now",
-      "session_id",
-      "head_any",
-      "tail_any",
-      "prepend"
+      "req"
      ],
-     "sig": "(self, nick: 'str', records: 'Iterable', my_nick: 'str' = '', align: 'bool' = True, expect_idx: 'Optional[int]' = None, dom_count: 'int' = 0, head_sig: 'Optional[str]' = None, tail_sig: 'Optional[str]' = None, now: 'Optional[datetime]' = None, session_id: 'str' = '', head_any: 'Optional[str]' = None, tail_any: 'Optional[str]' = None, prepend: 'bool' = False) -> 'AppendResult'"
+     "sig": "(self, req: 'AppendRequest') -> 'AppendResult'"
     },
     "delete_person": {
      "kind": "function",
@@ -950,14 +1029,9 @@
      "kind": "function",
      "params": [
       "self",
-      "person_id",
-      "records",
-      "media",
-      "nick",
-      "now",
-      "requeue_failed"
+      "req"
      ],
-     "sig": "(self, person_id: 'int', records, media=None, nick: 'str' = '', now=None, requeue_failed: 'bool' = True) -> 'dict'"
+     "sig": "(self, req: 'MediaRecoveryRequest') -> 'dict'"
     },
     "rename_if_same_conversation": {
      "kind": "function",
@@ -965,14 +1039,347 @@
       "self",
       "old_nick",
       "new_nick",
-      "head_sig",
-      "tail_sig",
-      "head_any",
-      "tail_any",
-      "dom_count",
+      "pane",
       "pane_same"
      ],
-     "sig": "(self, old_nick: 'str', new_nick: 'str', head_sig: 'str', tail_sig: 'str', head_any: 'str' = '', tail_any: 'str' = '', dom_count: 'int' = -1, pane_same: 'bool' = False) -> 'bool'"
+     "sig": "(self, old_nick: 'str', new_nick: 'str', pane: 'PaneSignature', pane_same: 'bool' = False) -> 'bool'"
+    },
+    "reset_cursor": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str') -> 'None'"
+    },
+    "restore_deleted": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "token"
+     ],
+     "sig": "(self, nick: 'str', token: 'str') -> 'int'"
+    },
+    "restore_person": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "token"
+     ],
+     "sig": "(self, nick: 'str', token: 'str' = '') -> 'bool'"
+    },
+    "soft_delete_history": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "token"
+     ],
+     "sig": "(self, nick: 'str', token: 'str' = '') -> 'str'"
+    },
+    "soft_delete_message": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "message_id",
+      "token"
+     ],
+     "sig": "(self, nick: 'str', message_id: 'int', token: 'str' = '') -> 'str'"
+    }
+   },
+   "MessageRecord": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "fp",
+      "direction",
+      "from_nick",
+      "kind",
+      "text",
+      "media_url",
+      "media_kind",
+      "ts_display",
+      "occ",
+      "idx"
+     ],
+     "sig": "(self, fp: 'str' = '', direction: 'str' = 'in', from_nick: 'str' = '', kind: 'str' = 'text', text: 'str' = '', media_url: 'str' = '', media_kind: 'str' = '', ts_display: 'str' = '', occ: 'int' = 0, idx: 'int' = 0) -> None"
+    },
+    "direction": {
+     "kind": "attribute"
+    },
+    "dup_key": {
+     "kind": "property"
+    },
+    "ensure_fp": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'str'"
+    },
+    "fp": {
+     "kind": "attribute"
+    },
+    "from_dict": {
+     "kind": "method",
+     "params": [
+      "data"
+     ],
+     "sig": "(data: 'dict') -> \"'MessageRecord'\""
+    },
+    "from_nick": {
+     "kind": "attribute"
+    },
+    "idx": {
+     "kind": "attribute"
+    },
+    "kind": {
+     "kind": "attribute"
+    },
+    "media_kind": {
+     "kind": "attribute"
+    },
+    "media_url": {
+     "kind": "attribute"
+    },
+    "occ": {
+     "kind": "attribute"
+    },
+    "payload": {
+     "kind": "property"
+    },
+    "text": {
+     "kind": "attribute"
+    },
+    "to_dict": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "ts_display": {
+     "kind": "attribute"
+    }
+   }
+  },
+  "constants": [
+   "MAX_LIVE_ITEMS",
+   "TAIL_FP_LIMIT"
+  ],
+  "functions": {
+   "align_batch": {
+    "kind": "function",
+    "params": [
+     "batch_fps",
+     "tail_fps"
+    ],
+    "sig": "(batch_fps: 'Sequence[str]', tail_fps: 'Sequence[str]') -> 'Alignment'"
+   },
+   "dedupe_key": {
+    "kind": "function",
+    "params": [
+     "line"
+    ],
+    "sig": "(line: 'LineIdentity') -> 'str'"
+   },
+   "fingerprint": {
+    "kind": "function",
+    "params": [
+     "line",
+     "occ"
+    ],
+    "sig": "(line: 'LineIdentity', occ: 'int' = 0) -> 'str'"
+   },
+   "resolve_days": {
+    "kind": "function",
+    "params": [
+     "times",
+     "now"
+    ],
+    "sig": "(times: 'Sequence[str]', now: 'datetime') -> 'list[str]'"
+   }
+  }
+ },
+ "stores.history_repo_append": {
+  "classes": {
+   "AppendPlanner": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "append": {
+     "kind": "function",
+     "params": [
+      "self",
+      "req"
+     ],
+     "sig": "(self, req: 'AppendRequest') -> 'AppendResult'"
+    },
+    "record_gap": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick_or_id",
+      "after_ord",
+      "reason",
+      "detail"
+     ],
+     "sig": "(self, nick_or_id, after_ord: 'int', reason: 'str', detail: 'str' = '') -> 'None'"
+    }
+   }
+  },
+  "constants": [
+   "MAX_LIVE_ITEMS"
+  ],
+  "functions": {}
+ },
+ "stores.history_repo_identity": {
+  "classes": {
+   "ConversationIdentity": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "ensure_person": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str') -> 'int'"
+    },
+    "get_person": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str') -> 'Optional[dict]'"
+    },
+    "get_person_by_id": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id"
+     ],
+     "sig": "(self, person_id: 'int') -> 'Optional[dict]'"
+    },
+    "possible_duplicates": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'list[dict]'"
+    },
+    "rename_if_same_conversation": {
+     "kind": "function",
+     "params": [
+      "self",
+      "old_nick",
+      "new_nick",
+      "pane",
+      "pane_same"
+     ],
+     "sig": "(self, old_nick: 'str', new_nick: 'str', pane: 'PaneSignature', pane_same: 'bool' = False) -> 'bool'"
+    }
+   }
+  },
+  "constants": [
+   "TAIL_FP_LIMIT"
+  ],
+  "functions": {
+   "align_batch": {
+    "kind": "function",
+    "params": [
+     "batch_fps",
+     "tail_fps"
+    ],
+    "sig": "(batch_fps: 'Sequence[str]', tail_fps: 'Sequence[str]') -> 'Alignment'"
+   },
+   "resolve_days": {
+    "kind": "function",
+    "params": [
+     "times",
+     "now"
+    ],
+    "sig": "(times: 'Sequence[str]', now: 'datetime') -> 'list[str]'"
+   }
+  }
+ },
+ "stores.history_repo_lifecycle": {
+  "classes": {
+   "PersonLifecycle": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "delete_person": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "hard",
+      "token"
+     ],
+     "sig": "(self, nick: 'str', hard: 'bool' = False, token: 'str' = '') -> 'bool'"
+    },
+    "deleted_count": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str' = '') -> 'int'"
+    },
+    "get_cursor": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id"
+     ],
+     "sig": "(self, person_id: 'int') -> 'dict'"
+    },
+    "mark_backfilled": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick_or_id"
+     ],
+     "sig": "(self, nick_or_id) -> 'None'"
+    },
+    "merge_persons": {
+     "kind": "function",
+     "params": [
+      "self",
+      "from_nick",
+      "into_nick"
+     ],
+     "sig": "(self, from_nick: 'str', into_nick: 'str') -> 'int'"
+    },
+    "purge_deleted": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str' = '') -> 'int'"
     },
     "reset_cursor": {
      "kind": "function",
@@ -1022,27 +1429,267 @@
    }
   },
   "constants": [
-   "MAX_LIVE_ITEMS",
    "TAIL_FP_LIMIT"
   ],
-  "functions": {
-   "align_batch": {
-    "kind": "function",
-    "params": [
-     "batch_fps",
-     "tail_fps"
-    ],
-    "sig": "(batch_fps: 'Sequence[str]', tail_fps: 'Sequence[str]') -> 'Alignment'"
-   },
-   "resolve_days": {
-    "kind": "function",
-    "params": [
-     "times",
-     "now"
-    ],
-    "sig": "(times: 'Sequence[str]', now: 'datetime') -> 'list[str]'"
+  "functions": {}
+ },
+ "stores.history_repo_media": {
+  "classes": {
+   "MediaRecovery": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "has_repairable_media": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id",
+      "include_failed",
+      "rescan_after_s"
+     ],
+     "sig": "(self, person_id: 'int', include_failed: 'bool' = False, rescan_after_s: 'int' = 600) -> 'bool'"
+    },
+    "recover_media": {
+     "kind": "function",
+     "params": [
+      "self",
+      "req"
+     ],
+     "sig": "(self, req: 'MediaRecoveryRequest') -> 'dict'"
+    }
    }
-  }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.history_requests": {
+  "classes": {
+   "AlignSpec": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "batch_keys",
+      "cursor",
+      "recs",
+      "align",
+      "expect_idx"
+     ],
+     "sig": "(self, batch_keys: 'list', cursor: 'dict', recs: 'list', align: 'bool', expect_idx: 'Optional[int]' = None) -> None"
+    }
+   },
+   "AppendRequest": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "records",
+      "my_nick",
+      "align",
+      "expect_idx",
+      "dom_count",
+      "head_sig",
+      "tail_sig",
+      "now",
+      "session_id",
+      "head_any",
+      "tail_any",
+      "prepend"
+     ],
+     "sig": "(self, nick: 'str', records: 'Iterable', my_nick: 'str' = '', align: 'bool' = True, expect_idx: 'Optional[int]' = None, dom_count: 'int' = 0, head_sig: 'Optional[str]' = None, tail_sig: 'Optional[str]' = None, now: 'Optional[datetime]' = None, session_id: 'str' = '', head_any: 'Optional[str]' = None, tail_any: 'Optional[str]' = None, prepend: 'bool' = False) -> None"
+    },
+    "align": {
+     "kind": "attribute"
+    },
+    "dom_count": {
+     "kind": "attribute"
+    },
+    "my_nick": {
+     "kind": "attribute"
+    },
+    "prepend": {
+     "kind": "attribute"
+    },
+    "session_id": {
+     "kind": "attribute"
+    }
+   },
+   "MediaRecoveryRequest": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id",
+      "records",
+      "media",
+      "nick",
+      "now",
+      "requeue_failed"
+     ],
+     "sig": "(self, person_id: 'int', records: 'list', media: 'Optional[dict]' = None, nick: 'str' = '', now: 'Optional[datetime]' = None, requeue_failed: 'bool' = True) -> None"
+    },
+    "nick": {
+     "kind": "attribute"
+    },
+    "requeue_failed": {
+     "kind": "attribute"
+    }
+   },
+   "PaneSignature": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "head_sig",
+      "tail_sig",
+      "head_any",
+      "tail_any",
+      "dom_count"
+     ],
+     "sig": "(self, head_sig: 'str', tail_sig: 'str', head_any: 'str' = '', tail_any: 'str' = '', dom_count: 'int' = -1) -> None"
+    },
+    "dom_count": {
+     "kind": "attribute"
+    },
+    "head_any": {
+     "kind": "attribute"
+    },
+    "tail_any": {
+     "kind": "attribute"
+    }
+   },
+   "PlacedRecord": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "rec",
+      "ord_value",
+      "day",
+      "my_nick",
+      "media_id"
+     ],
+     "sig": "(self, rec: 'MessageRecord', ord_value: 'int', day: 'str', my_nick: 'str', media_id: 'Optional[int]' = None) -> None"
+    }
+   },
+   "PrependRequest": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "recs",
+      "now",
+      "session_id",
+      "ctx",
+      "nick"
+     ],
+     "sig": "(self, recs: 'list', now: 'datetime', session_id: 'str', ctx: 'WriteContext', nick: 'str' = '') -> None"
+    },
+    "nick": {
+     "kind": "attribute"
+    }
+   },
+   "RowBatch": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id",
+      "pending",
+      "days",
+      "my_nick",
+      "nick",
+      "session_id",
+      "last_ord"
+     ],
+     "sig": "(self, person_id: 'int', pending: 'list', days: 'list', my_nick: 'str', nick: 'str', session_id: 'str', last_ord: 'int') -> None"
+    }
+   },
+   "SlotSearch": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id",
+      "used",
+      "rows"
+     ],
+     "sig": "(self, person_id: 'int', used: 'dict', rows: 'Optional[list]' = None) -> None"
+    }
+   },
+   "WriteContext": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "person_id",
+      "my_nick",
+      "dom_count",
+      "head_sig",
+      "tail_sig",
+      "bootstrapped",
+      "head_any",
+      "tail_any"
+     ],
+     "sig": "(self, person_id: 'int', my_nick: 'str', dom_count: 'int', head_sig: 'Optional[str]', tail_sig: 'Optional[str]', bootstrapped: 'Optional[bool]' = None, head_any: 'Optional[str]' = None, tail_any: 'Optional[str]' = None) -> None"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.history_schema": {
+  "classes": {},
+  "constants": [
+   "FTS_SCHEMA",
+   "INDEX_SQL",
+   "LEGACY_MESSAGES_CONSTRAINT",
+   "SCHEMA",
+   "SCHEMA_VERSION",
+   "TABLE_COLUMNS",
+   "TABLE_CONSTRAINTS",
+   "TABLE_ORDER",
+   "TABLE_SQL"
+  ],
+  "functions": {}
+ },
+ "stores.history_schema_repair": {
+  "classes": {
+   "SchemaMigrator": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner) -> 'None'"
+    },
+    "db_fetch_legacy": {
+     "kind": "function",
+     "params": [
+      "self",
+      "table",
+      "columns"
+     ],
+     "sig": "(self, table: 'str', columns: 'list[str]') -> 'list[dict]'"
+    }
+   }
+  },
+  "constants": [
+   "FTS_SCHEMA",
+   "LEGACY_MESSAGES_CONSTRAINT",
+   "SCHEMA_VERSION",
+   "TABLE_COLUMNS",
+   "TABLE_ORDER",
+   "TABLE_SQL"
+  ],
+  "functions": {}
  },
  "stores.json_store": {
   "classes": {
@@ -1141,6 +1788,273 @@
     "sig": "(path: 'str', data: 'Any') -> 'bool'"
    }
   }
+ },
+ "stores.label_assignments": {
+  "classes": {
+   "LabelAssignments": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner) -> 'None'"
+    },
+    "assign": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "label_id"
+     ],
+     "sig": "(self, nick, label_id) -> 'bool'"
+    },
+    "assignments": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "by_id": {
+     "kind": "function",
+     "params": [
+      "self",
+      "label_id"
+     ],
+     "sig": "(self, label_id) -> 'dict | None'"
+    },
+    "by_name": {
+     "kind": "function",
+     "params": [
+      "self",
+      "name"
+     ],
+     "sig": "(self, name) -> 'dict | None'"
+    },
+    "create": {
+     "kind": "function",
+     "params": [
+      "self",
+      "name",
+      "color"
+     ],
+     "sig": "(self, name, color: 'str' = '') -> 'dict | None'"
+    },
+    "defs": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'list[dict]'"
+    },
+    "delete": {
+     "kind": "function",
+     "params": [
+      "self",
+      "label_id"
+     ],
+     "sig": "(self, label_id) -> 'bool'"
+    },
+    "forget": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick) -> 'bool'"
+    },
+    "ids_for": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick) -> 'list[str]'"
+    },
+    "labels_for": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick) -> 'list[dict]'"
+    },
+    "labels_map": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nicks"
+     ],
+     "sig": "(self, nicks=None) -> 'dict'"
+    },
+    "restore": {
+     "kind": "function",
+     "params": [
+      "self",
+      "snapshot"
+     ],
+     "sig": "(self, snapshot) -> 'None'"
+    },
+    "set_for": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "ids"
+     ],
+     "sig": "(self, nick, ids) -> 'bool'"
+    },
+    "snapshot": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "state": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "unassign": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "label_id"
+     ],
+     "sig": "(self, nick, label_id) -> 'bool'"
+    },
+    "update": {
+     "kind": "function",
+     "params": [
+      "self",
+      "label_id",
+      "name",
+      "color"
+     ],
+     "sig": "(self, label_id, name=None, color=None) -> 'dict | None'"
+    }
+   }
+  },
+  "constants": [
+   "PALETTE"
+  ],
+  "functions": {}
+ },
+ "stores.label_filter": {
+  "classes": {
+   "LabelFilter": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner) -> 'None'"
+    },
+    "allows": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick) -> 'bool'"
+    },
+    "clear_filter": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "filter": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "reject_reason": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick) -> 'str'"
+    },
+    "set_filter": {
+     "kind": "function",
+     "params": [
+      "self",
+      "include",
+      "exclude"
+     ],
+     "sig": "(self, include=None, exclude=None) -> 'dict'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.label_rules": {
+  "classes": {},
+  "constants": [
+   "DEFAULT_COLOR",
+   "FILTER_KEY",
+   "MAX_NAME",
+   "PALETTE"
+  ],
+  "functions": {
+   "normalize_color": {
+    "kind": "function",
+    "params": [
+     "value",
+     "fallback"
+    ],
+    "sig": "(value, fallback: 'str' = '#ff3b30') -> 'str'"
+   },
+   "normalize_id": {
+    "kind": "function",
+    "params": [
+     "value"
+    ],
+    "sig": "(value) -> 'str'"
+   },
+   "normalize_name": {
+    "kind": "function",
+    "params": [
+     "value"
+    ],
+    "sig": "(value) -> 'str'"
+   },
+   "normalize_nick": {
+    "kind": "function",
+    "params": [
+     "value"
+    ],
+    "sig": "(value) -> 'str'"
+   }
+  }
+ },
+ "stores.label_state": {
+  "classes": {
+   "LabelState": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner) -> 'None'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
  },
  "stores.label_store": {
   "classes": {
@@ -1407,6 +2321,48 @@
    }
   }
  },
+ "stores.label_world": {
+  "classes": {
+   "LabelWorldSync": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner) -> 'None'"
+    },
+    "flush_to_db": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'None'"
+    },
+    "load_from_db": {
+     "kind": "function",
+     "params": [
+      "self",
+      "db"
+     ],
+     "sig": "(self, db) -> 'dict'"
+    },
+    "set_scheduler": {
+     "kind": "function",
+     "params": [
+      "self",
+      "scheduler"
+     ],
+     "sig": "(self, scheduler) -> 'None'"
+    }
+   }
+  },
+  "constants": [
+   "DEFAULT_COLOR",
+   "FILTER_KEY"
+  ],
+  "functions": {}
+ },
  "stores.labels_file_store": {
   "classes": {
    "LabelsFileStore": {
@@ -1495,8 +2451,178 @@
   ],
   "functions": {}
  },
+ "stores.media_cache": {
+  "classes": {
+   "MediaCachePolicy": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "cache_usage": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "clear_cache": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    },
+    "evict_if_needed": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    },
+    "migrate_layout": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.media_fetch": {
+  "classes": {
+   "MediaFetcher": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "download_one": {
+     "kind": "function",
+     "params": [
+      "self",
+      "media_id"
+     ],
+     "sig": "(self, media_id) -> 'dict'"
+    },
+    "process_pending": {
+     "kind": "function",
+     "params": [
+      "self",
+      "limit"
+     ],
+     "sig": "(self, limit: 'int' = 25) -> 'int'"
+    },
+    "requeue": {
+     "kind": "function",
+     "params": [
+      "self",
+      "media_id",
+      "reason"
+     ],
+     "sig": "(self, media_id, reason: 'str' = 'retry') -> 'bool'"
+    },
+    "retry_failed": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    },
+    "retry_failed_uncached": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.media_layout": {
+  "classes": {
+   "MediaLayout": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "folder_for": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick",
+      "kind"
+     ],
+     "sig": "(self, nick: 'str', kind: 'str' = '') -> 'str'"
+    }
+   }
+  },
+  "constants": [
+   "IMAGE_EXT",
+   "MIME_EXT",
+   "RESERVED",
+   "SAFE_CHARS",
+   "TRANSLIT"
+  ],
+  "functions": {
+   "infer_kind": {
+    "kind": "function",
+    "params": [
+     "url"
+    ],
+    "sig": "(url: 'str') -> 'str'"
+   },
+   "slugify_nick": {
+    "kind": "function",
+    "params": [
+     "nick"
+    ],
+    "sig": "(nick: 'str') -> 'str'"
+   }
+  }
+ },
  "stores.media_store": {
   "classes": {
+   "MediaOptions": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "cache_dir",
+      "max_file_mb",
+      "max_cache_mb",
+      "enabled"
+     ],
+     "sig": "(self, cache_dir: 'str' = 'saved_media', max_file_mb: 'float' = 25, max_cache_mb: 'float' = 10, enabled: 'bool' = True) -> None"
+    },
+    "cache_dir": {
+     "kind": "attribute"
+    },
+    "enabled": {
+     "kind": "attribute"
+    },
+    "max_cache_mb": {
+     "kind": "attribute"
+    },
+    "max_file_mb": {
+     "kind": "attribute"
+    }
+   },
    "MediaStore": {
     "NICK_MARKER": {
      "kind": "attribute"
@@ -1507,12 +2633,9 @@
       "self",
       "db",
       "cdp",
-      "cache_dir",
-      "max_file_mb",
-      "max_cache_mb",
-      "enabled"
+      "options"
      ],
-     "sig": "(self, db: 'HistoryDB', cdp=None, cache_dir: 'str' = 'saved_media', max_file_mb: 'float' = 25, max_cache_mb: 'float' = 10, enabled: 'bool' = True)"
+     "sig": "(self, db: 'HistoryDB', cdp=None, options: 'MediaOptions' = None)"
     },
     "_fetch_one": {
      "kind": "function",
@@ -1821,6 +2944,32 @@
     "sig": "() -> 'Outcome'"
    }
   }
+ },
+ "stores.preset_migration": {
+  "classes": {
+   "PresetMigration": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner: \"'PresetStore'\") -> 'None'"
+    },
+    "import_sqlite": {
+     "kind": "function",
+     "params": [
+      "self",
+      "db_path"
+     ],
+     "sig": "(self, db_path: 'str' = 'chatbot.db') -> 'bool'"
+    }
+   }
+  },
+  "constants": [
+   "TYPE_CHECKING"
+  ],
+  "functions": {}
  },
  "stores.preset_store": {
   "classes": {
@@ -2530,5 +3679,303 @@
    "_SCHEMA"
   ],
   "functions": {}
+ },
+ "stores.user_query": {
+  "classes": {
+   "UserQuery": {
+    "COLUMNS": {
+     "kind": "attribute"
+    },
+    "ORDER": {
+     "kind": "attribute"
+    },
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner: \"'UserMemory'\") -> 'None'"
+    },
+    "count_all": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    },
+    "count_unmessaged": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'int'"
+    },
+    "get_all": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> \"list['UserRecord']\""
+    },
+    "get_queue": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> \"list['UserRecord']\""
+    },
+    "get_stats": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict'"
+    },
+    "get_user": {
+     "kind": "function",
+     "params": [
+      "self",
+      "nick"
+     ],
+     "sig": "(self, nick: 'str') -> \"Optional['UserRecord']\""
+    }
+   }
+  },
+  "constants": [
+   "TYPE_CHECKING"
+  ],
+  "functions": {}
+ },
+ "stores.window_preset_store": {
+  "classes": {
+   "WindowPresetStore": {
+    "DEFAULTS": {
+     "kind": "attribute"
+    },
+    "DEFAULT_FILE": {
+     "kind": "attribute"
+    },
+    "SAVE_ALWAYS": {
+     "kind": "attribute"
+    },
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "config",
+      "path"
+     ],
+     "sig": "(self, config: 'Any' = None, path: 'Optional[str]' = None)"
+    },
+    "data": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'dict[str, Any]'"
+    },
+    "delete_preset": {
+     "kind": "function",
+     "params": [
+      "self",
+      "name"
+     ],
+     "sig": "(self, name: 'str') -> 'bool'"
+    },
+    "dirty": {
+     "kind": "property"
+    },
+    "flush": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'bool'"
+    },
+    "list_presets": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'list[dict[str, Any]]'"
+    },
+    "load": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'None'"
+    },
+    "load_preset": {
+     "kind": "function",
+     "params": [
+      "self",
+      "name"
+     ],
+     "sig": "(self, name: 'str') -> 'Optional[dict]'"
+    },
+    "path": {
+     "kind": "property"
+    },
+    "reload": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'None'"
+    },
+    "save": {
+     "kind": "function",
+     "params": [
+      "self",
+      "force"
+     ],
+     "sig": "(self, force: 'bool' = False) -> 'bool'"
+    },
+    "save_preset": {
+     "kind": "function",
+     "params": [
+      "self",
+      "name",
+      "document"
+     ],
+     "sig": "(self, name: 'str', document: 'dict') -> 'None'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.world_lock": {
+  "classes": {
+   "WorldGate": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "key"
+     ],
+     "sig": "(self, key: 'str' = '')"
+    },
+    "busy": {
+     "kind": "property"
+    },
+    "enter": {
+     "kind": "function",
+     "params": [
+      "self",
+      "token"
+     ],
+     "sig": "(self, token) -> 'bool'"
+    },
+    "holder": {
+     "kind": "property"
+    },
+    "leave": {
+     "kind": "function",
+     "params": [
+      "self",
+      "token"
+     ],
+     "sig": "(self, token) -> 'None'"
+    }
+   },
+   "WriteTurn": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "token",
+      "path"
+     ],
+     "sig": "(self, token, path: 'str' = '')"
+    },
+    "begin": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'bool'"
+    },
+    "drop": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'None'"
+    },
+    "end": {
+     "kind": "function",
+     "params": [
+      "self"
+     ],
+     "sig": "(self) -> 'None'"
+    },
+    "held": {
+     "kind": "property"
+    }
+   }
+  },
+  "constants": [
+   "BUSY_TIMEOUT_MS",
+   "WAIT_S"
+  ],
+  "functions": {
+   "apply_busy_timeout": {
+    "kind": "function",
+    "params": [
+     "conn",
+     "path"
+    ],
+    "sig": "(conn, path: 'str' = '') -> 'None'"
+   },
+   "gate_for": {
+    "kind": "function",
+    "params": [
+     "path"
+    ],
+    "sig": "(path: 'str') -> \"'WorldGate'\""
+   },
+   "is_locked_error": {
+    "kind": "function",
+    "params": [
+     "exc"
+    ],
+    "sig": "(exc) -> 'bool'"
+   },
+   "is_write_sql": {
+    "kind": "function",
+    "params": [
+     "sql"
+    ],
+    "sig": "(sql: 'str') -> 'bool'"
+   },
+   "retry_locked": {
+    "kind": "function",
+    "params": [
+     "work",
+     "attempts",
+     "delay"
+    ],
+    "sig": "(work: 'Callable', attempts: 'int' = 4, delay: 'float' = 0.3)"
+   },
+   "world_transaction": {
+    "kind": "function",
+    "params": [
+     "path",
+     "conn"
+    ],
+    "sig": "(path: 'str', conn)"
+   },
+   "world_write": {
+    "kind": "function",
+    "params": [
+     "path",
+     "token"
+    ],
+    "sig": "(path: 'str', token=None)"
+   }
+  }
  }
 }

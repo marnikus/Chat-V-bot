@@ -30,9 +30,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_query import HistoryQuery, PersonPageRequest  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 10, 12, 0, 0)
 
@@ -40,7 +41,7 @@ NOW = datetime(2026, 9, 10, 12, 0, 0)
 def rec(text="hi", direction="in", from_nick="Nick", time="17:31", idx=0):
     payload = text
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, "text", payload, 0),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, "text", payload), 0),
         direction=direction, from_nick=from_nick, kind="text", text=text,
         media_url="", media_kind="", ts_display=time, occ=0, idx=idx)
 
@@ -357,11 +358,11 @@ class TestRealRepositoryPath(SortCase):
     fixture style above cannot hide a mismatch with real data."""
 
     async def test_the_archive_written_by_the_repo_sorts_as_promised(self):
-        await self.repo.append("Nick", [rec(text=f"m{i}", idx=i)
+        await self.repo.append(AppendRequest("Nick", [rec(text=f"m{i}", idx=i)
                                         for i in range(4)], my_nick="Me",
-                               now=NOW)
-        await self.repo.append("Other", [rec(text="x", idx=0)], my_nick="Me",
-                               now=NOW)
+                               now=NOW))
+        await self.repo.append(AppendRequest("Other", [rec(text="x", idx=0)], my_nick="Me",
+                               now=NOW))
         busiest = await self.q.list_persons(PersonPageRequest(sort="msgs", dir="desc"))
         self.assertEqual(busiest["items"][0]["nick"], "Nick")
         quietest = await self.q.list_persons(PersonPageRequest(sort="msgs", dir="asc"))

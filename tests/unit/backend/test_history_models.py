@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
 from stores.history_models import (  # noqa: E402
+    LineIdentity,
     MAX_LIVE_ITEMS,
     Alignment,
     AppendResult,
@@ -54,42 +55,43 @@ class TestFingerprint(unittest.TestCase):
 
     def test_python_matches_the_javascript_constants(self):
         for args, expected in JS_PINNED.items():
-            self.assertEqual(fingerprint(*args), expected,
+            self.assertEqual(fingerprint(LineIdentity(*args[:-1]), args[-1]),
+                             expected,
                              f"JS/Python fingerprint drift at {args!r}")
 
     def test_stable_and_occurrence_sensitive(self):
-        a = fingerprint("in", "N", "17:31", "text", "x", 0)
-        self.assertEqual(a, fingerprint("in", "N", "17:31", "text", "x", 0))
-        self.assertNotEqual(a, fingerprint("in", "N", "17:31", "text", "x", 1))
-        self.assertNotEqual(a, fingerprint("out", "N", "17:31", "text", "x", 0))
-        self.assertNotEqual(a, fingerprint("in", "N", "17:32", "text", "x", 0))
+        a = fingerprint(LineIdentity("in", "N", "17:31", "text", "x"), 0)
+        self.assertEqual(a, fingerprint(LineIdentity("in", "N", "17:31", "text", "x"), 0))
+        self.assertNotEqual(a, fingerprint(LineIdentity("in", "N", "17:31", "text", "x"), 1))
+        self.assertNotEqual(a, fingerprint(LineIdentity("out", "N", "17:31", "text", "x"), 0))
+        self.assertNotEqual(a, fingerprint(LineIdentity("in", "N", "17:32", "text", "x"), 0))
 
     def test_astral_emoji_counts_as_two_utf16_units(self):
         """😀 is 2 UTF-16 units; the hash must see BOTH (charCodeAt)."""
-        with_emoji = fingerprint("in", "N", "t", "text", "😀", 0)
+        with_emoji = fingerprint(LineIdentity("in", "N", "t", "text", "😀"), 0)
         # the same string truncated to its first surrogate unit is the
         # 'lone surrogate' JS would see mid-pair — different hash
-        lone = fingerprint("in", "N", "t", "text", "\ud83d", 0)
+        lone = fingerprint(LineIdentity("in", "N", "t", "text", "\ud83d"), 0)
         self.assertNotEqual(with_emoji, lone)
         # equal UTF-16 length, different units → different hash
-        bmp_two = fingerprint("in", "N", "t", "text", "aa", 0)
+        bmp_two = fingerprint(LineIdentity("in", "N", "t", "text", "aa"), 0)
         self.assertNotEqual(with_emoji, bmp_two)
 
     def test_dedupe_key_ignores_occ(self):
         self.assertEqual(
-            dedupe_key("in", "N", "17:31", "text", "x"),
-            fingerprint("in", "N", "17:31", "text", "x", 0),
+            dedupe_key(LineIdentity("in", "N", "17:31", "text", "x")),
+            fingerprint(LineIdentity("in", "N", "17:31", "text", "x"), 0),
             "dedupe_key must be the occ=0 fingerprint")
-        self.assertNotEqual(dedupe_key("in", "N", "17:31", "text", "x"),
-                            dedupe_key("in", "N", "17:31", "text", "y"))
-        self.assertNotEqual(dedupe_key("in", "N", "17:31", "text", "x"),
-                            dedupe_key("out", "N", "17:31", "text", "x"))
+        self.assertNotEqual(dedupe_key(LineIdentity("in", "N", "17:31", "text", "x")),
+                            dedupe_key(LineIdentity("in", "N", "17:31", "text", "y")))
+        self.assertNotEqual(dedupe_key(LineIdentity("in", "N", "17:31", "text", "x")),
+                            dedupe_key(LineIdentity("out", "N", "17:31", "text", "x")))
 
     def test_empty_and_none_inputs_never_crash(self):
-        blank = fingerprint("", "", "", "", "", 0)
+        blank = fingerprint(LineIdentity("", "", "", "", ""), 0)
         self.assertEqual(len(blank), 16)
-        self.assertEqual(fingerprint(None, None, None, None, None),
-                         fingerprint("", "", "", "", "", 0))
+        self.assertEqual(fingerprint(LineIdentity(None, None, None, None, None)),
+                         fingerprint(LineIdentity("", "", "", "", ""), 0))
 
 
 class TestMessageRecord(unittest.TestCase):

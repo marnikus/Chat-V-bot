@@ -37,6 +37,7 @@ from services.history import HistoryDeps  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))), "tests"))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -80,7 +81,7 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
         batch = [raw(f"line {i}", direction="in" if i % 2 else "out",
                      from_nick="Me" if i % 2 else nick,
                      time=f"1{i}:0{i}") for i in range(n)]
-        await self.service.repo.append(nick, batch, my_nick="Me", now=NOW)
+        await self.service.repo.append(AppendRequest(nick, batch, my_nick="Me", now=NOW))
 
 
 # ══════════════════════════════════════════════════════════════════

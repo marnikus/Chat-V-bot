@@ -28,14 +28,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 
 from backend.chat_parser import ChatParser, sync_conversation  # noqa: E402
 from backend.chat_sync import SyncOptions, SyncPersister, SyncSession  # noqa: E402
-from stores.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 
 NOW = datetime(2026, 9, 9, 10, 0, 0)
 
 
 def record(i, *, direction="in", nick="Nick", text=None):
     text = f"m{i}" if text is None else text
-    fp = fingerprint(direction, nick, "10:00", "text", text, 0)
+    fp = fingerprint(LineIdentity(direction, nick, "10:00", "text", text), 0)
     return {"fp": fp, "dir": direction, "from": nick, "kind": "text",
             "text": text, "time": "10:00", "occ": 0, "idx": i,
             "media": None}
@@ -163,18 +163,24 @@ class FakeRepo:
     async def _last_ord(self, person_id):
         return self._last_ord_value
 
-    async def append(self, nick, records, my_nick="", **kw):
+    async def append(self, req):
+        # G7 §2: the repo API takes one AppendRequest; `gap` was never a
+        # parameter of the real append, so the fake never sees one either.
         class Appended:
             pass
         out = Appended()
-        out.added = len(records or [])
-        out.gap = bool(kw.get("gap", False))
+        out.added = len(req.records or [])
+        out.gap = False
         out.records = [r if isinstance(r, dict) else r.to_dict()
-                       for r in (records or [])]
+                       for r in (req.records or [])]
         for i, r in enumerate(out.records):
             r.setdefault("ord", self._last_ord_value + i + 1)
-        self._note("append", nick=nick, count=len(records or []),
-                   my_nick=my_nick, **kw)
+        self._note("append", nick=req.nick, count=len(req.records or []),
+                   my_nick=req.my_nick,
+                   **{f: getattr(req, f) for f in
+                      ("align", "expect_idx", "dom_count", "head_sig",
+                       "tail_sig", "now", "session_id", "head_any",
+                       "tail_any", "prepend")})
         return out
 
     async def record_gap(self, person_id, after_ord, reason, detail):
@@ -190,10 +196,11 @@ class FakeRepo:
                    include_failed=include_failed)
         return self._repairable
 
-    async def recover_media(self, person_id, records, media=None,
-                            nick="", now=None, requeue_failed=True):
-        self._note("recover_media", person_id=person_id,
-                   count=len(records or []), requeue_failed=requeue_failed)
+    async def recover_media(self, req):
+        # G7 §2: one MediaRecoveryRequest replaces the six parameters.
+        self._note("recover_media", person_id=req.person_id,
+                   count=len(req.records or []),
+                   requeue_failed=req.requeue_failed)
         return dict(self._media_stats)
 
     async def reset_cursor(self, nick):
@@ -356,8 +363,12 @@ class TestAlignThenWrite(unittest.TestCase):
         self.assertTrue(writes[0]["align"] and not writes[0].get("prepend"))
         self.assertTrue(writes[1]["prepend"],
                         "records older than the stored tail are prepended")
-        self.assertFalse(writes[1].get("align"),
-                         "a prepend is positional, not aligned")
+        # G7 §2 adaptation: under AppendRequest, `align` is a field with a
+        # default — the note can no longer show its ABSENCE at the call.
+        # "A prepend is positional, not aligned" stays pinned behaviorally,
+        # where the behaviour lives: test_history_repo_conflicts.py prepends
+        # with the default align=True and asserts the older prefix lands
+        # above the stored tail instead of being aligned away.
         self.assertEqual(result.added, 8)
 
 

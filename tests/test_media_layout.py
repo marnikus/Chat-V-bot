@@ -32,7 +32,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore, slugify_nick  # noqa: E402
+from backend.media_store import MediaStore, slugify_nick, MediaOptions  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 GIF = b"GIF89a" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 500
@@ -101,8 +102,7 @@ class LayoutCase(unittest.IsolatedAsyncioTestCase):
         self.cdp = FakeCDP({"https://images.virt-chat.com/images/m_1.gif": GIF,
                             "https://images.virt-chat.com/images/m_2.png": PNG,
                             "https://images.virt-chat.com/images/m_3.jpg": JPG})
-        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root,
-                                max_file_mb=1, max_cache_mb=10)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.root, max_file_mb=1, max_cache_mb=10))
         self.store.now = lambda: DAY
 
     async def asyncTearDown(self):
@@ -229,8 +229,7 @@ class BlockingCDP(FakeCDP):
 class TestCorsFallback(LayoutCase):
     async def test_python_fallback_caches_a_gif_when_the_page_fetch_is_blocked(self):
         self.cdp = BlockingCDP()
-        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root,
-                                max_file_mb=1, max_cache_mb=10)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.root, max_file_mb=1, max_cache_mb=10))
         self.store.now = lambda: DAY
 
         async def fetch(url):
@@ -250,7 +249,7 @@ class TestCorsFallback(LayoutCase):
 
     async def test_failed_uncached_rows_are_re_queued_once(self):
         self.cdp = BlockingCDP()
-        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.root))
         self.store.now = lambda: DAY
         mid = await self.store.register(
             "https://images.virt-chat.com/images/m_1.gif", "gif",
@@ -317,10 +316,10 @@ class TestMigration(LayoutCase):
 class TestRepoWiring(LayoutCase):
     async def test_the_repo_tells_the_store_whose_media_it_is(self):
         repo = HistoryRepo(self.db, media=self.store, session_id="t")
-        await repo.append(PARTNER, [MessageRecord(
+        await repo.append(AppendRequest(PARTNER, [MessageRecord(
             direction="in", from_nick=PARTNER, kind="gif", ts_display="11:55",
             media_url="https://images.virt-chat.com/images/m_1.gif",
-            media_kind="gif")], my_nick=ME, now=DAY)
+            media_kind="gif")], my_nick=ME, now=DAY))
         await self.store.process_pending()
         row = await self.store.get_by_url(
             "https://images.virt-chat.com/images/m_1.gif")
@@ -332,10 +331,10 @@ class TestRepoWiring(LayoutCase):
         # a conversation folder holds BOTH directions — that is what makes
         # the tree readable ("everything I exchanged with Ански")
         repo = HistoryRepo(self.db, media=self.store, session_id="t")
-        await repo.append(PARTNER, [MessageRecord(
+        await repo.append(AppendRequest(PARTNER, [MessageRecord(
             direction="out", from_nick=ME, kind="image", ts_display="11:58",
             media_url="https://images.virt-chat.com/images/m_2.png",
-            media_kind="image")], my_nick=ME, now=DAY)
+            media_kind="image")], my_nick=ME, now=DAY))
         await self.store.process_pending()
         row = await self.store.get_by_url(
             "https://images.virt-chat.com/images/m_2.png")

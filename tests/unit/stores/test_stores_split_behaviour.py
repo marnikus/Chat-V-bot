@@ -36,12 +36,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 sys.path.insert(0, ROOT)
 
 from stores.history_db import SCHEMA_VERSION, HistoryDB        # noqa: E402
-from stores.history_models import MessageRecord, fingerprint  # noqa: E402
+from stores.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from stores.history_repo import HistoryRepo                    # noqa: E402
 from stores.label_store import LabelStore                      # noqa: E402
-from stores.media_store import MediaStore                      # noqa: E402
+from stores.media_store import MediaStore, MediaOptions                      # noqa: E402
 from stores.preset_store import PresetStore                    # noqa: E402
 from stores.user_memory import UserMemory, UserRecord         # noqa: E402
+from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
 
 
 def convo(n, start=0, nick="Nick"):
@@ -55,7 +56,7 @@ def rec(text="hi", direction="in", from_nick="Nick", time="17:31",
         kind="text", media=None, occ=0, idx=0):
     payload = media["url"] if media else text
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, kind, payload, occ),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, kind, payload), occ),
         direction=direction, from_nick=from_nick, kind=kind, text=text,
         media_url=(media or {}).get("url", ""),
         media_kind=(media or {}).get("kind", ""),
@@ -121,7 +122,7 @@ class AggregateCase(unittest.IsolatedAsyncioTestCase):
         await self.db.init()
         self.cache = os.path.join(self.dir, "saved_media")
         self.cdp = FakeCdp()
-        self.media = MediaStore(self.db, cdp=self.cdp, cache_dir=self.cache)
+        self.media = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.cache))
         self.repo = HistoryRepo(self.db, media=self.media, session_id="s1")
 
     async def asyncTearDown(self):
@@ -312,8 +313,8 @@ class TestCollaboratorScenarios(AggregateCase):
 
     async def test_append_is_idempotent_through_the_planner(self):
         batch = convo(5)
-        first = await self.repo.append("Nick", batch, my_nick="Me", dom_count=5)
-        second = await self.repo.append("Nick", batch, my_nick="Me", dom_count=5)
+        first = await self.repo.append(AppendRequest("Nick", batch, my_nick="Me", dom_count=5))
+        second = await self.repo.append(AppendRequest("Nick", batch, my_nick="Me", dom_count=5))
         self.assertEqual(first.added, 5)
         self.assertEqual(second.added, 0)
         self.assertEqual(second.skipped, 5)
@@ -322,12 +323,12 @@ class TestCollaboratorScenarios(AggregateCase):
         self.assertEqual(cursor["last_ord"], first.last_ord)
 
     async def test_prepend_shifts_ord_and_keeps_it_dense(self):
-        first = await self.repo.append("Nick", convo(3, start=3), my_nick="Me",
-                                       dom_count=3)
+        first = await self.repo.append(AppendRequest("Nick", convo(3, start=3), my_nick="Me",
+                                       dom_count=3))
         early = [rec(text="first", direction="in", from_nick="Nick",
                      time="09:00", idx=0)]
-        again = await self.repo.append("Nick", early, my_nick="Me", dom_count=4,
-                                       prepend=True)
+        again = await self.repo.append(AppendRequest("Nick", early, my_nick="Me", dom_count=4,
+                                       prepend=True))
         self.assertEqual(again.added, 1)
         self.assertEqual(again.first_ord, 1)
         rows = await self.db.fetchdicts(
@@ -338,15 +339,15 @@ class TestCollaboratorScenarios(AggregateCase):
 
     async def test_recovery_fills_an_empty_slot_and_marks_the_row(self):
         empty = rec(text="", kind="image", time="17:45", idx=7)
-        result = await self.repo.append("Nick", [empty], my_nick="Me",
-                                        dom_count=1)
+        result = await self.repo.append(AppendRequest("Nick", [empty], my_nick="Me",
+                                        dom_count=1))
         self.assertEqual(result.added, 1, "the empty slot is archived")
         self.assertTrue(await self.repo.has_repairable_media(result.person_id))
         filled = rec(text="", kind="image",
                      media={"url": "https://c/x.png", "kind": "image"},
                      time="17:45", idx=7)
-        report = await self.repo.recover_media(
-            result.person_id, [filled], media=self.media, nick="Nick")
+        report = await self.repo.recover_media(MediaRecoveryRequest(
+            result.person_id, [filled], media=self.media, nick="Nick"))
         self.assertEqual(set(report), {"repaired", "requeued", "scanned"})
         self.assertEqual(report["repaired"], 1,
                          "the URL found in the DOM must land on the archived "
@@ -356,7 +357,7 @@ class TestCollaboratorScenarios(AggregateCase):
         self.assertFalse(await self.repo.has_repairable_media(result.person_id))
 
     async def test_lifecycle_tokens_gate_the_deletes(self):
-        await self.repo.append("Nick", convo(3), my_nick="Me", dom_count=3)
+        await self.repo.append(AppendRequest("Nick", convo(3), my_nick="Me", dom_count=3))
         token = HistoryRepo.new_op_token()
         self.assertNotEqual(token, HistoryRepo.new_op_token())
         issued = await self.repo.soft_delete_history("Nick", token)
@@ -374,7 +375,7 @@ class TestCollaboratorScenarios(AggregateCase):
         self.assertTrue(os.path.isfile(
             os.path.join(os.path.dirname(os.path.dirname(mine)),
                          MediaStore.NICK_MARKER)))
-        store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.cache)
+        store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.cache))
         self.assertEqual(store._person_dir("Anski"),
                          self.media._person_dir("Anski"),
                          "the owner keeps its folder across a restart")

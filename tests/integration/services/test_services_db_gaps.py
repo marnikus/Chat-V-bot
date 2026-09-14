@@ -22,6 +22,7 @@ from backend.config_manager import ConfigManager  # noqa: E402
 from services.db_service import (DbManager, db_stem,  # noqa: E402
                                  file_group_size, folder_size, safe_db_name)
 from services.history import HistoryDeps  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 
 class TestNameAndStem(unittest.TestCase):
@@ -179,13 +180,13 @@ class RestoreCase(unittest.IsolatedAsyncioTestCase):
 
     async def seed_row(self):
         from datetime import datetime
-        from backend.history_models import MessageRecord, fingerprint
+        from backend.history_models import MessageRecord, fingerprint, LineIdentity
         rec = MessageRecord(
-            fp=fingerprint("in", "Nick", "10:00", "text", "hello", 0),
+            fp=fingerprint(LineIdentity("in", "Nick", "10:00", "text", "hello"), 0),
             direction="in", from_nick="Nick", kind="text", text="hello",
             media_url="", media_kind="", ts_display="10:00", occ=0, idx=0)
-        await self.service.repo.append("Nick", [rec], my_nick="Me",
-                                       now=datetime(2026, 9, 6, 18, 30))
+        await self.service.repo.append(AppendRequest("Nick", [rec], my_nick="Me",
+                                       now=datetime(2026, 9, 6, 18, 30)))
 
     async def test_restore_connected_backup_brings_rows_back(self):
         await self.seed_row()

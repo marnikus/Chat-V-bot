@@ -22,7 +22,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from backend.media_store import MediaStore, MediaOptions  # noqa: E402
 
 GIF = b"GIF89a" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 500
@@ -107,9 +107,7 @@ class MediaCase(unittest.IsolatedAsyncioTestCase):
         await self.db.init()
         self.cdp = FakeCDP({"https://x/a.gif": GIF, "https://x/b.png": PNG,
                             "https://x/copy.gif": GIF})
-        self.store = MediaStore(self.db, cdp=self.cdp,
-                                cache_dir=os.path.join(self.dir, "media"),
-                                max_file_mb=1, max_cache_mb=10)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=os.path.join(self.dir, "media"), max_file_mb=1, max_cache_mb=10))
 
     async def asyncTearDown(self):
         await self.db.close()
@@ -185,9 +183,7 @@ class TestDownloading(MediaCase):
         extension from the response MIME — not from the mangled key name."""
         remote = "https://ru.virt-chat.com/m_Питер2к7_7a861cc"
         net = NetworkCDP(remote, GIF, "image/jpeg")
-        store = MediaStore(self.db, cdp=net,
-                           cache_dir=os.path.join(self.dir, "media3"),
-                           max_file_mb=1, max_cache_mb=10)
+        store = MediaStore(self.db, cdp=net, options=MediaOptions(cache_dir=os.path.join(self.dir, "media3"), max_file_mb=1, max_cache_mb=10))
         mid = await store.register("/m_Питер2к7_7a861cc", "image")
         self.assertEqual(await store.process_pending(), 1)
         row = await store.get(mid)
@@ -201,9 +197,7 @@ class TestDownloading(MediaCase):
         and a plain Python download is rejected; the CDP Network body is the
         third, browser-native path."""
         net = NetworkCDP("https://x/a.gif", GIF, "image/gif")
-        store = MediaStore(self.db, cdp=net,
-                           cache_dir=os.path.join(self.dir, "media2"),
-                           max_file_mb=1, max_cache_mb=10)
+        store = MediaStore(self.db, cdp=net, options=MediaOptions(cache_dir=os.path.join(self.dir, "media2"), max_file_mb=1, max_cache_mb=10))
         mid = await store.register("https://x/a.gif", "gif")
         self.assertEqual(await store.process_pending(), 1)
         row = await store.get(mid)
@@ -227,8 +221,7 @@ class TestDownloading(MediaCase):
         self.assertEqual((await self.store.get(mid))["state"], "cached")
 
     async def test_no_cdp_means_no_crash(self):
-        store = MediaStore(self.db, cdp=None,
-                           cache_dir=os.path.join(self.dir, "m2"))
+        store = MediaStore(self.db, cdp=None, options=MediaOptions(cache_dir=os.path.join(self.dir, "m2")))
         await store.register("https://x/a.gif", "gif")
         self.assertEqual(await store.process_pending(), 0)
 

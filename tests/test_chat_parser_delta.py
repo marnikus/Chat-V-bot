@@ -44,7 +44,7 @@ from backend.chat_agent_js import (  # noqa: E402
     slice_expression,
 )
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import fingerprint  # noqa: E402
+from backend.history_models import fingerprint, LineIdentity  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
@@ -54,7 +54,7 @@ def raw(text, direction="in", from_nick="Nick", time="17:31", kind="text",
         media=None, occ=0, idx=0):
     """One record exactly as the in-page agent emits it."""
     payload = media["url"] if media else text
-    return {"fp": fingerprint(direction, from_nick, time, kind, payload, occ),
+    return {"fp": fingerprint(LineIdentity(direction, from_nick, time, kind, payload), occ),
             "dir": direction, "from": from_nick, "kind": kind, "text": text,
             "media": media, "time": time, "occ": occ, "idx": idx}
 
@@ -119,10 +119,7 @@ class FakePage:
         from backend.history_models import fingerprint
         media = message.get("media")
         payload = media["url"] if media else message.get("text") or ""
-        return fingerprint(message.get("dir") or "in", "",
-                           message.get("time") or "",
-                           message.get("kind") or "text", payload,
-                           message.get("occ") or 0)
+        return fingerprint(LineIdentity(message.get("dir") or "in", "", message.get("time") or "", message.get("kind") or "text", payload), message.get("occ") or 0)
 
     async def evaluate(self, expression):
         self.evaluates += 1
@@ -269,9 +266,9 @@ class TestRecordParsing(unittest.TestCase):
         self.assertEqual(recs[0].text, "ok")
 
     def test_fingerprint_is_stable_and_occurrence_sensitive(self):
-        a = fingerprint("in", "N", "17:31", "text", "ok", 0)
-        b = fingerprint("in", "N", "17:31", "text", "ok", 0)
-        c = fingerprint("in", "N", "17:31", "text", "ok", 1)
+        a = fingerprint(LineIdentity("in", "N", "17:31", "text", "ok"), 0)
+        b = fingerprint(LineIdentity("in", "N", "17:31", "text", "ok"), 0)
+        c = fingerprint(LineIdentity("in", "N", "17:31", "text", "ok"), 1)
         self.assertEqual(a, b)
         self.assertNotEqual(a, c)
 

@@ -28,6 +28,7 @@ log = logging.getLogger("chatbot")
 
 from services.collector_service import CollectorState  # noqa: E402
 from services.collector_states import TailSigs, TickIdent  # noqa: E402
+from stores.history_requests import PaneSignature
 
 
 class TickPhase(str, Enum):
@@ -235,9 +236,10 @@ class CollectorArchive:
         host = self._host
         try:
             if await host.repo.rename_if_same_conversation(
-                    host._nick, nick, sigs.head_sig, sigs.tail_sig,
-                    head_any=sigs.head_any, tail_any=sigs.tail_any,
-                    dom_count=probe.count,
+                    host._nick, nick,
+                    PaneSignature(sigs.head_sig, sigs.tail_sig,
+                                  sigs.head_any, sigs.tail_any,
+                                  probe.count),
                     pane_same=bool(probe.state.get("pane_same"))):
                 host._log(f"Partner “{host._nick}” is now “{nick}” — "
                           "the history continues", "info", nick)

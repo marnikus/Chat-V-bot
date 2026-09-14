@@ -24,11 +24,11 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from stores.media_store import MediaStore, slugify_nick  # noqa: E402
+from stores.media_store import MediaStore, slugify_nick, MediaOptions  # noqa: E402
 
 
 def store(cache_dir):
-    return MediaStore(db=None, cdp=None, cache_dir=cache_dir)
+    return MediaStore(db=None, cdp=None, options=MediaOptions(cache_dir=cache_dir))
 
 
 class TestSlugify(unittest.TestCase):
