@@ -935,6 +935,86 @@ t('it reuses the Bookmarks panel styling', () => {
      'the popup must reuse the Bookmarks panel styling');
 });
 
+/* CSS specificity, computed the way the cascade does: (#id, .class, element).
+   A bare `.ui-btn` is (0,1,0) and loses to `.layout-menu button` (0,1,1). */
+function specificity(sel) {
+  const ids = (sel.match(/#[\w-]+/g) || []).length;
+  const cls = (sel.match(/\.[\w-]+/g) || []).length;
+  const els = (sel.match(/(?:^|[\s>+~])([a-z][\w-]*)/g) || []).length;
+  return (ids * 100) + (cls * 10) + els;
+}
+
+t('the popup\'s buttons outrank .layout-menu button', () => {
+  /* The reported broken header. The popup reuses `.layout-menu` for its
+     panel chrome, which drags in `.layout-menu button { display:block;
+     width:100% }` from sash-layout.css. That selector is (0,1,1) and beat
+     every bare `.ui-btn` rule at (0,1,0), so EVERY button in the popup was
+     forced full-width and stacked: the cross filled the header and shoved
+     the headings down to a few pixels wide.
+
+     Reusing another component's panel class means inheriting its element
+     selectors, so this popup's own button rules must be scoped to it. */
+  const css = readUi('css/bot-chat.css');
+  const rival = specificity('.layout-menu button');
+  const missed = [];
+  const wanted = ['.ui-btn', '.ui-btn--icon', '.bot-provider',
+                  '.bot-preset-opt'];
+  wanted.forEach((base) => {
+    // find the rule that actually declares this component
+    const re = new RegExp('([^{}]*\\' + base + '[^{},]*)(?:,[^{}]*)?\\{',
+                          'g');
+    let best = 0;
+    let m = re.exec(css);
+    while (m) {
+      m[1].split(',').forEach((sel) => {
+        if (sel.indexOf(base) >= 0) best = Math.max(best, specificity(sel));
+      });
+      m = re.exec(css);
+    }
+    if (best <= rival) missed.push(base + ' (' + best + ' <= ' + rival + ')');
+  });
+  eq(missed.join('; '), '', 'these lose to .layout-menu button');
+});
+
+t('the popup does not inherit full-width stacked buttons', () => {
+  const css = readUi('css/bot-chat.css');
+  const rule = /\.bot-settings\s+\.ui-btn\s*,?[^{]*\{([^}]*)\}/.exec(css);
+  ok(rule, 'the popup must restate the button box scoped to itself');
+  ok(/width:\s*auto/.test(rule[1]),
+     'width:100% is inherited from .layout-menu button and must be undone');
+  ok(/display:\s*inline-flex/.test(rule[1]),
+     'display:block is inherited too, and stacks the footer vertically');
+});
+
+t('the close button is pinned right and cannot be resized by the title', () => {
+  /* The reported drift: the header is a flex row whose text block had no
+     flex sizing, so its width followed the wrapping of the title and
+     subtitle. `margin-left:auto` pushes the button right relative to THAT
+     moving box, and a flex item with no flex-none shrinks besides — so the
+     cross floated and changed size as the heading reflowed. The text block
+     must absorb the free space and the button must be rigid. */
+  const css = readUi('css/bot-chat.css');
+  const text = /\.bot-settings-headings[^{]*\{([^}]*)\}/.exec(css);
+  ok(text, 'the heading block needs a class of its own to be sized');
+  ok(/flex:\s*1/.test(text[1]),
+     'the text block must take the slack, so the button stops moving');
+  ok(/min-width:\s*0/.test(text[1]),
+     'without min-width:0 a long title pushes the button off instead');
+
+  const btn = /\.bot-settings-head\s+\.ui-btn[^{]*\{([^}]*)\}/.exec(css);
+  ok(btn, 'the close button must be pinned explicitly');
+  ok(/flex:\s*none/.test(btn[1]),
+     'a flex item with no flex:none is resized by its neighbours');
+});
+
+t('the close button keeps the shared button metrics', () => {
+  const css = readUi('css/bot-chat.css');
+  const icon = /\.ui-btn--icon\s*\{([^}]*)\}/.exec(css)[1];
+  ok(/width:\s*28px/.test(icon), 'square, matching the 28px button height');
+  ok(/height:\s*28px/.test(icon),
+     'height must be stated too — flex-start would otherwise shrink it');
+});
+
 t('every field in the popup is dark, like the rest of the app', () => {
   /* The reported "white elements". This app has NO global input rule —
      each window styles its own fields by id or class — so a bare <input>

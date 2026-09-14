@@ -227,3 +227,60 @@ editors use, so matching the app is a consequence of sharing the palette.
 pre-existing failure; RULE 16 gate clean; RULE 18 re-checked — controller 310
 code lines, view 184, no function over 20. §6.1 and §6.3 were each proved by
 reverting the fix and watching the new test fail.
+
+
+### 6.5 The close cross floated and resized
+
+The header is a flex row holding a text block and the ✕. The text block had
+no flex sizing, so its width was content-driven — it grew and shrank with
+however the title and subtitle happened to wrap — and the cross was pushed
+right with `margin-left: auto`, which positions it relative to that moving
+box. The button was also a plain flex item, so its neighbour could squeeze
+it, and `.ui-btn--icon` set a width but no height while the header's
+`align-items: flex-start` declined to stretch it. Hence: floating *and*
+resizing.
+
+The fix inverts which element absorbs the slack. The headings get
+`flex: 1 1 auto; min-width: 0` and the button `flex: none`, so the cross is
+pinned by the layout rather than pushed by a margin, and a long title
+ellipsizes inside its own box instead of shoving the button off the edge.
+`.ui-btn--icon` now states `height: 28px` so it is square and matches the
+shared button height in every context. The key-reveal button, the popup's
+other icon button, gets the same pin.
+
+
+### 6.6 The real cause: inheriting `.layout-menu`'s element selectors
+
+§6.5 fixed the header's flex arithmetic and the cross was still broken,
+because the flex arithmetic was never the cause.
+
+The popup sets `class="bot-settings-backdrop layout-menu"` to reuse the
+Bookmarks panel chrome — position, border, radius, shadow. That also drags
+in, from `sash-layout.css`:
+
+```css
+.layout-menu button { display: block; width: 100%; text-align: left; }
+```
+
+`.layout-menu button` is specificity (0,1,1). A bare `.ui-btn` is (0,1,0)
+and **loses**. So every one of the popup's nine buttons was silently forced
+to `display:block; width:100%`: the ✕ stretched across the whole header,
+leaving the headings a few pixels wide — the title disappeared and the
+subtitle wrapped one word per line, exactly as reported. The footer was
+stacking vertically for the same reason.
+
+The `.ui-btn` component, the connection rows and the preset chips are now
+all scoped under `.bot-settings` (0,2,0), which outranks the inherited rule,
+and the component explicitly restates `width:auto` and
+`display:inline-flex` to undo what it inherits.
+
+**The general lesson, worth more than the fix:** reusing another
+component's class for its *panel* styling also inherits its *element*
+selectors. `.layout-menu` was chosen so this popup would match Bookmarks by
+construction, and the same decision quietly imposed Bookmarks' idea of what
+a button is. A new component nested inside a borrowed one must either scope
+its own rules above the host's element selectors, or not borrow the class.
+
+A test now computes specificity directly and fails if any `.ui-btn`,
+`.bot-provider` or `.bot-preset-opt` rule scores at or below
+`.layout-menu button`.
