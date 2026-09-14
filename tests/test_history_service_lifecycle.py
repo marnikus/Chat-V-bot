@@ -121,7 +121,11 @@ class TestSettings(ServiceCase):
         writes through the shared self.db handle, so a world switch
         racing the task could rebind the handle first."""
         self.service.apply_settings({"media": {"max_file_mb": 9}})
-        await asyncio.sleep(0.05)          # let the persist task run
+        # Await the actual write instead of sleeping: under a full-suite run
+        # the old 0.05 s guess lost the race (Ledger #9), which is exactly the
+        # flake a time-based assertion is supposed to avoid.
+        for task in list(self.service.pending_writes()):
+            await task
         rows = await self.service.db.fetchall(
             "SELECT value FROM app_settings WHERE key='media_max_file_mb'")
         self.assertTrue(rows, "per-world setting not persisted")

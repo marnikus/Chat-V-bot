@@ -123,6 +123,19 @@ def _archive_legacy_trio(legacy_path: str) -> None:
 
 
 class HistoryMutateService:
+    def pending_writes(self) -> set:
+        """In-flight fire-and-forget settings writes (see Ledger #9).
+
+        Created on first use because this is a mixin with no `__init__` of
+        its own. Tests await these instead of sleeping; production only needs
+        the strong reference.
+        """
+        writes = getattr(self, "_pending_writes", None)
+        if writes is None:
+            writes = set()
+            self._pending_writes = writes
+        return writes
+
     def apply_settings(self, patch: dict) -> dict:
         patch = dict(patch or {})
         collector = patch.pop("collector", None)
@@ -166,9 +179,17 @@ class HistoryMutateService:
             except Exception as exc:
                 log.debug("persist app settings failed: %s", exc)
         try:
-            asyncio.get_running_loop().create_task(work())
+            task = asyncio.get_running_loop().create_task(work())
         except RuntimeError:
             return
+        # Hold a reference until it settles. A bare create_task() keeps only a
+        # WEAK reference in the loop, so the GC may collect the task mid-write
+        # and the setting silently never lands (asyncio docs, create_task).
+        # Ledger #9. `_pending_writes` also lets a caller await the write
+        # instead of sleeping and hoping.
+        pending = self.pending_writes()
+        pending.add(task)
+        task.add_done_callback(pending.discard)
 
     async def seed_app_settings(self) -> None:
         have = {row["key"] for row in await self.db.fetchdicts("SELECT key FROM app_settings")}
