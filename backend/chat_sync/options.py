@@ -71,24 +71,26 @@ class SyncOptions:
         return max(0, int(ms or 0)) / 1000.0
 
     def stopping(self) -> bool:
-        """Is the user asking us to stop? A broken predicate says no."""
-        predicate = self.should_stop
-        if not callable(predicate):
-            return False
-        try:
-            return bool(predicate())
-        except Exception:                            # noqa: BLE001
-            return False
+        """Is the user asking us to stop? A broken predicate says no.
+
+        The fail-open rule lives in `actions.cancellation`, which owns the
+        stop protocol (RULE 7), so the sync path and the scroll parser cannot
+        drift apart on what a raising predicate means. The import is local:
+        `actions/__init__` runs a registry scan that imports this module back,
+        which is the same reason `services/run/*` imports it lazily.
+        """
+        from actions.cancellation import is_stop_requested
+        return is_stop_requested(self.should_stop)
 
     def progress(self, done: int, total: int) -> None:
         """RULE 5: report each chunk as it lands — and never let a UI
-        hiccup kill the read (RULE 8 of the pipeline: callbacks are wrapped)."""
-        if self.on_progress is None:
-            return
-        try:
-            self.on_progress(done, total)
-        except Exception:                            # noqa: BLE001
-            pass
+        hiccup kill the read (RULE 8 of the pipeline: callbacks are wrapped).
+
+        No log on failure here: progress ticks once per chunk, so a broken
+        callback would flood the log rather than inform anyone.
+        """
+        from actions.cancellation import call_guarded
+        call_guarded(self.on_progress, done, total)
 
     def cursor_time(self) -> Optional[datetime]:
         return self.now

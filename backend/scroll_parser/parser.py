@@ -119,22 +119,22 @@ class ScrollParser:
         self._log_cb = cb
 
     def _say(self, message: str, level: str = "info") -> None:
-        if self._log_cb:
-            try:
-                self._log_cb(message, level)
-            except Exception:
-                pass
+        from actions.cancellation import call_guarded
+        call_guarded(self._log_cb, message, level)
         log.log(getattr(logging, level.upper(), logging.INFO)
                 if level else logging.INFO, "%s", message)
 
     def _stop_requested(self) -> bool:
-        predicate = self._should_stop
-        if predicate is None:
-            return False
-        try:
-            return bool(predicate())
-        except Exception:
-            return False
+        """True when the caller asked to stop; a broken predicate says no.
+
+        Fail-open lives in `actions.cancellation`, the owner of the stop
+        protocol (RULE 7), so this path and `SyncOptions.stopping` cannot
+        disagree about what a raising predicate means. Imported locally
+        because `actions/__init__` scans the registry, which imports back
+        into backend.
+        """
+        from actions.cancellation import is_stop_requested
+        return is_stop_requested(self._should_stop)
 
     # ── the callbacks into the caller ────────────────────────────
     async def _notify_collected(self, record, result) -> None:

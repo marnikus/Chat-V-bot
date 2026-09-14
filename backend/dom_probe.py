@@ -26,6 +26,8 @@ This gives the UI logger everything it needs to answer:
 import json
 from typing import Optional
 
+from backend.dom_highlight_js import CANDIDATE_LABEL_JS
+
 # Match modes for the (optional) text comparison
 MATCH_CONTAINS = "contains"
 MATCH_EXACT = "exact"
@@ -119,13 +121,7 @@ def build_probe(
     out.total = nodes.length;
     var cands = [];
     for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var el = node;
-      var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
-      if (childSel) {
-        var c = node.querySelector(childSel);
-        if (c) { el = c; label = (c.textContent || '').trim().replace(/\\s+/g, ' '); }
-      }
+%(label)s
       if (label.length > 120) label = label.slice(0, 120) + '…';
       if (matchText !== null && matchText !== undefined && matchText !== '') {
         if (exact) { if (label !== matchText) continue; }
@@ -150,6 +146,7 @@ def build_probe(
   return JSON.stringify(out);
 })()
 """ % {
+        "label": CANDIDATE_LABEL_JS.lstrip("\n"),
         "selector": _js_str(selector),
         "label_selector": _js_str(label_selector) if label_selector else "null",
         "match_text": _js_str(match_text) if match_text else "null",

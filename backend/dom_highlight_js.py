@@ -8,7 +8,8 @@ payloads and interprets the results, which is what the module's tests exercise.
 Keeping the two apart means a change to the in-page DOM walk and a change to
 the result interpretation no longer land in the same file, and neither has to
 be read past the other. The names are unchanged and still private to the
-`dom_highlight` pair; nothing outside imports them.
+`dom_highlight` pair, except `CANDIDATE_LABEL_JS`, which
+`backend/dom_probe.py` also needs and therefore is public.
 """
 
 #: Outline colour used for the FIND phase.
@@ -153,7 +154,13 @@ _QUERY_VARS = """
 
 #: The label of one candidate node: the root's own text, or the inner element
 #: the caller named with ``label_selector``.
-_LABEL_JS = """
+#:
+#: PUBLIC because `backend/dom_probe.py` walks candidates the same way. It was
+#: written out a second time there, and pylint's R0801 flagged the pair: two
+#: copies of "what counts as this node's text" can drift, and then the probe
+#: that reports a match and the probe that highlights it disagree about which
+#: node matched. One definition, two callers.
+CANDIDATE_LABEL_JS = """
       var node = nodes[i];
       var el = node;
       var label = (node.textContent || '').trim().replace(/\\s+/g, ' ');
@@ -209,7 +216,7 @@ __MATCH__
                   clickable: vi.visible && !vi.disabled});
     }
     out.candidates = cands.slice(0, %(maxcand)s);
-""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
+""", query=_QUERY_VARS, label=CANDIDATE_LABEL_JS, match=_MATCH_JS)
 
 
 #: Visual confirmation only: highlight the first match. Never clicks, never
@@ -235,7 +242,7 @@ __MATCH__
       out.highlighted = !!rect;
       break;
     }
-""", query=_QUERY_VARS, label=_LABEL_JS, match=_MATCH_JS)
+""", query=_QUERY_VARS, label=CANDIDATE_LABEL_JS, match=_MATCH_JS)
 
 
 #: Phase 2: re-check the stashed element, draw the ORANGE outline on the

@@ -223,3 +223,26 @@ async def await_with_stop(
         if not task.done():
             await _cancel_and_drain(task)
         raise
+
+
+def call_guarded(callback, *args) -> None:
+    """Invoke a caller-supplied notification callback, absorbing its failures.
+
+    The other half of the stop protocol. A run reports progress to a UI it
+    does not own, and RULE 8 is that a hiccup in that UI must never kill the
+    read or the parse: the work is the point, the notification is advisory.
+    ``None`` and non-callables are no-ops, so callers need no guard of their
+    own.
+
+    Exceptions are swallowed, never logged here — the caller knows what the
+    callback was for and logs with that context (``ScrollParser`` names the
+    record; ``SyncOptions`` stays silent because progress ticks are frequent
+    enough that a log per failure would flood). ``BaseException`` is NOT
+    caught, so ``CancelledError`` and ``KeyboardInterrupt`` still propagate.
+    """
+    if not callable(callback):
+        return
+    try:
+        callback(*args)
+    except Exception:                                # noqa: BLE001
+        pass
