@@ -14,7 +14,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime
 
-from stores.history_models import dedupe_key
+from stores.history_models import LineIdentity, dedupe_key
 from stores.history_repo_identity import TAIL_FP_LIMIT
 from stores.history_requests import WriteContext
 
@@ -23,11 +23,11 @@ log = logging.getLogger("chatbot")
 
 def _hidden_row_key(row: dict) -> str:
     """The identity a hidden row would have once it is visible again."""
-    return dedupe_key(row.get("direction") or "in",
-                      row.get("from_nick") or "",
-                      row.get("ts_display") or "",
-                      row.get("kind") or "text",
-                      row.get("media_url") or row.get("text") or "")
+    return dedupe_key(LineIdentity(row.get("direction") or "in",
+                                   row.get("from_nick") or "",
+                                   row.get("ts_display") or "",
+                                   row.get("kind") or "text",
+                                   row.get("media_url") or row.get("text") or ""))
 
 
 def _sig_or(current: dict, key: str, value):

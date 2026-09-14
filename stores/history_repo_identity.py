@@ -18,7 +18,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
-from stores.history_models import (Alignment, MessageRecord, dedupe_key,
+from stores.history_models import (Alignment, LineIdentity, MessageRecord,
+                                   dedupe_key,
                                    fingerprint)
 from stores.history_requests import PaneSignature, PlacedRecord
 
@@ -350,10 +351,13 @@ class ConversationIdentity:
             await self._owner.db.execute(
                 "UPDATE messages SET from_nick=?, dup_key=?, fp=? WHERE id=?",
                 (clean,
-                 dedupe_key("in", clean, row.get("ts_display") or "",
-                            row.get("kind") or "text", payload),
-                 fingerprint("in", clean, row.get("ts_display") or "",
-                             row.get("kind") or "text", payload, occ),
+                 dedupe_key(LineIdentity("in", clean,
+                                         row.get("ts_display") or "",
+                                         row.get("kind") or "text", payload)),
+                 fingerprint(LineIdentity("in", clean,
+                                          row.get("ts_display") or "",
+                                          row.get("kind") or "text", payload),
+                             occ),
                  int(row["id"])))
         if rows:
             await self._owner.db.commit()

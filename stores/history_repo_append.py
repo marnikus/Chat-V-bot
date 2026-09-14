@@ -20,7 +20,7 @@ from typing import Iterable, Optional
 from stores.history_models import (MAX_LIVE_ITEMS, AppendResult, MessageRecord)
 from stores.history_repo_identity import (_as_record, align_batch,
                                           resolve_days)
-from stores.history_requests import (AlignSpec, PlacedRecord,
+from stores.history_requests import (AlignSpec, AppendRequest, PlacedRecord,
                                      PrependRequest, RowBatch, SlotSearch,
                                      WriteContext)
 
@@ -46,18 +46,14 @@ class AppendPlanner:
         """`owner` is the `HistoryRepo` this part borrows state from."""
         self._owner = owner
 
-    async def append(self, nick: str, records: Iterable, my_nick: str = "",
-                     align: bool = True, expect_idx: Optional[int] = None,
-                     dom_count: int = 0, head_sig: Optional[str] = None,
-                     tail_sig: Optional[str] = None,
-                     now: Optional[datetime] = None,
-                     session_id: str = "",
-                     head_any: Optional[str] = None,
-                     tail_any: Optional[str] = None,
-                     prepend: bool = False) -> AppendResult:
+    async def append(self, req: AppendRequest) -> AppendResult:
         """Archive one collected batch. See `HistoryRepo.append` for the
         contract; the steps are `_align`, `_write_rows` and `_after_write`."""
-        now = now or datetime.now()
+        nick, records, my_nick = req.nick, req.records, req.my_nick
+        align, expect_idx, prepend = req.align, req.expect_idx, req.prepend
+        dom_count, head_sig, tail_sig = req.dom_count, req.head_sig, req.tail_sig
+        head_any, tail_any, session_id = req.head_any, req.tail_any, req.session_id
+        now = req.now or datetime.now()
         person_id = await self._owner.ensure_person(nick)
         recs = [_as_record(r) for r in (records or [])]
         result = AppendResult(person_id=person_id)

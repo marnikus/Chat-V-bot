@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from backend.media_store import MediaStore, MediaOptions  # noqa: E402
+from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
 
 GIF = b"GIF89a" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 500
@@ -61,8 +62,7 @@ class RecoveryCase(unittest.IsolatedAsyncioTestCase):
         self.db = HistoryDB(os.path.join(self.dir, "history.db"))
         await self.db.init()
         self.cdp = FakeCDP({GIF_URL: GIF, PNG_URL: PNG})
-        self.store = MediaStore(self.db, cdp=self.cdp, cache_dir=self.root,
-                                max_file_mb=1, max_cache_mb=10)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=self.root, max_file_mb=1, max_cache_mb=10))
         self.store.now = lambda: DAY
         self.repo = HistoryRepo(self.db, media=self.store, session_id="t")
 
@@ -71,10 +71,10 @@ class RecoveryCase(unittest.IsolatedAsyncioTestCase):
 
     async def _save_missing(self, url="", kind="image", ts="11:55",
                             nick=PARTNER):
-        await self.repo.append(nick, [MessageRecord(
+        await self.repo.append(AppendRequest(nick, [MessageRecord(
             direction="in", from_nick=nick, kind=kind, ts_display=ts,
             media_url=url, media_kind=kind if url else "")],
-            my_nick=ME, now=DAY)
+            my_nick=ME, now=DAY))
         return await self.repo.ensure_person(nick)
 
 
@@ -88,8 +88,8 @@ class TestMissingUrlRecovery(RecoveryCase):
         dom = [MessageRecord(
             direction="in", from_nick=PARTNER, ts_display="11:55",
             kind="image", media_url=PNG_URL, media_kind="image")]
-        changed = await self.repo.recover_media(
-            pid, dom, media=self.store, nick=PARTNER, now=DAY)
+        changed = await self.repo.recover_media(MediaRecoveryRequest(
+            pid, dom, media=self.store, nick=PARTNER, now=DAY))
         self.assertEqual(changed, {"repaired": 1, "requeued": 0,
                                    "scanned": 1})
 
@@ -107,14 +107,14 @@ class TestMissingUrlRecovery(RecoveryCase):
         self.assertTrue(os.path.exists(media["cache_path"]))
 
         # the row is no longer a candidate, so the next backfill does nothing
-        again = await self.repo.recover_media(
-            pid, dom, media=self.store, nick=PARTNER, now=DAY)
+        again = await self.repo.recover_media(MediaRecoveryRequest(
+            pid, dom, media=self.store, nick=PARTNER, now=DAY))
         self.assertEqual(again["repaired"] + again["requeued"], 0)
 
     async def test_a_missing_url_that_is_not_in_the_dom_is_scanned_once(self):
         pid = await self._save_missing(ts="12:00")
-        changed = await self.repo.recover_media(
-            pid, [], media=self.store, nick=PARTNER, now=DAY)
+        changed = await self.repo.recover_media(MediaRecoveryRequest(
+            pid, [], media=self.store, nick=PARTNER, now=DAY))
         self.assertEqual(changed["repaired"] + changed["requeued"], 0)
 
         row = await self.db.fetchone(
@@ -123,8 +123,8 @@ class TestMissingUrlRecovery(RecoveryCase):
         self.assertIsNone(row["media_id"])
         self.assertTrue(row["media_scan_at"])
 
-        second = await self.repo.recover_media(
-            pid, [], media=self.store, nick=PARTNER, now=DAY)
+        second = await self.repo.recover_media(MediaRecoveryRequest(
+            pid, [], media=self.store, nick=PARTNER, now=DAY))
         self.assertEqual(second["repaired"] + second["requeued"], 0)
 
 
@@ -141,14 +141,14 @@ class TestFailedRowRecovery(RecoveryCase):
             "UPDATE media SET state='failed', sha256='', bytes=0, "
             "cache_path='', fail_reason='CORS blocked' WHERE id=?", (mid,))
         await self.db.commit()
-        await self.repo.append(PARTNER, [MessageRecord(
+        await self.repo.append(AppendRequest(PARTNER, [MessageRecord(
             direction="in", from_nick=PARTNER, ts_display="11:56",
             kind="gif", media_url=GIF_URL, media_kind="gif")],
-            my_nick=ME, now=DAY)
+            my_nick=ME, now=DAY))
         pid = await self.repo.ensure_person(PARTNER)
 
-        changed = await self.repo.recover_media(
-            pid, [], media=self.store, nick=PARTNER, now=DAY)
+        changed = await self.repo.recover_media(MediaRecoveryRequest(
+            pid, [], media=self.store, nick=PARTNER, now=DAY))
         self.assertEqual(changed, {"repaired": 0, "requeued": 1,
                                    "scanned": 1})
 

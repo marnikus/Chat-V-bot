@@ -174,22 +174,23 @@ loading. If a test would pass with the feature deleted, it is not a test.
 ## RULE 9 — a guard that skips work must not stall the stack
 
 A setting that makes a phase decline to do its work is only allowed to skip
-*that work*, never the phases downstream of it. When Scroll & Parse skips
-collection because of the backlog guard, `_run_collect_phase()` still returns
-`await self._memory.get_queue()`, so the people already waiting are worked
-through. If it returned `[]` instead, ticking the checkbox would quietly stop
-the entire pipeline — the exact opposite of what the user asked for.
+*that work*, never the phases downstream of it. The rule was born on the
+retired backlog guard: when Scroll & Parse skipped collection, the collect
+phase still returned the memory queue — returning `[]` instead would have
+quietly stopped the entire pipeline, the exact opposite of what the user
+asked for. The guard's knobs are retired (`_RETIRED_KNOBS`); the rule stays,
+and its live carrier is `ScrollRunPart._read_unmessaged`.
 
 Two corollaries:
 
-* **Fail open.** Counting the backlog fails open to `0` at both layers
-  (`ActionEngine.backlog_count()` and `ScrollParse._read_backlog()`), so a
-  counting error can never silently stop collection.
+* **Fail open.** The un-messaged read fails open to an empty set → normal
+  collection, so a read problem can never silently stop the block (the old
+  backlog counting failed open to `0` at both of its layers — same principle).
 * **Skipping is success.** A skipped run returns `ActionResult.OK`, not a
   failure — the guard firing is correct behaviour.
 
-Note the asymmetry, which is intended: a *normal* collect phase returns only the
-people it just collected, while a *skipped* one returns the whole waiting queue.
+The old asymmetry is worth remembering: a *normal* collect phase returned only
+the people it just collected, while a *skipped* one returned the whole queue.
 
 ## RULE 10 — one control per decision
 
@@ -580,10 +581,11 @@ reference implementation of that count is the AST walker in
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
   files move. 2026-09-13, after Rounds G2/G3: **186 files, median 134, 4 still
-  over 500**: `backend/history_query.py` (603), `bridge/history_bridge.py` (544,
+  over 500**: `backend/history_query.py` (601), `bridge/history_bridge.py` (544,
   whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
-  (534), `backend/config_manager.py` (509) — all four scheduled backlog (plan
-  §4, step G7). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
+  (514), `backend/config_manager.py` (507) — still open after Round G, whose G7
+  took the scheduled backlog items instead (two of the four are §16.5
+  landmines). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
   AREA-D freeze protecting three of the old seven; G2/G3 then split the two
   worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
   facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →

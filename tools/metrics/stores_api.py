@@ -126,7 +126,7 @@ def surface() -> dict:
 
 
 def diff(baseline: dict, current: dict, widened=(),
-         allow_new_modules: bool = False) -> list[str]:
+         allow_new_modules: bool = False, migrated=()) -> list[str]:
     """Every removal or signature change, compared with `widened` exemptions.
 
     A module that is not in the baseline at all is an *addition* — which is
@@ -145,7 +145,8 @@ def diff(baseline: dict, current: dict, widened=(),
             have = got["functions"].get(func)
             if have is None:
                 problems.append(f"{dotted} removed")
-            elif not compatible(record, have, dotted in widened):
+            elif not compatible(record, have, dotted in widened,
+                                dotted in migrated):
                 problems.append(f"{dotted} signature changed: "
                                 f"{record.get('sig')} -> {have.get('sig')}")
         for const in expected["constants"]:
@@ -161,7 +162,8 @@ def diff(baseline: dict, current: dict, widened=(),
                 have = live.get(meth)
                 if have is None:
                     problems.append(f"{dotted} removed")
-                elif not compatible(record, have, dotted in widened):
+                elif not compatible(record, have, dotted in widened,
+                                    dotted in migrated):
                     problems.append(f"{dotted} signature changed: "
                                     f"{record.get('sig')} -> {have.get('sig')}")
     for module in current:
@@ -173,12 +175,18 @@ def diff(baseline: dict, current: dict, widened=(),
     return problems
 
 
-def compatible(expected: dict, got: dict, widened: bool) -> bool:
-    """Same surface, or a documented widening that keeps every parameter."""
+def compatible(expected: dict, got: dict, widened: bool,
+               migrated: bool = False) -> bool:
+    """Same surface, a documented widening that keeps every parameter, or a
+    documented G7-style migration (parameter object) whose dropped params are
+    justified in the step's design doc — owner ruling 2026-09-13 lifted the
+    AREA-B freeze, so a migration may reshape a signature on purpose."""
     if expected == got:
         return True
     if expected.get("kind") != got.get("kind"):
         return False
+    if migrated:
+        return True
     if not widened:
         return False
     want = set(expected.get("params") or ())

@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from stores.history_models import MAX_LIVE_ITEMS, SyncResult
+from stores.history_requests import AppendRequest, MediaRecoveryRequest
 
 log = logging.getLogger("chatbot")
 
@@ -67,9 +68,9 @@ class SyncPersister:
     async def touch(self, dom_count: int, *, complete: bool = True) -> None:
         """Write the read position without appending any record."""
         s = self.s
-        await s.repo.append(s.nick, [], my_nick=s.options.my_nick,
+        await s.repo.append(AppendRequest(s.nick, [], my_nick=s.options.my_nick,
                             **self._cursor_kwargs(dom_count, complete=complete),
-                            now=s.options.now)
+                            now=s.options.now))
 
     async def mark_backfilled(self, *, why: str) -> None:
         try:
@@ -101,28 +102,28 @@ class SyncPersister:
     async def stream_chunk(self, records, position: int, *, first: bool) -> None:
         """Append one chunk as it lands (the delta / first-ever-read path)."""
         s = self.s
-        appended = await s.repo.append(
+        appended = await s.repo.append(AppendRequest(
             s.nick, records, my_nick=s.options.my_nick,
             align=first and not s.delta and not s.result.gap,
             expect_idx=position if (s.delta or not first or s.result.gap)
             else None,
-            now=s.options.now)
+            now=s.options.now))
         s.absorb(appended)
 
     async def write_batch(self, records) -> None:
         """Append a whole re-read, letting the archive align it."""
         s = self.s
-        appended = await s.repo.append(s.nick, records,
+        appended = await s.repo.append(AppendRequest(s.nick, records,
                                        my_nick=s.options.my_nick, align=True,
-                                       now=s.options.now)
+                                       now=s.options.now))
         s.absorb(appended)
 
     async def write_backfill(self, records) -> None:
         """Prepend the lines that appeared ABOVE what we already stored."""
         s = self.s
-        appended = await s.repo.append(s.nick, records,
+        appended = await s.repo.append(AppendRequest(s.nick, records,
                                        my_nick=s.options.my_nick, prepend=True,
-                                       now=s.options.now)
+                                       now=s.options.now))
         s.absorb(appended)
 
     # ── media ────────────────────────────────────────────────────
@@ -131,9 +132,9 @@ class SyncPersister:
         if s.options.media is None or not records:
             return
         try:
-            stats = await s.repo.recover_media(
+            stats = await s.repo.recover_media(MediaRecoveryRequest(
                 s.person_id, records, media=s.options.media, nick=s.nick,
-                now=s.options.now, requeue_failed=requeue_failed)
+                now=s.options.now, requeue_failed=requeue_failed))
         except Exception as exc:                     # noqa: BLE001
             log.debug("media recovery for %s failed: %s", s.nick, exc)
             return

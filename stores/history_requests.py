@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Iterable
 
 from stores.history_models import MessageRecord
 
@@ -149,9 +149,9 @@ class PaneSignature:
 
     head_sig: str
     tail_sig: str
-    head_any: str
-    tail_any: str
-    dom_count: int
+    head_any: str = ""
+    tail_any: str = ""
+    dom_count: int = -1
 
 
 @dataclass
@@ -172,6 +172,33 @@ class MediaRecoveryRequest:
     nick: str = ""
     now: Optional[datetime] = None
     requeue_failed: bool = True
+
+
+@dataclass
+class AppendRequest:
+    """One archive-append request.
+
+    Replaces the 13-parameter `AppendPlanner.append` and its `HistoryRepo`
+    facade twin (13 -> 1) — G7 §2, the stores wide-parameter adjudication
+    the F5/G4 freeze blocked. Defaults match the signature it replaced
+    exactly, so a caller that passed two positional args and a keyword or
+    two keeps working unchanged inside the wrapper; `**cursor_kwargs`
+    expansion keeps working because every key it yields is a field here.
+    """
+
+    nick: str
+    records: Iterable
+    my_nick: str = ""
+    align: bool = True
+    expect_idx: Optional[int] = None
+    dom_count: int = 0
+    head_sig: Optional[str] = None
+    tail_sig: Optional[str] = None
+    now: Optional[datetime] = None
+    session_id: str = ""
+    head_any: Optional[str] = None
+    tail_any: Optional[str] = None
+    prepend: bool = False
 
 
 @dataclass

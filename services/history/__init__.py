@@ -9,7 +9,7 @@ from services.collector_service import Collector, DEFAULTS as COLLECTOR_DEFAULTS
 from services.collector_states import CollectorDeps
 from stores.history_db import HistoryDB
 from stores.history_repo import HistoryRepo
-from stores.media_store import MediaStore
+from stores.media_store import MediaOptions, MediaStore
 
 from . import trash
 from .export import HistoryExportService
@@ -33,7 +33,12 @@ class HistoryService(HistoryQueryService, HistoryMutateService, HistoryExportSer
         self._migrate_media_cap()
         self.db = HistoryDB(self._settings["db_path"], use_fts=bool(self._settings["use_fts"]))
         media = self._settings["media"]
-        self.media = MediaStore(self.db, cdp=cdp, cache_dir=media["cache_dir"], max_file_mb=media["max_file_mb"], max_cache_mb=media["max_cache_mb"], enabled=bool(media["enabled"]))
+        self.media = MediaStore(
+            self.db, cdp=cdp,
+            options=MediaOptions(cache_dir=media["cache_dir"],
+                                 max_file_mb=media["max_file_mb"],
+                                 max_cache_mb=media["max_cache_mb"],
+                                 enabled=bool(media["enabled"])))
         self.repo = HistoryRepo(self.db, media=self.media, session_id=self.session_id)
         self.query = HistoryQuery(self.db)
         collector = _merge(COLLECTOR_DEFAULTS, self._stored("collector"))

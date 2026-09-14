@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from services.history import (HistoryService,  # noqa: E402
                                       HISTORY_DEFAULTS, MAX_FILE_MB_DEFAULT,
                                       OLD_MAX_FILE_MB, _merge, _db_stem)
@@ -30,13 +30,14 @@ from services.history import HistoryDeps  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "tests"))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
 
 def rec(text="hi", direction="in", from_nick="Nick", time="17:31"):
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, "text", text, 0),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, "text", text), 0),
         direction=direction, from_nick=from_nick, kind="text", text=text,
         media_url="", media_kind="", ts_display=time, occ=0, idx=0)
 
@@ -81,7 +82,7 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
         batch = [rec(text=f"line {i}", direction="in" if i % 2 else "out",
                      from_nick=my_nick if i % 2 else nick,
                      time=f"1{i}:0{i}") for i in range(n)]
-        await self.service.repo.append(nick, batch, my_nick=my_nick, now=NOW)
+        await self.service.repo.append(AppendRequest(nick, batch, my_nick=my_nick, now=NOW))
 
     async def world_undo_rows(self):
         if not self.service.db.is_open:

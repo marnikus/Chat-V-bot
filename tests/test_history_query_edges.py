@@ -27,7 +27,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_query import (  # noqa: E402
     MAX_LIMIT,
     _fts_query,
@@ -36,6 +36,7 @@ from backend.history_query import (  # noqa: E402
     PersonPageRequest,
 )
 from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -43,7 +44,7 @@ NOW = datetime(2026, 9, 6, 18, 30, 0)
 def rec(text="hi", direction="in", from_nick="Nick", time="17:31",
         occ=0, idx=0):
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, "text", text, occ),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, "text", text), occ),
         direction=direction, from_nick=from_nick, kind="text", text=text,
         ts_display=time, occ=occ, idx=idx)
 
@@ -66,7 +67,7 @@ class QueryCase(unittest.IsolatedAsyncioTestCase):
         batch = [rec(text=f"line {i}", idx=i, from_nick=nick,
                      time="1%d:%02d" % (i // 60, i % 60))
                  for i in range(n)]
-        await self.repo.append(nick, batch, my_nick="Me", now=NOW)
+        await self.repo.append(AppendRequest(nick, batch, my_nick="Me", now=NOW))
 
 
 class TestFtsSafety(QueryCase):
@@ -107,7 +108,7 @@ class TestFtsSafety(QueryCase):
     async def test_cyrillic_case_folds_in_search(self):
         batch = [rec(text="Привет МИР", idx=0),
                  rec(text="пока друг", idx=1)]
-        await self.repo.append("Nick", batch, my_nick="Me", now=NOW)
+        await self.repo.append(AppendRequest("Nick", batch, my_nick="Me", now=NOW))
         person = await self.q.search_person("Nick", "привет мир")
         self.assertEqual(person["total"], 1)
 
@@ -122,8 +123,8 @@ class TestLikeEscape(QueryCase):
 
     async def test_percent_in_nick_filter_is_literal(self):
         for nick in ("Ann", "Anndrea", "Ann%100", "Ann_200"):
-            await self.repo.append(nick, [rec(text="x", idx=0)],
-                                   my_nick="Me", now=NOW)
+            await self.repo.append(AppendRequest(nick, [rec(text="x", idx=0)],
+                                   my_nick="Me", now=NOW))
         # "Ann%" must find only the nick literally containing "Ann%" —
         # as a wildcard it would also return plain "Ann" and "Anndrea"
         out = await self.q.list_persons(PersonPageRequest(q="Ann%"))
@@ -218,11 +219,11 @@ class TestEmptyDatabaseCounters(QueryCase):
         self.assertFalse(out["has_more"])
 
     async def test_sort_modes_and_q_filter(self):
-        await self.repo.append("b", [rec(text="x", idx=0)],
-                               my_nick="Me", now=NOW)
-        await self.repo.append("a", [rec(text="x", idx=0), rec(text="y",
+        await self.repo.append(AppendRequest("b", [rec(text="x", idx=0)],
+                               my_nick="Me", now=NOW))
+        await self.repo.append(AppendRequest("a", [rec(text="x", idx=0), rec(text="y",
                                      idx=1, occ=1)],
-                               my_nick="Me", now=NOW)
+                               my_nick="Me", now=NOW))
         by_nick = await self.q.list_persons(PersonPageRequest(sort="nick"))
         self.assertEqual([i["nick"] for i in by_nick["items"]], ["a", "b"])
         by_messages = await self.q.list_persons(PersonPageRequest(sort="messages"))
@@ -234,11 +235,11 @@ class TestEmptyDatabaseCounters(QueryCase):
                          "an unknown sort must fall back, not fail")
 
     async def test_search_global_groups_by_person(self):
-        await self.repo.append("Ann", [rec(text="apple pie", idx=0),
+        await self.repo.append(AppendRequest("Ann", [rec(text="apple pie", idx=0),
                                        rec(text="apple juice", idx=1)],
-                               my_nick="Me", now=NOW)
-        await self.repo.append("Bea", [rec(text="apple tart", idx=0)],
-                               my_nick="Me", now=NOW)
+                               my_nick="Me", now=NOW))
+        await self.repo.append(AppendRequest("Bea", [rec(text="apple tart", idx=0)],
+                               my_nick="Me", now=NOW))
         out = await self.q.search_global("apple")
         self.assertEqual(out["persons"], 2)
         self.assertEqual(out["groups"][0]["nick"], "Ann",

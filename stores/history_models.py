@@ -41,22 +41,39 @@ def _int_or(value, default: int) -> int:
         return default
 
 
-def fingerprint(direction: str, from_nick: str, ts_display: str, kind: str,
-                payload: str, occ: int = 0) -> str:
+@dataclass(frozen=True)
+class LineIdentity:
+    """The five fields that identify one chat line.
+
+    Replaces the flat parameter lists of `fingerprint` (6 -> 2) and
+    `dedupe_key` (5 -> 1) — G7 §2, the stores wide-parameter adjudication.
+    Every caller (the record, the identity/lifecycle/repair row walkers, the
+    JS-pinned value tests) has exactly these five values in hand, and the
+    field order is the SEP-join order the hashes are computed over, so
+    positional construction reads the same as the tuple it replaced.
+    """
+
+    direction: str
+    from_nick: str
+    ts_display: str
+    kind: str
+    payload: str
+
+
+def fingerprint(line: LineIdentity, occ: int = 0) -> str:
     """Stable identity of one chat line.
 
-    `payload` is the message text, or the media URL for an image/GIF.
+    `line.payload` is the message text, or the media URL for an image/GIF.
     `occ` distinguishes literally identical lines in the same minute.
     """
-    joined = SEP.join([str(direction or ""), str(from_nick or ""),
-                       str(ts_display or ""), str(kind or "text"),
-                       str(payload or ""), str(int(occ or 0))])
+    joined = SEP.join([str(line.direction or ""), str(line.from_nick or ""),
+                       str(line.ts_display or ""), str(line.kind or "text"),
+                       str(line.payload or ""), str(int(occ or 0))])
     return "%08x%08x" % (_fnv1a(joined, _FNV_OFFSET),
                          _fnv1a(joined + "\u0001", _FNV_PRIME))
 
 
-def dedupe_key(direction: str, from_nick: str, ts_display: str, kind: str,
-               payload: str) -> str:
+def dedupe_key(line: LineIdentity) -> str:
     """The identity the archive deduplicates on.
 
     The site exposes no message id. A line is therefore identified by the
@@ -67,7 +84,7 @@ def dedupe_key(direction: str, from_nick: str, ts_display: str, kind: str,
     so re-reading the same line with older duplicates prepended changes them
     and produces the 2x/3x duplicate rows.
     """
-    return fingerprint(direction, from_nick, ts_display, kind, payload, 0)
+    return fingerprint(line, 0)
 
 
 def _media_payload(data: dict) -> dict:
@@ -115,14 +132,15 @@ class MessageRecord:
     @property
     def dup_key(self) -> str:
         """Timestamp + content identity used for idempotent storage."""
-        return dedupe_key(self.direction, self.from_nick, self.ts_display,
-                          self.kind, self.payload)
+        return dedupe_key(LineIdentity(self.direction, self.from_nick,
+                                       self.ts_display, self.kind,
+                                       self.payload))
 
     def ensure_fp(self) -> str:
         if not self.fp:
-            self.fp = fingerprint(self.direction, self.from_nick,
-                                  self.ts_display, self.kind, self.payload,
-                                  self.occ)
+            self.fp = fingerprint(LineIdentity(self.direction, self.from_nick,
+                                               self.ts_display, self.kind,
+                                               self.payload), self.occ)
         return self.fp
 
     def to_dict(self) -> dict:
