@@ -585,7 +585,15 @@ reference implementation of that count is the AST walker in
   whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
   (514), `backend/config_manager.py` (507) — still open after Round G, whose G7
   took the scheduled backlog items instead (two of the four are §16.5
-  landmines). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
+  landmines). **2026-09-14, after Round H Areas C + B: 237 files, median 124,
+  3 still over 500** — `backend/history_query.py` (531, whose H-B2 half moved
+  the FTS/LIKE back-end into `backend/history_query_search.py`),
+  `backend/dom_highlight.py` (514), `backend/config_manager.py` (511).
+  `bridge/history_bridge.py` left the band (544 → 241) when H-B1 moved its
+  twenty-one @Slot bodies into the four `history_bridge_*` parts, and
+  `backend/cdp_client.py` went 331 → 226 with the transport/events split (H-B6):
+  [`AREA_B_REBUILD_2026-09-14.md`](../archive/2026-09-14-round-h/AREA_B_REBUILD_2026-09-14.md).
+  The owner ruling of 2026-09-13 (Round G design §1c) lifted the
   AREA-D freeze protecting three of the old seven; G2/G3 then split the two
   worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
   facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →
@@ -610,7 +618,7 @@ reference implementation of that count is the AST walker in
   `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
   protocol, and `stores/`'s eight single-domain stores each import the JSON write
   layer while importing none of each other — eight modules, not one family.
-* `stores/` is therefore 37 files counting as **15** modules (`history_*`,
+* `stores/` is therefore 45 files counting as **15** modules (`history_*`,
   `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
   aggregate/collaborator pairs, eight single-domain stores). The family layout
   stands on its own merits, not on a freeze: the AREA-B dotted-key contract that

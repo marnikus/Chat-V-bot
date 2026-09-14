@@ -219,6 +219,18 @@ OWNED = [
 # The method count drops by one because the gate counts nested defs through
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
+# Round H step H-B1 (`2026-09-14`, AREA_B_BACKEND_BRIDGE_DESIGN §3) then moved
+# the twenty-one @Slot bodies into the four `history_bridge_*` part modules:
+# 467 LOC / 44 -> 180 LOC / 27 methods — the seven Signals and the twenty-one
+# @Slots the QWebChannel wire pins, plus the guarded runner (`_run_async` /
+# `_schedule`), `_json_arg`, `_ask` and `_run_if_archive`. Re-frozen at the
+# measured 180/27: the slots cannot shrink (the frontend calls every one of
+# them by name), so the LOC axis is where the split's gain lives.
+# `HistoryQuery` was re-frozen at 362/14 by the sortable-columns feature; Round
+# H step H-B2 moved the FTS/LIKE back-end into `backend/history_query_search.py`
+# (`search` + `_fts_query` / `_like_escape` / `_snippet`), which took the class
+# to the measured 266/14. Re-frozen there — the remaining half of H-B2 (the row
+# projection) can still shrink it, but nothing may hand the 96 LOC back.
 # `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
 # ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
 # documents, shipped while the file sat outside the OWNED scan. The Speed
@@ -227,8 +239,8 @@ OWNED = [
 # is module-level and the call site is net-zero lines, deliberately, so the
 # ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    ("backend/history_query.py", "HistoryQuery"): {"loc": 266, "methods": 14},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 180, "methods": 27},
     ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
                                                        "methods": 12},
 }

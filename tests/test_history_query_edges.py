@@ -30,11 +30,10 @@ from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_query import (  # noqa: E402
     MAX_LIMIT,
-    _fts_query,
-    _like_escape,
     HistoryQuery,
     PersonPageRequest,
 )
+from backend.history_query_search import _fts_query, _like_escape  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from stores.history_requests import AppendRequest  # noqa: E402
 
