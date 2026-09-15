@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **108 archived ones**. That is
+This repository has **three current docs** and **109 archived ones**. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 108 archived docs
+    ├── README.md                    ← index of all 109 archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -36,7 +36,8 @@ docs/
     ├── 2026-09-13-speed-multiplier/  ← global wait-speed multiplier
     ├── 2026-09-14-round-h/           ← Round H: the four-area plan (JS gate, spine, cohesion, verification)
     ├── 2026-09-14-round-i/           ← Round I: the sleep ratchet + the two worst files
-    └── 2026-09-15-round-j-area-b-closure/  ← Round J: the eight Area B criteria closed (newest)
+    ├── 2026-09-15-round-j-area-b-closure/  ← Round J: the eight Area B criteria closed
+    └── 2026-09-15-round-k-test-time/  ← Round K: the suite's wall clock measured, and the redesign that removes the waiting (newest)
 ```
 
 Also in the repo, not under `docs/`:

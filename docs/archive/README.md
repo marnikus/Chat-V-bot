@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**108 documents in 24 groups.**
+**109 documents in 25 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -37,6 +37,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 6 | Round H: the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. Areas A, C and D remain plans; Area B was partly rebuilt (step H-B6, H-B1 and the search half of H-B2) and that rebuild has its own record here. |
 | [`2026-09-14-round-i/`](#2026-09-14-round-i) | 1 | Round I: the sleep ratchet and wait-inventory work on the two worst files, the functions over the length cap, and the tests that only passed by luck. |
 | [`2026-09-15-round-j-area-b-closure/`](#2026-09-15-round-j-area-b-closure) | 1 | Round J: the eight Area B criteria the rebuild left open, each met — the history-bridge wire facade, the `history_query` and `config_manager` families, the DOM-highlight and media payload modules, the router split with the `Router(ctx=…)` parameter object, the parser gate/settle split, and `CDPClient`'s inherited command verbs. |
+| [`2026-09-15-round-k-test-time/`](#2026-09-15-round-k-test-time) | 1 | Round K: where the suite's 6½ minutes actually go — 252 s of a 386 s run is literally `asyncio.sleep`, 154 s is CPU — and the redesign that removes the waiting: signalled waits instead of fixed budgets, a clock seam for the production poll loops, a gate tier, `pytest-xdist`, and a wait-budget ratchet in seconds. |
 
 ---
 
@@ -414,3 +415,22 @@ half of the design.
 *1 doc.*
 
 - [`ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md`](2026-09-15-round-j-area-b-closure/ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md) — The eight open criteria re-measured, the three findings that decide how each step is done, the nine steps with their file ownership, what the round does not do, the definition of done, and the as-built record: what landed, what the plan got wrong and why.
+
+
+---
+
+## 2026-09-15-round-k-test-time
+
+Round K — the test suite's wall clock. Written from a measurement, not an
+intuition: a full-suite duration profile, a wait-budget probe that attributes
+every `asyncio.sleep`, subprocess and SQLite connect to the test and the file
+that paid for it, a per-tier split, a coverage A/B, and three whole-suite
+counter-experiments (parallelism, a sleep cap, a virtual clock — the last two
+rejected, with the failure counts that rejected them). It proposes five layers —
+signalled waits, a clock seam for the production poll loops, a gate tier,
+`pytest-xdist`, and a ratchet measured in seconds — with one commit per step and
+a number that closes each one.
+
+*1 doc.*
+
+- [`ROUND_K_TEST_TIME_DESIGN_2026-09-15.md`](2026-09-15-round-k-test-time/ROUND_K_TEST_TIME_DESIGN_2026-09-15.md) — The measurement (wall clock, CPU, wait budget, per-tier, coverage tax), the two conventions the numbers *disprove* (fixture scoping, import slimming), the three counter-experiments, the five design layers, the eight steps with their file ownership and acceptance numbers, the command matrix, the risks, and what the round deliberately does not do.
