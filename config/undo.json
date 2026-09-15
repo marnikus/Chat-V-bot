@@ -14,97 +14,6 @@
           "block_id": "CLICK_MAIN_TAB"
         },
         {
-          "enabled": true,
-          "block_id": "CONDITIONAL_SKIP",
-          "pre_delay_ms": 0
-        },
-        {
-          "max_scrolls": 50,
-          "scroll_pause_ms": 800,
-          "scroll_delta_y": 300,
-          "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
-          "load_timeout_ms": 2500,
-          "stall_threshold": 3,
-          "min_new_users": 1,
-          "person_selector": "user-item",
-          "nick_selector": ".primary-text",
-          "highlight_enabled": true,
-          "highlight_ms": 900,
-          "confirm_pause_ms": 500,
-          "purge_rejected": true,
-          "scroll_only": false,
-          "filter_female": "yes",
-          "filter_registered": "no",
-          "filter_guest": "yes",
-          "filter_anonymous": "no",
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "SCROLL_PARSE"
-        },
-        {
-          "selector": "user-item",
-          "label_selector": ".primary-text",
-          "click_selector": ".user-container",
-          "tab_selector": "div[role='tab'].tab-item",
-          "tab_title_selector": "p.chat-title",
-          "verify_new_tab": true,
-          "tab_pause_ms": 800,
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "respect_order": false,
-          "use_person_from_memory": false,
-          "pre_delay_ms": 1000,
-          "enabled": true,
-          "block_id": "CLICK_USER"
-        },
-        {
-          "target_selector": "textarea[placeholder='Сообщение']",
-          "timeout_ms": 5000,
-          "pre_delay_ms": 200,
-          "enabled": true,
-          "block_id": "WAIT_PAGE_LOAD"
-        },
-        {
-          "message": "",
-          "use_composer": false,
-          "typing_speed_ms": 30,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "TYPE_MESSAGE"
-        },
-        {
-          "selector": "button[type='submit']",
-          "fallback_selector": "button:has(mat-icon)",
-          "fallback_text": "send",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 300,
-          "enabled": true,
-          "block_id": "CLICK_SEND"
-        },
-        {
-          "multiplier": 0.5,
-          "enabled": true,
-          "block_id": "SPEED_MULTIPLIER",
-          "pre_delay_ms": 0
-        }
-      ],
-      "seq": 316
-    },
-    {
-      "kind": "stack",
-      "value": [
-        {
-          "selector": "div[role='tab'].tab-item",
-          "child_selector": "p.chat-title",
-          "tab_name": "Гостиная",
-          "highlight_enabled": true,
-          "confirm_pause_ms": 700,
-          "pre_delay_ms": 500,
-          "enabled": true,
-          "block_id": "CLICK_MAIN_TAB"
-        },
-        {
           "max_scrolls": 50,
           "scroll_pause_ms": 800,
           "scroll_delta_y": 300,
@@ -5949,6 +5858,11 @@
       "kind": "grid",
       "value": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"labels\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[61.82458888018794,38.17541111981206]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[51.60575858250277,27.26155869324474,21.13268272425249]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[59.671104150352384,40.32889584964761]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[66.80095220655556,26.735030214246475,6.46401757919795]}}",
       "seq": 563
+    },
+    {
+      "kind": "grid",
+      "value": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"labels\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[61.82458888018794,38.17541111981206]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[51.60590277777778,12.727430555555555,35.66666666666667]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[59.671104150352384,40.32889584964761]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[66.80095220655556,26.735030214246475,6.46401757919795]}}",
+      "seq": 576
     }
   ],
   "index": 65
