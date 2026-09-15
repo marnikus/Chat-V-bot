@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.probe_requests import (  # noqa: E402
+    ClickProbeSpec, FindProbeSpec, HighlightSpec)
 from backend.dom_probe import MATCH_CONTAINS  # noqa: E402
 from backend.dom_highlight import (  # noqa: E402
     COLOR_CLICK,
@@ -74,7 +76,7 @@ def overlay_css(res):
 # ── what the highlight probe leaves on the page ─────────────────────
 def test_highlight_draws_one_green_overlay_captioned_match():
     (res,), eff = run_js(
-        [build_highlight_probe("user-item", ".primary-text", "Anna")],
+        [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
         page("Anna", "Bela"))
     assert res["found"] is True and res["phase"] == "highlight"
     assert res["highlighted"] is True
@@ -87,7 +89,7 @@ def test_highlight_draws_one_green_overlay_captioned_match():
 def test_highlight_never_clicks_and_never_moves_the_viewport():
     """The scroll parser runs this mid-scroll: a scrollIntoView would corrupt it."""
     (res,), eff = run_js(
-        [build_highlight_probe("user-item", ".primary-text", "Anna")],
+        [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
         page("Anna"))
     assert eff["clicks"] == []
     assert eff["scrolled"] == []
@@ -95,10 +97,9 @@ def test_highlight_never_clicks_and_never_moves_the_viewport():
 
 def test_highlight_leaves_the_click_stash_to_the_find_probe():
     """Find → highlight → click: the click must still land on the found node."""
-    exprs = [build_find_probe("user-item", ".primary-text", "Bela",
-                              highlight=False),
-             build_highlight_probe("user-item", ".primary-text", "Anna"),
-             build_click_probe(highlight=False)]
+    exprs = [build_find_probe("user-item", FindProbeSpec(".primary-text", "Bela", highlight=False)),
+             build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna")),
+             build_click_probe(spec=ClickProbeSpec(highlight=False))]
     results, eff = run_js(exprs, page("Anna", "Bela"))
     assert results[0]["text"] == "Bela"
     assert results[2]["clicked"] is True
@@ -108,7 +109,7 @@ def test_highlight_leaves_the_click_stash_to_the_find_probe():
 
 def test_hidden_match_is_reported_and_gets_no_overlay():
     (res,), eff = run_js(
-        [build_highlight_probe("user-item", ".primary-text", "Anna")],
+        [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
         page("Anna", hidden=(0,)))
     assert res["found"] is True and res["visible"] is False
     assert res["clickable"] is False
@@ -117,29 +118,22 @@ def test_hidden_match_is_reported_and_gets_no_overlay():
 
 def test_highlight_defaults_to_exact_matching():
     nodes = page("Annabelle", "Anna")
-    (res,), _ = run_js([build_highlight_probe("user-item", ".primary-text",
-                                              "Anna")], nodes)
+    (res,), _ = run_js([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))], nodes)
     assert res["index"] == 1                      # never the longer name
-    (res,), _ = run_js([build_highlight_probe("user-item", ".primary-text",
-                                              "Anna",
-                                              match_mode=MATCH_CONTAINS)], nodes)
+    (res,), _ = run_js([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", match_mode=MATCH_CONTAINS))], nodes)
     assert res["index"] == 0
 
 
 def test_overlay_lifetime_follows_highlight_ms():
-    _, eff = run_js([build_highlight_probe("user-item", ".primary-text",
-                                           "Anna", highlight_ms=321)],
+    _, eff = run_js([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", highlight_ms=321))],
                     page("Anna"))
     assert eff["timers"] == [321]
-    _, eff = run_js([build_highlight_probe("user-item", ".primary-text",
-                                           "Anna", highlight_ms=0)], page("Anna"))
+    _, eff = run_js([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", highlight_ms=0))], page("Anna"))
     assert eff["timers"] == [1200]                # never an invisible flash
 
 
 def test_colour_and_caption_are_the_callers_to_choose():
-    (res,), eff = run_js([build_highlight_probe("user-item", ".primary-text",
-                                                "Anna", color=COLOR_CLICK,
-                                                caption="STEP 4")], page("Anna"))
+    (res,), eff = run_js([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", color=COLOR_CLICK, caption="STEP 4"))], page("Anna"))
     css = overlay_css(eff["overlays"][0][0])
     assert f"outline:2px solid {COLOR_CLICK}" in css
     # the overlay must never eat a click or move the page
@@ -150,36 +144,30 @@ def test_colour_and_caption_are_the_callers_to_choose():
 
 # ── overlays accumulating or being cleared ──────────────────────────
 def test_clear_first_replaces_the_previous_overlay():
-    exprs = [build_highlight_probe("user-item", ".primary-text", "Anna"),
-             build_highlight_probe("user-item", ".primary-text", "Bela")]
+    exprs = [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna")),
+             build_highlight_probe("user-item", HighlightSpec(".primary-text", "Bela"))]
     _, eff = run_js(exprs, page("Anna", "Bela"))
     assert [len(phase) for phase in eff["overlays"]] == [1, 1]
 
 
 def test_clear_first_false_marks_every_match_of_the_pass():
-    exprs = [build_highlight_probe("user-item", ".primary-text", "Anna",
-                                   clear_first=False),
-             build_highlight_probe("user-item", ".primary-text", "Bela",
-                                   clear_first=False)]
+    exprs = [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", clear_first=False)),
+             build_highlight_probe("user-item", HighlightSpec(".primary-text", "Bela", clear_first=False))]
     _, eff = run_js(exprs, page("Anna", "Bela"))
     assert [len(phase) for phase in eff["overlays"]] == [1, 2]
 
 
 def test_find_probe_also_clears_before_drawing():
-    exprs = [build_highlight_probe("user-item", ".primary-text", "Anna",
-                                   clear_first=False, color=COLOR_COLLECT),
-             build_find_probe("user-item", ".primary-text", "Bela",
-                              color=COLOR_FIND)]
+    exprs = [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", clear_first=False, color=COLOR_COLLECT)),
+             build_find_probe("user-item", FindProbeSpec(".primary-text", "Bela", color=COLOR_FIND))]
     _, eff = run_js(exprs, page("Anna", "Bela"))
     assert len(eff["overlays"][1]) == 1
     assert f"solid {COLOR_FIND}" in overlay_css(eff["overlays"][1][0])
 
 
 def test_clear_probe_removes_exactly_the_overlays_and_says_how_many():
-    exprs = [build_highlight_probe("user-item", ".primary-text", "Anna",
-                                   clear_first=False),
-             build_highlight_probe("user-item", ".primary-text", "Bela",
-                                   clear_first=False),
+    exprs = [build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna", clear_first=False)),
+             build_highlight_probe("user-item", HighlightSpec(".primary-text", "Bela", clear_first=False)),
              build_clear_probe()]
     results, eff = run_js(exprs, page("Anna", "Bela"))
     assert len(eff["overlays"][1]) == 2
@@ -205,7 +193,7 @@ def test_clear_probe_only_touches_its_own_attribute():
 
 def test_the_probe_marks_every_overlay_with_the_shared_attribute():
     """The clear probe's query and the drawing helper share HIGHLIGHT_ATTR."""
-    drawn = build_highlight_probe("user-item", color=COLOR_COLLECT)
+    drawn = build_highlight_probe("user-item", HighlightSpec(color=COLOR_COLLECT))
     assert f"'{HIGHLIGHT_ATTR}'" in drawn or f'"{HIGHLIGHT_ATTR}"' in drawn
     assert HIGHLIGHT_ATTR in build_clear_probe()
     assert STASH_KEY in build_find_probe("user-item")

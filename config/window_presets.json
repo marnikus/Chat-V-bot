@@ -290,6 +290,339 @@
         "height": 1377,
         "device_pixel_ratio": 1
       }
+    },
+    "v2": {
+      "format": "chat-v-bot.window-preset",
+      "schema_version": 1,
+      "app_version": "0.1.0",
+      "name": "v2",
+      "created_at": "2026-09-15T11:12:18.198Z",
+      "updated_at": "2026-09-15T11:12:18.198Z",
+      "grid": {
+        "type": "sash-tree",
+        "version": 4,
+        "window_count": 14,
+        "sizes_unit": "percent",
+        "tree": {
+          "t": "split",
+          "dir": "col",
+          "children": [
+            {
+              "t": "split",
+              "dir": "col",
+              "children": [
+                {
+                  "t": "split",
+                  "dir": "row",
+                  "children": [
+                    {
+                      "t": "split",
+                      "dir": "col",
+                      "children": [
+                        {
+                          "t": "leaf",
+                          "id": "stats"
+                        },
+                        {
+                          "t": "leaf",
+                          "id": "labels"
+                        },
+                        {
+                          "t": "leaf",
+                          "id": "filters"
+                        }
+                      ],
+                      "sizes": [
+                        35,
+                        32.5,
+                        32.5
+                      ]
+                    },
+                    {
+                      "t": "split",
+                      "dir": "row",
+                      "children": [
+                        {
+                          "t": "leaf",
+                          "id": "stack"
+                        },
+                        {
+                          "t": "leaf",
+                          "id": "config"
+                        }
+                      ],
+                      "sizes": [
+                        63.829787234042556,
+                        36.17021276595745
+                      ]
+                    }
+                  ],
+                  "sizes": [
+                    35.35630383711825,
+                    64.64369616288175
+                  ]
+                },
+                {
+                  "t": "split",
+                  "dir": "row",
+                  "children": [
+                    {
+                      "t": "leaf",
+                      "id": "people"
+                    },
+                    {
+                      "t": "leaf",
+                      "id": "log"
+                    }
+                  ],
+                  "sizes": [
+                    61.82458888018794,
+                    38.17541111981206
+                  ]
+                },
+                {
+                  "t": "split",
+                  "dir": "row",
+                  "children": [
+                    {
+                      "t": "leaf",
+                      "id": "history"
+                    },
+                    {
+                      "t": "leaf",
+                      "id": "userdb"
+                    },
+                    {
+                      "t": "split",
+                      "dir": "row",
+                      "children": [
+                        {
+                          "t": "leaf",
+                          "id": "collector"
+                        },
+                        {
+                          "t": "leaf",
+                          "id": "dbconn"
+                        }
+                      ],
+                      "sizes": [
+                        51.967709384460136,
+                        48.03229061553986
+                      ]
+                    }
+                  ],
+                  "sizes": [
+                    24.058084772370485,
+                    29.43485086342229,
+                    46.507064364207224
+                  ]
+                }
+              ],
+              "sizes": [
+                51.60575858250277,
+                27.26155869324474,
+                21.13268272425249
+              ]
+            },
+            {
+              "t": "split",
+              "dir": "row",
+              "children": [
+                {
+                  "t": "leaf",
+                  "id": "botchat"
+                },
+                {
+                  "t": "leaf",
+                  "id": "botprompt"
+                }
+              ],
+              "sizes": [
+                59.671104150352384,
+                40.32889584964761
+              ]
+            },
+            {
+              "t": "leaf",
+              "id": "composer"
+            }
+          ],
+          "sizes": [
+            66.80095220655556,
+            26.735030214246475,
+            6.46401757919795
+          ]
+        }
+      },
+      "windows": [
+        {
+          "id": "stats",
+          "title": "Stats",
+          "state": "closed",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        {
+          "id": "filters",
+          "title": "Filters",
+          "state": "closed",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        {
+          "id": "stack",
+          "title": "Action Stack",
+          "state": "open",
+          "bounds": {
+            "x": 0.355078,
+            "y": 0,
+            "width": 0.410156,
+            "height": 0.362006
+          }
+        },
+        {
+          "id": "config",
+          "title": "Block Config",
+          "state": "open",
+          "bounds": {
+            "x": 0.767578,
+            "y": 0,
+            "width": 0.232422,
+            "height": 0.362006
+          }
+        },
+        {
+          "id": "composer",
+          "title": "Message Composer",
+          "state": "closed",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        {
+          "id": "people",
+          "title": "User Memory",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.366682,
+            "width": 0.616797,
+            "height": 0.191239
+          }
+        },
+        {
+          "id": "log",
+          "title": "Log Console",
+          "state": "open",
+          "bounds": {
+            "x": 0.619141,
+            "y": 0.366682,
+            "width": 0.380859,
+            "height": 0.191239
+          }
+        },
+        {
+          "id": "history",
+          "title": "Person History",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.562597,
+            "width": 0.239453,
+            "height": 0.148237
+          }
+        },
+        {
+          "id": "userdb",
+          "title": "Full User Database",
+          "state": "open",
+          "bounds": {
+            "x": 0.241797,
+            "y": 0.562597,
+            "width": 0.292969,
+            "height": 0.148237
+          }
+        },
+        {
+          "id": "collector",
+          "title": "Chat Message Collector",
+          "state": "open",
+          "bounds": {
+            "x": 0.537109,
+            "y": 0.562597,
+            "width": 0.239337,
+            "height": 0.148237
+          }
+        },
+        {
+          "id": "labels",
+          "title": "Label Manager",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0.352734,
+            "height": 0.362006
+          }
+        },
+        {
+          "id": "dbconn",
+          "title": "DB Connection",
+          "state": "open",
+          "bounds": {
+            "x": 0.77879,
+            "y": 0.562597,
+            "width": 0.22121,
+            "height": 0.148237
+          }
+        },
+        {
+          "id": "botchat",
+          "title": "AI Bot Chat",
+          "state": "open",
+          "bounds": {
+            "x": 0,
+            "y": 0.715511,
+            "width": 0.595313,
+            "height": 0.284489
+          }
+        },
+        {
+          "id": "botprompt",
+          "title": "Grok Prompt Editor",
+          "state": "open",
+          "bounds": {
+            "x": 0.597656,
+            "y": 0.715511,
+            "width": 0.402344,
+            "height": 0.284489
+          }
+        }
+      ],
+      "window_states": {
+        "closed": [
+          "stats",
+          "filters",
+          "composer"
+        ],
+        "minimized": []
+      },
+      "screen": {
+        "width": 2560,
+        "height": 1377,
+        "device_pixel_ratio": 1
+      }
     }
   }
 }

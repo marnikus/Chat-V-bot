@@ -58,9 +58,9 @@ global.StackDrag = { attach() {}, dragging: false };
 
 // Load the real shipped module. It declares `const StackDnD = {...}` at top
 // level and binds the init listener, so evaluate it in this scope.
-const src = fs.readFileSync(
-  path.join(__dirname, '..', 'ui', 'js', 'stack-dnd.js'), 'utf8');
-const StackDnD = new Function(src + '\nreturn StackDnD;')();
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.stackDnd, { except: ['stack-drag.js'] });
+const StackDnD = global.StackDnD;
 StackDnD.init();
 
 // ── tiny assertion kit ──────────────────────────────────────────────

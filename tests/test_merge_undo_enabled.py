@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.scroll_parse import ScrollParse  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
@@ -54,7 +55,7 @@ def run_stack(blocks, seed=()):
             await mem.upsert_user(UserRecord(nick=nick, gender="female",
                                              guest=True))
         cdp = HighlightCDP(PAGES, page_height=100)
-        eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
         eng.load_stack(blocks)
         await eng.execute()
         names = sorted(u.nick for u in await mem.get_all())
@@ -123,14 +124,26 @@ class TestSettingsCoexist(unittest.TestCase):
 
 # ── the merged UI must not lose either side ──────────────────────
 class TestMergedUI(unittest.TestCase):
+    STACK_DND_FAMILY = [
+        "core/ui-helpers.js", "stack-drag.js", "stack-dnd-history.js",
+        "stack-dnd-render.js", "stack-dnd-menu.js", "stack-dnd-config.js",
+        "stack-dnd-form.js", "stack-dnd.js",
+    ]
+
+    def _read_stack_family(self):
+        # Round H (H-A4): the stack-dnd surface spans facade + part files;
+        # UI contracts are asserted against the whole family (same order as
+        # ui/index.html / tests/js_family.js).
+        base = os.path.join(os.path.dirname(__file__), "..", "ui", "js")
+        return "".join(open(os.path.join(base, f), encoding="utf-8").read()
+                       for f in self.STACK_DND_FAMILY)
+
     def setUp(self):
-        with open(os.path.join(UI_DIR, "js", "stack-dnd.js"),
-                  encoding="utf-8") as fh:
-            self.js = fh.read()
+        self.js = self._read_stack_family()
 
     def test_no_conflict_markers_anywhere(self):
-        for name in ("js/stack-dnd.js", "js/app.js", "js/presets-ui.js",
-                     "css/stack.css", "index.html"):
+        for name in tuple("js/" + f for f in self.STACK_DND_FAMILY) + (
+                "js/app.js", "js/presets-ui.js", "css/stack.css", "index.html"):
             with open(os.path.join(UI_DIR, name), encoding="utf-8") as fh:
                 text = fh.read()
             for marker in ("<<<<<<<", ">>>>>>>", "=======\n<<<"):
@@ -185,9 +198,15 @@ class TestBridgeSurface(unittest.TestCase):
         """The block owns its own parser now; the bridge must not rebuild one."""
         import inspect
         from bridge.stack_bridge import StackBridge
+        from bridge.stack_bridge_parts import RunControl
         # the router forwards run_stack to the domain bridge — inspect
-        # the real implementation, not the generated forwarder
-        src = inspect.getsource(StackBridge.run_stack)
+        # the real implementation, not the generated forwarder. G7 §4
+        # adaptation: the body moved into the RunControl part; the @Slot
+        # delegate stays on the bridge and must forward to it (checked
+        # here too, so the wire half of the pin is stronger than before).
+        wire = inspect.getsource(StackBridge.run_stack)
+        self.assertIn("_parts.run.run_stack", wire)
+        src = inspect.getsource(RunControl.run_stack)
         self.assertNotIn("ScrollParser(", src)
         self.assertIn("engine.execute()", src)
 

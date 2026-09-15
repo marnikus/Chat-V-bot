@@ -28,10 +28,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import fingerprint  # noqa: E402
+from backend.history_models import fingerprint, LineIdentity  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
-from backend.media_store import MediaStore  # noqa: E402
+from backend.media_store import MediaStore, MediaOptions  # noqa: E402
 
 NOW = datetime(2026, 9, 7, 16, 30, 0)
 ME = "Хорошо Все"
@@ -50,7 +51,7 @@ GIF2 = ("https://images.virt-chat.com/images/"
 def raw(text="", direction="in", from_nick=PARTNER, time="16:22",
         kind="text", media=None, occ=0, idx=0):
     payload = media["url"] if media else text
-    return {"fp": fingerprint(direction, from_nick, time, kind, payload, occ),
+    return {"fp": fingerprint(LineIdentity(direction, from_nick, time, kind, payload), occ),
             "dir": direction, "from": from_nick, "kind": kind, "text": text,
             "media": media, "time": time, "occ": occ, "idx": idx}
 
@@ -180,12 +181,10 @@ async def scenario(name, cdp, host_recovers=False, cap_mb=25):
     tmp = tempfile.mkdtemp()
     db = HistoryDB(os.path.join(tmp, "history.db"))
     await db.init()
-    store = MediaStore(db, cdp=cdp, cache_dir=os.path.join(tmp, "saved_media"),
-                       max_file_mb=cap_mb, max_cache_mb=200)
+    store = MediaStore(db, cdp=cdp, options=MediaOptions(cache_dir=os.path.join(tmp, "saved_media"), max_file_mb=cap_mb, max_cache_mb=200))
     repo = HistoryRepo(db, media=store, session_id="repro")
     parser = ChatParser(cdp, chunk_size=80, chunk_pause_ms=0)
-    col = Collector(cdp=cdp, repo=repo, parser=parser, media=store,
-                    settings={"my_nick": ME, "auto_backfill": False})
+    col = Collector(CollectorDeps(cdp=cdp, repo=repo, parser=parser, media=store, settings={"my_nick": ME, "auto_backfill": False}))
     col.now = lambda: NOW
     logs = []
     col.collector_log.connect(lambda p: logs.append(json.loads(p)))

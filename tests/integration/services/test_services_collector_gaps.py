@@ -22,6 +22,7 @@ from backend.chat_parser import ChatParser  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from services.collector_service import Collector, CollectorState  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
@@ -45,13 +46,11 @@ class CollectorCase(unittest.IsolatedAsyncioTestCase):
         self.parser = ChatParser(self.page, chunk_size=10, chunk_pause_ms=0)
         self.memory = UserMemory(os.path.join(self.dir, "users.db"))
         await self.memory.init()
-        self.col = Collector(cdp=self.page, repo=self.repo,
-                             parser=self.parser, media=None,
-                             settings={"heartbeat_ms": 1000,
-                                       "idle_heartbeat_ms": 3000,
-                                       "throttle_factor": 4,
-                                       "my_nick": "Me"},
-                             memory=self.memory)
+        self.col = Collector(CollectorDeps(
+            cdp=self.page, repo=self.repo, parser=self.parser, media=None,
+            settings={"heartbeat_ms": 1000, "idle_heartbeat_ms": 3000,
+                      "throttle_factor": 4, "my_nick": "Me"},
+            memory=self.memory))
         self.col.now = lambda: NOW
 
     async def asyncTearDown(self):

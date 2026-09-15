@@ -15,6 +15,7 @@ import json
 import logging
 
 from core.events import EventBus, PeopleChanged, UsersDeleted
+from services.wiring_requests import PeopleDeps  # noqa: F401  (re-exported)
 from core.result import Err, Ok, Result
 from services.service_log import emit_log
 
@@ -35,27 +36,27 @@ def people_row(u) -> dict:
 class PeopleService:
     """Snapshot → mutate → undo-entry → announce, for the people queue."""
 
-    def __init__(self, memory, engine=None, labels=None, undo=None,
-                 bus: EventBus | None = None):
-        self._memory = memory
-        self._engine = engine
-        self._labels = labels
-        self._undo = undo
-        self._bus = bus or EventBus()
+    def __init__(self, deps: PeopleDeps):
+        # The world collaborators travel as one `PeopleDeps` (Round G step 4).
+        self._memory = deps.memory
+        self._engine = deps.engine
+        self._labels = deps.labels
+        self._undo = deps.undo
+        self._bus = deps.bus or EventBus()
 
     # ── wiring (main.py / attach_history) ────────────────────────
-    def attach(self, memory=None, engine=None, labels=None, undo=None,
-               bus=None) -> None:
-        if memory is not None:
-            self._memory = memory
-        if engine is not None:
-            self._engine = engine
-        if labels is not None:
-            self._labels = labels
-        if undo is not None:
-            self._undo = undo
-        if bus is not None:
-            self._bus = bus
+    def attach(self, deps: PeopleDeps) -> None:
+        """Re-wire: only the deps fields that are set replace the current."""
+        if deps.memory is not None:
+            self._memory = deps.memory
+        if deps.engine is not None:
+            self._engine = deps.engine
+        if deps.labels is not None:
+            self._labels = deps.labels
+        if deps.undo is not None:
+            self._undo = deps.undo
+        if deps.bus is not None:
+            self._bus = deps.bus
 
     # ── helpers ──────────────────────────────────────────────────
     def _log(self, message: str, level: str = "info") -> None:

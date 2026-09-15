@@ -700,6 +700,13 @@ evidence shows actually occurring. Fixing `WriteTurn` properly means a nesting
 count per task, which changes an 817-line pinned contract
 (`tests/test_world_write_gate.py` asserts `turn.held` as a boolean), so it is
 recorded as **F3c** instead of being bundled into a flake fix.
+**RESOLVED 2026-09-13 — fixed as Round G step G1**: `WriteTurn` now holds the
+gate for the union of a *set of writer tasks* (a per-task count would leak,
+because `_gated` begins per statement but ends per commit), `held` became a
+property so the two boolean pins above read unchanged, and six tests in
+`TestWriteTurnUnion` pin the union — three of them fail against the pre-fix
+flag version. The design, the rejected variants and the measurements are in
+docs/archive/2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md §5.
 
 ### 8.11 F3 executed — `UndoService` → facade + 4 collaborators
 

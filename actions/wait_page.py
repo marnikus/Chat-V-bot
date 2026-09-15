@@ -16,6 +16,7 @@ from actions.cancellation import (
     check_stopped,
     sleep_with_stop,
 )
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.dom_probe import build_probe, interpret_wait
 
@@ -62,9 +63,10 @@ class WaitPageLoad(BaseAction):
     def _report_timeout(self, last_res, engine) -> None:
         """Terminal failure line, carrying the last known DOM state."""
         total = int((last_res or {}).get("total", 0) or 0)
+        timeout_ms = scale_ms(self.timeout_ms, engine)
         if engine:
             engine.report(f"❌ Failed to find element: {self._label} — timeout "
-                          f"after {self.timeout_ms} ms, selector matched "
+                          f"after {timeout_ms} ms, selector matched "
                           f"{total} node(s)", "error")
         log.warning("Timeout waiting for: %s", self.target_selector[:50])
 
@@ -146,17 +148,20 @@ class WaitPageLoad(BaseAction):
             if time.monotonic() >= deadline:
                 return False, last_res
             self._report_progress(res, attempt, engine)
-            await self._sleep_or_stop(0.3, engine, slice_s=0.05)
+            poll_gap_s = scale_ms(300, engine) / 1000.0
+            await self._sleep_or_stop(poll_gap_s, engine, slice_s=0.05)
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
         # Already-stopped entry: no delay, no probe (C1a).
         await self._stop_boundary(engine)
-        await self._sleep_or_stop(self.pre_delay_ms / 1000.0, engine)
-        deadline = time.monotonic() + self.timeout_ms / 1000
+        pre_delay_s = scale_ms(self.pre_delay_ms, engine) / 1000.0
+        await self._sleep_or_stop(pre_delay_s, engine)
+        timeout_ms = scale_ms(self.timeout_ms, engine)
+        deadline = time.monotonic() + timeout_ms / 1000
         if engine:
             engine.report(f"🔍 Waiting for {self._label} "
-                          f"(timeout {self.timeout_ms} ms)...", "info")
+                          f"(timeout {timeout_ms} ms)...", "info")
         found, last_res = await self._wait_loop(cdp, deadline, engine)
         if found:
             return ActionResult.OK

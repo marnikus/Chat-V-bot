@@ -33,7 +33,7 @@ from services.db_deletion_paths import (  # noqa: F401
 from services.db_deletion_plan import (  # noqa: F401
     DeletionPlan, collect_discovered_files)
 from services.db_deletion_policy import (  # noqa: F401
-    classify_candidate, plan_deletion)
+    CandidateContext, DeletionSpec, classify_candidate, plan_deletion)
 
 #: SQLite file group members removed on delete. `SUFFIXES` in db_service
 #: stays ("","-wal","-shm") for size/compat; deletion also best-effort
@@ -48,7 +48,8 @@ SUPPORTED_BOUNDARY = (
 
 __all__ = [
     "DB_GROUP_SUFFIXES", "SUPPORTED_BOUNDARY",
-    "DeletionInventory", "DeletionOutcome", "DeletionPlan",
+    "CandidateContext", "DeletionInventory", "DeletionOutcome",
+    "DeletionPlan", "DeletionSpec",
     "build_deletion_inventory", "canonical", "classify_candidate",
     "collect_discovered_files", "is_same_file", "is_within",
     "plan_deletion", "prune_empty_dirs", "unlink_one",

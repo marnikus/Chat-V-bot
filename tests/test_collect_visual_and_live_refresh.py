@@ -18,10 +18,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from backend.probe_requests import HighlightSpec  # noqa: E402
 from backend.dom_highlight import COLOR_COLLECT, build_highlight_probe  # noqa: E402
 from backend.person_filter import PersonFilter  # noqa: E402
-from backend.scroll_parser import ScrollParser  # noqa: E402
+from backend.scroll_parser import ScrollOptions, ScrollParser  # noqa: E402
 from tests.test_scroll_parse_pipeline import FakeCDP, person  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 
 HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js_harness.js")
 
@@ -74,7 +76,7 @@ class HighlightCDP(FakeCDP):
 # ── BUG A: visual confirmation + pause ───────────────────────────
 class TestCollectHighlightProbe(unittest.TestCase):
     def test_draws_a_green_outline_on_the_matched_person(self):
-        expr = build_highlight_probe("user-item", ".primary-text", "Anna")
+        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
         (res,), eff = run_js([expr], rows("Zoe", "Anna", "Mia"))
         self.assertTrue(res["found"])
         self.assertEqual(res["text"], "Anna")
@@ -87,19 +89,19 @@ class TestCollectHighlightProbe(unittest.TestCase):
 
     def test_highlighting_never_clicks_or_scrolls(self):
         """Scrolling mid-parse would corrupt the parser's position tracking."""
-        expr = build_highlight_probe("user-item", ".primary-text", "Anna")
+        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
         _, eff = run_js([expr], rows("Anna"))
         self.assertEqual(eff["clicks"], [])
         self.assertEqual(eff["scrolled"], [])
 
     def test_uses_exact_matching(self):
-        expr = build_highlight_probe("user-item", ".primary-text", "Anna")
+        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
         (res,), _ = run_js([expr], rows("Annabelle", "Anna"))
         self.assertEqual(res["text"], "Anna")
         self.assertEqual(res["index"], 1)
 
     def test_missing_person_reports_not_found(self):
-        expr = build_highlight_probe("user-item", ".primary-text", "Ghost")
+        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Ghost"))
         (res,), eff = run_js([expr], rows("Anna"))
         self.assertFalse(res["found"])
         self.assertEqual(eff["overlays"][0], [])
@@ -111,7 +113,7 @@ class TestCollectPauseAndOrder(unittest.TestCase):
         kw.setdefault("poll_ms", 1)
         kw.setdefault("load_timeout_ms", 20)
         kw.setdefault("person_filter", PersonFilter())
-        parser = ScrollParser(cdp=cdp, **kw)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(**kw))
         return parser, run(parser.collect())
 
     def test_each_matching_person_is_highlighted(self):
@@ -137,18 +139,17 @@ class TestCollectPauseAndOrder(unittest.TestCase):
                 order.append(("sleep", round(delay, 3)))
             await real_sleep(0)
 
-        import backend.scroll_parser as sp
-        sp.asyncio.sleep = spy
+        # Round G step G2 moved the sleeps into the scroll_parser_* family.
+        # The old `sp.asyncio.sleep` patch went through the module's `asyncio`
+        # attribute — which IS this stdlib module object — so patching it
+        # directly is the same process-wide spy, with the same restore.
+        asyncio.sleep = spy
         try:
-            parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                                  load_timeout_ms=20,
-                                  person_filter=PersonFilter(),
-                                  confirm_pause_ms=250,
-                                  on_collect=lambda r, c: order.append(
-                                      ("added", r.nick)))
+            parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=250, on_collect=lambda r, c: order.append(
+                                      ("added", r.nick))))
             run(parser.collect())
         finally:
-            sp.asyncio.sleep = real_sleep
+            asyncio.sleep = real_sleep
         # a 250 ms hold must precede each "added" event
         self.assertEqual(order[0], ("sleep", 0.25))
         self.assertEqual(order[1], ("added", "Anna"))
@@ -156,9 +157,7 @@ class TestCollectPauseAndOrder(unittest.TestCase):
 
     def test_pause_is_configurable_and_can_be_disabled(self):
         cdp = HighlightCDP([[person("Anna")]])
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1, load_timeout_ms=20,
-                              person_filter=PersonFilter(),
-                              highlight_enabled=False)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), highlight_enabled=False))
         res = run(parser.collect())
         self.assertEqual([p.nick for p in res.collected], ["Anna"])
         self.assertEqual(cdp.highlights, [], "highlighting was disabled")
@@ -180,10 +179,7 @@ class TestLiveRefresh(unittest.TestCase):
     def test_callback_fires_per_person_during_the_scroll(self):
         cdp = HighlightCDP([[person("Anna")], [person("Bella")]])
         events = []
-        parser = ScrollParser(
-            cdp=cdp, pause_ms=0, poll_ms=1, load_timeout_ms=20,
-            person_filter=PersonFilter(), confirm_pause_ms=0,
-            on_collect=lambda rec, coll: events.append((rec.nick, len(coll))))
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, on_collect=lambda rec, coll: events.append((rec.nick, len(coll)))))
         res = run(parser.collect())
         # one event per person, each carrying the running total
         self.assertEqual(events, [("Anna", 1), ("Bella", 2)])
@@ -194,10 +190,7 @@ class TestLiveRefresh(unittest.TestCase):
         pages = [[person(f"P{i}")] for i in range(6)]
         cdp = HighlightCDP(pages, page_height=10)
         seen_at = []
-        parser = ScrollParser(
-            cdp=cdp, pause_ms=0, poll_ms=1, load_timeout_ms=20,
-            person_filter=PersonFilter(), confirm_pause_ms=0,
-            on_collect=lambda rec, coll: seen_at.append(cdp.scrolls))
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, on_collect=lambda rec, coll: seen_at.append(cdp.scrolls)))
         run(parser.collect())
         self.assertTrue(seen_at)
         self.assertLess(min(seen_at), max(seen_at),
@@ -211,9 +204,7 @@ class TestLiveRefresh(unittest.TestCase):
             await asyncio.sleep(0)
             seen.append(rec.nick)
 
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter(),
-                              confirm_pause_ms=0, on_collect=on_collect)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, on_collect=on_collect))
         run(parser.collect())
         self.assertEqual(seen, ["Anna"])
 
@@ -222,9 +213,7 @@ class TestLiveRefresh(unittest.TestCase):
             raise RuntimeError("UI exploded")
 
         cdp = HighlightCDP([[person("Anna"), person("Bella")]])
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter(),
-                              confirm_pause_ms=0, on_collect=boom)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, on_collect=boom))
         res = run(parser.collect())
         self.assertEqual([p.nick for p in res.collected], ["Anna", "Bella"])
 
@@ -239,7 +228,7 @@ class TestEngineLiveHook(unittest.TestCase):
             async def upsert_user(self, u): self.saved.append(u.nick)
 
         mem = Mem()
-        engine = ActionEngine(cdp=None, memory=mem, criteria=None)
+        engine = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
         emitted = []
         engine.person_found.connect(lambda p: emitted.append(json.loads(p)))
 
@@ -258,14 +247,14 @@ class TestEngineLiveHook(unittest.TestCase):
         class Broken:
             async def upsert_user(self, u): raise RuntimeError("db down")
 
-        engine = ActionEngine(cdp=None, memory=Broken(), criteria=None)
+        engine = ActionEngine(RunDeps(cdp=None, memory=Broken(), criteria=None))
         emitted = []
         engine.person_found.connect(lambda p: emitted.append(p))
         run(engine.person_collected(UserRecord(nick="Anna"), []))
         self.assertEqual(len(emitted), 1, "UI is still told about the person")
 
     def test_block_wires_the_engine_hook_automatically(self):
-        from actions.scroll_parse import ScrollParse
+        from actions.scroll_parse import PipelineRun, ScrollParse
 
         cdp = HighlightCDP([[person("Anna")]])
         got = []
@@ -278,7 +267,7 @@ class TestEngineLiveHook(unittest.TestCase):
         block = ScrollParse(scroll_pause_ms=0, load_timeout_ms=20,
                             min_new_users=0, pre_delay_ms=0,
                             confirm_pause_ms=0)
-        run(block.run_pipeline(cdp, Eng()))
+        run(block.run_pipeline(cdp, PipelineRun(engine=Eng())))
         self.assertEqual(got, ["Anna"],
                          "the block must use the engine's live hook")
 

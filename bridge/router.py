@@ -27,6 +27,9 @@ from typing import Any, Optional, Type
 
 from PySide6.QtCore import QMetaMethod, QObject, Signal, Slot
 
+from bridge.bot_bridge import BotBridge
+from bridge.bot_prompt_bridge import BotPromptBridge
+from bridge.bot_settings_bridge import BotSettingsBridge
 from bridge.collector_bridge import CollectorBridge
 from bridge.context import BridgeContext
 from bridge.cdp_bridge import CdpBridge
@@ -38,6 +41,7 @@ from bridge.layout_bridge import LayoutBridge
 from bridge.people_bridge import PeopleBridge
 from bridge.stack_bridge import StackBridge
 from bridge.undo_bridge import UndoBridge
+from bridge.window_preset_bridge import WindowPresetBridge
 from core.events import LogMessage
 from services.people_service import people_row
 from services.run import normalize_blocks
@@ -47,10 +51,11 @@ from stores.preset_store import PresetStore
 
 log = logging.getLogger("chatbot")
 
-#: the ten domain bridges, in wiring order
+#: the eleven domain bridges, in wiring order
 BRIDGE_CLASSES = [CdpBridge, StackBridge, FileBridge, PeopleBridge,
                   HistoryBridge, LabelBridge, DbBridge, CollectorBridge,
-                  UndoBridge, LayoutBridge]
+                  UndoBridge, LayoutBridge, BotBridge, BotPromptBridge,
+                  BotSettingsBridge, WindowPresetBridge]
 
 # Qt type-name → Python type for signature rebuilding
 _QT_TYPES = {
@@ -111,11 +116,8 @@ def _make_forwarder(bridge_cls: Type[QObject], method_name: str):
 BRIDGE_SPECS: dict[str, tuple] = {}
 
 
-def _build_router_class() -> Type[QObject]:
-    Meta = type(QObject)          # Shiboken.ObjectType
-    ns: dict = {}
-
-    # 1 — signals: one same-named Signal per bridge signal + log_message
+def _register_signals(ns: dict) -> None:
+    """1 — signals: one same-named Signal per bridge signal + log_message."""
     seen_signals: dict[str, list] = {}
     for cls in BRIDGE_CLASSES:
         signals, _slots = _meta_members(cls)
@@ -128,7 +130,9 @@ def _build_router_class() -> Type[QObject]:
             ns[name] = Signal(*types)
     ns["log_message"] = Signal(str, str)      # router-owned (LogMessage)
 
-    # 2 — forwarding slots with identical signatures
+
+def _register_slots(ns: dict) -> None:
+    """2 — forwarding slots with identical signatures."""
     seen_slots: dict[str, list] = {}
     for cls in BRIDGE_CLASSES:
         _signals, slots = _meta_members(cls)
@@ -140,9 +144,12 @@ def _build_router_class() -> Type[QObject]:
             deco = Slot(*types, result=ret) if ret else Slot(*types)
             ns[name] = deco(_make_forwarder(cls, name))
 
-    # 3 — class attributes re-exported for legacy callers (tests)
+
+def _register_legacy_attrs(ns: dict) -> None:
+    """3 — class attributes re-exported for legacy callers (tests)."""
     for attr in ("GRID_VERSION", "WINDOW_IDS", "V1_WINDOW_IDS",
-                 "V2_WINDOW_IDS", "V3_WINDOW_IDS", "LEGACY_WINDOW_IDS",
+                 "V2_WINDOW_IDS", "V3_WINDOW_IDS", "V4_WINDOW_IDS",
+                 "LEGACY_WINDOW_IDS",
                  "NEW_WINDOW_IDS", "MIN_GRID_SIZE", "_default_grid_tree",
                  "_leaf_ids", "_parse_grid_payload", "_validate_grid_tree",
                  "_normalize_grid_tree", "_node_type", "_migrate_grid_tree",
@@ -159,6 +166,15 @@ def _build_router_class() -> Type[QObject]:
     ns["_history_entry"] = staticmethod(UndoService._history_entry)
     ns["_people_row"] = staticmethod(people_row)
 
+
+def _build_router_class() -> Type[QObject]:
+    """Assemble the Router class from the four registration phases (§19.5:
+    a long-and-flat synthesis — one phase, one concept, one function)."""
+    Meta = type(QObject)          # Shiboken.ObjectType
+    ns: dict = {}
+    _register_signals(ns)
+    _register_slots(ns)
+    _register_legacy_attrs(ns)
     # 4 — the hand-written Router surface
     ns.update(_ROUTER_METHODS)
     return Meta("Router", (QObject,), ns)
@@ -182,7 +198,7 @@ def _router_method(fn_or_name=None, **kwargs):
 
 
 @_router_method
-def __init__(self, cdp=None, memory=None, criteria=None, engine=None,
+def __init__(self, cdp=None, memory=None, criteria=None, engine=None,  # quality-override: params=8 reason=Qt compat facade: **_legacy absorbs the pre-Router boot keyword set
              config=None, presets=None, parent=None, **_legacy):
     QObject.__init__(self, parent)
     if presets is None and config is not None:

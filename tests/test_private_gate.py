@@ -27,10 +27,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.chat_agent_js import AGENT_VERSION  # noqa: E402
 from backend.chat_parser import (  # noqa: E402
     ChatParser,
+    PrivateQuery,
+    SyncOptions,
     sync_conversation,
     verify_private,
 )
 from backend.collector import Collector, CollectorState  # noqa: E402
+from services.collector_states import CollectorDeps  # noqa: E402
 from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from backend.user_memory import UserMemory  # noqa: E402
@@ -153,7 +156,8 @@ class TestVerifyPrivate(unittest.TestCase):
     def test_the_gate_also_accepts_a_list_of_records(self):
         items = [{"dir": "in", "from": PARTNER}, {"dir": "out", "from": ME},
                  {"dir": "in", "from": STRANGER}]
-        check = verify_private(state(), PARTNER, ME, items=items)
+        check = verify_private(state(), PARTNER, ME,
+                                       PrivateQuery(items=items))
         self.assertFalse(check.ok)
         self.assertEqual(check.strangers, [STRANGER])
 
@@ -176,9 +180,7 @@ class GateCase(unittest.IsolatedAsyncioTestCase):
                  idx=1)],
             partner=PARTNER, me=ME)
         self.parser = ChatParser(self.page, chunk_size=10, chunk_pause_ms=0)
-        self.col = Collector(cdp=self.page, repo=self.repo,
-                             parser=self.parser, media=None,
-                             settings={"my_nick": ME})
+        self.col = Collector(CollectorDeps(cdp=self.page, repo=self.repo, parser=self.parser, media=None, settings={"my_nick": ME}))
         self.col.now = lambda: NOW
 
     async def asyncTearDown(self):
@@ -371,8 +373,8 @@ class TestSyncConversationGate(GateCase):
     async def test_sync_refuses_a_pane_with_a_third_author(self):
         self.page.messages.append(raw("ку", from_nick=STRANGER, idx=2))
         result = await sync_conversation(self.parser, self.repo, PARTNER,
-                                         my_nick=ME, require_private=True,
-                                         verify_partner=True, now=NOW)
+                                         SyncOptions(my_nick=ME, require_private=True,
+                                                     verify_partner=True, now=NOW))
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, "strangers")
         self.assertEqual(result.added, 0)
@@ -380,8 +382,8 @@ class TestSyncConversationGate(GateCase):
 
     async def test_sync_still_stores_a_clean_private_chat(self):
         result = await sync_conversation(self.parser, self.repo, PARTNER,
-                                         my_nick=ME, require_private=True,
-                                         verify_partner=True, now=NOW)
+                                         SyncOptions(my_nick=ME, require_private=True,
+                                                     verify_partner=True, now=NOW))
         self.assertTrue(result.ok)
         self.assertEqual(result.added, 2)
 

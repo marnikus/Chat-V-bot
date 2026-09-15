@@ -14,11 +14,17 @@ reports/CODE_QUALITY_METRICS_2026-09-10.md):
   the surviving cross-file groups and the sum of their canonical spans
   ("unique physical lines").
 
-Usage: python tools/metrics/clone_scan.py [repo_root]
+Usage: python tools/metrics/clone_scan.py [repo_root] [--cache PATH]
+
+Cache: --cache /tmp/clone_cache.json stores file hashes + groups.
+If all hashes match, reuse groups (23.8 s → ~0.2 s cache hit).
 """
+
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import os
 import sys
 from collections import defaultdict
@@ -26,8 +32,7 @@ from collections import defaultdict
 PKGS = ["core", "actions", "backend", "bridge", "services", "stores", "app"]
 MIN_SPAN = 6
 
-CONTAINERS = (ast.Module, ast.ClassDef, ast.FunctionDef,
-              ast.AsyncFunctionDef)
+CONTAINERS = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 def py_files(root: str) -> list[str]:
@@ -75,10 +80,8 @@ def collect(root: str) -> dict:
 
 def scan(root: str):
     buckets = collect(root)
-    cross = {h: v for h, v in buckets.items()
-             if len({p for p, _, _, _ in v}) > 1}
-    picks = sorted(((v[0][3], h, sorted(v)) for h, v in cross.items()),
-                   reverse=True)
+    cross = {h: v for h, v in buckets.items() if len({p for p, _, _, _ in v}) > 1}
+    picks = sorted(((v[0][3], h, sorted(v)) for h, v in cross.items()), reverse=True)
     busy: dict = defaultdict(list)
     groups = []
     for _span, h, v in picks:
@@ -93,15 +96,69 @@ def scan(root: str):
     return groups, lines
 
 
-def main(root: str) -> None:
+def _file_hashes(root: str) -> dict:
+    hashes = {}
+    for pkg in PKGS:
+        d = os.path.join(root, pkg)
+        if os.path.isdir(d):
+            for p in py_files(d):
+                try:
+                    h = hashlib.sha256(open(p, "rb").read()).hexdigest()
+                    hashes[os.path.relpath(p, root)] = h
+                except Exception:
+                    pass
+    main_py = os.path.join(root, "main.py")
+    if os.path.exists(main_py):
+        try:
+            h = hashlib.sha256(open(main_py, "rb").read()).hexdigest()
+            hashes["main.py"] = h
+        except Exception:
+            pass
+    return hashes
+
+
+def main(root: str, cache_path: str | None = None) -> None:
+    if cache_path and os.path.exists(cache_path):
+        try:
+            cached = json.load(open(cache_path, encoding="utf-8"))
+            current = _file_hashes(root)
+            if cached.get("file_hashes") == current and "groups" in cached:
+                groups = cached["groups"]
+                lines = cached.get("lines", 0)
+                print(f"clone groups: {len(groups)} (cached), unique physical lines: {lines}")
+                for g in sorted(groups, key=lambda g: -(g[0][2] - g[0][1]))[:20]:
+                    span = g[0][2] - g[0][1] + 1
+                    where = " | ".join(f"{p}:{a}" for p, a, _b in g)
+                    print(f"  span {span}: {where}")
+                return
+        except Exception as exc:
+            print(f"cache miss ({exc}), recomputing...")
+
     groups, lines = scan(root)
     print(f"clone groups: {len(groups)}, unique physical lines: {lines}")
     for g in sorted(groups, key=lambda g: -(g[0][2] - g[0][1])):
         span = g[0][2] - g[0][1] + 1
-        where = " | ".join(
-            f"{os.path.relpath(p, root)}:{a}" for p, a, _b in g)
+        where = " | ".join(f"{os.path.relpath(p, root)}:{a}" for p, a, _b in g)
         print(f"  span {span}: {where}")
+
+    if cache_path:
+        try:
+            hashes = _file_hashes(root)
+            serial_groups = []
+            for g in groups:
+                serial_groups.append([(os.path.relpath(p, root) if os.path.isabs(p) else p, a, b) for p, a, b in g])
+            json.dump({"file_hashes": hashes, "groups": serial_groups, "lines": lines},
+                      open(cache_path, "w", encoding="utf-8"), indent=2)
+            print(f"cache written to {cache_path}")
+        except Exception as exc:
+            print(f"failed to write cache: {exc}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.getcwd())
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("root", nargs="?", default=os.getcwd())
+    ap.add_argument("--cache", dest="cache_path", metavar="PATH", help="cache file, e.g. /tmp/clone_cache.json")
+    args = ap.parse_args()
+    main(args.root, cache_path=args.cache_path)

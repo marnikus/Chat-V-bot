@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stores.history_db import HistoryDB  # noqa: E402
 from stores.history_models import MessageRecord  # noqa: E402
+from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
 from stores.history_repo import (  # noqa: E402
     HistoryRepo,
     align_batch,
@@ -94,7 +95,7 @@ class TestPureFunctions(unittest.TestCase):
 
 class TestAppendConflicts(RepoCase):
     async def test_empty_batch_is_a_typed_noop(self):  # HRP-04
-        res = await self.repo.append("Ann", [], now=NOW)
+        res = await self.repo.append(AppendRequest("Ann", [], now=NOW))
         self.assertEqual((res.added, res.skipped, res.gap), (0, 0, False))
         self.assertGreater(res.person_id, 0)
 
@@ -102,8 +103,8 @@ class TestAppendConflicts(RepoCase):
         batch = [rec("one", "10:01", idx=0), rec("two", "10:02", idx=1),
                  rec("three", "10:03", idx=2)]
         first, second = await asyncio.gather(
-            self.repo.append("Ann", batch, now=NOW),
-            self.repo.append("Ann", batch, now=NOW))
+            self.repo.append(AppendRequest("Ann", batch, now=NOW)),
+            self.repo.append(AppendRequest("Ann", batch, now=NOW)))
         self.assertEqual(first.added + second.added, 3)
         keys = await self.dup_keys("Ann")
         self.assertEqual(len(keys), 3)
@@ -111,28 +112,28 @@ class TestAppendConflicts(RepoCase):
         self.assertEqual([o for o, _ in await self.ords("Ann")], [1, 2, 3])
 
     async def test_prepend_shifts_existing_ord(self):  # HRP-06
-        await self.repo.append("Ann", [rec("new1", "10:03", idx=2),
-                                       rec("new2", "10:04", idx=3)], now=NOW)
-        res = await self.repo.append("Ann", [rec("old1", "10:01", idx=0),
+        await self.repo.append(AppendRequest("Ann", [rec("new1", "10:03", idx=2),
+                                       rec("new2", "10:04", idx=3)], now=NOW))
+        res = await self.repo.append(AppendRequest("Ann", [rec("old1", "10:01", idx=0),
                                              rec("old2", "10:02", idx=1)],
-                                     now=NOW, prepend=True)
+                                     now=NOW, prepend=True))
         self.assertEqual(res.added, 2)
         self.assertEqual(await self.ords("Ann"),
                          [(1, "old1"), (2, "old2"), (3, "new1"), (4, "new2")])
 
     async def test_prepend_of_dupes_moves_nothing(self):  # HRP-07
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0)], now=NOW))
         before = await self.ords("Ann")
-        res = await self.repo.append("Ann", [rec("a", "10:01", idx=0)],
-                                     now=NOW, prepend=True)
+        res = await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0)],
+                                     now=NOW, prepend=True))
         self.assertEqual(res.added, 0)
         self.assertEqual(await self.ords("Ann"), before)
 
     async def test_recorded_gap_survives_later_appends(self):  # HRP-08
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0)], now=NOW))
         await self.repo.record_gap("Ann", 1, "cap", "detail-1")
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0),
-                                       rec("b", "10:02", idx=1)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0),
+                                       rec("b", "10:02", idx=1)], now=NOW))
         gaps = await self.db.fetchdicts(
             "SELECT reason, detail FROM gaps ORDER BY id")
         self.assertIn({"reason": "cap", "detail": "detail-1"},
@@ -142,8 +143,8 @@ class TestAppendConflicts(RepoCase):
 
 class TestTokenSemantics(RepoCase):
     async def _one_message_id(self, nick="Ann"):
-        await self.repo.append(nick, [rec("a", "10:01", idx=0),
-                                      rec("b", "10:02", idx=1)], now=NOW)
+        await self.repo.append(AppendRequest(nick, [rec("a", "10:01", idx=0),
+                                      rec("b", "10:02", idx=1)], now=NOW))
         person = await self.repo.get_person(nick)
         rows = await self.db.fetchall(
             "SELECT id FROM messages WHERE person_id=? ORDER BY ord",
@@ -175,8 +176,8 @@ class TestTokenSemantics(RepoCase):
         self.assertEqual(await self.repo.purge_deleted("Ann"), 0)
 
     async def test_person_delete_and_restore_round_trip(self):  # HRP-12
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0),
-                                       rec("b", "10:02", idx=1)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0),
+                                       rec("b", "10:02", idx=1)], now=NOW))
         self.assertTrue(await self.repo.delete_person("Ann"))
         person = await self.repo.get_person("Ann")
         self.assertTrue(person["deleted"])
@@ -188,7 +189,7 @@ class TestTokenSemantics(RepoCase):
         self.assertEqual(person["message_count"], 2)
 
     async def test_restore_person_with_wrong_token_refuses(self):  # HRP-13
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0)], now=NOW))
         await self.repo.delete_person("Ann")
         self.assertFalse(await self.repo.restore_person("Ann",
                                                         token="wrong"))
@@ -202,7 +203,7 @@ class TestTokenSemantics(RepoCase):
     async def test_merge_keeps_tombstones_hidden(self):  # HRP-14
         person, mid = await self._one_message_id("Src")
         await self.repo.soft_delete_message("Src", mid)
-        await self.repo.append("Dst", [rec("d", "10:05", idx=0)], now=NOW)
+        await self.repo.append(AppendRequest("Dst", [rec("d", "10:05", idx=0)], now=NOW))
         moved = await self.repo.merge_persons("Src", "Dst")
         self.assertEqual(moved, 2)
         dst = await self.repo.get_person("Dst")
@@ -210,7 +211,7 @@ class TestTokenSemantics(RepoCase):
         self.assertEqual(await self.repo.deleted_count("Dst"), 1)
 
     async def test_merge_with_self_or_stranger_is_zero(self):  # HRP-15
-        await self.repo.append("Ann", [rec("a", "10:01", idx=0)], now=NOW)
+        await self.repo.append(AppendRequest("Ann", [rec("a", "10:01", idx=0)], now=NOW))
         self.assertEqual(await self.repo.merge_persons("Ann", "Ann"), 0)
         self.assertEqual(await self.repo.merge_persons("Ghost", "Ann"), 0)
         self.assertEqual(await self.repo.merge_persons("Ann", "Ghost"), 0)
@@ -249,9 +250,9 @@ class TestQueriesAndIdentity(RepoCase):
     async def test_repair_probes_are_empty_safe(self):  # HRP-20
         pid = await self.repo.ensure_person("Ann")
         self.assertFalse(await self.repo.has_repairable_media(pid))
-        self.assertEqual(await self.repo.recover_media(pid, [], media=None),
+        self.assertEqual(await self.repo.recover_media(MediaRecoveryRequest(pid, [], media=None)),
                          {"repaired": 0, "requeued": 0, "scanned": 0})
-        self.assertEqual(await self.repo.recover_media(0, [], media=None),
+        self.assertEqual(await self.repo.recover_media(MediaRecoveryRequest(0, [], media=None)),
                          {"repaired": 0, "requeued": 0, "scanned": 0})
 
     async def test_reset_cursor_clears_the_backfill_flag(self):  # HRP-21

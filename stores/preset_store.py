@@ -16,6 +16,7 @@ AREA B1 (plan P1-3) put this store on the shared `JsonFileStore` lifecycle:
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 from datetime import datetime
@@ -27,7 +28,11 @@ from stores.json_store import JsonFileStore
 log = logging.getLogger("chatbot")
 
 #: the sections this file owns; other sections are kept verbatim (PRS-03)
-SECTIONS = ("stack_presets", "template_presets")
+SECTIONS = ("stack_presets", "template_presets",
+            # the AI feature's named connections and prompt presets
+            # (2026-09-13): same "user creates, names, deletes, expects back
+            # after a restart" shape as the two above.
+            "ai_connections", "prompt_presets")
 
 
 def _config_dir_of(config: Any) -> str:
@@ -61,7 +66,8 @@ class PresetStore(JsonFileStore):
     """CRUD for named stack presets and message templates (JSON-backed)."""
 
     DEFAULT_FILE = os.path.join("config", "presets.json")
-    DEFAULTS: dict[str, Any] = {"stack_presets": {}, "template_presets": {}}
+    DEFAULTS: dict[str, Any] = {"stack_presets": {}, "template_presets": {},
+                                "ai_connections": {}, "prompt_presets": {}}
 
     _by_path: dict[str, "PresetStore"] = {}
 

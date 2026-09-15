@@ -22,7 +22,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stores.history_db import HistoryDB  # noqa: E402
-from stores.media_store import MediaStore, slugify_nick  # noqa: E402
+from stores.media_store import MediaStore, slugify_nick, MediaOptions  # noqa: E402
 
 GIF = b"GIF89a" + b"\x00" * 200
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 500
@@ -70,9 +70,7 @@ class MediaCase(unittest.IsolatedAsyncioTestCase):
         self.db = HistoryDB(os.path.join(self.dir, "history.db"))
         await self.db.init()
         self.cdp = FakeCDP()
-        self.store = MediaStore(self.db, cdp=self.cdp,
-                                cache_dir=os.path.join(self.dir, "media"),
-                                max_file_mb=1, max_cache_mb=10)
+        self.store = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=os.path.join(self.dir, "media"), max_file_mb=1, max_cache_mb=10))
 
     async def asyncTearDown(self):
         await self.db.close()
@@ -115,8 +113,7 @@ class TestFolders(MediaCase):
         self.assertNotEqual(first, second)
         # … and the mapping is stable across a restart with cached bytes
         await self.cached_row("https://x/a.gif", nick="Ански")
-        twin = MediaStore(self.db, cdp=self.cdp,
-                          cache_dir=os.path.join(self.dir, "media"))
+        twin = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=os.path.join(self.dir, "media")))
         self.assertEqual(twin.folder_for("Ански"), first)
         self.assertEqual(twin.folder_for("Anski"), second)
 
@@ -179,9 +176,7 @@ class TestLimits(MediaCase):
         self.assertEqual(self.cdp.fetched, [])
 
     async def test_zero_file_cap_skips_with_reason(self):  # MED-11
-        tiny = MediaStore(self.db, cdp=self.cdp,
-                          cache_dir=os.path.join(self.dir, "m0"),
-                          max_file_mb=0)
+        tiny = MediaStore(self.db, cdp=self.cdp, options=MediaOptions(cache_dir=os.path.join(self.dir, "m0"), max_file_mb=0))
         mid = await tiny.register("https://x/a.gif", "gif")
         self.assertEqual(await tiny.process_pending(), 0)
         row = await tiny.get(mid)

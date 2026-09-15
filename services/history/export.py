@@ -7,6 +7,11 @@ session-sized trash). Every method name and signature here is unchanged —
 each delegates to its lazily-created collaborator, so
 `HistoryService.__init__` (which deliberately calls no `super().__init__`)
 is untouched and callers see the same surface.
+
+G7 §3 (21 -> 14 methods, the 15-method cap): the five lazy per-part
+properties collapsed into one `_parts` bundle, and the three private world
+delegates were deleted as dead code — every public/tested method name here
+is unchanged.
 """
 
 from __future__ import annotations
@@ -59,42 +64,33 @@ def _bind_cdp_signals(service) -> None:
         disconnected.connect(service._on_disconnected)
 
 
+class _Parts:
+    """The facade's five collaborators, created together on first use.
+
+    G7 §3: five lazy per-part properties used a third of the facade's
+    15-method budget while every part is a trivial `host`-holder — the
+    bundle keeps the same lazy-import discipline (the imports live in
+    `__init__`, so no module-level cycle) in one method instead of five.
+    """
+
+    def __init__(self, service):
+        from services.history.migrate import HistoryMigration
+        from services.history.runtime import (ChatExporter, CollectorRuntime,
+                                              PushBindings, WorldSwitcher)
+        self.push = PushBindings(service)
+        self.runtime = CollectorRuntime(service)
+        self.worlds = WorldSwitcher(service)
+        self.migrator = HistoryMigration(service)
+        self.exporter = ChatExporter(service)
+
+
 class HistoryExportService:
     # ── lazy collaborators ───────────────────────────────────────
     @property
-    def _push(self):
-        if getattr(self, "__push", None) is None:
-            from services.history.runtime import PushBindings
-            self.__push = PushBindings(self)
-        return self.__push
-
-    @property
-    def _runtime(self):
-        if getattr(self, "__runtime", None) is None:
-            from services.history.runtime import CollectorRuntime
-            self.__runtime = CollectorRuntime(self)
-        return self.__runtime
-
-    @property
-    def _worlds(self):
-        if getattr(self, "__worlds", None) is None:
-            from services.history.runtime import WorldSwitcher
-            self.__worlds = WorldSwitcher(self)
-        return self.__worlds
-
-    @property
-    def _migrator(self):
-        if getattr(self, "__migrator", None) is None:
-            from services.history.migrate import HistoryMigration
-            self.__migrator = HistoryMigration(self)
-        return self.__migrator
-
-    @property
-    def _exporter(self):
-        if getattr(self, "__exporter", None) is None:
-            from services.history.runtime import ChatExporter
-            self.__exporter = ChatExporter(self)
-        return self.__exporter
+    def _parts(self) -> _Parts:
+        if getattr(self, "__parts", None) is None:
+            self.__parts = _Parts(self)
+        return self.__parts
 
     # ── lifecycle ────────────────────────────────────────────────
     async def init(self):
@@ -105,7 +101,7 @@ class HistoryExportService:
         await self.migrate_install()
         await self.load_app_settings()
         self._apply_world_media_dir()
-        await self._worlds.load_labels()
+        await self._parts.worlds.load_labels()
         await self.load_gaze()
         _ensure_media_dir(self)
         await _migrate_media_layout(self)
@@ -128,47 +124,43 @@ class HistoryExportService:
 
     # ── push binding ─────────────────────────────────────────────
     async def _install_push_binding(self) -> None:
-        await self._push.install()
+        await self._parts.push.install()
 
     async def _rebind(self) -> None:
-        await self._push.rebind()
+        await self._parts.push.rebind()
 
     def _on_disconnected(self) -> None:
-        self._push.on_disconnected()
+        self._parts.push.on_disconnected()
 
     def _on_binding(self, params: dict):
-        return self._push.on_binding(params)
+        return self._parts.push.on_binding(params)
 
     # ── collector runtime ────────────────────────────────────────
     def start(self) -> None:
-        self._runtime.start()
+        self._parts.runtime.start()
 
     async def _stop_collector(self) -> dict:
-        return await self._runtime.stop()
+        return await self._parts.runtime.stop()
 
     def _restart_collector(self, state) -> None:
-        self._runtime.restart(state)
+        self._parts.runtime.restart(state)
 
     # ── world switching ──────────────────────────────────────────
-    def _rebind_db(self, db) -> None:
-        self._worlds._rebind_db(db)
-
-    async def _flush_labels(self) -> None:
-        await self._worlds._flush_labels()
-
-    async def _load_world_state(self) -> None:
-        await self._worlds._load_world_state()
-
+    # G7 §3: the three private world delegates (_rebind_db, _flush_labels,
+    # _load_world_state) were dead — WorldSwitcher owns methods of the same
+    # names and every caller, in runtime.py, calls its OWN. Deleting them
+    # returns three methods to the facade's budget; detach_db/switch_db are
+    # the public half and stay.
     async def detach_db(self) -> bool:
-        return await self._worlds.detach_db()
+        return await self._parts.worlds.detach_db()
 
     async def switch_db(self, path: str) -> dict:
-        return await self._worlds.switch_db(path)
+        return await self._parts.worlds.switch_db(path)
 
     # ── migration ────────────────────────────────────────────────
     async def migrate_install(self) -> dict:
-        return await self._migrator.run()
+        return await self._parts.migrator.run()
 
     # ── export ───────────────────────────────────────────────────
     async def export_chat(self, nick: str, fmt: str = "json"):
-        return await self._exporter.export(nick, fmt)
+        return await self._parts.exporter.export(nick, fmt)

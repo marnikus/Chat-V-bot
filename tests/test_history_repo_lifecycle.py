@@ -27,17 +27,18 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from stores.history_repo import resolve_days  # noqa: E402
 from backend.history_query import HistoryQuery  # noqa: E402
+from stores.history_requests import AppendRequest, PaneSignature  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
 
 def rec(text, direction="in", from_nick="Nick", time="17:31", occ=0, idx=0):
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, "text", text, occ),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, "text", text), occ),
         direction=direction, from_nick=from_nick, kind="text", text=text,
         ts_display=time, occ=occ, idx=idx)
 
@@ -57,7 +58,7 @@ class RepoCase(unittest.IsolatedAsyncioTestCase):
     async def seed(self, nick="Nick", n=4, time="17:31"):
         batch = [rec(f"line {i}", from_nick=nick, time=time, idx=i)
                  for i in range(n)]
-        await self.repo.append(nick, batch, my_nick="Me", now=NOW)
+        await self.repo.append(AppendRequest(nick, batch, my_nick="Me", now=NOW))
 
     async def visible_texts(self, nick):
         page = await self.q.page(nick, limit=500)
@@ -207,12 +208,12 @@ class TestMerge(RepoCase):
 
     async def test_merge_moves_folds_and_empties_the_source(self):
         # two records of "Ann" plus one identical line already on "Anna"
-        await self.repo.append("Ann", [rec("hello", from_nick="Ann", idx=0),
+        await self.repo.append(AppendRequest("Ann", [rec("hello", from_nick="Ann", idx=0),
                                        rec("from Ann only",
                                            from_nick="Ann", idx=1)],
-                               my_nick="Me", now=NOW)
-        await self.repo.append("Anna", [rec("hello", from_nick="Ann", idx=0)],
-                               my_nick="Me", now=NOW)
+                               my_nick="Me", now=NOW))
+        await self.repo.append(AppendRequest("Anna", [rec("hello", from_nick="Ann", idx=0)],
+                               my_nick="Me", now=NOW))
         moved = await self.repo.merge_persons("Ann", "Anna")
         # 1 actually moved: the duplicate "hello" row loses the UPDATE
         # race against the target's existing identity (UNIQUE index) and
@@ -251,8 +252,9 @@ class TestRename(RepoCase):
     async def test_rename_adopts_the_archive_with_matching_evidence(self):
         await self.bootstrap()
         ok = await self.repo.rename_if_same_conversation(
-            "Nick", "NewNick", head_sig="HEAD", tail_sig="TAIL",
-            dom_count=5, pane_same=True)
+            "Nick", "NewNick",
+            PaneSignature(head_sig="HEAD", tail_sig="TAIL", dom_count=5),
+            pane_same=True)
         self.assertTrue(ok)
         person = await self.repo.get_person("NewNick")
         self.assertIsNotNone(person)
@@ -266,21 +268,25 @@ class TestRename(RepoCase):
         await self.bootstrap()
         # different pane
         self.assertFalse(await self.repo.rename_if_same_conversation(
-            "Nick", "A1", head_sig="HEAD", tail_sig="TAIL",
-            dom_count=5, pane_same=False))
+            "Nick", "A1",
+            PaneSignature(head_sig="HEAD", tail_sig="TAIL", dom_count=5),
+            pane_same=False))
         # signature mismatch
         self.assertFalse(await self.repo.rename_if_same_conversation(
-            "Nick", "A2", head_sig="WRONG", tail_sig="TAIL",
-            dom_count=5, pane_same=True))
+            "Nick", "A2",
+            PaneSignature(head_sig="WRONG", tail_sig="TAIL", dom_count=5),
+            pane_same=True))
         # dom_count changed
         self.assertFalse(await self.repo.rename_if_same_conversation(
-            "Nick", "A3", head_sig="HEAD", tail_sig="TAIL",
-            dom_count=99, pane_same=True))
+            "Nick", "A3",
+            PaneSignature(head_sig="HEAD", tail_sig="TAIL", dom_count=99),
+            pane_same=True))
         # the target nick is already a person
         await self.seed("Busy", n=1)
         self.assertFalse(await self.repo.rename_if_same_conversation(
-            "Nick", "Busy", head_sig="HEAD", tail_sig="TAIL",
-            dom_count=5, pane_same=True))
+            "Nick", "Busy",
+            PaneSignature(head_sig="HEAD", tail_sig="TAIL", dom_count=5),
+            pane_same=True))
         # nothing above may have renamed Nick
         self.assertIsNotNone(await self.repo.get_person("Nick"))
         self.assertIsNone(await self.repo.get_person("A1"))

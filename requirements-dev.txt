@@ -29,6 +29,10 @@ mutmut==3.7.0
 # the test runner itself
 pytest==9.1.1
 pytest-asyncio==1.4.0
+# parallel execution — from 387 s to ~100 s with -n auto
+# Tiered runner (tools/metrics/run_tiers.py) uses it for pure+db tiers;
+# Qt tier stays single-process (QApplication singleton not fork-safe).
+pytest-xdist==3.8.0
 # Runs the RULE 16 gate before a commit lands. Install the hook once with
 # `pre-commit install`; the config is .pre-commit-config.yaml. Without this
 # package the documented setup (`pip install -r requirements-dev.txt` then

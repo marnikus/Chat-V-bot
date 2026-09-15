@@ -454,15 +454,9 @@ async def attach_with_options(cdp: CDPClient,
     return True
 
 
-async def attach_image(cdp: CDPClient, folder_path: str,
-                       file_pattern: str = DEFAULT_FILE_PATTERN,
-                       mode: str = "sequential",
-                       simulate_dialog: bool = True,
-                       verify_timeout_ms: int = 8000,
-                       highlight_enabled: bool = True,
-                       confirm_pause_ms: int = 700,
-                       report: Optional[Callable] = None,
-                       verify_poll_ms: int = 200) -> bool:
+async def attach_image(cdp: CDPClient, folder_path: str = "",
+                       options: Optional[AttachOptions] = None,
+                       **legacy) -> bool:
     """Attach (and let the site send) one image file to the ACTIVE chat.
 
     Returns True only when the file was injected AND (unless verification
@@ -471,12 +465,10 @@ async def attach_image(cdp: CDPClient, folder_path: str,
     The steps, each in its own function below: scan the folder → scope the
     selectors to the active conversation → click the upload button → write the
     hidden file input and read it back → wait for the new message.
+
+    The knobs travel as one :class:`AttachOptions` (Round G step 4); the
+    legacy keyword form the tests and old callers use is absorbed into the
+    same object, with `folder_path` kept positional for them.
     """
     return await attach_with_options(
-        cdp, AttachOptions(folder_path=folder_path,
-                           file_pattern=file_pattern, mode=mode,
-                           simulate_dialog=simulate_dialog,
-                           verify_timeout_ms=verify_timeout_ms,
-                           highlight_enabled=highlight_enabled,
-                           confirm_pause_ms=confirm_pause_ms, report=report,
-                           verify_poll_ms=verify_poll_ms))
+        cdp, options or AttachOptions(folder_path=folder_path, **legacy))

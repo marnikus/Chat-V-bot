@@ -107,10 +107,8 @@ class StopGatesCase(unittest.IsolatedAsyncioTestCase):
                 async def execute(self, nick, cdp, engine=None):
                     return ActionResult.OK
 
-                async def run_pipeline(
-                    self, cdp, engine, panel_criteria=None, known_messaged=None
-                ):
-                    engine.stop()
+                async def run_pipeline(self, cdp, run=None):
+                    run.engine.stop()
                     return SimpleNamespace(
                         collected=[],
                         all_people=[],

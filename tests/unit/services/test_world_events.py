@@ -25,6 +25,7 @@ if ROOT not in sys.path:
 from core.events import (EventBus, LabelsChanged, PeopleChanged,  # noqa: E402
                          UserDbChanged)
 from services.undo_service import restart_world  # noqa: E402
+from services.wiring_requests import RestartDeps  # noqa: E402
 from services.world_events import (announce_world_live,  # noqa: E402
                                    run_when_world_open, wait_for_world_open)
 
@@ -108,8 +109,10 @@ class TestRestartWorldUsesTheOneBroadcast(unittest.IsolatedAsyncioTestCase):
         bus = EventBus()
         seen = collector(bus)
         undo = FakeUndo()
-        await restart_world(FakeMemory(), FakeArchive(), FakeLabels(), undo,
-                            bus, "load")
+        await restart_world(RestartDeps(memory=FakeMemory(),
+                                        archive=FakeArchive(),
+                                        labels=FakeLabels(), undo=undo,
+                                        bus=bus), "load")
         self.assertEqual(undo.synced, 1, "the timeline is rebuilt first")
         self.assertEqual(seen, ["PeopleChanged", "UserDbChanged",
                                 "LabelsChanged"])
@@ -117,7 +120,8 @@ class TestRestartWorldUsesTheOneBroadcast(unittest.IsolatedAsyncioTestCase):
     async def test_no_archive_means_no_broadcast(self):
         bus = EventBus()
         seen = collector(bus)
-        await restart_world(FakeMemory(), None, None, FakeUndo(), bus, "load")
+        await restart_world(RestartDeps(memory=FakeMemory(),
+                                        undo=FakeUndo(), bus=bus), "load")
         self.assertEqual(seen, [], "a tear-down without a world says nothing")
 
 

@@ -37,7 +37,7 @@ from backend.config_manager import MAX_STACK_HISTORY  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from core.events import EventBus  # noqa: E402
 from services.layout_service import LayoutService  # noqa: E402
-from services.undo_service import UndoService  # noqa: E402
+from services.undo_service import UndoDeps, UndoService  # noqa: E402
 
 STACK_A = [{"block_id": "PAUSE", "pause_ms": 5}]
 STACK_B = [{"block_id": "CLICK_MAIN_TAB"}]
@@ -69,7 +69,7 @@ class UndoContractCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
-        self.undo = UndoService(config=self.cfg, bus=EventBus())
+        self.undo = UndoService(config=self.cfg, deps=UndoDeps(bus=EventBus()))
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -248,8 +248,7 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
         self.archive = FakeArchive()
-        self.undo = UndoService(config=self.cfg, bus=EventBus(),
-                                archive=self.archive)
+        self.undo = UndoService(config=self.cfg, deps=UndoDeps(bus=EventBus(), archive=self.archive))
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -271,7 +270,7 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
                          ["people"])
 
     async def test_commit_with_closed_archive_keeps_everything_in_config(self):
-        self.undo.attach(archive=FakeArchive(open_=False))
+        self.undo.attach(UndoDeps(archive=FakeArchive(open_=False)))
         self.undo.set_history([
             {"kind": "stack", "value": STACK_A, "seq": 1},
             {"kind": "labels", "value": {"x": 1}, "seq": 2},
@@ -307,7 +306,7 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
         self.cfg.set_state(undo_history=[
             {"kind": "stack", "value": STACK_A, "seq": 1},
         ])
-        self.undo.attach(archive=None)
+        self.undo.attach(UndoDeps(archive=None))
         await self.undo.sync_world_state()
         history, index = self.undo.history()
         self.assertEqual([e["kind"] for e in history], ["stack"])
@@ -381,7 +380,7 @@ class TestWorldStoreSeams(unittest.IsolatedAsyncioTestCase):
                            "enabled": True}])
 
     async def test_commit_with_no_archive_writes_config_unchanged(self):
-        self.undo.attach(archive=None)
+        self.undo.attach(UndoDeps(archive=None))
         self.undo.set_history([
             {"kind": "stack", "value": STACK_A, "seq": 1},
         ], 0)
@@ -398,8 +397,7 @@ class TestTimelineCommitSeams(unittest.IsolatedAsyncioTestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.cfg = ConfigManager(os.path.join(self._tmp.name, "config.json"))
         self.archive = FakeArchive()
-        self.undo = UndoService(config=self.cfg, bus=EventBus(),
-                                archive=self.archive)
+        self.undo = UndoService(config=self.cfg, deps=UndoDeps(bus=EventBus(), archive=self.archive))
         self.hub = self.undo._timeline_commit
 
     def tearDown(self):
@@ -456,7 +454,7 @@ class TestTimelineCommitSeams(unittest.IsolatedAsyncioTestCase):
             {"kind": "archive", "value": {"op": "delete_person",
                                           "token": "tok-2"}, "seq": 1},
         ], 0)
-        self.undo.attach(archive=None)              # world CHANGE mid-flight
+        self.undo.attach(UndoDeps(archive=None))              # world CHANGE mid-flight
         await self.undo.sync_world_state()
         await asyncio.sleep(0.01)
         self.assertEqual(self.archive.purged, [],

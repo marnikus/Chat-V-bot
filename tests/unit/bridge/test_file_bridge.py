@@ -50,7 +50,7 @@ class FakeUndo:
         self.pushed.append(list(blocks))
         return (self.pushed, len(self.pushed) - 1)
 
-    def attach(self, **_refs):      # ctx._crosswire calls this on build
+    def attach(self, _deps=None, **_refs):  # ctx._crosswire calls this on build
         return None
 
 

@@ -15,6 +15,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import DbChanged, LogMessage
 from services.undo_service import emit_db_change, restart_world
+from services.wiring_requests import RestartDeps
 
 log = logging.getLogger("chatbot")
 
@@ -97,9 +98,9 @@ class DbBridge(QObject):
         if op in ("create", "load", "delete"):
             # REBUILD the timeline before recording this step
             # (the in-memory copy still holds the world being LEFT)
-            await restart_world(self.ctx.memory, self.ctx.archive,
-                                self.ctx.label_store(),
-                                self.ctx.undo, self.ctx.bus, op)
+            await restart_world(RestartDeps(
+                memory=self.ctx.memory, archive=self.ctx.archive,
+                labels=self.ctx.label_store(), undo=self.ctx.undo, bus=self.ctx.bus), op)
         if op != "delete":
             self.ctx.undo.push("dbconn", {
                 "op": result["op"],
@@ -121,9 +122,9 @@ class DbBridge(QObject):
         """
         if op in ("create", "load", "delete") and result.get("world_changed"):
             try:
-                await restart_world(self.ctx.memory, self.ctx.archive,
-                                    self.ctx.label_store(),
-                                    self.ctx.undo, self.ctx.bus, op)
+                await restart_world(RestartDeps(
+                    memory=self.ctx.memory, archive=self.ctx.archive,
+                    labels=self.ctx.label_store(), undo=self.ctx.undo, bus=self.ctx.bus), op)
             except Exception as exc:                     # noqa: BLE001
                 log.warning("world refresh after %s failed: %s", op, exc)
             # Tell JS to drop cached world data (emit_db_change only

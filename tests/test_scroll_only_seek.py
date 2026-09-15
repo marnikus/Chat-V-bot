@@ -24,8 +24,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from actions.scroll_parse import ScrollParse  # noqa: E402
+from actions.scroll_parse import (  # noqa: E402
+    PipelineRun, ScrollCallbacks, ScrollParse)
 from backend.action_engine import ActionEngine, RunTracer  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.criteria_engine import CriteriaEngine  # noqa: E402
 from backend.scroll_parser import ScrollParser  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
@@ -65,7 +67,8 @@ def block(**over):
 
 
 def parser(cdp, blk=None, **kw):
-    return (blk or block()).build_parser(cdp, **kw)
+    panel = kw.pop("panel_criteria", None)
+    return (blk or block()).build_parser(cdp, panel, ScrollCallbacks(**kw))
 
 
 async def seed(mem, *people):
@@ -152,8 +155,8 @@ class TestBacklogGuardRemoved(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, *[(f"Waiting{i}", False) for i in range(9)])
                 cdp = HighlightCDP(PAGES, page_height=100)
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
-                res = await block().run_pipeline(cdp, eng)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
+                res = await block().run_pipeline(cdp, PipelineRun(engine=eng))
                 return res, cdp.scrolls
 
         res, scrolls = in_tmp_cwd(go)
@@ -170,8 +173,8 @@ class TestModeDecision(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, ("Old", True))       # messaged = not waiting
                 cdp = HighlightCDP(PAGES, page_height=100)
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
-                return await block(scroll_only=True).run_pipeline(cdp, eng)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
+                return await block(scroll_only=True).run_pipeline(cdp, PipelineRun(engine=eng))
 
         res = in_tmp_cwd(go)
         self.assertFalse(res.seeking, "must fall back to normal collection")
@@ -183,8 +186,8 @@ class TestModeDecision(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, ("Cara", False))
                 cdp = HighlightCDP(PAGES, page_height=100)
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
-                return await block(scroll_only=True).run_pipeline(cdp, eng)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
+                return await block(scroll_only=True).run_pipeline(cdp, PipelineRun(engine=eng))
 
         res = in_tmp_cwd(go)
         self.assertTrue(res.seeking)
@@ -202,7 +205,7 @@ class TestModeDecision(unittest.TestCase):
                 return {"Anna"}
 
         run(block(scroll_only=False).run_pipeline(
-            HighlightCDP(PAGES, page_height=100), Eng()))
+            HighlightCDP(PAGES, page_height=100), PipelineRun(engine=Eng())))
         self.assertEqual(asked, [])
 
     def test_reading_memory_fails_open_to_collecting(self):
@@ -213,14 +216,14 @@ class TestModeDecision(unittest.TestCase):
                 raise RuntimeError("db is on fire")
 
         res = run(block(scroll_only=True).run_pipeline(
-            HighlightCDP(PAGES, page_height=100), Eng()))
+            HighlightCDP(PAGES, page_height=100), PipelineRun(engine=Eng())))
         self.assertFalse(res.seeking, "a read error must not idle the block")
         self.assertTrue(res.collected)
 
     def test_explicit_seek_nicks_win(self):
         res = run(block(scroll_only=True).run_pipeline(
-            HighlightCDP(PAGES, page_height=100), None,
-            seek_nicks={"Dana"}))
+            HighlightCDP(PAGES, page_height=100),
+            PipelineRun(seek_nicks={"Dana"})))
         self.assertTrue(res.seeking)
         self.assertEqual(res.found.nick, "Dana")
 
@@ -312,7 +315,7 @@ class TestSeekWritesNothing(unittest.TestCase):
                 await seed(mem, ("Cara", False), ("Zed", False))
                 before = sorted(u.nick for u in await mem.get_all())
                 cdp = HighlightCDP(PAGES, page_height=100)
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
                 eng.load_stack([{"block_id": "SCROLL_PARSE", "scroll_only": True,
                                  "scroll_pause_ms": 0, "load_timeout_ms": 20,
                                  "pre_delay_ms": 0, "confirm_pause_ms": 0,
@@ -336,7 +339,7 @@ class TestEngineIntegration(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, *seeded)
                 cdp = HighlightCDP(PAGES, page_height=100)
-                eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
                 base = {"block_id": "SCROLL_PARSE", "scroll_pause_ms": 0,
                         "load_timeout_ms": 20, "pre_delay_ms": 0,
                         "confirm_pause_ms": 0, "highlight_ms": 0,
@@ -384,7 +387,7 @@ class TestEngineIntegration(unittest.TestCase):
                 out = []
                 for cycle in range(2):
                     cdp = HighlightCDP(PAGES, page_height=100)
-                    eng = ActionEngine(cdp=cdp, memory=mem, criteria=None)
+                    eng = ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
                     eng.load_stack([dict(cfg)])
                     eng._tracer = RunTracer("test")
                     queue = await eng._run_collect_phase(eng._stack[0])
@@ -445,8 +448,13 @@ class TestBlockContract(unittest.TestCase):
         self.assertEqual(out, ActionResult.OK)
 
     def test_ui_matches_the_backend(self):
-        js = open(os.path.join(os.path.dirname(__file__), "..", "ui", "js",
-                               "stack-dnd.js"), encoding="utf-8").read()
+        # Round H (H-A4): assert against the whole stack-dnd family.
+        base = os.path.join(os.path.dirname(__file__), "..", "ui", "js")
+        family = ["core/ui-helpers.js", "stack-drag.js", "stack-dnd-history.js",
+                  "stack-dnd-render.js", "stack-dnd-menu.js", "stack-dnd-config.js",
+                  "stack-dnd-form.js", "stack-dnd.js"]
+        js = "".join(open(os.path.join(base, f), encoding="utf-8").read()
+                     for f in family)
         self.assertIn("scroll_only:false", js)
         self.assertIn("scroll_only:'", js, "needs a label")
         # The retired keys must never be live, user-facing controls. They DO
@@ -456,9 +464,12 @@ class TestBlockContract(unittest.TestCase):
         import re
         code = re.sub(r"//[^\n]*", "", js)                     # // comments
         code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)      # /* comments */
-        code = re.sub(r"'[^']*'", "''", code)                  # 'strings'
-        code = re.sub(r'"[^"]*"', '""', code)                  # "strings"
-        code = re.sub(r"`[^`]*`", "``", code)                  # `templates`
+        # The esc() chain contains quote regex literals that would desync
+        # string pairing — neutralize them to /Q/g before stripping.
+        code = re.sub(r"/['\"]/g", "/Q/g", code)     # quote regex literals
+        code = re.sub(r"'(?:[^'\\]|\\.)*'", "''", code, flags=re.S)  # 'strings'
+        code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', code, flags=re.S)  # "strings"
+        code = re.sub(r"`(?:[^`\\]|\\.)*`", "``", code, flags=re.S)  # `templates`
         for dead in ("use_panel_filters", "skip_if_backlog",
                      "backlog_threshold"):
             self.assertNotIn(dead, code,
@@ -490,7 +501,7 @@ class TestBackendBlockNormalization(unittest.TestCase):
 
     def test_load_stack_drops_the_dead_kwargs(self):
         cdp = HighlightCDP(PAGES, page_height=100)
-        eng = ActionEngine(cdp=cdp, memory=None, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=cdp, memory=None, criteria=None))
         eng.load_stack([
             {"block_id": "SCROLL_PARSE", "use_panel_filters": True,
              "scroll_only": True},

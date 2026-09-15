@@ -27,6 +27,7 @@ from actions.base_action import ActionResult, get_action_class  # noqa: E402
 from actions.mark_messaged import MarkMessaged  # noqa: E402
 from actions.take_person import TakePerson  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -164,7 +165,7 @@ class TestEngineMarkMethod(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 await seed(mem, rec("Anna"), rec("Bella", messaged=True))
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 marked = []
                 eng.person_marked.connect(lambda nick: marked.append(nick))
                 status = await eng.mark_person_messaged("Anna")
@@ -179,7 +180,7 @@ class TestEngineMarkMethod(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 await seed(mem, rec("Cara", messaged=True))
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 marked = []
                 eng.person_marked.connect(lambda nick: marked.append(nick))
                 status = await eng.mark_person_messaged("Cara")
@@ -192,7 +193,7 @@ class TestEngineMarkMethod(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 await seed(mem, rec("Anna"))
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 return await eng.mark_person_messaged("Ghost")
         self.assertEqual(in_tmp_cwd(go), "missing")
 
@@ -206,7 +207,7 @@ class TestEngineFlow(unittest.TestCase):
                 await seed(mem, rec("Cara", messaged=True))
                 take = TakePerson(pick_mode="random_done")
                 mark = MarkMessaged(pre_delay_ms=0)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, mark]
                 steps = []
                 eng.step_started.connect(
@@ -229,7 +230,7 @@ class TestEngineFlow(unittest.TestCase):
                 await seed(mem, rec("Cara", messaged=True))
                 take = TakePerson(pick_mode="random_new")
                 mark = MarkMessaged(pre_delay_ms=0)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, mark]
                 eng._repeat_cycles = lambda: 10   # pretend a Repeat Loop
                 logs = []
@@ -255,7 +256,7 @@ class TestEngineFlow(unittest.TestCase):
                 await seed(mem, rec("Anna"), rec("Bella"))
                 take = TakePerson(pick_mode="order_first")
                 mark = MarkMessaged(pre_delay_ms=0)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, mark]
                 marked = []
                 eng.person_marked.connect(lambda nick: marked.append(nick))

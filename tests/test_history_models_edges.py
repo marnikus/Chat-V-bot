@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from stores.history_models import (  # noqa: E402
     MAX_LIVE_ITEMS,
+    LineIdentity,
     Alignment,
     AppendResult,
     MessageRecord,
@@ -34,14 +35,15 @@ def fp(**kw):
     args = {"direction": "in", "from_nick": "Ann", "ts_display": "10:01",
             "kind": "text", "payload": "hi", "occ": 0}
     args.update(kw)
-    return fingerprint(**args)
+    occ = args.pop("occ")
+    return fingerprint(LineIdentity(**args), occ)
 
 
 def dk(**kw):
     args = {"direction": "in", "from_nick": "Ann", "ts_display": "10:01",
             "kind": "text", "payload": "hi"}
     args.update(kw)
-    return dedupe_key(**args)
+    return dedupe_key(LineIdentity(**args))
 
 
 class TestIdentityFields(unittest.TestCase):

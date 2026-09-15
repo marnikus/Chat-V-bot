@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="css/composer.css">
 <link rel="stylesheet" href="css/history.css">
 <link rel="stylesheet" href="css/labels.css">
+<link rel="stylesheet" href="css/bot-chat.css">
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
@@ -387,7 +388,211 @@
       </div>
     </div>
 
+    <!-- AI BOT CHAT — today's messages, Grok suggestions, reaction labels -->
+    <div class="panel botchat-panel" id="winBotChat" data-window="botchat">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">smart_toy</span> AI Bot Chat
+        <span class="spacer"></span>
+        <span id="botChatPerson" class="bot-person" title="The person this window works on">no person</span>
+        <button id="botReloadBtn" class="btn-icon-sm" title="Reload today's messages"><span class="material-icons">refresh</span></button>
+        <button id="botSettingsBtn" class="btn-icon-sm" title="AI connections — API keys, models, endpoints"><span class="material-icons">settings</span></button>
+      </h3>
+      <div class="bot-toolbar">
+        <button id="botSuggestBtn" class="btn-small btn-primary" type="button"
+                title="Ask Grok for a reply that fits today's conversation">🤖 Suggest reply</button>
+        <button id="botSuggestEditBtn" class="btn-small" type="button"
+                data-template="suggest_reply"
+                title="Edit this prompt in the Prompt Editor window">edit</button>
+        <button id="botAnalyzeBtn" class="btn-small" type="button"
+                title="Ask Grok to classify the person's last answer">🔍 Analyze reaction</button>
+        <button id="botAnalyzeEditBtn" class="btn-small" type="button"
+                data-template="analyze_reaction"
+                title="Edit this prompt in the Prompt Editor window">edit</button>
+      </div>
+      <label class="bot-scope" for="botScopeToday"
+             title="Unticked, the AI reads this person's whole conversation instead of just today">
+        <input type="checkbox" id="botScopeToday" checked>
+        <span>Today’s messages only</span>
+      </label>
+      <div class="bot-labels" id="botReactionLabels"
+           title="Only one reaction label is active; clicking another one replaces it"></div>
+      <div class="bot-chat-box" id="botChatBox"></div>
+      <div class="bot-approved" id="botApprovedRow">
+        <button id="botSendApprovedBtn" class="btn-success" type="button" disabled
+                title="Deliver the approved AI message to the person">Send to Person</button>
+        <span id="botApprovedHint" class="bot-hint">Approve a suggestion (✅) to enable sending</span>
+      </div>
+      <div class="bot-direct">
+        <textarea id="botDirectInput" maxlength="1000" rows="2"
+                  placeholder="Write your own message — sent as-is, no AI involved…"></textarea>
+        <button id="botSendDirectBtn" class="btn-small" type="button"
+                title="Send this text to the person immediately">Send Direct</button>
+      </div>
+      <div class="bot-status" id="botChatStatus" aria-live="polite"></div>
+    </div>
+
+    <!-- GROK PROMPT EDITOR — a separate window, never embedded in Bot Chat -->
+    <div class="panel botprompt-panel" id="winBotPrompt" data-window="botprompt">
+      <h3 class="win-title"><span class="win-grip material-icons" title="Drag to move">drag_indicator</span><span class="material-icons">edit_note</span> Grok Prompt Editor
+        <span class="spacer"></span>
+        <button id="botPromptPreviewBtn" class="btn-small" type="button"
+                title="Show exactly what would be sent for the current person">Preview</button>
+        <button id="botPromptSettingsBtn" class="btn-icon-sm" type="button"
+                title="AI connections — API keys, models, endpoints"><span class="material-icons">settings</span></button>
+      </h3>
+      <div class="bot-prompt-tabs" id="botPromptTabs"></div>
+      <div class="bot-prompt-bar">
+        <label for="botPresetSelect">Preset</label>
+        <div id="botPresetSelect" class="dark-select-host"
+             title="Saved versions of this prompt"></div>
+        <button id="botPresetSaveBtn" class="btn-small" type="button"
+                title="Save the editor text as a new preset">Save as…</button>
+        <button id="botPresetUpdateBtn" class="btn-small" type="button"
+                title="Overwrite the selected preset with the editor text">Update</button>
+        <button id="botPresetDeleteBtn" class="btn-small btn-danger" type="button"
+                title="Delete the selected preset">Delete</button>
+      </div>
+      <textarea id="botPromptText" class="bot-prompt-text" spellcheck="false"
+                placeholder="Prompt template — click a variable below to insert it"></textarea>
+      <div id="botPromptWarn" class="bot-prompt-warn hidden" aria-live="polite"></div>
+      <details class="bot-vars" id="botVarsBox" open>
+        <summary>Variables — click one to insert it at the cursor</summary>
+        <div class="bot-vars-list" id="botVarsList"></div>
+      </details>
+      <div class="bot-prompt-actions">
+        <button id="botPromptSaveBtn" class="btn-success" type="button">Save</button>
+        <button id="botPromptCancelBtn" class="btn-small" type="button">Cancel</button>
+        <button id="botPromptResetBtn" class="btn-small" type="button"
+                title="Forget my edit and use the shipped template again">Reset to default</button>
+        <span class="spacer"></span>
+        <span id="botPromptStatus" class="bot-hint" aria-live="polite"></span>
+      </div>
+      <pre id="botPromptPreview" class="bot-prompt-preview hidden"></pre>
+    </div>
+
   </main>
+</div>
+
+<!-- AI CONNECTIONS — an anchored popup, opened by the ⚙ in the Grok
+     Prompt Editor title bar and dismissed by a click outside, exactly
+     like the Grid view / Bookmarks menu. API keys, models and endpoints
+     live HERE and nowhere else.
+
+     Two columns, master/detail. Clicking a row on the left only LOADS it
+     into the form on the right: browsing is not choosing. "Select" in the
+     footer is the single action that confirms a connection and closes the
+     popup, so the user can look at three connections, test one and change
+     their mind without anything having happened. -->
+<div class="bot-settings-backdrop layout-menu hidden"
+     id="botSettingsBackdrop">
+  <div class="bot-settings" role="dialog"
+       aria-labelledby="botSettingsTitle">
+    <header class="bot-settings-head">
+      <div class="bot-settings-headings">
+        <h3 id="botSettingsTitle">Choose AI connection</h3>
+        <p class="bot-settings-sub">Select a connection, adjust its
+          settings, then confirm with Select.</p>
+      </div>
+      <button id="botSettingsCloseBtn" class="ui-btn ui-btn--icon"
+              type="button" title="Close without changing anything"
+              aria-label="Close">✕</button>
+    </header>
+
+    <div class="bot-settings-body">
+      <!-- LEFT: the list never moves while the right side is edited -->
+      <aside class="bot-conn-rail">
+        <div class="bot-rail-head">
+          <span class="bot-rail-title">Connections</span>
+          <span class="bot-rail-count" id="botConnCount"></span>
+        </div>
+        <div class="bot-provider-list" id="botProviderList"
+             role="listbox" aria-label="Saved connections"></div>
+        <button id="botConnNewBtn" class="ui-btn ui-btn--ghost ui-btn--block"
+                type="button" title="Add another connection">
+          <span class="ui-btn-ico">+</span>New connection</button>
+      </aside>
+
+      <!-- RIGHT: everything about the connection being viewed -->
+      <section class="bot-conn-detail">
+        <div class="bot-detail-head">
+          <h4 id="botDetailTitle">No connection</h4>
+          <span class="bot-ready" id="botConnReady">
+            <i class="bot-dot" id="botConnDot"></i>
+            <span id="botConnReadyText"></span>
+          </span>
+        </div>
+
+        <!-- The provider's recommended configuration. Choosing it only
+             describes it; the button below is what writes the fields. -->
+        <div class="bot-preset-card" id="botPresetCard">
+          <div class="bot-preset-head">Recommended preset</div>
+          <div class="bot-preset-options" id="botPresetOptions"
+               role="listbox" aria-label="Presets"></div>
+          <p class="bot-preset-desc" id="botPresetDesc"></p>
+          <button id="botApplyPresetBtn" class="ui-btn ui-btn--primary"
+                  type="button" disabled
+                  title="Copy the preset values into the fields below">
+            Apply Preset Settings</button>
+          <p class="bot-hint">Fills in the fields below. The popup stays
+            open and the values stay editable.</p>
+        </div>
+
+        <div class="bot-provider-form">
+          <div class="bot-field">
+            <label for="botConnTitle">Name</label>
+            <input id="botConnTitle" type="text" spellcheck="false"
+                   placeholder="e.g. Grok — grok-4.3">
+          </div>
+          <div class="bot-field">
+            <label for="botConnProvider">Provider</label>
+            <div id="botConnProvider" class="dark-select-host"></div>
+          </div>
+          <div class="bot-field">
+            <label for="botProviderModel">Model</label>
+            <input id="botProviderModel" type="text" spellcheck="false"
+                   placeholder="e.g. grok-4.3">
+          </div>
+          <div class="bot-field">
+            <label for="botProviderKey">API key</label>
+            <div class="bot-key-row">
+              <input id="botProviderKey" type="password" spellcheck="false"
+                     autocomplete="off"
+                     placeholder="leave blank to keep the saved key">
+              <button id="botKeyRevealBtn" class="ui-btn ui-btn--icon"
+                      type="button" title="Show the key you are typing"
+                      aria-label="Show or hide the key">◉</button>
+            </div>
+            <span id="botProviderKeyState" class="bot-hint"></span>
+          </div>
+          <div class="bot-field bot-field--wide">
+            <label for="botProviderUrl">Endpoint</label>
+            <input id="botProviderUrl" type="text" spellcheck="false">
+            <span class="bot-hint">Leave this alone unless you use a
+              proxy.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="bot-settings-actions">
+      <button id="botConnDeleteBtn" class="ui-btn ui-btn--danger"
+              type="button" title="Delete the connection shown on the right">
+        Delete connection</button>
+      <span class="spacer"></span>
+      <div id="botSettingsStatus" class="bot-status" aria-live="polite"></div>
+      <button id="botTestConnBtn" class="ui-btn ui-btn--ghost" type="button"
+              title="Send one tiny request using the values shown">
+        Test connection</button>
+      <button id="botSettingsSaveBtn" class="ui-btn ui-btn--ghost"
+              type="button"
+              title="Store these settings and keep editing">Save</button>
+      <button id="botSettingsCancelBtn" class="ui-btn ui-btn--ghost"
+              type="button">Cancel</button>
+      <button id="botConnSelectBtn" class="ui-btn ui-btn--primary"
+              type="button"
+              title="Use this connection for prompts and close">
+        Select</button>
+    </footer>
+  </div>
 </div>
 
 <!-- GRID VIEW MENU (layouts and window presets) -->
@@ -507,12 +712,41 @@
 <script src="js/core/dialog.js"></script>
 <script src="js/core/ui-helpers.js"></script>
 <script src="js/sash-core.js"></script>
+<script src="js/sash-grid-tree.js"></script>
+<script src="js/sash-grid-windows.js"></script>
+<script src="js/sash-grid-presets.js"></script>
+<script src="js/sash-grid-drag-core.js"></script>
+<script src="js/sash-grid-drag-spec.js"></script>
+<script src="js/sash-grid-drag-resize.js"></script>
+<script src="js/sash-grid-drag.js"></script>
 <script src="js/sash-grid.js"></script>
+<script src="js/window-presets-core.js"></script>
+<script src="js/window-presets-actions.js"></script>
+<script src="js/window-presets-preview.js"></script>
 <script src="js/window-presets.js"></script>
+<script src="js/app-bridge.js"></script>
+<script src="js/app-history.js"></script>
+<script src="js/app-session.js"></script>
 <script src="js/app.js"></script>
+<script src="js/user-table-core.js"></script>
+<script src="js/user-table-render.js"></script>
+<script src="js/user-table-actions.js"></script>
 <script src="js/user-table.js"></script>
+<script src="js/stack-drag-core.js"></script>
+<script src="js/stack-drag-visual.js"></script>
+<script src="js/stack-drag-scroll.js"></script>
 <script src="js/stack-drag.js"></script>
+<script src="js/stack-dnd-history.js"></script>
+<script src="js/stack-dnd-render.js"></script>
+<script src="js/stack-dnd-menu.js"></script>
+<script src="js/stack-dnd-config.js"></script>
+<script src="js/stack-dnd-form.js"></script>
 <script src="js/stack-dnd.js"></script>
+<script src="js/presets-ui-core.js"></script>
+<script src="js/presets-ui-stack.js"></script>
+<script src="js/presets-ui-templates.js"></script>
+<script src="js/presets-ui-blocks.js"></script>
+<script src="js/presets-ui-import.js"></script>
 <script src="js/presets-ui.js"></script>
 <script src="js/composer.js"></script>
 <script src="js/url-toolbar.js"></script>
@@ -520,11 +754,43 @@
 <script src="js/log-console.js"></script>
 <script src="js/history-model.js"></script>
 <script src="js/history-view.js"></script>
+<script src="js/history-store-core.js"></script>
+<script src="js/history-store-open.js"></script>
+<script src="js/history-store-bridge.js"></script>
+<script src="js/history-store-scroll.js"></script>
+<script src="js/history-store-render.js"></script>
 <script src="js/history-store.js"></script>
+<script src="js/history-db-core.js"></script>
+<script src="js/history-db-sort.js"></script>
+<script src="js/history-db-render.js"></script>
 <script src="js/history-db.js"></script>
 <script src="js/collector-panel.js"></script>
 <script src="js/color-picker.js"></script>
+<script src="js/labels-model.js"></script>
+<script src="js/labels-render.js"></script>
+<script src="js/labels-edit.js"></script>
+<script src="js/labels-filter.js"></script>
+<script src="js/labels-assign.js"></script>
 <script src="js/labels.js"></script>
+<script src="js/db-panel-core.js"></script>
+<script src="js/db-panel-actions.js"></script>
+<script src="js/db-panel-render.js"></script>
 <script src="js/db-panel.js"></script>
+<script src="js/dark-select.js"></script>
+<script src="js/bot-messages.js"></script>
+<script src="js/bot-chat-core.js"></script>
+<script src="js/bot-chat-bridge.js"></script>
+<script src="js/bot-chat-cards.js"></script>
+<script src="js/bot-chat-send.js"></script>
+<script src="js/bot-chat.js"></script>
+<script src="js/bot-connection-view.js"></script>
+<script src="js/bot-settings-core.js"></script>
+<script src="js/bot-settings-actions.js"></script>
+<script src="js/bot-settings.js"></script>
+<script src="js/bot-prompt-core.js"></script>
+<script src="js/bot-prompt-vars.js"></script>
+<script src="js/bot-prompt-presets.js"></script>
+<script src="js/bot-prompt-actions.js"></script>
+<script src="js/bot-prompt.js"></script>
 </body>
 </html>

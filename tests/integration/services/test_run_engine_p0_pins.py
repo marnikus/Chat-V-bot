@@ -33,6 +33,7 @@ from actions.base_action import ActionResult, BaseAction  # noqa: E402
 from actions.registry import ActionRegistry  # noqa: E402
 from actions.take_person import TakePerson  # noqa: E402
 from services.run import RunCoordinator  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from stores.user_memory import UserRecord  # noqa: E402
 
 
@@ -76,7 +77,7 @@ class RegistryCase(unittest.TestCase):
 
 
 def make_coordinator(memory=None):
-    return RunCoordinator(cdp=None, memory=memory, criteria=None)
+    return RunCoordinator(RunDeps(cdp=None, memory=memory, criteria=None))
 
 
 # ── P0-1: load_stack ─────────────────────────────────────────────

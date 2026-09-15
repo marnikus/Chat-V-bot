@@ -30,6 +30,7 @@ from backend.action_engine import (  # noqa: E402
     ActionEngine,
     get_action_class,
 )
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 from actions.repeat_loop import RepeatLoop  # noqa: E402
 
@@ -144,7 +145,7 @@ class MemoryHarness:
 
 
 def build_engine(memory):
-    engine = ActionEngine(cdp=None, memory=memory, criteria=None)
+    engine = ActionEngine(RunDeps(cdp=None, memory=memory, criteria=None))
     logs = []
     engine.log_msg.connect(lambda m: logs.append(("log", m)))
     engine.debug_msg.connect(lambda m, l: logs.append(("debug", m, l)))
@@ -290,7 +291,7 @@ class TestRepeatLoopBlockContract(unittest.TestCase):
         self.assertEqual(blk.config_schema()["repeat_count"]["default"], 2)
 
     def test_engine_load_stack_instantiates_it(self):
-        engine = ActionEngine(cdp=None, memory=FakeMemory(), criteria=None)
+        engine = ActionEngine(RunDeps(cdp=None, memory=FakeMemory(), criteria=None))
         engine.load_stack([{"block_id": "REPEAT_LOOP", "repeat_count": 6,
                             "enabled": True}])
         self.assertEqual(len(engine._stack), 1)
@@ -302,7 +303,7 @@ class TestRepeatLoopBlockContract(unittest.TestCase):
         self.assertNotIn("REPEAT_LOOP", USER_SCOPED_BLOCKS)
 
     def test_repeat_cycles_defaults(self):
-        engine = ActionEngine(cdp=None, memory=FakeMemory(), criteria=None)
+        engine = ActionEngine(RunDeps(cdp=None, memory=FakeMemory(), criteria=None))
         self.assertEqual(engine._repeat_cycles(), 1, "no marker → once")
         engine._stack = [RepeatLoop(repeat_count=0)]       # clamped to 1
         self.assertEqual(engine._repeat_cycles(), 1)

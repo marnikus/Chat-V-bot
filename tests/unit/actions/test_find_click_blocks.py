@@ -295,17 +295,24 @@ class TestClickRequest(unittest.TestCase):
         self.assertEqual(via_kwargs.lines, via_request.lines)
 
     def test_defaults_are_the_find_and_click_defaults(self):
-        """The façade may not quietly change a default."""
+        """The façade may not quietly change a default.
+
+        Since Round G step 4 the knobs live on `ClickRequest` itself and the
+        façade absorbs the legacy keyword form, so the guard pins two things:
+        the legacy path builds exactly the typed defaults, and the façade
+        signature stays (cdp, request, engine, **legacy).
+        """
         import inspect
-        params = dict(inspect.signature(find_and_click).parameters)
-        fields = ClickRequest.__dataclass_fields__
-        for name, param in params.items():
-            if name in ("cdp", "engine"):
-                continue
+        self.assertEqual(ClickRequest.from_kwargs(selector="div"),
+                         ClickRequest(selector="div"))
+        bare = ClickRequest.from_kwargs()
+        for name, field in ClickRequest.__dataclass_fields__.items():
             with self.subTest(field=name):
-                self.assertIn(name, fields)
-                if name in fields and param.default is not inspect.Parameter.empty:
-                    self.assertEqual(param.default, fields[name].default)
+                self.assertEqual(getattr(bare, name), field.default)
+        params = dict(inspect.signature(find_and_click).parameters)
+        self.assertEqual(sorted(params),
+                         ["cdp", "engine", "legacy", "request"])
+        self.assertIsNone(params["request"].default)
 
     def test_exact_match_helper(self):
         """AC#9."""

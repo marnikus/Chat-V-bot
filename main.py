@@ -13,7 +13,7 @@ from qasync import QEventLoop
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.bootstrap import create_container
-from app.lifecycle import ApplicationLifecycle
+from app.lifecycle import AppDeps, ApplicationLifecycle
 from app.window import create_window
 from backend.logger import setup_logger
 
@@ -36,7 +36,7 @@ def main() -> int:
     bridge = container.get("bridge")
     bridge.attach_history(history)
     window = create_window(config, bridge)
-    lifecycle = ApplicationLifecycle(app, cdp, memory, engine, history, bridge)
+    lifecycle = ApplicationLifecycle(AppDeps(app, cdp, memory, engine, history, bridge))
     lifecycle.bind(window)
     lifecycle.start(loop)
     with loop:

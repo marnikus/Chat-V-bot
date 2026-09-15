@@ -29,10 +29,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from app.lifecycle import ApplicationLifecycle  # noqa: E402
+from app.lifecycle import AppDeps, ApplicationLifecycle  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.unit.bridge_safety.helpers import drain  # noqa: E402
 
@@ -60,7 +61,7 @@ async def seed_world(path: str) -> None:
     for nick in NICKS:
         await memory.upsert_user(UserRecord(nick=nick))
     await memory.close()
-    archive = HistoryService(cdp=FakeCdp(), db_path=path)
+    archive = HistoryService(HistoryDeps(cdp=FakeCdp(), db_path=path))
     await archive.db.init()
     for nick in NICKS:                              # the real write path
         await archive.repo.ensure_person(nick)
@@ -78,8 +79,7 @@ class BootChainCase(unittest.IsolatedAsyncioTestCase):
         self.bridge = Bridge(config=ConfigManager(
             os.path.join(self._tmp.name, "config.json")))
         self.memory = UserMemory(world)             # both stores exist,
-        self.archive = HistoryService(cdp=FakeCdp(), db_path=world,
-                                      memory=self.memory)
+        self.archive = HistoryService(HistoryDeps(cdp=FakeCdp(), db_path=world, memory=self.memory))
         self.bridge._memory = self.memory           # ...and are CLOSED
         self.bridge.attach_history(self.archive)
         self.pages, self.errors, self.changes = [], [], []
@@ -96,9 +96,9 @@ class BootChainCase(unittest.IsolatedAsyncioTestCase):
 
     async def run_startup(self):
         """The real `startup`, on the real objects — no fakes in the path."""
-        lifecycle = ApplicationLifecycle(app=FakeApp(), cdp=None,
-                                         memory=self.memory, engine=None,
-                                         history=self.archive, bridge=self.bridge)
+        lifecycle = ApplicationLifecycle(AppDeps(
+            app=FakeApp(), cdp=None, memory=self.memory, engine=None,
+            history=self.archive, bridge=self.bridge))
         await lifecycle.startup()
         await drain()
 

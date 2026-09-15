@@ -35,6 +35,7 @@ _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
 from services.run import (ActionEngine, STANDALONE_NICK,  # noqa: E402
                                   normalize_blocks)
+from services.run import RunDeps  # noqa: E402
 from stores.user_memory import UserRecord  # noqa: E402
 
 
@@ -146,7 +147,7 @@ class EngineCase(unittest.IsolatedAsyncioTestCase):
 
     def make(self, users=None):
         self.memory = FakeMemory(users)
-        self.engine = ActionEngine(cdp=None, memory=self.memory, criteria=None)
+        self.engine = ActionEngine(RunDeps(cdp=None, memory=self.memory, criteria=None))
         self.logs = []
         self.debug = []
         self.completes = []

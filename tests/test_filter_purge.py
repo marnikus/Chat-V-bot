@@ -24,10 +24,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from actions.scroll_parse import ScrollParse  # noqa: E402
+from actions.scroll_parse import (  # noqa: E402
+    PipelineRun, ScrollCallbacks, ScrollParse)
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.person_filter import PersonFilter  # noqa: E402
-from backend.scroll_parser import ScrollParser  # noqa: E402
+from backend.scroll_parser import ScrollOptions, ScrollParser  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
 from tests.test_scroll_parse_pipeline import person  # noqa: E402
@@ -77,8 +79,7 @@ class TestOnlyPassingPeopleArePersisted(unittest.TestCase):
     def test_rejected_people_are_never_stored(self):
         async def go():
             async with MemHarness() as mem:
-                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
-                                   memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                 eng.load_stack(stack())
                 await eng.execute()
                 return await nicks_in(mem)
@@ -97,9 +98,7 @@ class TestOnlyPassingPeopleArePersisted(unittest.TestCase):
             async with MemHarness() as mem:
                 snapshots = []
                 for _ in range(3):
-                    eng = ActionEngine(
-                        cdp=HighlightCDP(MIXED, page_height=100),
-                        memory=mem, criteria=None)
+                    eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                     eng.load_stack(stack(min_new_users=1))
                     await eng.execute()
                     snapshots.append(await nicks_in(mem))
@@ -128,8 +127,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
                     await mem.upsert_user(UserRecord(nick=nick, gender=gender,
                                                      guest=True))
                 before = await nicks_in(mem)
-                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
-                                   memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                 removed = []
                 eng.person_removed.connect(
                     lambda p: removed.append(json.loads(p)))
@@ -153,16 +151,14 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 # lax run: accept everyone
-                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
-                                   memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                 eng.load_stack(stack(filter_female="any", filter_guest="any",
                                      filter_registered="any",
                                      filter_anonymous="any"))
                 await eng.execute()
                 lax = await nicks_in(mem)
                 # strict run: women only
-                eng2 = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
-                                    memory=mem, criteria=None)
+                eng2 = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                 eng2.load_stack(stack())
                 await eng2.execute()
                 return lax, await nicks_in(mem)
@@ -181,8 +177,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 await mem.upsert_user(UserRecord(nick="Boris", gender="male"))
-                eng = ActionEngine(cdp=HighlightCDP(MIXED, page_height=100),
-                                   memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                 eng.load_stack(stack(purge_rejected=False))
                 await eng.execute()
                 return await nicks_in(mem)
@@ -199,11 +194,8 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
     def test_reject_callback_fires_with_a_reason(self):
         cdp = HighlightCDP([[person("Anna"), person("Boris", female=False)]])
         seen = []
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter(),
-                              confirm_pause_ms=0, highlight_enabled=False,
-                              on_reject=lambda rec, why: seen.append(
-                                  (rec.nick, why)) or True)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, highlight_enabled=False, on_reject=lambda rec, why: seen.append(
+                                  (rec.nick, why)) or True))
         res = run(parser.collect())
         self.assertEqual(seen, [("Boris", "not female")])
         self.assertEqual(res.purged, ["Boris"])
@@ -214,10 +206,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
             raise RuntimeError("db on fire")
 
         cdp = HighlightCDP([[person("Anna"), person("Boris", female=False)]])
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter(),
-                              confirm_pause_ms=0, highlight_enabled=False,
-                              on_reject=boom)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, highlight_enabled=False, on_reject=boom))
         res = run(parser.collect())
         self.assertEqual([p.nick for p in res.collected], ["Anna"])
 
@@ -225,7 +214,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
         class Broken:
             async def delete_user(self, nick): raise RuntimeError("db down")
 
-        eng = ActionEngine(cdp=None, memory=Broken(), criteria=None)
+        eng = ActionEngine(RunDeps(cdp=None, memory=Broken(), criteria=None))
         self.assertFalse(run(eng.person_rejected(UserRecord(nick="B"), "nope")))
 
     def test_engine_purge_reports_only_real_deletions(self):
@@ -236,7 +225,7 @@ class TestRejectedPeopleArePurged(unittest.TestCase):
                 return nick == "Boris"      # Igor was never stored
 
         mem = Mem()
-        eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
         emitted = []
         eng.person_removed.connect(lambda p: emitted.append(json.loads(p)))
         self.assertTrue(run(eng.person_rejected(UserRecord(nick="Boris"), "x")))
@@ -251,12 +240,8 @@ class TestStopHaltsCollection(unittest.TestCase):
         pages = [[person(f"W{i}")] for i in range(40)]
         cdp = HighlightCDP(pages, page_height=10)
         flag = {"stop": False}
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter(),
-                              confirm_pause_ms=0, highlight_enabled=False,
-                              should_stop=lambda: flag["stop"],
-                              on_collect=lambda r, c: flag.__setitem__(
-                                  "stop", len(c) >= 3))
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter(), confirm_pause_ms=0, highlight_enabled=False, should_stop=lambda: flag["stop"], on_collect=lambda r, c: flag.__setitem__(
+                                  "stop", len(c) >= 3)))
         res = run(parser.collect())
         self.assertTrue(res.stopped)
         self.assertLess(len(res.collected), 40)
@@ -264,11 +249,7 @@ class TestStopHaltsCollection(unittest.TestCase):
     def test_stop_is_honoured_during_the_lazy_load_wait(self):
         """A stop must not have to wait out the full load timeout."""
         cdp = HighlightCDP([[person("Anna")], [person("Zoe")]], load_delay=99)
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=5000,
-                              person_filter=PersonFilter(),
-                              confirm_pause_ms=0, highlight_enabled=False,
-                              should_stop=lambda: True)
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=5000, person_filter=PersonFilter(), confirm_pause_ms=0, highlight_enabled=False, should_stop=lambda: True))
         res = run(parser.collect())
         self.assertTrue(res.stopped)
 
@@ -276,8 +257,7 @@ class TestStopHaltsCollection(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 pages = [[person(f"W{i}")] for i in range(30)]
-                eng = ActionEngine(cdp=HighlightCDP(pages, page_height=10),
-                                   memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=HighlightCDP(pages, page_height=10), memory=mem, criteria=None))
                 eng.load_stack(stack(scroll_pause_ms=5))
                 eng.person_found.connect(lambda p: eng.stop())
                 await eng.execute()
@@ -292,7 +272,7 @@ class TestStopHaltsCollection(unittest.TestCase):
         self.assertLess(len(after), 30, "stop must cut the run short")
 
     def test_engine_exposes_the_stop_predicate(self):
-        eng = ActionEngine(cdp=None, memory=None, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=None, memory=None, criteria=None))
         self.assertFalse(eng.is_stopping())
         eng.stop()
         self.assertTrue(eng.is_stopping())
@@ -315,7 +295,7 @@ class TestBlockWiring(unittest.TestCase):
         block = ScrollParse(scroll_pause_ms=0, load_timeout_ms=20,
                             min_new_users=0, pre_delay_ms=0,
                             confirm_pause_ms=0, highlight_enabled=False)
-        run(block.run_pipeline(cdp, Eng()))
+        run(block.run_pipeline(cdp, PipelineRun(engine=Eng())))
         self.assertEqual(added, ["Anna"])
         self.assertEqual(purged, [("Boris", "not female")])
 
@@ -331,7 +311,8 @@ class TestBlockWiring(unittest.TestCase):
 
     def test_disabled_purge_detaches_the_callback(self):
         block = ScrollParse(purge_rejected=False)
-        parser = block.build_parser(None, on_reject=lambda r, w: True)
+        parser = block.build_parser(
+            None, cbs=ScrollCallbacks(on_reject=lambda r, w: True))
         self.assertIsNone(parser._on_reject)
 
 
@@ -342,9 +323,7 @@ class TestInvariant(unittest.TestCase):
             async with MemHarness() as mem:
                 await mem.upsert_user(UserRecord(nick="Boris", gender="male"))
                 for i in range(3):
-                    eng = ActionEngine(
-                        cdp=HighlightCDP(MIXED, page_height=100),
-                        memory=mem, criteria=None)
+                    eng = ActionEngine(RunDeps(cdp=HighlightCDP(MIXED, page_height=100), memory=mem, criteria=None))
                     eng.load_stack(stack(min_new_users=1))
                     if i == 1:                       # stop mid-way once
                         eng.person_found.connect(lambda p: eng.stop())

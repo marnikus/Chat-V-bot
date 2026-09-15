@@ -20,7 +20,7 @@ media_cache/
 saved_media/
 history.db*
 
-# Runtime config (split stores — migrated from the old single config.json)
-config/
+# Legacy single-file config artifacts. The split stores under config/ are
+# tracked deliberately — owner ruling 2026-09-13 (Round G design doc §1f).
 config.json
 config.json.migrated-*

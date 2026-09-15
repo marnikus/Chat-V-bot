@@ -38,6 +38,7 @@ _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 from actions.click_user import ClickUser  # noqa: E402
 from actions.scroll_parse import ScrollParse  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.criteria_engine import CriteriaEngine  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 from tests.test_collect_visual_and_live_refresh import HighlightCDP  # noqa: E402
@@ -94,7 +95,7 @@ def in_tmp_cwd(coro_fn):
 
 
 def engine_for(mem, cdp):
-    return ActionEngine(cdp=cdp, memory=mem, criteria=None)
+    return ActionEngine(RunDeps(cdp=cdp, memory=mem, criteria=None))
 
 
 # ── the block setting itself ─────────────────────────────────────

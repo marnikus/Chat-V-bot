@@ -1,34 +1,23 @@
 """DbRegistry — the read half of `services.db_service.DbManager` (AREA C).
-
 Owns every READ of the database registry: path resolution (with the
 containment rule), the remembered-path list, the world scan, the DB-window
 list and the size/count info payload. No mutation of databases happens
 here; the write half lives in `services.db_lifecycle.DbLifecycle`.
-
 The collaborator calls through its host (`host._config`, `host._service`,
 `host.root`) so `DbManager` stays the only facade — every public name it
 exposed before still works through a one-line delegate.
 """
-
 from __future__ import annotations
-
 import logging
 import os
-
 from services.db_service import (TRASH_DIR, SUFFIXES, db_stem,
                                  file_group_size, folder_size, safe_db_name)
-
 log = logging.getLogger("chatbot")
-
-
 def _stat_int(stats: dict, key: str) -> int:
     """One counter of a `db_stats()` payload, tolerating NULL/absent."""
     return int(stats.get(key) or 0)
-
-
 def _apply_stats(payload: dict, stats: dict) -> None:
     """Fold a live `db_stats()` reading into the window payload.
-
     `db_bytes` keeps the on-disk measurement when the engine reports no
     size, so a connected world never shows 0 bytes.
     """
@@ -44,14 +33,10 @@ def _apply_stats(payload: dict, stats: dict) -> None:
         "media_cached": _stat_int(stats, "media_cached"),
         "fts": bool(stats.get("fts")),
     })
-
-
 class DbRegistry:
     """Path resolution, remembered paths and world listing (reads only)."""
-
     def __init__(self, host):
         self._host = host
-
     # ── paths ────────────────────────────────────────────────────
     def active_path(self) -> str:
         host = self._host
@@ -66,7 +51,6 @@ class DbRegistry:
             if isinstance(stored, str) and stored:
                 return stored
         return "history.db"
-
     @staticmethod
     def _inside_root(candidate: str, root: str) -> bool:
         """True when `candidate` (absolute) is strictly inside `root`."""
@@ -75,10 +59,8 @@ class DbRegistry:
         except ValueError:                             # different drives
             return False
         return common == root and candidate != root
-
     def resolve(self, name_or_path: str) -> str:
         """Absolute-ish path for a user-supplied name (kept inside the app).
-
         Anything the user types must land INSIDE the app folder: absolute
         paths and separator-containing relatives are contained against
         `host.root`, and names that would escape resolve to "" (the
@@ -101,12 +83,10 @@ class DbRegistry:
         if not self._inside_root(candidate, root):
             return ""
         return candidate
-
     def trash_dir(self) -> str:
         base = os.path.dirname(os.path.abspath(self.active_path())) \
             or self._host.root
         return os.path.join(base, TRASH_DIR)
-
     def media_base_dir(self) -> str:
         """The app-level media root (one folder per world lives inside it)."""
         host = self._host
@@ -120,12 +100,10 @@ class DbRegistry:
             if isinstance(media, dict):
                 return str(media.get("cache_dir") or "saved_media")
         return "saved_media"
-
     def media_dir(self, path: str = "") -> str:
         """The world's own media folder: `<media root>/<world stem>/`."""
         target = path or self.active_path()
         return os.path.join(self.media_base_dir(), db_stem(target))
-
     # ── listing ──────────────────────────────────────────────────
     def known_paths(self) -> list[str]:
         stored = []
@@ -135,7 +113,6 @@ class DbRegistry:
             if isinstance(raw, list):
                 stored = [p for p in raw if isinstance(p, str) and p]
         return stored
-
     def _remember(self, path: str) -> None:
         host = self._host
         if host._config is None or not path:
@@ -143,10 +120,8 @@ class DbRegistry:
         recent = [p for p in self.known_paths() if p != path]
         recent.insert(0, path)
         host._config.set_state(db_recent=recent[:12])
-
     def _prune_remembered(self) -> None:
         """Drop remembered paths whose file is gone (the "missing" ghosts).
-
         `db_recent` is a recall list, not a registry: a file that does not
         exist on disk must never reach the UI (D3 of the design).
         """
@@ -157,10 +132,8 @@ class DbRegistry:
         kept = [p for p in stored if os.path.exists(p)]
         if len(kept) != len(stored):
             host._config.set_state(db_recent=kept[:12])
-
     def deletion_inventory_sources(self, victim_abs: str = "") -> dict:
         """Raw source lists for the AREA A deletion inventory (read-only).
-
         Returns {"active_folder": [...], "victim_folder": [...],
         "remembered": [...], "active": ...}. Existing methods are unchanged;
         `services.db_deletion.build_deletion_inventory` combines these with
@@ -180,7 +153,6 @@ class DbRegistry:
         return {"active_folder": active_folder,
                 "victim_folder": victim_folder,
                 "remembered": remembered, "active": active}
-
     def existing_worlds(self) -> list[str]:
         """Every database file that EXISTS: the folder scan + the active file."""
         active = self.active_path()
@@ -198,10 +170,8 @@ class DbRegistry:
         if os.path.exists(active):
             found.setdefault(os.path.abspath(active), active)
         return [found[key] for key in sorted(found)]
-
     def list_dbs(self) -> list[dict]:
         """Every `*.db` that exists, with delete eligibility (D3, D5).
-
         No more remembered-but-gone paths: those are pruned before they can
         render, so the "missing" row is impossible, and `can_delete`/
         `delete_hint` let the UI mirror the backend's last-world rule.
@@ -224,7 +194,6 @@ class DbRegistry:
             })
         items.sort(key=lambda i: (not i["active"], i["name"].lower()))
         return items
-
     # ── info ─────────────────────────────────────────────────────
     async def info(self) -> dict:
         """Sizes + counts for the DB Connection window."""
@@ -258,13 +227,9 @@ class DbRegistry:
         _apply_stats(payload, stats)
         payload["total_bytes"] = payload["db_bytes"] + media_bytes
         return payload
-
-
 # ── raw source helpers for the deletion inventory ──────────────────
-
 def _victim_folder_db_files(registry, victim_abs: str) -> list:
     """Existing `*.db` files in the victim directory (raw source list).
-
     The directory is skipped when it is the active world's directory.
     Best-effort like the old inline form: any OSError yields no files.
     """
@@ -290,8 +255,6 @@ def _victim_folder_db_files(registry, victim_abs: str) -> list:
         except OSError:
             return []
     return files
-
-
 def _remembered_existing_dbs(registry) -> list:
     """Remembered `*.db` paths that still exist (raw source list)."""
     try:

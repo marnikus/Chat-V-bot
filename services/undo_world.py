@@ -24,6 +24,7 @@ import os
 from core.events import (EventBus, DbChanged, LogMessage, UndoHistoryChanged,
                          UserDbChanged)
 from core.result import Ok, Result
+from services.wiring_requests import RestartDeps  # noqa: F401  (re-exported)
 from services.world_events import announce_world_live
 
 log = logging.getLogger("chatbot")
@@ -48,8 +49,7 @@ def emit_db_change(bus: EventBus, action: str, result) -> None:
                             level="warn"))
 
 
-async def restart_world(memory, archive, labels, undo, bus: EventBus,
-                        op: str) -> None:
+async def restart_world(deps: RestartDeps, op: str) -> None:
     """After a world create/load/delete: rebuild every world-bound surface.
 
     The service already tore the old world down and rebuilt the database
@@ -57,29 +57,29 @@ async def restart_world(memory, archive, labels, undo, bus: EventBus,
     here the rest of the app follows via bus events: undo timeline,
     People list, Full User Database, labels and the my-nick readout.
     """
-    if archive is None:
+    if deps.archive is None:
         return
-    if memory is not None:
+    if deps.memory is not None:
         try:
-            if os.path.abspath(memory.db_path) != \
-                    os.path.abspath(archive.db.path):
-                await memory.switch_db(archive.db.path)
+            if os.path.abspath(deps.memory.db_path) != \
+                    os.path.abspath(deps.archive.db.path):
+                await deps.memory.switch_db(deps.archive.db.path)
         except Exception as exc:                        # noqa: BLE001
             log.warning("queue did not follow the world switch: %s", exc)
-    if undo is not None:
+    if deps.undo is not None:
         try:
-            await undo.sync_world_state()
+            await deps.undo.sync_world_state()
         except Exception as exc:                        # noqa: BLE001
             log.warning("world undo sync failed: %s", exc)
-    announce_world_live(bus, labels, reason="db_switch")
+    announce_world_live(deps.bus, deps.labels, reason="db_switch")
     try:
-        bus.emit(LogMessage(message="👤 my nick follows the world", level="debug"))
+        deps.bus.emit(LogMessage(message="👤 my nick follows the world", level="debug"))
         from core.events import MyNickChanged
-        bus.emit(MyNickChanged(nick=archive.my_nick))
+        deps.bus.emit(MyNickChanged(nick=deps.archive.my_nick))
     except Exception:                                   # noqa: BLE001
         pass
     log.info("world %s is live — all world state rebuilt (%s)",
-             os.path.basename(archive.db.path), op)
+             os.path.basename(deps.archive.db.path), op)
 
 
 class WorldSync:

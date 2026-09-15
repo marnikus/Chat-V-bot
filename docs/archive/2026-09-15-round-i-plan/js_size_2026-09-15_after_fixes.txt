@@ -1,0 +1,122 @@
+file                              lines  funcs   objLoc  objMeth   >30   >60
+backend/js/chat_agent.js            803     61       23        1     6     1
+ui/js/app-bridge.js                 284     40      270       15     0     0
+ui/js/app-history.js                176     14      161       11     0     0
+ui/js/app-session.js                 93      5       79        5     0     0
+ui/js/app.js                         93      6        8        1     0     0
+ui/js/bot-chat-bridge.js             70     10       60        9     0     0
+ui/js/bot-chat-cards.js              53     11       43        6     0     0
+ui/js/bot-chat-core.js               86     14       73        8     0     0
+ui/js/bot-chat-send.js               66     10       56        8     0     0
+ui/js/bot-chat.js                    17      0        1        0     0     0
+ui/js/bot-connection-view.js        238     21      210       17     0     0
+ui/js/bot-messages.js                76      4       47        3     0     0
+ui/js/bot-prompt-actions.js          42      7       32        5     0     0
+ui/js/bot-prompt-core.js             82     15       72        9     0     0
+ui/js/bot-prompt-presets.js          55     12       45        9     0     0
+ui/js/bot-prompt-vars.js             49      7       39        6     0     0
+ui/js/bot-prompt.js                  17      0        1        0     0     0
+ui/js/bot-settings-actions.js        80     19       70       15     0     0
+ui/js/bot-settings-core.js          115     38      105       21     0     0
+ui/js/bot-settings.js                27      2        1        0     0     0
+ui/js/collector-panel.js            303     21      290       15     2     0
+ui/js/color-picker.js               229     15      211       10     1     1
+ui/js/composer.js                    81     11       69        2     1     0
+ui/js/core/bridge-ready.js           74      7        8        3     1     0
+ui/js/core/dialog.js                 70      8       58        2     0     0
+ui/js/core/ui-helpers.js            105      7       89        5     1     0
+ui/js/criteria-editor.js             85     12       78        7     0     0
+ui/js/dark-select.js                195     19      161       13     0     0
+ui/js/db-panel-actions.js            38      6       28        4     0     0
+ui/js/db-panel-core.js               88     11       78        9     0     0
+ui/js/db-panel-render.js             66      6       56        4     0     0
+ui/js/db-panel.js                    17      0        1        0     0     0
+ui/js/history-db-core.js            106     10       96        5     1     0
+ui/js/history-db-render.js           91      9       81        6     1     0
+ui/js/history-db-sort.js            117     21      107       14     0     0
+ui/js/history-db.js                  16      0        1        0     0     0
+ui/js/history-model.js              412     30       21        0     4     2
+ui/js/history-store-bridge.js       115     12      105       10     0     0
+ui/js/history-store-core.js         112     11      102        5     1     0
+ui/js/history-store-open.js          40      3       30        3     0     0
+ui/js/history-store-render.js        87     10       77        9     0     0
+ui/js/history-store-scroll.js        55      8       45        5     0     0
+ui/js/history-store.js               19      0        1        0     0     0
+ui/js/history-view.js               345     32        8        0     5     1
+ui/js/labels-assign.js              145     12      132        9     1     0
+ui/js/labels-edit.js                106      8       94        4     1     0
+ui/js/labels-filter.js               88      7       76        3     1     0
+ui/js/labels-model.js                86     12       72        9     0     0
+ui/js/labels-render.js              106      7       94        5     1     0
+ui/js/labels.js                     190     17      169        9     2     0
+ui/js/log-console.js                 39      4       29        3     0     0
+ui/js/presets-ui-blocks.js           64     10       54        6     0     0
+ui/js/presets-ui-core.js            102     13       89       13     0     0
+ui/js/presets-ui-import.js          103     14       90        6     0     0
+ui/js/presets-ui-stack.js            89     15       76        7     0     0
+ui/js/presets-ui-templates.js        64     11       51        5     0     0
+ui/js/presets-ui.js                  30      1        1        0     0     0
+ui/js/sash-core.js                  684     46       14        0     3     1
+ui/js/sash-grid-drag-core.js        200     17      194       13     0     0
+ui/js/sash-grid-drag-resize.js      133     13      127        7     0     0
+ui/js/sash-grid-drag-spec.js        165     11      159       11     1     0
+ui/js/sash-grid-drag.js               6      0        0        0     0     0
+ui/js/sash-grid-presets.js          159     15      156       10     0     0
+ui/js/sash-grid-tree.js             243     28      240       13     0     0
+ui/js/sash-grid-windows.js          487     58      221       14     0     0
+ui/js/sash-grid.js                  110      7       84        6     0     0
+ui/js/stack-dnd-config.js           125     14      122       12     0     0
+ui/js/stack-dnd-form.js             283     30      222       13     1     0
+ui/js/stack-dnd-history.js          222     18      157       12     0     0
+ui/js/stack-dnd-menu.js             245     36      242       16     0     0
+ui/js/stack-dnd-render.js           281     23      157       10     0     0
+ui/js/stack-dnd.js                  269      8       90        5     0     0
+ui/js/stack-drag-core.js             78      9       68        8     0     0
+ui/js/stack-drag-scroll.js           27      3       17        1     0     0
+ui/js/stack-drag-visual.js           84     12       74        9     0     0
+ui/js/stack-drag.js                  16      0        1        0     0     0
+ui/js/url-toolbar.js                168     19      153       12     1     0
+ui/js/user-table-actions.js          77     13       67       12     0     0
+ui/js/user-table-core.js             71     11       61        5     1     0
+ui/js/user-table-render.js           86     13       76        9     0     0
+ui/js/user-table.js                  18      1        1        1     0     0
+ui/js/window-presets-actions.js     136     23      126       12     0     0
+ui/js/window-presets-core.js        111     15      101       10     0     0
+ui/js/window-presets-preview.js      82     10       70        6     0     0
+ui/js/window-presets.js              16      0        1        0     0     0
+TOTAL (85 files)                  11182   1149
+functions over 30 LOC: 37 · over 60: 6 · over 100: 5
+
+longest functions (the tail the gate watches):
+   782  backend/js/chat_agent.js::(anonymous)  (line 21)
+   661  ui/js/sash-core.js::(anonymous)  (line 23)
+   386  ui/js/history-model.js::(anonymous)  (line 26)
+   327  ui/js/history-view.js::(anonymous)  (line 15)
+   238  ui/js/history-model.js::create  (line 162)
+    73  ui/js/color-picker.js::open  (line 54)
+    60  ui/js/composer.js::init  (line 10)
+    59  ui/js/collector-panel.js::init  (line 30)
+    55  ui/js/labels.js::init  (line 20)
+    54  ui/js/core/bridge-ready.js::(anonymous)  (line 20)
+    54  ui/js/labels-edit.js::_editRow  (line 49)
+    51  ui/js/sash-core.js::moveWindow  (line 484)
+    50  ui/js/labels-assign.js::renderAssign  (line 26)
+    47  ui/js/labels-render.js::pill  (line 32)
+    46  backend/js/chat_agent.js::selectPane  (line 164)
+    45  backend/js/chat_agent.js::walk  (line 366)
+    45  ui/js/history-db-core.js::init  (line 26)
+    45  ui/js/history-store-core.js::init  (line 21)
+    45  ui/js/labels-filter.js::renderFilter  (line 11)
+    44  backend/js/chat_agent.js::visiblePane  (line 225)
+
+largest gated objects (function-bearing object literals):
+   290 loc,  15 methods  ui/js/collector-panel.js     line 11
+   270 loc,  15 methods  ui/js/app-bridge.js          line 14
+   242 loc,  16 methods  ui/js/stack-dnd-menu.js      line 3
+   240 loc,  13 methods  ui/js/sash-grid-tree.js      line 3
+   222 loc,  13 methods  ui/js/stack-dnd-form.js      line 3
+   221 loc,  14 methods  ui/js/sash-grid-windows.js   line 266
+   211 loc,  10 methods  ui/js/color-picker.js        line 15
+   210 loc,  17 methods  ui/js/bot-connection-view.js line 24
+   194 loc,  13 methods  ui/js/sash-grid-drag-core.js line 6
+   169 loc,   9 methods  ui/js/labels.js              line 16

@@ -1,50 +1,37 @@
 """preset_io — the portable stack/block export file format (v1).
-
 Pure module: no Qt, no store. Everything the import path knows about a
 file is a function of the file text, so it is testable without a GUI.
 Design: docs/STACK_PRESET_EXPORT_IMPORT_DESIGN_2026-09-10.md §3.
-
 Two shapes, distinguished by ``format``:
-
 * ``chat-v-bot/stack-preset`` — the full stack (every parameter of every
   block) plus the whole custom-block library, standalone;
 * ``chat-v-bot/action-block`` — one named block.
-
 Import never applies unvalidated data: ``parse_export`` rejects with a
 distinct ``Err`` code for every hard failure and collects human-readable
 warnings for compatibility problems (version mismatch, unknown block
 type, missing selector).
 """
-
 from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
-
 from actions.registry import all_action_ids
 from core.result import Err, Result, err, ok
 from core.version import APP_VERSION
-
 #: the two known file shapes
 STACK_PRESET_FORMAT = "chat-v-bot/stack-preset"
 ACTION_BLOCK_FORMAT = "chat-v-bot/action-block"
-
 #: the newest format this app reads (hard reject above, warning below)
 FORMAT_VERSION = 1
-
-
 @dataclass(frozen=True, slots=True)
 class PresetPreview:
     """The validated, normalized content of one export file.
-
     ``kind`` is ``"stack"`` or ``"block"``; ``stack``/``custom_blocks``
     are meaningful for ``"stack"`` and ``block`` for ``"block"`` (the
     unused halves stay empty so the wire shape is one dict either way).
     """
-
     kind: str
     name: str
     format_version: int
@@ -54,18 +41,11 @@ class PresetPreview:
     custom_blocks: tuple[dict, ...] = ()
     block: Optional[dict] = None
     warnings: tuple[str, ...] = ()
-
-
 # ── builders (export side) ─────────────────────────────────────────
-
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
-
-
 def _only_dicts(items: Any) -> list[dict]:
     return [dict(item) for item in (items or []) if isinstance(item, dict)]
-
-
 def build_stack_export(name: str, stack: Any, custom_blocks: Any,
                        app_version: Optional[str] = None) -> dict:
     """The full stack + whole block library as one standalone payload."""
@@ -81,8 +61,6 @@ def build_stack_export(name: str, stack: Any, custom_blocks: Any,
         "stack": _only_dicts(stack),
         "custom_blocks": _only_dicts(custom_blocks),
     }
-
-
 def build_block_export(name: str, block: Any,
                        app_version: Optional[str] = None) -> dict:
     """One named block as a standalone payload."""
@@ -97,15 +75,10 @@ def build_block_export(name: str, block: Any,
         "name": name,
         "block": dict(block),
     }
-
-
 def export_text(payload: dict) -> str:
     """Human-readable serialization (indent 2, original scripts kept)."""
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
-
-
 # ── file IO ────────────────────────────────────────────────────────
-
 def write_export(path: Any, payload: dict) -> Result[None]:
     """Atomic write: a failure never leaves a half-written file behind
     (same tmp+fsync+replace pattern as ``stores.atomic``)."""
@@ -127,25 +100,18 @@ def write_export(path: Any, payload: dict) -> Result[None]:
         except OSError:
             pass
         return err("write_failed", str(exc))
-
-
 def read_export_file(path: Any) -> Result[str]:
     try:
         with open(os.fspath(path), "r", encoding="utf-8") as handle:
             return ok(handle.read())
     except OSError as exc:
         return err("read_failed", str(exc))
-
-
 # ── parse + validate (import side) ─────────────────────────────────
-
 def _require_name(data: dict) -> "str | Err":
     name = data.get("name")
     if not isinstance(name, str) or not name.strip():
         return err("no_name", "the preset has no name")
     return name.strip()
-
-
 def _check_version(data: dict, warnings: list[str]) -> "int | Err":
     """Reject a newer format, warn on an older one, note app version."""
     raw = data.get("format_version")
@@ -166,20 +132,14 @@ def _check_version(data: dict, warnings: list[str]) -> "int | Err":
             f"exported with app {exported}; this app is {APP_VERSION} — "
             "check compatibility")
     return raw
-
-
 def _selector_warning(bid: str, block: dict) -> Optional[str]:
     if bid != "CUSTOM_FIND" or _nonempty(block.get("selector")):
         return None
     label = block.get("custom_name")
     label = label if isinstance(label, str) and label else bid
     return f"“{label}” has no selector — it finds nothing on any page"
-
-
 def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
-
-
 def _stack_warnings(stack: list[dict]) -> list[str]:
     """RULE 4: the engine drops unknown types SILENTLY, so the import
     must say which blocks will vanish before the user applies."""
@@ -198,8 +158,6 @@ def _stack_warnings(stack: list[dict]) -> list[str]:
         if warning:
             out.append(f"block #{idx}: {warning}")
     return out
-
-
 def _clean_custom_blocks(raw: Any, warnings: list[str]) -> list[dict]:
     if raw is None:
         return []
@@ -222,8 +180,6 @@ def _clean_custom_blocks(raw: Any, warnings: list[str]) -> list[dict]:
         out.append({"name": name.strip(), "block": entry["block"],
                     "updated_at": entry.get("updated_at", "")})
     return out
-
-
 def _parse_stack(data: dict) -> Result[PresetPreview]:
     name = _require_name(data)
     if isinstance(name, Err):
@@ -245,8 +201,6 @@ def _parse_stack(data: dict) -> Result[PresetPreview]:
         exported_at=str(data.get("exported_at") or ""),
         stack=tuple(stack), custom_blocks=tuple(custom),
         warnings=tuple(warnings)))
-
-
 def _block_warning(bid: Any, block: dict) -> Optional[str]:
     """The compatibility problem of one standalone block, if any."""
     if not isinstance(bid, str) or not bid:
@@ -255,8 +209,6 @@ def _block_warning(bid: Any, block: dict) -> Optional[str]:
         return f"block uses unknown type “{bid}” — it cannot run " \
                "in this app"
     return _selector_warning(bid, block)
-
-
 def _parse_block(data: dict) -> Result[PresetPreview]:
     name = _require_name(data)
     if isinstance(name, Err):
@@ -276,8 +228,6 @@ def _parse_block(data: dict) -> Result[PresetPreview]:
         app_version=str(data.get("app_version") or ""),
         exported_at=str(data.get("exported_at") or ""),
         block=block, warnings=tuple(warnings)))
-
-
 def parse_export(text: str) -> Result[PresetPreview]:
     """Parse + validate one export file. A hard failure is a typed
     ``Err`` with a stable code; soft problems become warnings."""
@@ -295,8 +245,6 @@ def parse_export(text: str) -> Result[PresetPreview]:
     return err("unknown_format",
                f"unknown format {fmt!r} — expected one of "
                f"{STACK_PRESET_FORMAT!r}, {ACTION_BLOCK_FORMAT!r}")
-
-
 def preview_dict(preview: PresetPreview) -> dict:
     """The JSON-serialisable wire shape the UI preview consumes."""
     return {

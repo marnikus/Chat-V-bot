@@ -34,7 +34,8 @@ from stores.history_repo_identity import (                        # noqa: F401
 from stores.history_repo_identity import ConversationIdentity
 from stores.history_repo_lifecycle import PersonLifecycle
 from stores.history_repo_media import MediaRecovery
-from stores.history_requests import (MediaRecoveryRequest, PaneSignature,
+from stores.history_requests import (AppendRequest, MediaRecoveryRequest,
+                                     PaneSignature,
                                      PlacedRecord, PrependRequest, SlotSearch,
                                      WriteContext)
 
@@ -97,9 +98,8 @@ class HistoryRepo:
         """See `ConversationIdentity.possible_duplicates` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
         return await self.identity.possible_duplicates()
 
-    async def rename_if_same_conversation(self, old_nick: str, new_nick: str, head_sig: str, tail_sig: str, head_any: str='', tail_any: str='', dom_count: int=-1, pane_same: bool=False) -> bool:
-        """See `ConversationIdentity.rename_if_same_conversation` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3). The signature is part of the frozen AREA B surface, so the facade keeps all eight parameters and packs the five pane values into the `PaneSignature` the collaborator takes."""
-        pane = PaneSignature(head_sig, tail_sig, head_any, tail_any, dom_count)
+    async def rename_if_same_conversation(self, old_nick: str, new_nick: str, pane: PaneSignature, pane_same: bool=False) -> bool:
+        """See `ConversationIdentity.rename_if_same_conversation` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3). G7 §2: the facade takes the same `PaneSignature` the collaborator does (8 -> 4); the AREA-B freeze that kept the eight-parameter shape was lifted by owner ruling 2026-09-13."""
         return await self.identity.rename_if_same_conversation(old_nick, new_nick, pane, pane_same)
 
     # ── cursor ───────────────────────────────────────────────────
@@ -120,9 +120,9 @@ class HistoryRepo:
         await self.lifecycle.mark_backfilled(nick_or_id)
 
     # ── append ───────────────────────────────────────────────────
-    async def append(self, nick: str, records: Iterable, my_nick: str='', align: bool=True, expect_idx: Optional[int]=None, dom_count: int=0, head_sig: Optional[str]=None, tail_sig: Optional[str]=None, now: Optional[datetime]=None, session_id: str='', head_any: Optional[str]=None, tail_any: Optional[str]=None, prepend: bool=False) -> AppendResult:
-        """See `AppendPlanner.append` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.planner.append(nick, records, my_nick, align, expect_idx, dom_count, head_sig, tail_sig, now, session_id, head_any, tail_any, prepend)
+    async def append(self, req: AppendRequest) -> AppendResult:
+        """See `AppendPlanner.append` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3). G7 §2: the facade takes the same `AppendRequest` the planner does; the AREA-B freeze that kept the 13-parameter shape was lifted by owner ruling 2026-09-13."""
+        return await self.planner.append(req)
 
     async def _prepend(self, req: PrependRequest) -> AppendResult:
         """See `AppendPlanner._prepend` — the name stays on the facade because `TestPrivatesStayReachable` requires it, though the planner is what calls its own today (design §2.3)."""
@@ -200,11 +200,9 @@ class HistoryRepo:
             " ".join(str(ts_display or "").split()).strip().lower(),
         ])
 
-    async def recover_media(self, person_id: int, records, media=None, nick: str='', now=None, requeue_failed: bool=True) -> dict:
-        """See `MediaRecovery.recover_media` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""
-        return await self.media_recovery.recover_media(
-            MediaRecoveryRequest(person_id, records or [], media, nick, now,
-                                 requeue_failed))
+    async def recover_media(self, req: MediaRecoveryRequest) -> dict:
+        """See `MediaRecovery.recover_media` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3). G7 §2: the facade takes the same `MediaRecoveryRequest` the collaborator does (6 -> 1)."""
+        return await self.media_recovery.recover_media(req)
 
     async def _all_person_keys(self, person_id: int) -> set:
         """See `MediaRecovery._all_person_keys` — the name stays on the facade, which is what `services/`, the bridges and the archive tests call (design §2.3)."""

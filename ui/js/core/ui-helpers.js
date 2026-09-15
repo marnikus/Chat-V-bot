@@ -5,6 +5,8 @@
   chip(opts)        the standard chip: [icon+title][meta][×]
                     used by the URL bookmarks and both preset pickers
   sortArrow(active, dir)  the ▲▼ / ▲ / ▼ header indicator
+  mergeParts(host, ...parts)  bind a facade part onto its host (Round H
+                    part pattern: SashGrid / StackDnD facades + part files)
 
   Everything builds DOM nodes and sets textContent — user text never
   becomes markup (RULE 8).
@@ -78,5 +80,25 @@ window.UIHelpers = {
   sortArrow(active, direction) {
     if (!active) return '▲▼';
     return direction > 0 ? '▲' : '▼';
+  },
+
+  /**
+   * mergeParts(host, ...parts) — the Round H part pattern.
+   *
+   * Copies every member of each `part` object onto `host`, binding
+   * functions to `host` so `this` resolves to the facade (and sibling
+   * methods). Non-function values are copied by reference. Members the
+   * host already has keep winning — the facade owns its state and its
+   * own methods; parts only add behaviour.
+   */
+  mergeParts(host, ...parts) {
+    for (const part of parts) {
+      for (const key of Object.keys(part)) {
+        if (key in host) continue;
+        const value = part[key];
+        host[key] = typeof value === 'function' ? value.bind(host) : value;
+      }
+    }
+    return host;
   },
 };

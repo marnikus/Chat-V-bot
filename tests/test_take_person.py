@@ -33,6 +33,7 @@ _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
 from actions.take_person import TakePerson  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -177,7 +178,7 @@ class TestEnginePickPerson(unittest.TestCase):
                            rec("Cara", messaged=True))
                 take = TakePerson()
                 consumer = Consumer(match_text="hi {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, consumer]
                 await eng.execute(None)
                 return eng.selected_nick, consumer.seen
@@ -196,7 +197,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 await seed(mem, rec("Cara", messaged=True))
                 take = TakePerson(pick_mode="random_done")
                 consumer = Consumer(match_text="to {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, consumer]
                 await eng.execute(None)
                 return eng.selected_nick, consumer.seen
@@ -214,7 +215,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 await pin_first_seen(mem, "Bella", "2026-09-02T10:00:00")
                 take = TakePerson(pick_mode="order_first")
                 consumer = Consumer(match_text="msg {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 expected = eng.queue_order(await mem.get_all())[0]
                 self.assertEqual(expected, "Bella",
                                  "precondition: #1 is Bella")
@@ -235,7 +236,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 take_first = TakePerson(pick_mode="order_first")
                 take_done = TakePerson(pick_mode="random_done")
                 consumer = Consumer(match_text="go {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 logs = []
                 eng.log_msg.connect(lambda m: logs.append(m))
                 eng._stack = [take_first, take_done, consumer]
@@ -256,7 +257,7 @@ class TestEnginePickPerson(unittest.TestCase):
                 await seed(mem, rec("Anna"))
                 take = TakePerson()
                 take.enabled = False
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take]
                 await eng.execute(None)
                 return eng.selected_nick

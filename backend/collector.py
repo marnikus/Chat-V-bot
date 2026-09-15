@@ -3,5 +3,6 @@
 from services.collector_service import (  # noqa: F401
     Collector, CollectorState, DEFAULTS,
 )
+from services.collector_states import CollectorDeps  # noqa: F401
 
-__all__ = ["Collector", "CollectorState", "DEFAULTS"]
+__all__ = ["Collector", "CollectorDeps", "CollectorState", "DEFAULTS"]

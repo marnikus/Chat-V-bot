@@ -81,6 +81,23 @@ WIDENED = frozenset({
     "stores.bookmark_store.BookmarkStore.remove",
 })
 
+# G7 §2 (2026-09-13): the stores wide-parameter adjudication MIGRATED these
+# names to parameter objects / value classes under the owner ruling that
+# lifted the AREA-B freeze ("remove any restriction to all frozen solutions,
+# redesign any code as needed"). Each dropped parameter set is documented in
+# G7_BACKLOG_DESIGN_2026-09-13.md §2 (the conservation table: every field
+# kept, every default kept, behaviour pinned by the existing suites). The
+# refreshed api_baseline.json (same step) is the new post-migration surface.
+MIGRATED = frozenset({
+    "stores.history_models.fingerprint",           # 6 -> 2 (LineIdentity)
+    "stores.history_models.dedupe_key",            # 5 -> 1 (LineIdentity)
+    "stores.history_repo.HistoryRepo.append",      # 13 -> 1 (AppendRequest)
+    "stores.history_repo.HistoryRepo.rename_if_same_conversation",
+    #                                                 8 -> 4 (PaneSignature)
+    "stores.history_repo.HistoryRepo.recover_media",  # 6 -> 1 (request)
+    "stores.media_store.MediaStore.__init__",      # 6 -> 3 (MediaOptions)
+})
+
 #: `tests/unit/stores/api_baseline_pre_b1.json` is the surface as AREA B
 #: found it; `api_baseline.json` is the surface after B1, which B2 may only
 #: add to.
@@ -162,7 +179,7 @@ class TestSurfaceIsFrozen(ApiSurfaceCase):
         """
         self.assertEqual(
             stores_api.diff(self.pre_b1, self.current, WIDENED,
-                            allow_new_modules=True), [],
+                            allow_new_modules=True, migrated=MIGRATED), [],
             "the pre-B1 surface moved in a way the design doc does not "
             "account for")
 
@@ -179,8 +196,11 @@ class TestSurfaceIsFrozen(ApiSurfaceCase):
         self.assertEqual(
             stores_api.diff(frozen_baseline, frozen_current,
                             allow_new_modules=True), [],
-            "stores/history_models.py, jsonio.py and migration.py are frozen "
-            "for every area (plan §7.3 rule 2)")
+            "stores/history_models.py, jsonio.py and migration.py must not "
+            "move without a deliberate, in-step baseline refresh (the AREA-B "
+            "freeze was lifted by owner ruling 2026-09-13; history_models "
+            "moved in G7 §2 — see MIGRATED — and the baseline was refreshed "
+            "in that same step)")
 
     def test_every_allowlisted_name_keeps_its_old_parameters(self):
         for dotted in sorted(WIDENED):
@@ -266,9 +286,45 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # services/history/mutate.py (the timeline save does the same). Both
         # are the sanctioned case again — a new leaf store, imported by the
         # two services that must survive a locked world file.
-        self.assertEqual(count, 40,
+        # 40 -> 42 (2026-09-13, Round G2 RULE 18 split): the backend
+        # chat_sync monolith became a seam + family; the *same* stores names
+        # now sit in the files that use them — seam (SyncResult, the pinned
+        # run_sync annotation), chat_sync_persist (MAX_LIVE_ITEMS,
+        # SyncResult), chat_sync_read (align_batch), chat_sync_session
+        # (SyncResult) — two more import lines than the monolith's two. The
+        # scroll_parser family is net-zero (UserRecord moved facade ->
+        # scroll_parser_dom). The stores/ surface itself is unchanged; the
+        # invariant (a stores refactor never forces another area to edit an
+        # import) still holds.
+        # 42 -> 41 (2026-09-13, Round G4 parameter objects): the old
+        # `Collector.__init__` carried `repo: HistoryRepo` as an annotation,
+        # which is why services/collector_service.py imported the name. W6
+        # moved the seven collaborators into the `CollectorDeps` bundle, whose
+        # fields are uniformly `Any` (like every other Deps bundle — no import
+        # cycles, no astroid setattr fallout), so the annotation-only import
+        # went away with the signature. The stores/ surface is untouched; this
+        # is a services-side refactor legitimately shrinking the count.
+        # 41 -> 44 (2026-09-13, Round G7 §2 stores parameter objects): the
+        # migrated facades take request objects, so three production files now
+        # import the request names: services/collector_push.py (+1,
+        # AppendRequest), backend/chat_sync_persist.py (+1, one
+        # stores.history_requests line shared by AppendRequest and
+        # MediaRecoveryRequest), services/collector_tick.py (+1,
+        # PaneSignature). services/history/__init__.py reuses its existing
+        # stores.media_store import line for MediaOptions (+0). No area had
+        # to edit an import to keep WORKING — these are the deliberate new
+        # call shapes, ledgered here.
+        # 44 -> 46 (2026-09-14, Round H Area B + Area C): Area B splits
+        # history_bridge (no stores import) and cdp_client (no stores import),
+        # but Area C H-C1 splits run queue (queue_order, single_target,
+        # progress each carry the UserRecord guard) and collector_archive
+        # now imports PaneSignature for cursor check. Both are legitimate
+        # new call shapes from the run/collector family, not a stores
+        # refactor forcing another area to edit an import. Baseline moves
+        # 44->46, ledgered here.
+        self.assertEqual(count, 46,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 40)")
+                         "import in another area (integrated baseline: 46)")
 
 
 if __name__ == "__main__":

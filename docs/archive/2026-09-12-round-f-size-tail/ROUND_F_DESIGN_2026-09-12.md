@@ -30,6 +30,12 @@ problem to fix.
 
 ## 2. Why the biggest file is *not* step 1
 
+> **Superseded 2026-09-13 (owner ruling F0, Round G plan §1c).** The AREA-D
+> freeze this section treats as binding was lifted and snapshot refreshes
+> became a sanctioned, deliberate in-step spend. `backend/chat_sync.py` was
+> split in Round G2 accordingly — see
+> [`G2_CHAT_SYNC_SCROLL_PARSER_DESIGN_2026-09-13.md`](../2026-09-13-round-g-write-gate/G2_CHAT_SYNC_SCROLL_PARSER_DESIGN_2026-09-13.md).
+
 `backend/chat_sync.py` (800 lines, MI 11.1 — half the next-worst score) is the
 obvious target and cannot be split by the recipe this repo normally uses.
 
@@ -267,6 +273,12 @@ equivalence gate (§16.6 step 3). Order matters — cheap gates first:
 | F8 | `stores/` module count | 37 files vs RULE 18.3's ~15 | promote a family to a sub-package; lowest urgency |
 
 ## 7. The frozen five — decision required, with a compliant interim
+
+> **Superseded 2026-09-13 (owner ruling F0, Round G plan §1c).** The freeze
+> was lifted and the decision this section asks for was taken. G2 split
+> `chat_sync.py` and `scroll_parser.py`; G3 split `db_deletion_flow.py`; the
+> four remaining >500-line files are recorded Round G backlog (plan §4, G7)
+> with their `ideal-size:` notes rewritten to say so.
 
 The AREA D snapshot test says: *"Refresh the snapshot only when a change is
 intentional and coordinated."* So splitting `chat_sync.py` is **permitted** by the

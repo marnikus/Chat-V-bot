@@ -56,18 +56,29 @@ class FilterVerdict:
         return self.passed
 
 
+@dataclass(eq=False, repr=False)
 class PersonFilter:
-    """Evaluate people against tri-state rules (+ optional panel criteria)."""
+    """Evaluate people against tri-state rules (+ optional panel criteria).
 
-    def __init__(self, female: str = YES, registered: str = NO,
-                 guest: str = YES, anonymous: str = NO,
-                 panel_criteria: Optional[object] = None):
-        self.female = normalize(female)
-        self.registered = normalize(registered)
-        self.guest = normalize(guest)
-        self.anonymous = normalize(anonymous)
-        #: optional CriteriaEngine — ANDed with the rules above
-        self.panel_criteria = panel_criteria
+    The constructor is synthesized (Round G step 4): the fields are the old
+    ctor parameters in their old order with their old defaults, and
+    `__post_init__` normalises exactly what the hand-written body did.
+    `eq=False, repr=False` keep identity comparison and the object repr, so
+    nothing downstream sees a behaviour change.
+    """
+
+    female: str = YES
+    registered: str = NO
+    guest: str = YES
+    anonymous: str = NO
+    #: optional CriteriaEngine — ANDed with the rules above
+    panel_criteria: Optional[object] = None
+
+    def __post_init__(self):
+        self.female = normalize(self.female)
+        self.registered = normalize(self.registered)
+        self.guest = normalize(self.guest)
+        self.anonymous = normalize(self.anonymous)
 
     # ── description ──────────────────────────────────────────────
     def rules(self) -> list[str]:
