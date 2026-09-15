@@ -254,7 +254,7 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (3204 tests + 902 subtests, incl. the 29 Node suites as pytest items);
+# Python (3206 tests + 903 subtests, incl. the 29 Node suites as pytest items);
 # webengine excluded by addopts; lanes: -n 4 + markers (pytest.ini)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q -m "not webengine"
 
