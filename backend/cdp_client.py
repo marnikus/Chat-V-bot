@@ -32,16 +32,12 @@ from typing import Any, Callable, Optional
 from PySide6.QtCore import QObject, Signal
 
 from backend import cdp_client_transport as transport
+from backend.cdp_client_commands import CdpClientCommands, TabInfo
 from backend.cdp_client_events import CdpEvents
 
 log = logging.getLogger("chatbot")
 
 HIGH, LOW = 0, 1
-
-
-@dataclass
-class TabInfo:
-    id: str; title: str; url: str; ws_url: str
 
 
 class _LeaseCtx:
@@ -116,13 +112,17 @@ class CdpLease:
         self._locked = False
 
 
-class CDPClient(QObject):
+class CDPClient(CdpClientCommands, QObject):
     """WebSocket client for Chrome DevTools Protocol.
 
     Method count is one below the ideal fifteen-plus-one only because the
     public command surface (frozen by ~20 importers and by the API
     snapshot) is flat on this class; the bodies of all of them live in the
     two part modules, so the class itself is a thin, fully testable seam.
+
+    H-B6b: command helpers moved to `cdp_client_commands.CdpClientCommands`
+    mixin, so direct methods ≤15 (RULE 16). Public API stays flat via
+    inheritance, snapshot still pins methods to this module via re-export.
     """
 
     connected = Signal()
@@ -175,52 +175,3 @@ class CDPClient(QObject):
     @property
     def base_url(self) -> str:
         return f"http://{self._host}:{self._port}"
-
-    async def fetch_tabs(self) -> list[TabInfo]:
-        """List of available page tabs (empty if the endpoint is down)."""
-        return [TabInfo(item.get("id", ""), item.get("title", ""),
-                        item.get("url", ""),
-                        item.get("webSocketDebuggerUrl", ""))
-                for item in await transport.fetch_tabs(self)]
-
-    # ── command helpers (bodies in cdp_client_transport.py) ───────
-    async def add_binding(self, name: str) -> bool:
-        """Expose `window[name](payload)` as a `Runtime.bindingCalled` event."""
-        return await transport.add_binding(self, name)
-
-    async def add_script_on_new_document(self, source: str) -> str:
-        """Re-inject `source` after every navigation. Returns its identifier."""
-        return await transport.add_script_on_new_document(self, source)
-
-    async def remove_script_on_new_document(self, identifier: str) -> bool:
-        if not identifier:
-            return False
-        return await transport.remove_script_on_new_document(self, identifier)
-
-    async def evaluate(self, expression: str) -> Any:
-        return await transport.evaluate(self, expression)
-
-    async def get_cookies(self, url: str = "") -> str:
-        """A `Cookie` header string for the given origin.
-
-        Used by the media cache's Python download path: the browser tab can
-        load `images.virt-chat.com` through an `<img>` tag with the session
-        cookies (no CORS), but the in-page `fetch()` needed for the old cache
-        can be blocked by CORS. Downloading from Python with the same cookies
-        bypasses that while still authenticating like the page.
-        """
-        return await transport.cookie_header(self, url)
-
-    async def click_at(self, x: float, y: float) -> None:
-        await transport.click_at(self, x, y)
-
-    async def mouse_wheel(self, dx: float, dy: float, x: float,
-                          y: float) -> None:
-        await transport.mouse_wheel(self, dx, dy, x, y)
-
-    async def get_element_rect(self, selector: str) -> Optional[dict]:
-        return await transport.get_element_rect(self, selector)
-
-    async def set_file_input_files(self, selector: str,
-                                   files: list[str]) -> None:
-        await transport.set_file_input_files(self, selector, files)
