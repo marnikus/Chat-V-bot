@@ -23,6 +23,8 @@ import unittest
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+sys.path.insert(0, os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "unit"))
 
 from backend.chat_parser import ChatParser  # noqa: E402
 from backend.collector import Collector  # noqa: E402
@@ -32,6 +34,7 @@ from backend.history_models import MessageRecord, fingerprint, LineIdentity  # n
 from backend.history_repo import HistoryRepo  # noqa: E402
 from backend.media_store import MediaStore, MediaOptions  # noqa: E402
 from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
+from _fast_clock import fast_settle  # noqa: E402
 
 NOW = datetime(2026, 9, 7, 16, 30, 0)
 ME = "Хорошо Все"
@@ -168,6 +171,7 @@ class FakeChatPage:
 
 class E2ECase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.db = HistoryDB(os.path.join(self.dir, "history.db"))
         await self.db.init()

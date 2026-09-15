@@ -128,6 +128,11 @@ class TestSnapshots(PeopleCase):
         payload = result.value
         # get_queue sorts first_seen DESC → Anna (newer) first
         self.assertEqual(payload["users"][0]["nick"], "Anna")
+        order = {u["nick"]: u["order"] for u in payload["users"]}
+        self.assertEqual(order, {"Anna": 1, "Bob": 2},
+                         "the engine fallback must rank by the queue sort it "
+                         "claims — the 2026-09-15 transient failed this pin "
+                         "exactly once and was never reproduced")
 
     async def test_payload_empty_people(self):
         result = await self.service.payload()

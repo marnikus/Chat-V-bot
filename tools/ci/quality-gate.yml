@@ -87,11 +87,13 @@ jobs:
       - name: Run the fast lane
         env:
           QT_QPA_PLATFORM: offscreen
-        # Everything except the labelled slow/e2e/metrics items, across the
-        # runner's cores (the suite is worker-safe — see requirements-dev.txt).
+        # Everything except the labelled slow/e2e/metrics items. -n 4, not
+        # auto: on a 2-core box oversubscription measured better (74 s vs
+        # 110 s, all green, coverage-identical) — the worker-safety
+        # invariants in requirements-dev.txt hold either way.
         # Node harness suites run here too (marked `node`); ubuntu runners
         # ship node, and the wrapper skips cleanly if one ever doesn't.
-        run: python -m pytest -q -n auto --dist loadfile --durations=25 \
+        run: python -m pytest -q -n 4 --dist loadfile --durations=25 \
           -m "not slow and not e2e and not metrics"
 
   test-suite-slow:
