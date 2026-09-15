@@ -1,9 +1,6 @@
-"""Collector probe phases — extracted from collector_tick (H-C4).
+"""Collector probe phases — facade (H-C5 split)
 
-Phases PROBE / GATE / NICK (read-only page state + nick adoption).
-
-Design: AREA_C H-C4 — helper named by responsibility, ≤200 LOC.
-H-C5 MI lift: named predicates (RULE 19 step 3).
+Phases PROBE / GATE / NICK, now ≤120 LOC via predicates split.
 """
 
 from __future__ import annotations
@@ -12,6 +9,14 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from services.collector_probe_predicates import (
+    _has_partner_nick,
+    _is_group_tab,
+    _is_private_tab,
+    _is_saved_nick_stale,
+    _is_single_out_author,
+    _is_state_ok,
+)
 from services.collector_service import CollectorState
 
 log = logging.getLogger("chatbot")
@@ -44,36 +49,6 @@ class Probe:
     @property
     def out_authors(self) -> list[str]:
         return [str(o or "").strip() for o in (self.state.get("out_authors") or [])]
-
-
-# ── predicates ────────────────────────────────
-def _is_state_ok(state: dict) -> bool:
-    return bool(state.get("ok", True))
-
-
-def _is_private_tab(state: dict) -> bool:
-    return state.get("tab") == "private"
-
-
-def _has_partner_nick(nick: str) -> bool:
-    return bool(nick)
-
-
-def _is_group_tab(participants: int, require_two: bool) -> bool:
-    return require_two and participants > 0 and participants != 2
-
-
-def _is_single_out_author(outs: list, nick: str) -> bool:
-    singles = [o for o in outs if o]
-    return len(singles) == 1 and singles[0].lower() != nick.lower()
-
-
-def _is_saved_nick_stale(saved: str, detected: str, outs: list) -> bool:
-    if not saved or not detected:
-        return False
-    if detected.lower() == saved.lower():
-        return False
-    return saved.lower() not in {o.lower() for o in outs if o}
 
 
 class CollectorProbe:

@@ -440,7 +440,6 @@ CLONE_BASELINE = frozenset({
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("bridge/context.py", "services/wiring_requests.py"),
-    ("services/collector_archive.py", "services/collector_probe.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
