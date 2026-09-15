@@ -233,6 +233,42 @@ class TestLegacyCompatSurface:
         assert isinstance(bridge._undo_pendings, list)
 
 
+class TestContextParameterObject:
+    """`Router(ctx=…)` — the G4 parameter object (Round J step J-5).
+
+    The historical boot keywords are still accepted and still build a
+    context, so both spellings must mean the same thing: the router takes
+    the context it is given and holds no state of its own.
+    """
+
+    def test_a_given_context_is_used_as_is(self):
+        ctx = BridgeContext()
+        br = Bridge(ctx=ctx)
+        assert br._ctx is ctx, "no second context is built behind the caller"
+        assert br._config is ctx.config, "and the wire aliases read from it"
+
+    def test_legacy_boot_keywords_still_build_a_context(self, tmp_path):
+        from backend.config_manager import ConfigManager
+        cfg = ConfigManager(str(tmp_path / "config.json"))
+        br = Bridge(config=cfg, engine=FakeEngine())
+        assert br._ctx.config is cfg
+        assert br._engine is not None, "the boot keywords reached the context"
+
+    def test_presets_are_derived_from_config_as_before(self, tmp_path):
+        from backend.config_manager import ConfigManager
+        from stores.preset_store import PresetStore
+        cfg = ConfigManager(str(tmp_path / "config.json"))
+        br = Bridge(config=cfg)
+        assert br._presets is not None
+        assert isinstance(br._presets, PresetStore)
+
+    def test_unknown_boot_keywords_are_still_tolerated(self):
+        # `**_legacy` absorbed them before the context existed; a caller that
+        # passes one must not get a TypeError out of Qt's constructor.
+        br = Bridge(nonsense=1)
+        assert isinstance(br, Bridge)
+
+
 class TestRouterBuildGuards:
     def test_router_method_named_decorator(self):
         from bridge.router import _ROUTER_METHODS, _router_method
