@@ -428,6 +428,45 @@ def _tool(name: str) -> str | None:
     return exe if os.path.exists(exe) else None
 
 
+# ── re-scan avoidance ────────────────────────────────────────────
+# One test session calls the gate several times (the pre-commit hook
+# does too, but in a fresh process). Nothing changes inside a process,
+# so every cache below is keyed on file mtimes: a write invalidates it
+# automatically, a stale read is impossible.
+_AST_CACHE: dict = {}      # rel -> (mtime_ns, ast.AST)
+_CC_CACHE: dict = {}       # rel -> (mtime_ns, {func_name: score})
+_SMELL_CACHE: dict = {}    # key -> (findings, missing)
+_CLONE_CACHE: dict = {}    # key -> (new, stale, missing)
+
+
+def _mtime(rel: str) -> int:
+    return os.stat(os.path.join(ROOT, rel)).st_mtime_ns
+
+
+def _tree(rel: str):
+    m = _mtime(rel)
+    hit = _AST_CACHE.get(rel)
+    if hit is not None and hit[0] == m:
+        return hit[1]
+    tree = ast.parse(_read(rel))
+    _AST_CACHE[rel] = (m, tree)
+    return tree
+
+
+def _repo_mtime_key() -> tuple:
+    """Fingerprint of the scanned tree, for the subprocess scans."""
+    skip = {".git", ".venv", "mutants", "node_modules", "__pycache__",
+            ".pytest_cache", "tests", "reports", "docs"}
+    out = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        for f in filenames:
+            if f.endswith(".py"):
+                full = os.path.join(dirpath, f)
+                out.append((full, os.stat(full).st_mtime_ns))
+    return tuple(sorted(out))
+
+
 def nesting(node: ast.AST) -> int:
     """Control-flow nesting depth. `elif` counts as a nested `if`; sibling
     statements do not add."""
@@ -454,7 +493,7 @@ def params(node) -> int:
 
 def find(rel: str, cls: str | None, func: str):
     """The FunctionDef for `rel::cls.func` (or `rel::func`), else None."""
-    tree = ast.parse(_read(rel))
+    tree = _tree(rel)
     scope = tree.body
     if cls:
         scope = [n.body for n in tree.body
@@ -471,7 +510,7 @@ def find(rel: str, cls: str | None, func: str):
 
 def classes(rel: str) -> dict:
     out = {}
-    for node in ast.parse(_read(rel)).body:
+    for node in _tree(rel).body:
         if isinstance(node, ast.ClassDef):
             out[node.name] = {
                 "loc": node.end_lineno - node.lineno + 1,
@@ -487,12 +526,20 @@ def _cyclomatic(rel: str, func: str):
     exe = _tool("radon")
     if exe is None:
         return None
-    sys.path.insert(0, os.path.join(ROOT, ".venv", "lib", "python3.11",
-                                    "site-packages"))
-    from radon.complexity import cc_visit
-    scores = [b.complexity for b in cc_visit(_read(rel))
-              if getattr(b, "name", None) == func]
-    return max(scores) if scores else 1
+    m = _mtime(rel)
+    hit = _CC_CACHE.get(rel)
+    if hit is None or hit[0] != m:
+        sys.path.insert(0, os.path.join(ROOT, ".venv", "lib", "python3.11",
+                                        "site-packages"))
+        from radon.complexity import cc_visit
+        scores = {}
+        for b in cc_visit(_read(rel)):
+            n = getattr(b, "name", None)
+            if n:
+                scores[n] = max(scores.get(n, 1), b.complexity)
+        hit = (m, scores)
+        _CC_CACHE[rel] = hit
+    return hit[1].get(func, 1)
 
 
 def _cognitive(node):
@@ -620,6 +667,11 @@ def smells() -> tuple[list[str], list[str]]:
     A missing tool is reported as *not checked*, never as a pass — a gate that
     quietly degrades to green is worse than one that says it could not look.
     """
+    key = tuple((rel, _mtime(rel)) for rel in SMELL_FILES)
+    cached = _SMELL_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     findings, missing = [], []
 
     vulture = _tool("vulture")
@@ -646,6 +698,7 @@ def smells() -> tuple[list[str], list[str]]:
                                         "history_bridge.py")):
                 findings.append(block)
 
+    _SMELL_CACHE[key] = (findings, missing)
     return findings, missing
 
 
@@ -663,6 +716,11 @@ def clones() -> tuple[list[str], list[str], list[str]]:
     if not os.path.exists(path):
         return [], [], ["clone_scan"]
 
+    key = _repo_mtime_key()
+    cached = _CLONE_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     spec = importlib.util.spec_from_file_location("clone_scan", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -677,7 +735,9 @@ def clones() -> tuple[list[str], list[str], list[str]]:
             new.append(" | ".join(f"{rel}:{a}" for rel, a in where))
 
     stale = [" | ".join(sig) for sig in sorted(CLONE_BASELINE - seen)]
-    return new, stale, []
+    result = (new, stale, [])
+    _CLONE_CACHE[key] = result
+    return result
 
 
 def main() -> int:

@@ -403,6 +403,11 @@ that would **fail if the function were deleted** or its boolean inverted; empty
 vs broken distinguished (RULE 4); stop/cancel paths honoured if it loops
 (RULE 7); JS probes go through `tests/js_harness.js` (RULE 8).
 
+**The battery is tiered** — `tests/run_batteries.sh [fast|medium|gates|js|full]`
+(parallel Python via pytest-xdist, parallel Node via `xargs -P`; the full
+battery is ~3 min 25 s on a 2-core box instead of 6 min 28 s serial — see
+[`TEST_BATTERY_TIERS_2026-09-15.md`](TEST_BATTERY_TIERS_2026-09-15.md)).
+
 **Coverage command (copy-paste):**
 
 ```bash

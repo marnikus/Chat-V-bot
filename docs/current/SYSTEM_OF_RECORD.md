@@ -254,11 +254,15 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (2829 tests + 894 subtests)
+# The battery, tiered (2026-09-15) — see docs/current/TEST_BATTERY_TIERS_2026-09-15.md
+tests/run_batteries.sh full     # js + all Python (parallel) + quality gates
+tests/run_batteries.sh fast     # unit tier only, for iterating
+
+# The same thing, un-tiered (one serial process)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
   --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Front-end (27 Node harness files)
+# Front-end Node harnesses, serial (the runner does this with xargs -P)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)

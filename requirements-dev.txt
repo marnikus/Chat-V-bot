@@ -34,3 +34,7 @@ pytest-asyncio==1.4.0
 # package the documented setup (`pip install -r requirements-dev.txt` then
 # `pre-commit install`) fails at the second step.
 pre-commit==4.6.2
+
+# parallel test execution — tests/run_batteries.sh runs the python tiers
+# with `-n auto`; see docs/current/TEST_BATTERY_TIERS_2026-09-15.md
+pytest-xdist==3.8.0

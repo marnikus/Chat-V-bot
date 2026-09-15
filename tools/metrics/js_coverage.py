@@ -45,9 +45,22 @@ PYTHON_ROOTS = ("actions", "app", "backend", "bridge", "core", "services",
 
 
 # ── mirror + pragma ────────────────────────────────────────────────
+# The Node suites only ever read ui/**, bridge/** (test_bridge_router),
+# backend/js/** and their own tests/ directory — mirror just those. The
+# full-repo copy was ~116 MB; this is a few MB, and the mirror is what
+# every parallel Node worker starts from.
+MIRROR_PARTS = (("ui", "ui"), ("bridge", "bridge"),
+                ("tests", "tests"), (os.path.join("backend", "js"),
+                                     os.path.join("backend", "js")))
+
+
 def mirror_repo(dst: str) -> None:
-    shutil.copytree(ROOT, dst, symlinks=True,
-                    ignore=lambda _d, names: [n for n in names if n in MIRROR_IGNORE])
+    for src, dst_rel in MIRROR_PARTS:
+        full = os.path.join(dst, dst_rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        shutil.copytree(os.path.join(ROOT, src), full, symlinks=True,
+                        ignore=lambda _d, names: [n for n in names
+                                                  if n in MIRROR_IGNORE])
 
 
 def attributed_js_files(root: str) -> list:
@@ -69,20 +82,34 @@ def append_pragmas(root: str, rel_paths: list) -> None:
 
 
 # ── running the Node tests ─────────────────────────────────────────
+def _run_one_suite(args: tuple) -> tuple:
+    mirror, name, cov_dir = args
+    proc = subprocess.run(["node", os.path.join("tests", name)],
+                          cwd=mirror,
+                          env=dict(os.environ, NODE_V8_COVERAGE=cov_dir),
+                          timeout=120,
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.PIPE)
+    return (name, proc.returncode,
+            proc.stderr.decode("utf-8", "replace")[-300:])
+
+
 def run_node_tests(mirror: str, cov_dir: str) -> list:
     os.makedirs(cov_dir, exist_ok=True)
-    env = dict(os.environ, NODE_V8_COVERAGE=cov_dir)
     failures = []
     tests_dir = os.path.join(mirror, "tests")
     names = sorted(n for n in os.listdir(tests_dir)
                    if n.startswith("test_") and n.endswith(".js"))
-    for name in names:
-        proc = subprocess.run(["node", os.path.join("tests", name)],
-                              cwd=mirror, env=env, timeout=120,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        if proc.returncode != 0:
-            failures.append((name, proc.returncode,
-                             proc.stderr.decode("utf-8", "replace")[-300:]))
+    # Independent processes, PID-unique V8 coverage filenames — run them
+    # in parallel; on a 2-core box the wall time roughly halves.
+    from concurrent.futures import ProcessPoolExecutor
+    workers = max(1, min(4, os.cpu_count() or 1, len(names)))
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        for name, code, err in pool.map(_run_one_suite,
+                                        [(mirror, n, cov_dir)
+                                         for n in names]):
+            if code != 0:
+                failures.append((name, code, err))
     return failures
 
 
