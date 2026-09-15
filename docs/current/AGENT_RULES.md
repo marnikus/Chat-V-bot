@@ -171,22 +171,23 @@ against a DOM stub, not by asserting on generated strings. Pipelines are tested
 against a fake CDP client that behaves like the real page, including lazy
 loading. If a test would pass with the feature deleted, it is not a test.
 
-How a new test is integrated (`pytest.ini` marks; `tests/conftest.py` auto-marks at collection):
+How a new test is integrated (`pytest.ini` marks; `tests/conftest.py` classifies at collection; tiers: `tools/metrics/run_tiers.py`):
 
 * **Lane by location and name — that is the whole registration.** Per-module
   contract → `tests/unit/`; cross-module contract → `tests/integration/`;
-  real DB lifecycle → `tests/*_e2e.py`; an executable gate (sizes, budgets,
-  floors) carries `metrics`, a lane of its own, kept out of the fast lane.
-* **Time budget: ≤ 50 ms of real sleep per test.** More is a contract, not
-  convenience: `slow` + a `# wait-budget:` reason — `tests/test_wait_budget.py`
-  fails on any NEW one. Speed comes from dials, not mocks: `tests/_fast_clock.py`
-  dials `SettleSpec` at construction (the real loop still runs); mocking the
-  loop away deletes the test.
-* **Ratchet baselines only improve** — `tests/wait_budget_baseline.txt`, `tests/js_coverage_baseline.json`
-  regenerate only after drift is reviewed and named in the commit.
-* **A new JS suite needs no registration** — `tests/test_*.js` is collected by
-  `tests/test_node_harness_suites.py`; refresh the JS coverage pins in the same
-  change. A UI file with no suite stays pinned at 0.0 until it gets one.
+  real DB lifecycle → its slow/integration mark; an executable gate (sizes,
+  budgets, floors) carries `metrics`, a lane of its own, out of quick tiers.
+* **Time budget: ≤ 50 ms of real sleep per test.** Beyond that is a contract,
+  not a convenience: mark `slow` and say why — `tests/test_wait_budget.py`
+  fails on any NEW one, `tests/unit/test_sleep_and_hope_ratchet.py` keeps the
+  total only going down. Speed comes from dials, not mocks:
+  `tests/_fast_clock.py` dials `SettleSpec` at construction (the real loop
+  still runs); mocking the loop away deletes the test.
+* **Ratchet baselines only improve** — `tests/wait_budget_baseline.txt`,
+  `tests/js_coverage_baseline.json` regenerate only after reviewed, named drift.
+* **A new JS suite needs no registration** — `tests/test_*.js` runs in the
+  harness and through `tests/test_node_harness_suites.py`; refresh the JS
+  coverage pins in the same change. A UI file with no suite stays at 0 until one.
 
 ## RULE 9 — a guard that skips work must not stall the stack
 
@@ -368,8 +369,8 @@ These are the **fail** lines; the sizes to *aim at* — functions, files, module
 
 **16.1.5 Embedded-JS exception (explicit)**
 
-Embedded JavaScript in Python string builders (`dom_probe`, highlight probes): the length limit never forces a split of the JS payload. `backend/dom_probe.py`
-`build_probe`'s 122 LOC are exactly this — **do not refactor that builder to meet 30 LOC.** New probe builders may
+Embedded JavaScript in Python string builders (`dom_probe`, highlight probes): the length limit never forces a split of the JS payload.
+`backend/dom_probe.py` `build_probe`'s 122 LOC are exactly this — **do not refactor that builder to meet 30 LOC.** New probe builders may
 exceed 30 LOC **only** when the excess is one JS/HTML string literal; the Python
 control flow around it stays CC ≤ 10 and nesting ≤ 4.
 
@@ -392,7 +393,8 @@ Floor example: four independent binary outcomes cost at least CC 5 (1 base + 4 b
 
 ### 16.3 Test coverage — new code must be tested
 
-Global floors (must not go down; measured 2026-09-10: line **90.44%**, branch **84.38%**):
+Global floors (must not go down; measured 2026-09-14 post-D: line **93.16%**, branch **88.85%** —
+post `tests/test_area_d_coverage_lift.py`; snapshot `reports/CODE_QUALITY_METRICS_2026-09-14.md`):
 
 | Metric | Target | Tool | Fail rule |
 |---|---:|---|---|
@@ -413,12 +415,12 @@ vs broken distinguished (RULE 4); stop/cancel paths honoured (RULE 7).
 **Coverage command (copy-paste):**
 
 ```bash
-# parallel form (adopted 2026-09-15, W4.2: line 91.77 / branch 88.05 ≥ the serial
-# run it replaced; -n 4 beats auto on 2 cores, same totals, 132 s). -n 0 = serial.
 QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=/tmp/stublibs \
-.venv/bin/python -m pytest tests -q -n 4 --dist loadfile -m "not webengine" \
-  --cov=core --cov=actions --cov=backend --cov=bridge --cov=services --cov=stores --cov=app --cov=main \
-  --cov-branch --cov-report=json:coverage.json
+.venv/bin/python -m coverage run --branch \
+  --source=core,actions,backend,bridge,services,stores,app,main \
+  -m pytest tests -q \
+  --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
+COVERAGE_FILE=.coverage .venv/bin/python -m coverage json -o coverage.json
 ```
 
 (`LD_LIBRARY_PATH` is only needed on a machine without GL/X11/NSS — build the
@@ -580,18 +582,16 @@ reference implementation of that count is the AST walker in
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13, after Rounds G2/G3: **186 files, median 134, 4 still
-  over 500**: `backend/history_query.py` (601), `bridge/history_bridge.py` (544,
-  whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
-  (514), `backend/config_manager.py` (507) — still open after Round G, whose G7
-  took the scheduled backlog items instead (two of the four are §16.5
-  landmines). The owner ruling of 2026-09-13 (Round G design §1c) lifted the
-  AREA-D freeze protecting three of the old seven; G2/G3 then split the two
-  worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
-  facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →
-  seam + 3): [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
-  F1–F3 family history: [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
-  §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
+  files move. 2026-09-14: **208 files, median 134, 4 still over 500**:
+  `backend/history_query.py` (601), `bridge/history_bridge.py` (544, Qt slot
+  contract §18.5), `backend/dom_highlight.py` (514), `backend/config_manager.py`
+  (511) — still open after Round G (G7 took backlog). Round G lifted the
+  AREA-D freeze (owner ruling 2026-09-13 §1c) and split `chat_sync.py` 807 → 5
+  + seam and `scroll_parser.py` 706 → 4 + facade; F1 split `db_deletion_flow.py`
+  509 → 3 + seam: [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
+  history [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
+  §8. Round H: A=JS gate + sash-grid/stack-dnd, B=spine, C=services/stores,
+  D=verification (this file). Known debt (§16.5): do not grow, extract on touch.
 
 ### 18.3 Modules — 5–15 cohesive files
 

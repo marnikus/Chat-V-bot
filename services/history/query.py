@@ -1,10 +1,15 @@
+"""History query — facade (H-C5 split)
+
+Now ≤80 LOC via settings/merge/gaze split.
+"""
+
 from __future__ import annotations
 
-import copy
-import json
 import logging
-import os
-import re
+
+from services.history.query_gaze import HistoryQueryGaze
+from services.history.query_merge import _merge, _merge_media_settings, _merge_preview_settings
+from services.history.query_settings import HistoryQuerySettings, _db_stem
 
 log = logging.getLogger("chatbot")
 OLD_MAX_FILE_MB = 2
@@ -13,96 +18,14 @@ HISTORY_DEFAULTS = {
     "enabled": True,
     "db_path": "history.db",
     "use_fts": True,
-    "media": {"enabled": True, "download": True, "cache_dir": "saved_media",
-               "max_file_mb": MAX_FILE_MB_DEFAULT, "max_cache_mb": 200},
-    "preview": {"preload_rows": 40, "page_size": 50,
-                "max_rows": 400, "show_images": True},
+    "media": {"enabled": True, "download": True, "cache_dir": "saved_media", "max_file_mb": MAX_FILE_MB_DEFAULT, "max_cache_mb": 200},
+    "preview": {"preload_rows": 40, "page_size": 50, "max_rows": 400, "show_images": True},
 }
 SETTING_KEYS = ("my_nick", "media_max_file_mb", "media_max_cache_mb", "preview")
 
 
-def _merge(base: dict, patch: dict) -> dict:
-    out = copy.deepcopy(base)
-    for key, value in (patch or {}).items():
-        out[key] = _merge(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
-    return out
-
-
-def _db_stem(path: str) -> str:
-    stem = os.path.splitext(os.path.basename(str(path or "")))[0]
-    stem = re.sub(r"[^0-9A-Za-z._-]+", "_", stem).strip("._-")
-    return stem or "world"
-
-
-def _merge_media_settings(data: dict, media: dict) -> None:
-    """The media limits the stored rows override, in place.
-
-    A value that does not parse is left to the caller's except clause, which
-    is what keeps one garbage setting from failing the whole open.
-    """
-    if "media_max_file_mb" in data:
-        media["max_file_mb"] = float(data["media_max_file_mb"])
-    if "media_max_cache_mb" in data:
-        media["max_cache_mb"] = float(data["media_max_cache_mb"])
-
-
-def _merge_preview_settings(data: dict, preview: dict) -> dict:
-    """The stored preview payload merged over the in-memory one."""
-    if "preview" not in data:
-        return preview
-    stored = json.loads(str(data["preview"]))
-    return _merge(preview, stored) if isinstance(stored, dict) else preview
-
-
-class HistoryQueryService:
-    def _stored(self, section: str) -> dict:
-        if self.config is None:
-            return {}
-        value = self.config.get(section, default={})
-        return value if isinstance(value, dict) else {}
-
-    def _migrate_media_cap(self) -> None:
-        media = self._settings.get("media") or {}
-        try:
-            cap = float(media.get("max_file_mb", MAX_FILE_MB_DEFAULT))
-        except (TypeError, ValueError):
-            cap = MAX_FILE_MB_DEFAULT
-        if cap <= OLD_MAX_FILE_MB:
-            media["max_file_mb"] = MAX_FILE_MB_DEFAULT
-            self._settings["media"] = media
-
-    @property
-    def enabled(self) -> bool:
-        return bool(self._settings.get("enabled", True))
-
-    @property
-    def my_nick(self) -> str:
-        return self.collector.my_nick
-
-    def settings(self) -> dict:
-        data = copy.deepcopy(self._settings)
-        data.update({"collector": self.collector.settings(),
-                     "fts": bool(self.db.fts_enabled), "db_path": self.db.path})
-        return data
-
-    def media_base_dir(self) -> str:
-        return str((self._settings.get("media") or {}).get("cache_dir") or "saved_media")
-
-    def world_media_dir(self, path: str = "") -> str:
-        return os.path.join(self.media_base_dir(), _db_stem(path or self.db.path))
-
-    def _apply_world_media_dir(self) -> None:
-        self.media.cache_dir = self.media_base_dir() if not self.db.is_open else self.world_media_dir()
-        if self.db.is_open:
-            self.media._dirs.clear()
-
-    def _apply_stored_my_nick(self, data: dict) -> None:
-        """Restore My Nick from the stored settings when it parses to a str."""
-        if "my_nick" not in data:
-            return
-        nick = json.loads(str(data["my_nick"]))
-        if isinstance(nick, str):
-            self.collector.configure(my_nick=nick)
+class HistoryQueryService(HistoryQuerySettings, HistoryQueryGaze):
+    """Query service — loads app settings, gaze, undo, pages."""
 
     async def load_app_settings(self) -> None:
         rows = await self.db.fetchdicts("SELECT key, value FROM app_settings")
@@ -113,62 +36,18 @@ class HistoryQueryService:
             self._apply_stored_my_nick(data)
             _merge_media_settings(data, media)
             preview = _merge_preview_settings(data, preview)
-        except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        except (TypeError, ValueError, KeyError, __import__("json").JSONDecodeError):
             pass
         self._settings["media"], self._settings["preview"] = media, preview
         self.media.max_file_bytes = int(float(media.get("max_file_mb", MAX_FILE_MB_DEFAULT)) * 1024 * 1024)
         self.media.max_cache_bytes = int(float(media.get("max_cache_mb", 200)) * 1024 * 1024)
 
-    async def load_gaze(self) -> None:
-        try:
-            rows = await self.db.fetchdicts("SELECT key, value FROM gaze_data")
-        except Exception as exc:
-            log.debug("gaze load skipped: %s", exc)
-            return
-        data = {row["key"]: row["value"] for row in rows}
-        if not data:
-            return
-        if data.get("partner"):
-            self.collector._nick = str(data["partner"])
-        for field in ("added", "total", "last_sync_added", "last_sync_count"):
-            try:
-                setattr(self.collector, "_" + field, int(data.get(field)))
-            except (TypeError, ValueError):
-                pass
-        if data.get("last_sync_reason"):
-            self.collector._last_sync_reason = str(data["last_sync_reason"])
 
-    async def get_meta_flag(self, key: str) -> bool:
-        try:
-            value = await self.db.get_meta(key, None)
-            return value is not None and str(value) != ""
-        except Exception:
-            return False
-
-    async def load_world_undo(self) -> list[dict]:
-        if not self.db.is_open:
-            return []
-        try:
-            rows = await self.db.fetchall("SELECT seq, kind, value FROM undo_history ORDER BY seq")
-        except Exception as exc:
-            log.warning("undo load from %s failed: %s", self.db.path, exc)
-            return []
-        out = []
-        for seq, kind, value in rows:
-            try:
-                out.append({"seq": int(seq), "kind": str(kind), "value": json.loads(str(value))})
-            except (TypeError, ValueError, json.JSONDecodeError):
-                pass
-        return out
-
-    async def page(self, nick: str, **kwargs) -> dict:
-        payload = await self.query.page(nick, **kwargs)
-        payload["stats"] = await self.query.person_stats(nick)
-        payload["my_nick"] = self.my_nick
-        return payload
-
-    def preview_settings(self) -> dict:
-        return dict(self._settings.get("preview") or {})
-
-    def to_json(self) -> str:
-        return json.dumps(self.settings(), ensure_ascii=False)
+__all__ = [
+    "HistoryQueryService",
+    "HISTORY_DEFAULTS",
+    "MAX_FILE_MB_DEFAULT",
+    "OLD_MAX_FILE_MB",
+    "_merge",
+    "_db_stem",
+]

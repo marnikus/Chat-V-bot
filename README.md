@@ -207,7 +207,7 @@ stays pinned; everything below it is rearrangeable.
 Implementation: `ui/js/sash-core.js` (pure split-tree model),
 `ui/js/sash-grid.js` (rendering + drag/resize), `ui/css/sash-layout.css`;
 design in `docs/archive/2026-09-05-grid-scroll-undo/SASH_LAYOUT_DESIGN_2026-09-05.md`; tests in
-`tests/test_sash_core.js` (node) and `tests/test_sash_webengine.py`
+`tests/test_sash_core.py` (node) and `tests/test_sash_webengine.py`
 (real Qt WebEngine).
 
 ### Save / Load Presets (full action stack)

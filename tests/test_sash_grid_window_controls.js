@@ -317,9 +317,11 @@ global.App = { bridge: null, recordGlobal() {} };
 global.MutationObserver = class { constructor() {} observe() {} disconnect() {} };
 global.getComputedStyle = () => ({ display: '' });
 
-// ── load the real shipped sash-grid.js ────────────────────────────
-const gridSrc = fs.readFileSync(path.join(__dirname, '..', 'ui', 'js', 'sash-grid.js'), 'utf8');
-const SashGrid = new Function('return (function() {\n' + gridSrc + '\nreturn SashGrid;\n})();')();
+// ── load the real shipped sash-grid family (facade + parts) ───────
+const vm = require('vm');
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.sashGrid);
+const SashGrid = global.SashGrid;
 
 // panels exist in the DOM before init (like ui/index.html)
 for (const w of SashCore.WINDOWS) makePanel(PANEL_IDS[w.id]);

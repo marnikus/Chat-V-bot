@@ -29,11 +29,9 @@ mutmut==3.7.0
 # the test runner itself
 pytest==9.1.1
 pytest-asyncio==1.4.0
-# parallel test execution (W1 of docs/archive/2026-09-15-test-time-reduction/):
-# `-n auto --dist loadfile` halved wall time measured 2026-09-15 (367→181 s,
-# 2 cores). The suite is worker-safe by convention: per-test state only via
-# tmp_path, in-memory or tmp_path SQLite, no fixed ports, no CWD-relative
-# writes (logs/, saved_media/).
+# parallel execution — from 387 s to ~100 s with -n auto
+# Tiered runner (tools/metrics/run_tiers.py) uses it for pure+db tiers;
+# Qt tier stays single-process (QApplication singleton not fork-safe).
 pytest-xdist==3.8.0
 # Runs the RULE 16 gate before a commit lands. Install the hook once with
 # `pre-commit install`; the config is .pre-commit-config.yaml. Without this

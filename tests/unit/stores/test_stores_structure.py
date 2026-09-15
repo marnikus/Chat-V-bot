@@ -94,7 +94,13 @@ class TestFileSize(unittest.TestCase):
         # dataclasses F5's first attempt added alongside an uncalled
         # `append_v2()` were dropped as dead code, so this file is not a
         # fragment parking unused types.
-        self.assertLessEqual(len(py_files()), 38)
+        # 38 -> 44 (2026-09-14, Round H Area C H-C4): history_repo_cursor (108),
+        # identity_helpers (90), restore (66), slots (82), schema_legacy (175),
+        # media_network (148) — six focused helpers named by responsibility,
+        # each ≤200 LOC, keeping lifecycle/append/media/schema within 150-300.
+        # The family layout stays cohesive (history_* 10->16, media_* 4->5),
+        # and the new modules are leaves (no Qt, no services import).
+        self.assertLessEqual(len(py_files()), 44)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

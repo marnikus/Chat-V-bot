@@ -270,7 +270,6 @@ class WaitCancellationCase(unittest.IsolatedAsyncioTestCase):
             ]
         )
         eng = FakeEngine()
-        eng.speed_multiplier = 0.02  # tolerate ≠ wait: real retries, fast gaps
         blk = WaitPageLoad(target_selector="div", timeout_ms=2000, pre_delay_ms=0)
         self.assertEqual(await blk.execute("u", cdp, eng), "ok")
         self.assertGreaterEqual(cdp.calls, 3)

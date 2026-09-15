@@ -1768,6 +1768,31 @@
    "functions": {},
    "values": {}
   },
+  "actions.scroll_parse_run": {
+   "classes": {
+    "ScrollRunPart": {
+     "ancestry": [
+      "ScrollRunPart",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, block)",
+      "build_filter": "(self, panel_criteria=None) -> 'PersonFilter'",
+      "build_parser": "(self, cdp: 'CDPClient', panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollParser'",
+      "run": "(self, cdp: 'CDPClient', run: 'Optional[PipelineRun]' = None) -> 'CollectResult'",
+      "to_scroll_options": "(self, panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollOptions'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "actions.search_users": {
    "classes": {
     "SearchUsers": {
@@ -1967,35 +1992,38 @@
     "CDPClient": {
      "ancestry": [
       "CDPClient",
+      "CdpClientCommands",
       "QObject",
       "Object",
       "object"
      ],
      "attrs": {},
      "bases": [
+      "CdpClientCommands",
       "QObject"
      ],
      "fields": {},
-     "inherited": {},
+     "inherited": {
+      "add_binding": "(self, name: 'str') -> 'bool'",
+      "add_script_on_new_document": "(self, source: 'str') -> 'str'",
+      "click_at": "(self, x: 'float', y: 'float') -> 'None'",
+      "evaluate": "(self, expression: 'str') -> 'Any'",
+      "fetch_tabs": "(self) -> 'list[TabInfo]'",
+      "get_cookies": "(self, url: 'str' = '') -> 'str'",
+      "get_element_rect": "(self, selector: 'str') -> 'Optional[dict]'",
+      "mouse_wheel": "(self, dx: 'float', dy: 'float', x: 'float', y: 'float') -> 'None'",
+      "remove_script_on_new_document": "(self, identifier: 'str') -> 'bool'",
+      "set_file_input_files": "(self, selector: 'str', files: 'list[str]') -> 'None'"
+     },
      "methods": {
       "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
-      "add_binding": "(self, name: str) -> bool",
-      "add_script_on_new_document": "(self, source: str) -> str",
       "base_url": "<property>",
-      "click_at": "(self, x: float, y: float) -> None",
       "connect": "(self, ws_url: str) -> bool",
       "disconnect": "(self) -> None",
-      "evaluate": "(self, expression: str) -> Any",
-      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
-      "get_cookies": "(self, url: str = '') -> str",
-      "get_element_rect": "(self, selector: str) -> Optional[dict]",
       "is_connected": "<property>",
-      "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
       "off_event": "(self, method: str, callback: Optional[Callable] = None) -> None",
       "on_event": "(self, method: str, callback: Callable) -> Callable",
-      "remove_script_on_new_document": "(self, identifier: str) -> bool",
-      "send": "(self, method: str, params: dict | None = None) -> dict",
-      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+      "send": "(self, method: str, params: dict | None = None) -> dict"
      }
     },
     "CdpLease": {
@@ -2018,6 +2046,36 @@
       "low": "(self) -> backend.cdp_client._LeaseCtx",
       "release": "(self) -> None",
       "waiting": "<property>"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.cdp_client_commands": {
+   "classes": {
+    "CdpClientCommands": {
+     "ancestry": [
+      "CdpClientCommands",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "add_binding": "(self, name: 'str') -> 'bool'",
+      "add_script_on_new_document": "(self, source: 'str') -> 'str'",
+      "click_at": "(self, x: 'float', y: 'float') -> 'None'",
+      "evaluate": "(self, expression: 'str') -> 'Any'",
+      "fetch_tabs": "(self) -> 'list[TabInfo]'",
+      "get_cookies": "(self, url: 'str' = '') -> 'str'",
+      "get_element_rect": "(self, selector: 'str') -> 'Optional[dict]'",
+      "mouse_wheel": "(self, dx: 'float', dy: 'float', x: 'float', y: 'float') -> 'None'",
+      "remove_script_on_new_document": "(self, identifier: 'str') -> 'bool'",
+      "set_file_input_files": "(self, selector: 'str', files: 'list[str]') -> 'None'"
      }
     },
     "TabInfo": {
@@ -2049,11 +2107,55 @@
      },
      "inherited": {},
      "methods": {
-      "__init__": "(self, id: str, title: str, url: str, ws_url: str) -> None"
+      "__init__": "(self, id: 'str', title: 'str', url: 'str', ws_url: 'str') -> None"
      }
     }
    },
    "functions": {},
+   "values": {}
+  },
+  "backend.cdp_client_events": {
+   "classes": {
+    "CdpEvents": {
+     "ancestry": [
+      "CdpEvents",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self)",
+      "dispatch": "(self, frame: 'dict') -> 'None'",
+      "off_event": "(self, method: 'str', callback: 'Callable | None' = None) -> 'None'",
+      "on_event": "(self, method: 'str', callback: 'Callable') -> 'Callable'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.cdp_client_transport": {
+   "classes": {},
+   "functions": {
+    "add_binding": "(client, name: 'str') -> 'bool'",
+    "add_script_on_new_document": "(client, source: 'str') -> 'str'",
+    "click_at": "(client, x: 'float', y: 'float') -> 'None'",
+    "close_client": "(client) -> 'None'",
+    "cookie_header": "(client, url: 'str' = '') -> 'str'",
+    "evaluate": "(client, expression: 'str') -> 'Any'",
+    "fetch_tabs": "(client) -> 'list[dict]'",
+    "get_element_rect": "(client, selector: 'str') -> 'dict | None'",
+    "mouse_wheel": "(client, dx: 'float', dy: 'float', x: 'float', y: 'float') -> 'None'",
+    "open_client": "(client, ws_url: 'str') -> 'bool'",
+    "raw_send": "(client, method: 'str', params: 'dict | None' = None) -> 'dict'",
+    "receive_loop": "(client) -> 'None'",
+    "remove_script_on_new_document": "(client, identifier: 'str') -> 'bool'",
+    "set_file_input_files": "(client, selector: 'str', files: 'list[str]') -> 'None'"
+   },
    "values": {}
   },
   "backend.chat_agent_js": {
@@ -2723,7 +2825,18 @@
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query_projection": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query_request": {
+   "classes": {
     "PersonPageRequest": {
      "ancestry": [
       "PersonPageRequest",
@@ -2779,6 +2892,13 @@
     }
    },
    "functions": {},
+   "values": {}
+  },
+  "backend.history_query_search": {
+   "classes": {},
+   "functions": {
+    "search": "(db, person_id, query: 'str', limit: 'int', offset: 'int')"
+   },
    "values": {}
   },
   "backend.history_repo": {

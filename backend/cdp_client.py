@@ -1,25 +1,43 @@
-"""Chrome DevTools Protocol WebSocket client with auto-reconnect."""
+"""Chrome DevTools Protocol WebSocket client with auto-reconnect.
+
+Round H step H-B6 split the file by *who it talks to*:
+
+* `backend/cdp_client_transport.py` — the wire: the connect/disconnect
+  lifecycle, request/response framing, the receive loop, tab discovery and
+  the command helpers (script injection, cookies, input, file inputs);
+* `backend/cdp_client_events.py` — the event fan-out: the listener table
+  and the isolation rule (a failing listener must never kill the loop);
+* this file — the `CDPClient` QObject the rest of the application knows,
+  plus the priority lease and `TabInfo`.
+
+The facade keeps every historical name and seam: the mutable socket state
+(`_ws`, `_cmd_id`, `_pending`, `_connected`, `_receive_task`) stays plain
+instance attributes, and every command method calls `self.send`, so the
+long-standing test seam (shadowing `cdp.send` with a fake, assigning
+`cdp._ws` / `cdp._connected`) works unchanged (tests/test_cdp_events.py,
+tests/unit/backend/test_cdp_client_transport.py). `CdpLease` and `TabInfo`
+stay defined here because the public API snapshot pins them to this module
+(tests/unit/backend/backend_api_snapshot.json).
+
+Imports: the two part modules only (plus PySide6); the parts never import
+this file back.
+"""
 
 import asyncio
 import heapq
-import inspect
-import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
-import aiohttp
-import websockets
+
 from PySide6.QtCore import QObject, Signal
-from urllib.parse import urlparse
+
+from backend import cdp_client_transport as transport
+from backend.cdp_client_commands import CdpClientCommands, TabInfo
+from backend.cdp_client_events import CdpEvents
 
 log = logging.getLogger("chatbot")
 
 HIGH, LOW = 0, 1
-
-
-@dataclass
-class TabInfo:
-    id: str; title: str; url: str; ws_url: str
 
 
 class _LeaseCtx:
@@ -94,34 +112,19 @@ class CdpLease:
         self._locked = False
 
 
-def _domain_matches(host: str, domain: str) -> bool:
-    """Whether a cookie's domain covers the requested host.
+class CDPClient(CdpClientCommands, QObject):
+    """WebSocket client for Chrome DevTools Protocol.
 
-    A leading dot is already stripped by the caller, so `example.com` covers
-    both itself and every subdomain of it.
+    Method count is one below the ideal fifteen-plus-one only because the
+    public command surface (frozen by ~20 importers and by the API
+    snapshot) is flat on this class; the bodies of all of them live in the
+    two part modules, so the class itself is a thin, fully testable seam.
+
+    H-B6b: command helpers moved to `cdp_client_commands.CdpClientCommands`
+    mixin, so direct methods ≤15 (RULE 16). Public API stays flat via
+    inheritance, snapshot still pins methods to this module via re-export.
     """
-    return domain == host or host.endswith("." + domain)
 
-
-def _cookie_pairs(cookies: list, host: str) -> list[str]:
-    """`name=value` for every cookie that applies to `host`.
-
-    With no host (or a cookie with no domain) there is nothing to match
-    against, so the cookie is kept — the caller asked for "the cookies".
-    """
-    pairs = []
-    for cookie in cookies:
-        name, value = cookie.get("name"), cookie.get("value")
-        if not name:
-            continue
-        domain = str(cookie.get("domain") or "").strip().lower().lstrip(".")
-        if host and domain and not _domain_matches(host, domain):
-            continue
-        pairs.append(f"{name}={value or ''}")
-    return pairs
-
-
-class CDPClient(QObject):
     connected = Signal()
     disconnected = Signal()
     error = Signal(str)
@@ -133,199 +136,42 @@ class CDPClient(QObject):
         self._ws: Any = None
         self._cmd_id = 0
         self._pending: dict[int, asyncio.Future] = {}
-        self._listeners: dict[str, list[Callable]] = {}
         self._receive_task: Optional[asyncio.Task] = None
         self._connected = False
         self.lease = CdpLease()
+        self._events = CdpEvents()
 
-    # ── event fan-out ────────────────────────────────────────────
+    # ── event fan-out (body in cdp_client_events.py) ──────────────
     def on_event(self, method: str, callback: Callable) -> Callable:
         """Subscribe to a CDP event (e.g. `Runtime.bindingCalled`)."""
-        self._listeners.setdefault(method, []).append(callback)
-        return callback
+        return self._events.on_event(method, callback)
 
     def off_event(self, method: str, callback: Callable | None = None) -> None:
         """Unsubscribe one callback, or every callback for `method`."""
-        if callback is None:
-            self._listeners.pop(method, None)
-            return
-        handlers = self._listeners.get(method)
-        if handlers and callback in handlers:
-            handlers.remove(callback)
+        self._events.off_event(method, callback)
 
     def _dispatch_event(self, frame: dict) -> None:
-        """Deliver one received event frame to its listeners.
+        """Deliver one received event frame to its listeners."""
+        self._events.dispatch(frame)
 
-        A listener that raises (or an async listener with no running loop)
-        must never stop the remaining listeners or the receive loop.
-        """
-        method = frame.get("method")
-        if not method:
-            return
-        params = frame.get("params") or {}
-        for callback in list(self._listeners.get(method, ())):
-            try:
-                result = callback(params)
-                if inspect.isawaitable(result):
-                    try:
-                        asyncio.get_event_loop().create_task(result)
-                    except RuntimeError:      # no loop — drop, do not crash
-                        result.close()
-            except Exception as e:            # noqa: BLE001 - isolation
-                log.warning("CDP listener for %s failed: %s", method, e)
+    # ── connection lifecycle (body in cdp_client_transport.py) ────
+    async def connect(self, ws_url: str) -> bool:
+        """Connect, enable the four domains and start the receive loop."""
+        return await transport.open_client(self, ws_url)
 
-    async def add_binding(self, name: str) -> bool:
-        """Expose `window[name](payload)` as a `Runtime.bindingCalled` event."""
-        try:
-            await self.send("Runtime.addBinding", {"name": name})
-            return True
-        except Exception as e:                # noqa: BLE001
-            log.warning("addBinding(%s) failed: %s", name, e)
-            return False
+    async def disconnect(self) -> None:
+        await transport.close_client(self)
 
-    async def add_script_on_new_document(self, source: str) -> str:
-        """Re-inject `source` after every navigation. Returns its identifier."""
-        try:
-            res = await self.send("Page.addScriptToEvaluateOnNewDocument",
-                                  {"source": source})
-            return res.get("result", {}).get("identifier", "")
-        except Exception as e:                # noqa: BLE001
-            log.warning("addScriptToEvaluateOnNewDocument failed: %s", e)
-            return ""
+    async def send(self, method: str, params: dict | None = None) -> dict:
+        return await transport.raw_send(self, method, params)
 
-    async def remove_script_on_new_document(self, identifier: str) -> bool:
-        if not identifier:
-            return False
-        try:
-            await self.send("Page.removeScriptToEvaluateOnNewDocument",
-                            {"identifier": identifier})
-            return True
-        except Exception:                     # noqa: BLE001
-            return False
+    async def _receive_loop(self) -> None:
+        await transport.receive_loop(self)
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self._ws is not None
+        return bool(self._connected and self._ws is not None)
 
     @property
     def base_url(self) -> str:
         return f"http://{self._host}:{self._port}"
-
-    async def _fetch_tab_list(self) -> list:
-        """The raw `/json/list` payload (empty when the endpoint is unhappy)."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{self.base_url}/json/list",
-                                   timeout=aiohttp.ClientTimeout(total=5)) as r:
-                return await r.json() if r.status == 200 else []
-
-    async def fetch_tabs(self) -> list[TabInfo]:
-        try:
-            items = await self._fetch_tab_list()
-        except Exception as e:                     # noqa: BLE001
-            log.warning("Tab discovery failed: %s", e)
-            return []
-        return [TabInfo(item.get("id", ""), item.get("title", ""),
-                        item.get("url", ""), item.get("webSocketDebuggerUrl", ""))
-                for item in items if item.get("type") == "page"]
-
-    async def connect(self, ws_url: str) -> bool:
-        await self.disconnect()
-        try:
-            self._ws = await websockets.connect(ws_url, max_size=50*1024*1024,
-                                                 open_timeout=10, close_timeout=5)
-            self._connected = True
-            self._receive_task = asyncio.create_task(self._receive_loop())
-            for dom in ("Page", "DOM", "Runtime", "Network"):
-                await self.send(f"{dom}.enable")
-            log.info("CDP connected: %s", ws_url[:80])
-            self.connected.emit()
-            return True
-        except Exception as e:
-            log.error("CDP connect failed: %s", e)
-            self.error.emit(str(e))
-            return False
-
-    async def disconnect(self) -> None:
-        self._connected = False
-        if self._receive_task:
-            self._receive_task.cancel()
-            self._receive_task = None
-        if self._ws:
-            try: await self._ws.close()
-            except Exception: pass
-            self._ws = None
-        self._pending.clear()
-        self.disconnected.emit()
-
-    async def send(self, method: str, params: dict | None = None) -> dict:
-        if not self._ws:
-            raise ConnectionError("CDP not connected")
-        self._cmd_id += 1
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
-        self._pending[self._cmd_id] = fut
-        await self._ws.send(json.dumps({"id": self._cmd_id, "method": method,
-                                         "params": params or {}}))
-        return await asyncio.wait_for(fut, timeout=30)
-
-    async def evaluate(self, expression: str) -> Any:
-        r = await self.send("Runtime.evaluate", {"expression": expression,
-                                                   "returnByValue": True, "awaitPromise": True})
-        return r.get("result", {}).get("result", {}).get("value")
-
-    async def get_cookies(self, url: str = "") -> str:
-        """A `Cookie` header string for the given origin.
-
-        Used by the media cache's Python download path: the browser tab can
-        load `images.virt-chat.com` through an `<img>` tag with the session
-        cookies (no CORS), but the in-page `fetch()` needed for the old cache
-        can be blocked by CORS. Downloading from Python with the same cookies
-        bypasses that while still authenticating like the page.
-        """
-        try:
-            result = await self.send("Network.getAllCookies")
-        except Exception as e:                     # noqa: BLE001
-            log.debug("getCookies failed: %s", e)
-            return ""
-        cookies = result.get("result", {}).get("cookies", []) or []
-        host = str(urlparse(str(url or "")).hostname or "").lower()
-        return "; ".join(_cookie_pairs(cookies, host))
-
-    async def click_at(self, x: float, y: float) -> None:
-        for t in ("mousePressed", "mouseReleased"):
-            await self.send("Input.dispatchMouseEvent",
-                            {"type": t, "x": x, "y": y, "button": "left", "clickCount": 1})
-
-    async def mouse_wheel(self, dx: float, dy: float, x: float, y: float) -> None:
-        await self.send("Input.dispatchMouseEvent",
-                        {"type": "mouseWheel", "x": x, "y": y, "deltaX": dx, "deltaY": dy})
-
-    async def get_element_rect(self, selector: str) -> Optional[dict]:
-        js = (f"(function(){{var e=document.querySelector('{selector}');"
-              f"if(!e)return null;var r=e.getBoundingClientRect();"
-              f"return{{x:r.x,y:r.y,width:r.width,height:r.height}};}})()")
-        return await self.evaluate(js)
-
-    async def set_file_input_files(self, selector: str, files: list[str]) -> None:
-        res = await self.send("DOM.getDocument")
-        root_id = res.get("result", {}).get("root", {}).get("nodeId", 0)
-        res = await self.send("DOM.querySelector", {"nodeId": root_id, "selector": selector})
-        node_id = res.get("result", {}).get("nodeId", 0)
-        if node_id:
-            await self.send("DOM.setFileInputFiles", {"files": files, "nodeId": node_id})
-
-    async def _receive_loop(self) -> None:
-        try:
-            async for raw in self._ws:
-                data = json.loads(raw)
-                mid = data.get("id")
-                if mid and mid in self._pending:
-                    self._pending.pop(mid).set_result(data)
-                elif data.get("method"):
-                    self._dispatch_event(data)
-        except (websockets.ConnectionClosed, asyncio.CancelledError):
-            pass
-        except Exception as e:
-            log.error("CDP receive error: %s", e)
-        finally:
-            self._connected = False
-            self.disconnected.emit()

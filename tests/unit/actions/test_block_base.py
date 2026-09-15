@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from unittest import mock
 
 import pytest
 
@@ -166,9 +165,6 @@ def test_to_dict_key_order_is_the_wire_format_the_presets_use():
 def test_find_kwargs_are_the_runner_keywords(monkeypatch, cls, expected):
     recorder = Recorder()
     patch_runner(monkeypatch, recorder)
-    # delays are asserted via the kwargs, not lived through — keep real
-    # pre-delay/confirm values on the block, compress only the clock.
-    monkeypatch.setattr(asyncio, "sleep", mock.AsyncMock())
     block = cls()
     asyncio.run(block.execute("Nick", None, None))
     assert recorder.calls, "the block must click through find_and_click"
@@ -183,8 +179,6 @@ def test_every_click_block_passes_the_engine_through(monkeypatch):
 
     recorder = Recorder()
     patch_runner(monkeypatch, recorder)
-    # engine passthrough is the contract here; the clock is not
-    monkeypatch.setattr(asyncio, "sleep", mock.AsyncMock())
     for cls in (ClickBack, ClickMainTab, ClickSend, CustomFind):
         recorder.calls.clear()
         asyncio.run(cls().execute("Nick", None, Engine()))

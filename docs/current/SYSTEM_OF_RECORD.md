@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-15 (this checkout) |
-| Test suite | `3206 passed, 2 skipped, 1 deselected, 1 xfailed, 903 subtests passed` incl. 29 green Node suites |
-| Coverage (measured, `--branch`, 8 production packages) | line **91.77%** · branch **88.05%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-13 (this checkout) |
+| Test suite | `2829 passed, 6 skipped, 1 deselected, 1 xfailed, 894 subtests passed` + 27 green Node harness files |
+| Coverage (measured, `--branch`, 8 production packages) | line **91.83%** · branch **87.02%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
@@ -46,15 +46,15 @@ collector** archives whatever private conversation is on screen.
 
 | Surface | What it does today | Implementation | Pinned by |
 |---|---|---|---|
-| **Action stack** | 17 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` `SPEED_MULTIPLIER` (one coefficient scaling every wait of the run; last enabled SPEED block wins, resolved at run start) | `actions/*` (registry auto-scans the package), `services/run/` | `tests/unit/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
-| **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/unit/test_visual_click_contract.py`, `tests/unit/test_find_click_visual.py` |
-| **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py`, `actions/scroll_parse_run.py` | `tests/unit/test_scroll_parse_pipeline.py`, `tests/integration/test_scroll_only_seek.py`, `tests/integration/test_filter_purge.py` |
+| **Action stack** | 17 ordered blocks, drag-and-drop, presets, per-block config panel. Blocks: `SCROLL_PARSE` `SEARCH_USERS` `CLICK_USER` `CLICK_MAIN_TAB` `CLICK_BACK` `CUSTOM_FIND` `WAIT_PAGE_LOAD` `TYPE_MESSAGE` `CLICK_SEND` `ATTACH_IMAGE` `COLLECT_HISTORY` `TAKE_PERSON` `MARK_MESSAGED` `CONDITIONAL_SKIP` `REPEAT_LOOP` `PAUSE` `SPEED_MULTIPLIER` (one coefficient scaling every wait of the run; last enabled SPEED block wins, resolved at run start) | `actions/*` (registry auto-scans the package), `services/run/` | `tests/test_action_registry.py`, `tests/unit/actions/`, `tests/integration/run_safety/` |
+| **Find & click** | Every locating click goes through one two-phase, visually confirmed runner (RED outline on FIND, ORANGE on CLICK) | `backend/visual_click.py`, `backend/dom_highlight.py`, `actions/find_click_runner.py` | `tests/test_visual_click_contract.py`, `tests/test_find_click_visual.py` |
+| **Scroll & Parse** | Harvests the CDK virtual-scroll list, reports each person as found, applies the block's own filter selects, purges rejects from the queue | `backend/scroll_parser.py`, `actions/scroll_parse.py`, `actions/scroll_parse_run.py` | `tests/test_scroll_parse_pipeline.py`, `tests/test_scroll_only_seek.py`, `tests/test_filter_purge.py` |
 | **Run engine** | Plan-then-execute cycle loop, stop/pause gates, repeat cycles, empty-vs-broken reporting, JSONL trace | `services/run/` (see §3) | `tests/integration/run_safety/`, `tests/unit/services/test_cycle_plan.py` |
-| **Passive collector** | Heartbeat probe per tick; archives only when the conversation changed; never blocks the UI; throttled (not paused) during a run | `services/collector_service.py`, `services/collector_tick.py` | `tests/integration/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
-| **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person; every writer of the world file serializes on one gate | `stores/history_*`, `stores/world_lock.py`, `services/history/`, `backend/history_query.py` | `tests/unit/test_history_*`, `tests/integration/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
-| **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/unit/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
-| **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/unit/test_person_labels.py`, `tests/unit/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
-| **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z`; an archive command is a task that reads the world back before it reports, and a refusal is an error, never a success; a DB-connection entry announces only what the DbManager returned (I-21), and a people-list entry only what the store says landed (I-22) | `services/undo_service.py` (facade — owns the timeline state and `push`), `services/undo_history.py` (`HistoryProjection` — the timeline and its stack/kind projections), `services/undo_apply.py` (`ApplyCommand` — undo / redo / applying one entry), `services/undo_db.py` (`DbCommands` — reversing a DB-connection entry), `services/undo_world.py` (`WorldSync` — rebuilding after a world change), `services/undo_archive.py`, `services/undo_timeline.py` (`TimelineCommit`), `services/undo_support.py`, `stores/undo_store.py` | `tests/unit/test_people_undo.py`, `tests/integration/test_archive_delete_undo.py`, `tests/integration/test_world_write_gate.py`, `tests/integration/services/test_undo_support_contract.py`, `tests/integration/services/test_services_undo_gaps.py`, `tests/unit/services/test_undo_structure.py` |
+| **Passive collector** | Heartbeat probe per tick; archives only when the conversation changed; never blocks the UI; throttled (not paused) during a run | `services/collector_service.py`, `services/collector_tick.py` | `tests/test_collector_state.py`, `tests/integration/services/test_collector_tick_phases.py` |
+| **Message archive** | Append-only per-person history, FTS5 search (LIKE fallback), paging that stays stable while collection appends, media downloaded and filed per person; every writer of the world file serializes on one gate | `stores/history_*`, `stores/world_lock.py`, `services/history/`, `backend/history_query.py` | `tests/test_history_*`, `tests/unit/stores/`, `tests/integration/services/test_history_service_contract.py` |
+| **People queue** | "Who should I message under the current filter" — `users` table of the active world; shrinks when filters tighten | `stores/user_memory.py`, `stores/user_query.py`, `services/people_service.py` | `tests/test_user_memory_*.py`, `tests/integration/services/test_services_people.py` |
+| **Labels** | Coloured person tags + include/exclude filter rule, per world | `stores/label_*`, `ui/js/labels.js` | `tests/test_person_labels.py`, `tests/test_label_store_orphans.py`, `tests/unit/backend/test_label_store_dbmode.py` |
+| **Undo / redo** | ONE global timeline across every editable surface, one `Ctrl+Z`; an archive command is a task that reads the world back before it reports, and a refusal is an error, never a success; a DB-connection entry announces only what the DbManager returned (I-21), and a people-list entry only what the store says landed (I-22) | `services/undo_service.py` (facade — owns the timeline state and `push`), `services/undo_history.py` (`HistoryProjection` — the timeline and its stack/kind projections), `services/undo_apply.py` (`ApplyCommand` — undo / redo / applying one entry), `services/undo_db.py` (`DbCommands` — reversing a DB-connection entry), `services/undo_world.py` (`WorldSync` — rebuilding after a world change), `services/undo_archive.py`, `services/undo_timeline.py` (`TimelineCommit`), `services/undo_support.py`, `stores/undo_store.py` | `tests/test_people_undo.py`, `tests/test_archive_delete_undo.py`, `tests/test_world_write_gate.py`, `tests/integration/services/test_undo_support_contract.py`, `tests/integration/services/test_services_undo_gaps.py`, `tests/unit/services/test_undo_structure.py` |
 | **Boot / world ready** | The page boots before the world is open, and BOTH sides are handled: a request that arrives too early **waits for the world and is answered** (`wait_for_world_open`, bounded 15 s — the DB window's `userdb_page` can no longer die unanswered), and once `startup` has opened the world the backend **announces the live world** so the People list, the Full User Database, the DB Connection window and the label pills reload. No refresh button is ever needed, at boot or after a switch | `app/lifecycle.py` (`startup` → `_announce_world_ready`), `services/world_events.py` (`wait_for_world_open`, `run_when_world_open`, `announce_world_live`), `bridge/history_bridge.py` (`_run_async`), `bridge/people_bridge.py`, `bridge/router.py` (`announce_world_ready`) | `tests/unit/app/test_app_lifecycle.py`, `tests/unit/services/test_world_events.py`, `tests/unit/bridge_safety/test_boot_race.py`, `tests/unit/bridge_safety/test_boot_chain.py`, `tests/unit/bridge_safety/test_world_ready.py`, `tests/test_userdb_refresh.js` |
 | **Delete safety (DB window)** | Removing a person or a chat happens **at once — no dialog**; the delete is soft and Ctrl+Z restores both halves. The trash is **session-sized**: it is erased when the step leaves the undo history (cap / redo-branch truncation) or when a new app run opens the world | `ui/js/history-db.js`, `services/history/trash.py` (`begin_session`, `open_world`, `purge_tokens`), `services/undo_timeline.py` | `tests/test_userdb_refresh.js`, `tests/test_world_write_gate.py`, `tests/test_history_repo_lifecycle.py` |
 | **Grid layout** | Any window in any cell; sashes draggable; layout validated before it is stored; **v4** adds the AI Bot Chat and Grok Prompt Editor windows and migrates any older saved tree | `services/layout_service.py`, `bridge/layout_bridge.py`, `ui/js/sash-*.js` | `tests/test_grid_persistence.py`, `tests/integration/services/test_services_layout.py`, `tests/test_sash_webengine.py` |
@@ -253,31 +253,30 @@ connects them to the window and starts the qasync loop.
 
 ## 7. Tests
 
-Lanes + principles: RULE 8 ([`AGENT_RULES.md`](AGENT_RULES.md)); marks in `pytest.ini`, auto-applied per item by `tests/conftest.py`; redesign: `docs/archive/2026-09-15-test-integration-principles/`.
-
 ```bash
-# Whole suite, parallel — 3206 tests + 903 subtests, incl. the 29 Node suites
-# as pytest items; ~74 s on 2 cores. `-n 0` = serial; webengine auto-excluded.
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q -n 4 --dist loadfile
+# Python (2829 tests + 894 subtests)
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q \
+  --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
 
-# Fast lane ≤ 90 s: append  -m "not slow and not e2e and not metrics"
-# Labelled tail, serial:  -m "(slow or e2e or metrics) and not webengine"  ·  gate alone: .venv/bin/python tests/test_rule16_new_code.py
-
-# Front-end ad-hoc (the same suites the node wrapper collects as pytest items)
+# Front-end (27 Node harness files)
 for f in tests/test_*.js; do node "$f"; done
+
+# Quality gate that is executable (RULE 16)
+.venv/bin/python tests/test_rule16_new_code.py
 ```
 
-On a machine without GL/X11/NSS (apt blocked), build the repo's stub-library builder and export it:
+On a machine without GL/X11/NSS (apt blocked), build the stub libraries the
+repo already ships a builder for, and put them on `LD_LIBRARY_PATH`:
 
 ```bash
-.venv/bin/python tools/build_stubs.py .venv /tmp/stublibs && export LD_LIBRARY_PATH=/tmp/stublibs
+.venv/bin/python tools/build_stubs.py .venv /tmp/stublibs
+export LD_LIBRARY_PATH=/tmp/stublibs
 ```
 
 | Directory | What it pins |
 |---|---|
-| `tests/unit/` (auto `unit`) | Per-module contracts: `actions/`, `app/`, `backend/`, `bridge_safety/`, `core/`, `services/`, `stores/` |
-| `tests/integration/` (auto `integration`) | Cross-module feature contracts (db manager, history services, grid, undo, private gate, blocks) |
-| root `tests/test_*.py` | Lane machinery — `test_node_harness_suites.py` (the 29 JS suites as items), gates `test_rule16_new_code.py` / `test_wait_budget.py` / `test_js_coverage.py`, `test_sash_webengine.py`, the `_fast_clock.py` dials — plus the `*_e2e.py` lifecycles (auto `e2e` + `slow`) |
+| `tests/test_*.py` | Feature-level and end-to-end contracts (db manager, history, grid, undo, media, private gate, blocks) |
+| `tests/unit/` | Per-module contracts: `actions/`, `app/`, `backend/`, `bridge_safety/`, `core/`, `services/`, `stores/` |
 | `tests/integration/safety_deletion/` | The 18 deletion regressions — result shape, fail-closed ordering, cancellation, shared media, symlinks |
 | `tests/integration/run_safety/` | Stop/pause contracts, cycle event order, cleanup |
 | `tests/integration/services/` | Service-layer contracts (run engine, history, db, collector, undo, layout, people) |
@@ -285,7 +284,7 @@ On a machine without GL/X11/NSS (apt blocked), build the repo's stub-library bui
 | `tests/unit/bridge_safety/test_world_ready.py` | The boot broadcast: the real router hands the People window every user of the world and tells the DB window to reload — the regression for “after a restart I had to press refresh” |
 | `tests/unit/bridge_safety/test_boot_race.py` | The boot race itself: the real bridges over a real world file, one request sent while the world is still closed, answered once it opens (page, stats, People refresh; a never-opening world is a bounded error, not a hang) |
 | `tests/unit/bridge_safety/test_boot_chain.py` | The shipped boot order end to end: real `Router` + real `ApplicationLifecycle` + real stores, the page asking before `startup` opens the world — the answer arrives with zero refresh calls |
-| `tests/integration/test_world_write_gate.py` | The world write gate and the verified archive undo: cross-connection exclusion, fail-open, `world_transaction` commit/rollback, delete → undo → redo, a refused undo, the session-sized trash (a delete is reversible in-session, erased on the next run) |
+| `tests/test_world_write_gate.py` | The world write gate and the verified archive undo: cross-connection exclusion, fail-open, `world_transaction` commit/rollback, delete → undo → redo, a refused undo, the session-sized trash (a delete is reversible in-session, erased on the next run) |
 
 **Frozen contracts** you must not break casually: the AREA D public-API snapshot (`tests/unit/backend/test_backend_api_snapshot.py`), the QWebChannel wire (`tests/unit/bridge_safety/test_router_contract.py`), the deletion result dict, and the collector status strings —
 and the ratchet baselines (`tests/wait_budget_baseline.txt`, `tests/js_coverage_baseline.json`), which only ever regenerate after reviewed drift (RULE 8).
@@ -298,7 +297,7 @@ and the ratchet baselines (`tests/wait_budget_baseline.txt`, `tests/js_coverage_
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC **10** (no function over the gate), mean 3.09 · cognitive > 15 only on the two frozen exemptions · nesting max 4 |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.77% / 88.05%** |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.83% / 87.02%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (63.6% in band) · median file 142 lines — RULE 18, re-measured 2026-09-12, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
@@ -309,7 +308,8 @@ and the ratchet baselines (`tests/wait_budget_baseline.txt`, `tests/js_coverage_
 
 | Date | Design | Why you'd open it |
 |---|---|---|
-| 2026-09-15 | [Test-integration principles](../archive/2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) · [the time plan it documents](../archive/2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) | Why tests land in lanes now, the 50 ms wait budget, dials-not-mocks speed, ratchet baselines that only improve |
+| 2026-09-16 | [Round I plan](../archive/2026-09-16-round-i/ROUND_I_PLAN_2026-09-16.md) (+ its input [metrics](../archive/../../reports/CODE_QUALITY_METRICS_2026-09-16.md)) | The post-split RED measurement, the R0 reconciliation, and areas R1–R4 |
+| 2026-09-15 | [Test-integration principles](../archive/2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) · [time plan](../archive/2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) | The lane/budget/ratchet doctrine behind RULE 8's extension |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |

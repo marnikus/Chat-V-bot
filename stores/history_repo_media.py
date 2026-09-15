@@ -1,5 +1,4 @@
 """The backfill that gives archived media its bytes back.
-
 The recovery half of `stores/history_repo.py`: it walks a person's rows,
 re-queues the ones whose file is missing (failed, skipped, evicted or
 deleted), and reports what it did, scanning in bounded passes so a huge
@@ -7,49 +6,36 @@ history cannot pin the UI. Each pass is stamped with `_scan_seq` and rows
 carry `recovery_attempts`, which is what keeps a failing URL from being
 retried forever inside one scan.
 """
-
 from __future__ import annotations
-
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-
 from stores.history_models import MessageRecord
 from stores.history_repo_identity import _as_record
 from stores.history_requests import MediaRecoveryRequest
-
 log = logging.getLogger("chatbot")
-
-
 class MediaRecovery:
     """The backfill that gives archived media its bytes back."""
-
     def __init__(self, owner):
         """`owner` is the `HistoryRepo` this part borrows state from."""
         self._owner = owner
-
     async def recover_media(self, req: MediaRecoveryRequest) -> dict:
         """Repair images/GIFs whose URL was missing or whose download failed.
-
         Called while a sync re-reads the DOM. It scans the saved archive for
         messages that *should* have media but are broken, matches them to the
         freshly parsed DOM record (direction + author + the on-screen clock),
         registers the real URL in the right person folder
         (`saved_media/<Latin-nick>/images|gifs/`) and re-queues failed rows so
         the normal downloader retries them.
-
         Broken shapes (Bug #2 audit, 2026-09-07):
-
         * ``media_id IS NULL`` and the row is an *empty slot* — kind
           ``image``/``gif`` with no URL, or a ``text`` row with no text
           (a media line parsed before ``app-chat-image`` rendered);
         * ``media_id`` points at a ``failed``/``skipped`` media row.
-
         With ``requeue_failed=False`` (the cheap automatic pass on ordinary
         ticks) only never-registered rows are repaired — known-bad downloads
         are left for the manual backfill or the "click to restore" marker, so
         a dead URL cannot trigger a download attempt every heartbeat.
-
         Returns ``{"repaired": n, "requeued": n, "scanned": n}``.
         """
         if req.media is None or not req.person_id:
@@ -69,7 +55,6 @@ class MediaRecovery:
             await self._recover_row(row, ctx)
         await ctx.finish()
         return ctx.report()
-
     def _records_by_key(self, records) -> dict:
         """The DOM records of this pass, keyed the way a human recognises
         a chat line: direction + author + the on-screen clock."""
@@ -82,10 +67,8 @@ class MediaRecovery:
                                          rec.ts_display)
             by_key.setdefault(key, []).append(rec)
         return by_key
-
     async def _broken_rows(self, ctx) -> list:
         """The archived rows that need a look, excluding this pass's marker.
-
         Rows already stamped with the marker are skipped, which is what keeps
         two passes of one backfill from re-reading each other's work.
         """
@@ -107,7 +90,6 @@ class MediaRecovery:
             + failed_filter +
             ") ORDER BY m.ord",
             (ctx.person_id, ctx.marker))
-
     async def _recover_row(self, row, ctx) -> None:
         """One broken row: find its DOM partner and fix what can be fixed."""
         mid = row.get("media_id")
@@ -127,10 +109,8 @@ class MediaRecovery:
             # endlessly on every backfill.
             await self._mark_scanned(row, ctx)
         ctx.touched.append(int(row["id"]))
-
     def _match_row(self, row, ctx) -> Optional[MessageRecord]:
         """The next unused DOM record with the same visible identity.
-
         Several identical lines in one window are matched in order, so two
         "photo" messages 3 seconds apart do not both repair the first row.
         """
@@ -143,7 +123,6 @@ class MediaRecovery:
             return None
         ctx.used[key] = at + 1
         return matches[at]
-
     async def _repair_stamped_row(self, row, ctx, mid, match) -> None:
         """A row that already points at a media row: re-queue or re-point."""
         existing = await ctx.media.get(mid)
@@ -155,10 +134,8 @@ class MediaRecovery:
                 "WHERE id=?", (ctx.marker, ctx.stamp, int(row["id"])))
             return
         await self._register(row, ctx, match, media_id=mid)
-
     async def _fill_empty_slot(self, row, ctx, match) -> None:
         """An empty slot: a real media line to fill, or a duplicate to drop.
-
         If the payload-bearing line is already archived elsewhere, the slot is
         a pre-fix duplicate artefact — remove it (design §2.3, Bug #2 audit).
         """
@@ -172,10 +149,8 @@ class MediaRecovery:
                 "AND media_id IS NULL", (int(row["id"]),))
             return
         await self._register(row, ctx, match, media_id=None)
-
     async def _register(self, row, ctx, match, media_id) -> None:
         """Register the DOM URL for this row and re-point (or rewrite) it.
-
         An empty slot also rewrites its identity: the old `dup_key` was
         computed from an empty payload, which would let a later append archive
         the same line a second time.
@@ -201,29 +176,24 @@ class MediaRecovery:
                  match.dup_key, match.ensure_fp(), ctx.marker, ctx.stamp,
                  int(row["id"])))
         ctx.repaired += 1
-
     async def _retry_known_url(self, row, ctx, mid) -> None:
         existing = await ctx.media.get(mid)
         if existing and existing.get("url") and ctx.requeue_failed:
             await ctx.count_requeue(mid)
         if existing:
             await self._mark_scanned(row, ctx)
-
     async def _mark_scanned(self, row, ctx) -> None:
         await ctx.db.execute("UPDATE messages SET media_scan_at=? WHERE id=?",
                              (ctx.marker, int(row["id"])))
-
     async def _all_person_keys(self, person_id: int) -> set:
         rows = await self._owner.db.fetchall(
             "SELECT dup_key FROM messages WHERE person_id=? AND dup_key<>''",
             (person_id,))
         return {r[0] for r in rows}
-
     async def has_repairable_media(self, person_id: int,
                                    include_failed: bool = False,
                                    rescan_after_s: int = 600) -> bool:
         """Cheap heartbeat check: is there any media row worth a repair pass?
-
         ``include_failed`` is True only for the manual backfill (a known-bad
         download gets another chance there, not on every tick). A row the DOM
         could not supply a URL for is skipped for `rescan_after_s` seconds so
@@ -250,17 +220,13 @@ class MediaRecovery:
             f"SELECT COUNT(*) FROM messages WHERE person_id=? AND "
             f"deleted_at='' AND ({clause})",
             (person_id, cutoff), 0))
-
-
 class _RecoveryPass:
     """The state of one `recover_media` scan.
-
     The pass used to carry nine locals through a 170-line method: the marker
     that identifies it, the DOM records it can match against, and the three
     counters it reports. They live here so every step of the walk is a method
     of its own and the counters cannot be lost between steps.
     """
-
     def __init__(self, recovery, req: MediaRecoveryRequest, stamp: str,
                  marker: str):
         self.recovery = recovery
@@ -277,26 +243,21 @@ class _RecoveryPass:
         self.touched: list[int] = []
         self.repaired = 0
         self.requeued = 0
-
     @property
     def db(self):
         """The archive — read through the aggregate, never copied."""
         return self.recovery._owner.db
-
     async def count_requeue(self, media_id) -> bool:
         """Re-queue one row and count it when that was an actual change."""
         if await self.media.requeue(media_id, "backfill_recovery"):
             self.requeued += 1
             return True
         return False
-
     async def finish(self) -> None:
         if not self.touched:
             return
         await self.db.commit()
         await self.recovery._owner._recount(self.person_id)
-
     def report(self) -> dict:
         return {"repaired": self.repaired, "requeued": self.requeued,
                 "scanned": len(self.touched)}
-

@@ -314,9 +314,17 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # stores.media_store import line for MediaOptions (+0). No area had
         # to edit an import to keep WORKING — these are the deliberate new
         # call shapes, ledgered here.
-        self.assertEqual(count, 44,
+        # 44 -> 46 (2026-09-14, Round H Area B + Area C): Area B splits
+        # history_bridge (no stores import) and cdp_client (no stores import),
+        # but Area C H-C1 splits run queue (queue_order, single_target,
+        # progress each carry the UserRecord guard) and collector_archive
+        # now imports PaneSignature for cursor check. Both are legitimate
+        # new call shapes from the run/collector family, not a stores
+        # refactor forcing another area to edit an import. Baseline moves
+        # 44->46, ledgered here.
+        self.assertEqual(count, 46,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 44)")
+                         "import in another area (integrated baseline: 46)")
 
 
 if __name__ == "__main__":

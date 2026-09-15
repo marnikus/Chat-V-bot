@@ -34,15 +34,17 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
+# H-B2b split: PersonPageRequest moved to history_query_request.py,
+# _person_item to history_query_projection.py — OWNED follows the move.
 OWNED = [
-    ("backend/history_query.py", "PersonPageRequest", "needle"),
-    ("backend/history_query.py", "PersonPageRequest", "where"),
-    ("backend/history_query.py", "PersonPageRequest", "order"),
-    ("backend/history_query.py", "PersonPageRequest", "spec"),
-    ("backend/history_query.py", "PersonPageRequest", "columns"),
-    ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
+    ("backend/history_query_request.py", "PersonPageRequest", "needle"),
+    ("backend/history_query_request.py", "PersonPageRequest", "where"),
+    ("backend/history_query_request.py", "PersonPageRequest", "order"),
+    ("backend/history_query_request.py", "PersonPageRequest", "spec"),
+    ("backend/history_query_request.py", "PersonPageRequest", "columns"),
+    ("backend/history_query_request.py", "PersonPageRequest", "resolved_dir"),
     ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
+    ("backend/history_query_projection.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
     # ── Speed multiplier (2026-09-13, ported onto the G line) ────
@@ -219,6 +221,22 @@ OWNED = [
 # The method count drops by one because the gate counts nested defs through
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
+# Round H step H-B1 (`2026-09-14`, AREA_B_BACKEND_BRIDGE_DESIGN §3) then moved
+# the twenty-one @Slot bodies into the four `history_bridge_*` part modules:
+# 467 LOC / 44 -> 180 LOC / 27 methods — the seven Signals and the twenty-one
+# @Slots the QWebChannel wire pins, plus the guarded runner (`_run_async` /
+# `_schedule`), `_json_arg`, `_ask` and `_run_if_archive`. Re-frozen at the
+# measured 180/27: the slots cannot shrink (the frontend calls every one of
+# them by name), so the LOC axis is where the split's gain lives.
+# `HistoryQuery` was re-frozen at 362/14 by the sortable-columns feature; Round
+# H step H-B2 moved the FTS/LIKE back-end into `backend/history_query_search.py`
+# (`search` + `_fts_query` / `_like_escape` / `_snippet`), which took the class
+# to the measured 266/14. Re-frozen there — the remaining half of H-B2 (the row
+# projection) can still shrink it, but nothing may hand the 96 LOC back.
+# H-B2b (2026-09-15) moved PersonPageRequest to `history_query_request.py`
+# (51 LOC) and row projection to `history_query_projection.py` (93 LOC),
+# taking HistoryQuery facade from 266/14 → 179/13 (measured). Re-frozen at
+# 179/13 — the projection is pure mapping, the request is value object.
 # `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
 # ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
 # documents, shipped while the file sat outside the OWNED scan. The Speed
@@ -227,8 +245,8 @@ OWNED = [
 # is module-level and the call site is net-zero lines, deliberately, so the
 # ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    ("backend/history_query.py", "HistoryQuery"): {"loc": 179, "methods": 13},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 180, "methods": 27},
     ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
                                                        "methods": 12},
 }
@@ -393,24 +411,40 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # dropping or reordering an import to dissolve the window would either delete a
 # used name or reintroduce pylint C0411 — the cosmetic span-shrinking §18.5
 # forbids.
+# Maintenance 2026-09-14 (Round H, Area C step H-C1): one entry DISSOLVED —
+# ('services/run/coordinator.py', 'services/run/progress.py'). The cloned
+# window was the `try: from stores.user_memory import UserRecord / except
+# Exception: @dataclass class UserRecord …` import guard, which coordinator.py
+# and progress.py each carried a byte-identical copy of. H-C1 splits the run
+# ladder's queue half out of progress.py, and the guard now exists once, in
+# services/run/requests.py (the module that already owns the run family's
+# value objects); progress.py re-exports the name so the P0-2 runtime pin
+# still holds. Nothing was added to reach this: the group is simply gone.
+# Maintenance 2026-09-15 (H-B2b + H-C5): two entries change.
+#
+# DISSOLVED — ('services/history/query.py', 'services/undo_world.py',
+# 'stores/preset_store.py'). query.py went from 174 → 109 + 77 (settings
+# split), so its import header no longer matches undo_world/preset_store.
+# The shared window is now only between undo_world and preset_store.
+#
+# ADDED — ('services/collector_archive.py', 'services/collector_probe.py'),
+# span 6 at archive.py:9 and probe.py:9: the collector family's standard
+# header (from __future__ / logging / dataclasses / typing Optional /
+# CollectorState). No logic copied, same pattern as other collector pairs.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector_field.py"),
     ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
      "bridge/people_bridge.py"),
-    # The standard bridge import header — a match of imports, not logic.
-    # (`bot_prompt_bridge.py` was in this group until 2026-09-13, when the
-    # Prompt Editor and the AI Settings dialog moved their shared wiring into
-    # `BotSideBridge` and its import list changed.)
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
-     "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
+     "bridge/layout_bridge.py", "bridge/undo_bridge.py",
+     "bridge/window_preset_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("bridge/context.py", "services/wiring_requests.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
-    ("services/history/query.py", "services/undo_world.py"),
-    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("services/undo_world.py", "stores/preset_store.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),

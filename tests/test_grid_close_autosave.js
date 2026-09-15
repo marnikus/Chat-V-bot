@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const vm = require('vm');
+const { FAMILIES, loadFamily } = require('./js_family');
 
 global.window = global;
 global.document = { addEventListener() {} };
@@ -13,11 +14,8 @@ global.localStorage = {
 global.SashCore = {
   serialize(tree) { return JSON.stringify({ v: 1, tree }); },
 };
-vm.runInThisContext(
-  fs.readFileSync('ui/js/sash-grid.js', 'utf8') +
-  '\nglobalThis.__SashGridForCloseTests = SashGrid;'
-);
-const SashGrid = global.__SashGridForCloseTests;
+loadFamily(FAMILIES.sashGrid);
+const SashGrid = global.SashGrid;
 
 let passed = 0;
 let failed = 0;

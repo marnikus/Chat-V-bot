@@ -1,0 +1,20 @@
+    Comments: 2
+    Single comments: 14
+    Multi: 7
+    Blank: 34
+    - Comment Stats
+        (C % L): 1%
+        (C % S): 1%
+        (C + M % L): 5%
+** Total **
+    LOC: 26837
+    LLOC: 16533
+    SLOC: 17674
+    Comments: 1185
+    Single comments: 1404
+    Multi: 3404
+    Blank: 4355
+    - Comment Stats
+        (C % L): 4%
+        (C % S): 7%
+        (C + M % L): 17%

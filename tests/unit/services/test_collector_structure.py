@@ -104,32 +104,30 @@ class TestCollectorDecomposition(unittest.TestCase):
                         "state stays on the aggregate")
 
     def test_the_tick_host_protocol_stays_reachable_on_the_facade(self):
-        """Every `host.<name>` collector_tick.py uses must still resolve.
+        """Every `host.<name>` the collector family uses must still resolve.
 
-        Read straight out of collector_tick.py, so the gate follows the
-        protocol instead of freezing a copy of it. The protocol mixes two kinds
-        of name and each is checked the way it can actually exist:
-
-          * methods and properties (`host._log`, `host.configure`,
-            `host.my_nick`) live on the class;
-          * plain state (`host._nick`, `host.repo`, `host._settings`) is
-            assigned in `__init__` — directly or, since Round G3, through
-            the `init_run_counters` helper `__init__` calls — so it exists
-            on the INSTANCE and never on the class, which is exactly why F2
-            left all of it on the aggregate instead of moving it into the
-            collaborators.
+        Originally read from collector_tick.py only (F2). After H-C4 the tick
+        was split into tick (loop) + archive (write) + probe (read) — the host
+        protocol is now spread across the family. So we collect host.<name>
+        from all collector_* modules (tick, archive, probe, loop, pacing,
+        report, push, partner, settings) and check the facade still provides it.
         """
-        path = os.path.join(ROOT, "services", "collector_tick.py")
-        with open(path, encoding="utf-8") as fh:
-            tick = ast.parse(fh.read())
         wanted = set()
-        for node in ast.walk(tick):
-            if (isinstance(node, ast.Attribute)
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id == "host"):
-                wanted.add(node.attr)
+        for fname in os.listdir(os.path.join(ROOT, "services")):
+            if not fname.startswith("collector_") or not fname.endswith(".py"):
+                continue
+            path = os.path.join(ROOT, "services", fname)
+            try:
+                tree = ast.parse(open(path, encoding="utf-8").read())
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "host"):
+                    wanted.add(node.attr)
         self.assertGreater(len(wanted), 25,
-                           "expected the tick state machine to use the host "
+                           "expected the collector family to use the host "
                            f"protocol, found only {sorted(wanted)}")
 
         fpath = os.path.join(ROOT, "services", "collector_service.py")

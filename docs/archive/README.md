@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**108 documents in 24 groups.**
+**110 documents in 26 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,8 +35,10 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
-| [`2026-09-15-test-time-reduction/`](#2026-09-15-test-time-reduction) | 2 | Testing-process redesign, executed and measured: the 6:07 / wait-bound suite baseline, the zero-change xdist halving, and the four workstreams — parallel marker lanes, wait-tax removal, template-world fixtures, CI/coverage wiring; closure in `reports/SUITE_TIME_2026-09-15.md`. |
-| [`2026-09-15-test-integration-principles/`](#2026-09-15-test-integration-principles) | 1 | How a new test is integrated after the speed work: lane placement by location and name, the 50 ms wait budget, dials-not-mocks, ratchet baselines that only improve — landed as the RULE 8 redesign in `docs/current/AGENT_RULES.md`. |
+| [`2026-09-14-round-h-area-d/`](#2026-09-14-round-h-area-d) | 1 | Round H Area D implementation (verification): mutation from 1 module to a platform measurement (widened job 159→910 reachable + second job over pure bot family), the RULE 8 double audit that would have caught FakeArchive.labels, a per-file coverage floor with ratchet so global average stops hiding message_injector_send.py at 21.1%, and baseline/doc currency (RULE 16 §16.3 re-quoted to 92.64/88.03, RULE 18.2 corrected). |
+| [`2026-09-15-test-time-reduction/`](#2026-09-15-test-time-reduction) | 2 | The xdist lane stream, executed and measured on its branch: the 6:07 wait-bound baseline, `-n 4` full-suite in 73.8 s, wait-budget ratchet (≤ 50 ms), JS suites as pytest items; closure in `reports/SUITE_TIME_2026-09-15.md`. |
+| [`2026-09-15-test-integration-principles/`](#2026-09-15-test-integration-principles) | 1 | How a new test is integrated: lane placement by location/name, the 50 ms wait budget, dials-not-mocks, ratchet baselines that only improve — the RULE 8 doctrine merged back here. |
+| [`2026-09-16-round-i/`](#2026-09-16-round-i) | 1 | Round I (in progress): the post-split measurement (73 red tests, JS gate at 86 violations, JS coverage 82.52→69.49%), the R0 reconciliation of the main/session streams, areas R1–R4; input `reports/CODE_QUALITY_METRICS_2026-09-16.md`. |
 
 ---
 
@@ -384,35 +386,54 @@ the repository has**, holding the largest file (1,361 lines), the largest class
 
 ---
 
+## 2026-09-14-round-h-area-d
+
+Round H Area D implementation — verification debt closed without touching production.
+
+*1 doc.*
+
+- [`AREA_D_IMPLEMENTATION_2026-09-14.md`](2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md) — What landed: H-D1 mutation platform (job1 widened 159→910 reachable + job2 over pure bot family 9 files, report `reports/MUTATION_REPORT_2026-09-14.md` with explicit reachable arithmetic), H-D2 double audit (`tools/metrics/double_audit.py` + `tests/test_double_audit.py`, FakeArchive.labels pinned), H-D3 per-file floor (`file_coverage_floor.py` 208 lines + ratchet 15 files, test `test_file_coverage_floor.py`), H-D4 baseline/doc currency (AGENT_RULES §16.3 re-quoted 90.44/84.38→92.64/88.03, §18.2 corrected 186→208 files and 507→511, doc maps updated), H-D5 smell ratchet (`smell_inventory.py` 7 vulture findings with delete/protocol disposition, 13 clone groups, 4 boundary crossings, 11 wide params). All tools respect RULE 18 ideals and RULE 16 gates; verification battery included.
+
+---
+
 ## 2026-09-15-test-time-reduction
 
-The testing-process redesign for **speed**, written from a same-day measurement
-of the whole suite rather than principles. **Plan only: no production code,
-test code, config or workflow was changed to produce it.** Headline measured
-facts: the full suite is 3,168 tests in 367 s serial and is *wait-bound*
-(wall ≈ 2.7× CPU; `tests/unit` ≈ 6.7×); it passes 3,168/3,168 under
-`pytest -n 2` with **zero tree changes** (181.5 s); the ten slowest files are
-≈ 40 % of serial time; the single slowest test is the RULE 16 clone scan
-running inside pytest; the coverage-gate command costs 519 s; the 29 Node
-harness suites are green but wired into neither pytest nor CI.
+The parallel-stream speed programme, written and executed on the session
+branch: the measured 6:07 wait-bound baseline, the zero-change xdist
+halving, the four executed workstreams (parallel marker lanes, wait-tax
+removal, template-world fixtures, CI/coverage wiring) and its closure in
+`reports/SUITE_TIME_2026-09-15.md`. Merged back here by R0 of Round I.
 
 *2 docs.*
 
-- [`TEST_TIME_REDUCTION_PLAN_2026-09-15.md`](2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) — The plan: the three taxes (wait, lifecycle, duplication), the what-is-already-done table that prevents re-doing RULE 8 / JS-harness / WebEngine work, the four workstreams W1–W4 with file-level changes and exit criteria, effort-vs-impact and expected-outcome tables, the rejected-ideas list, the RULE-compliance checklist and the re-measurement protocol.
-- [`SUITE_BASELINE_2026-09-15.md`](2026-09-15-test-time-reduction/SUITE_BASELINE_2026-09-15.md) — The raw baseline: environment and exact reproduction commands, headline run table (serial / `-n 2` / coverage / groups / node harness), the slowest-15 durations, file-level timings for the top ten, the 127-site `asyncio.sleep` census, suite composition and the doc-drift note for §7 counts.
+- [`TEST_TIME_REDUCTION_PLAN_2026-09-15.md`](2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) — The plan: the three taxes (wait, lifecycle, duplication), the four workstreams W1–W4 with exit criteria, the rejected ideas and the re-measurement protocol.
+- [`SUITE_BASELINE_2026-09-15.md`](2026-09-15-test-time-reduction/SUITE_BASELINE_2026-09-15.md) — The raw baseline: environment, reproduction commands, headline run table, slowest-15 durations and the 127-site `asyncio.sleep` census.
 
 ---
 
 ## 2026-09-15-test-integration-principles
 
-Same-day follow-up to the speed work: the speed program shipped lanes, marks,
-ratchets and dials, and the documented *principles* for integrating a test had
-not caught up — RULE 8 was five lines from the harness era and SOR §7 still
-led with the serial command. The research → plan → implement record of the
-doctrine redesign that landed line-neutrally in
-`docs/current/AGENT_RULES.md` (RULE 8 extended, §16 tightenings paying for it)
-and `docs/current/SYSTEM_OF_RECORD.md` (§7 lanes, §8 truth fix, §9 pointer).
+The doctrine the speed work needed: lane placement by location and name, the
+≤ 50 ms wait budget with `slow` + reason, dials-not-mocks speed
+(`tests/_fast_clock.py`), ratchet baselines that only improve, JS suites
+that register themselves — landed as the RULE 8 extension both streams now
+share in `docs/current/AGENT_RULES.md`.
 
 *1 doc.*
 
-- [`TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md`](2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) — The research inventory of the shipped architecture (lanes, auto-marking, wait budget, JS-coverage pins, fast-settle dial, node wrapper, floors, pre-commit, blocked CI), the seven stale-doctrine findings, the redesigned principles P1–P7, the exact line ledger that kept both at-ceiling docs inside their budgets, the verification steps, and the rejected alternatives (a new RULE 20, a new current doc, editing archived plans).
+- [`TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md`](2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) — Research inventory of the shipped machinery, the seven stale-doctrine findings, principles P1–P7, the line ledger that kept the at-ceiling docs inside budget, and the rejected alternatives.
+
+---
+
+## 2026-09-16-round-i
+
+Round I — repair the verification gap after the JS-split fixes. Input
+measurement `reports/CODE_QUALITY_METRICS_2026-09-16.md` (73 red tests, JS
+gate at 86 violations, JS coverage 82.52 → 69.49%); R0 reconciles the two
+divergent streams (main's splits + tier tools; the session stream's lanes,
+ratchets and doctrine), then R1 back-to-green, R2 JS floor recovery, R3
+finish the splits to the gate, R4 gate integrity.
+
+*1 doc.*
+
+- [`ROUND_I_PLAN_2026-09-16.md`](2026-09-16-round-i/ROUND_I_PLAN_2026-09-16.md) — Round rules, the R0 decision table, per-area steps with exit criteria and disjoint file ownership, the branch strategy, and the end-of-round RULE 16.7 / RULE 18 re-check protocol.

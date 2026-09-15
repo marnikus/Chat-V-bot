@@ -22,7 +22,6 @@ import os
 import sys
 import unittest
 from datetime import datetime
-from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
@@ -274,9 +273,7 @@ class TestChunkReader(unittest.TestCase):
 
     def test_a_still_empty_range_stops_the_read(self):
         parser = FakeParser([], count=9, chunk_size=4, empty_reads=99)
-        # all SLICE_RETRIES attempts still run — only their 0.2 s gaps don't
-        with mock.patch("asyncio.sleep", new=mock.AsyncMock()):
-            result = sync(parser, FakeRepo())
+        result = sync(parser, FakeRepo())
         self.assertEqual(parser.slice_calls, [(0, 4)] * 4,
                          "SLICE_RETRIES attempts, then give up")
         self.assertEqual(result.added, 0)

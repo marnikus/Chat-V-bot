@@ -66,9 +66,9 @@ global.PresetsUI = { promptName() {} };
 global.StackDrag = { attach() {}, dragging: false };
 
 // Load the real shipped module.
-const src = fs.readFileSync(
-  path.join(__dirname, '..', 'ui', 'js', 'stack-dnd.js'), 'utf8');
-const StackDnD = new Function(src + '\nreturn StackDnD;')();
+const { FAMILIES, loadFamily } = require('./js_family');
+loadFamily(FAMILIES.stackDnd, { except: ['stack-drag.js'] });
+const StackDnD = global.StackDnD;
 StackDnD.init();
 
 const html = fs.readFileSync(

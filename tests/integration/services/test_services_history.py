@@ -31,7 +31,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "tests"))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
 from stores.history_requests import AppendRequest  # noqa: E402
-from _fast_clock import fast_settle  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -66,7 +65,6 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
     USE_FTS = True
 
     async def asyncSetUp(self):
-        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         media_cfg = dict(self.cfg.get("history", "media", default={}) or {})

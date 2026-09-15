@@ -27,11 +27,9 @@ from tests.integration.run_safety._helpers import (
 class CleanupCase(unittest.IsolatedAsyncioTestCase):
     async def test_external_cancel_propagates_after_cleanup(self):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
-            slow = SlowBlock(delay=5.0)
-            h.engine._stack = [slow]
+            h.engine._stack = [SlowBlock(delay=5.0)]
             task = asyncio.ensure_future(h.engine.execute(None))
-            while not slow.calls:        # woken by the block, not a fixed 150 ms
-                await asyncio.sleep(0.005)
+            await asyncio.sleep(0.15)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
@@ -53,17 +51,15 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             block.selector = 'li:has-text("{{nick}}")'
 
             orig_execute = block.execute
-            started = asyncio.Event()
 
             async def hanging_execute(nick, cdp, engine=None):
-                started.set()
                 await asyncio.sleep(5.0)
                 return ActionResult.OK
 
             block.execute = hanging_execute  # type: ignore
             h.engine._stack = [block]
             task = asyncio.ensure_future(h.engine.execute(None))
-            await asyncio.wait_for(started.wait(), timeout=2.0)
+            await asyncio.sleep(0.15)
             # Expansion happened (block attr rewritten while running).
             self.assertIn("Zoe", getattr(block, "selector", ""))
             task.cancel()
@@ -174,11 +170,8 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_cancel_during_post_run_still_cleans_up(self):
-        started = asyncio.Event()
-
         class Hooks(RunHooks):
             async def post_run(self, coordinator, outcome):
-                started.set()
                 await asyncio.sleep(5.0)
 
         with EngineHarness(
@@ -186,7 +179,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
         ) as h:
             h.engine._stack = [make_ok_block()]
             task = asyncio.ensure_future(h.engine.execute(None))
-            await asyncio.wait_for(started.wait(), timeout=2.0)
+            await asyncio.sleep(0.3)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
@@ -227,11 +220,9 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancel_never_produces_success_trace_or_mark(self):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
-            slow = SlowBlock(delay=5.0)
-            h.engine._stack = [slow]
+            h.engine._stack = [SlowBlock(delay=5.0)]
             task = asyncio.ensure_future(h.engine.execute(None))
-            while not slow.calls:        # woken by the block, not a fixed 150 ms
-                await asyncio.sleep(0.005)
+            await asyncio.sleep(0.15)
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task

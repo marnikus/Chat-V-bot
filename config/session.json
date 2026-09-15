@@ -2,11 +2,12 @@
   "window_states": {
     "closed": [
       "stats",
-      "filters"
+      "filters",
+      "composer"
     ],
     "minimized": []
   },
-  "grid_layout": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[61.82458888018794,38.17541111981206]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[44.25087108013937,27.526132404181187,28.222996515679444]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[59.671104150352384,40.32889584964761]}],\"sizes\":[68.36335160532498,31.63664839467502]}}",
+  "grid_layout": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"leaf\",\"id\":\"labels\"},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[61.82458888018794,38.17541111981206]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[51.60590277777778,12.727430555555555,35.66666666666667]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[59.671104150352384,40.32889584964761]},{\"t\":\"leaf\",\"id\":\"composer\"}],\"sizes\":[66.80095220655556,26.735030214246475,6.46401757919795]}}",
   "last_stack": [
     {
       "max_scrolls": 1000,
@@ -225,7 +226,7 @@
     "D:\\Google Drive\\Chat V Bot\\Chat V bot\\v.db"
   ],
   "window_geometry": {
-    "x": -2560,
+    "x": 0,
     "y": 23,
     "width": 2560,
     "height": 1377

@@ -1242,6 +1242,24 @@
   ],
   "functions": {}
  },
+ "stores.history_repo_cursor": {
+  "classes": {
+   "CursorLadder": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    }
+   }
+  },
+  "constants": [
+   "TAIL_FP_LIMIT"
+  ],
+  "functions": {}
+ },
  "stores.history_repo_identity": {
   "classes": {
    "ConversationIdentity": {
@@ -1300,6 +1318,11 @@
   "constants": [
    "TAIL_FP_LIMIT"
   ],
+  "functions": {}
+ },
+ "stores.history_repo_identity_helpers": {
+  "classes": {},
+  "constants": [],
   "functions": {
    "align_batch": {
     "kind": "function",
@@ -1428,9 +1451,7 @@
     }
    }
   },
-  "constants": [
-   "TAIL_FP_LIMIT"
-  ],
+  "constants": [],
   "functions": {}
  },
  "stores.history_repo_media": {
@@ -1461,6 +1482,38 @@
       "req"
      ],
      "sig": "(self, req: 'MediaRecoveryRequest') -> 'dict'"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.history_repo_restore": {
+  "classes": {
+   "RestoreLadder": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
+ },
+ "stores.history_repo_slots": {
+  "classes": {
+   "SlotPlanner": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
     }
    }
   },
@@ -1659,6 +1712,35 @@
   ],
   "functions": {}
  },
+ "stores.history_schema_legacy": {
+  "classes": {
+   "LegacyRebuild": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "owner"
+     ],
+     "sig": "(self, owner)"
+    },
+    "db_fetch_legacy": {
+     "kind": "function",
+     "params": [
+      "self",
+      "table",
+      "columns"
+     ],
+     "sig": "(self, table: 'str', columns: 'list[str]') -> 'list[dict]'"
+    }
+   }
+  },
+  "constants": [
+   "LEGACY_MESSAGES_CONSTRAINT",
+   "TABLE_COLUMNS",
+   "TABLE_SQL"
+  ],
+  "functions": {}
+ },
  "stores.history_schema_repair": {
   "classes": {
    "SchemaMigrator": {
@@ -1683,7 +1765,6 @@
   },
   "constants": [
    "FTS_SCHEMA",
-   "LEGACY_MESSAGES_CONSTRAINT",
    "SCHEMA_VERSION",
    "TABLE_COLUMNS",
    "TABLE_ORDER",
@@ -2595,6 +2676,22 @@
     "sig": "(nick: 'str') -> 'str'"
    }
   }
+ },
+ "stores.media_network": {
+  "classes": {
+   "NetworkBodyFinisher": {
+    "__init__": {
+     "kind": "function",
+     "params": [
+      "self",
+      "fetcher"
+     ],
+     "sig": "(self, fetcher)"
+    }
+   }
+  },
+  "constants": [],
+  "functions": {}
  },
  "stores.media_store": {
   "classes": {

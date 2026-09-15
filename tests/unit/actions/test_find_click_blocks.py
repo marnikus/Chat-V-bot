@@ -201,10 +201,7 @@ class TestFindPhase(unittest.TestCase):
         """AC#5 — the "look, don't touch" mode still has to say so."""
         engine = Recorder()
         cdp = FakeCDP()
-        # the confirmation hold is AC#4's subject, not this one's — 1 ms keeps
-        # the real hold path without living through 700 ms
-        self.assertEqual(click(cdp, engine, click_enabled=False,
-                               confirm_pause_ms=1),
+        self.assertEqual(click(cdp, engine, click_enabled=False),
                          ActionResult.OK)
         self.assertTrue(engine.has("Click disabled for this block"))
         self.assertEqual([which for which, _ in cdp.expressions], ["find"])
@@ -214,8 +211,7 @@ class TestFindPhase(unittest.TestCase):
         cdp = FakeCDP(find={"found": True, "total": 1, "visible": False,
                             "clickable": False})
         engine = Recorder()
-        self.assertEqual(click(cdp, engine, confirm_pause_ms=1),
-                         ActionResult.FAIL)
+        self.assertEqual(click(cdp, engine), ActionResult.FAIL)
         self.assertTrue(engine.has("was found but is not visible"))
         self.assertEqual([which for which, _ in cdp.expressions], ["find"])
 
@@ -264,7 +260,6 @@ class TestClickPhase(unittest.TestCase):
         for kw, expected in cases:
             with self.subTest(**kw):
                 engine = Recorder()
-                engine.speed_multiplier = 0.02  # failure modes, not the beat
                 self.assertEqual(click(FakeCDP(**kw), engine,
                                        confirm_pause_ms=0), ActionResult.FAIL)
                 if expected != "CLICK failed":
@@ -293,7 +288,6 @@ class TestClickRequest(unittest.TestCase):
                       click_selector=".row", highlight_enabled=True,
                       confirm_pause_ms=0, highlight_ms=900, label="a person")
         via_kwargs, via_request = Recorder(), Recorder()
-        via_kwargs.speed_multiplier = via_request.speed_multiplier = 0.02
         first = click(FakeCDP(), via_kwargs, **kwargs)
         second = asyncio.run(run_click(FakeCDP(), ClickRequest(**kwargs),
                                        engine=via_request))
@@ -324,7 +318,6 @@ class TestClickRequest(unittest.TestCase):
         """AC#9."""
         cdp = FakeCDP()
         engine = Recorder()
-        engine.speed_multiplier = 0.02  # MATCH_EXACT wiring, not the beat
         asyncio.run(find_and_click_exact(cdp, text="Ански", selector="user-item",
                                          label_selector=".nick", engine=engine,
                                          confirm_pause_ms=0))
@@ -384,9 +377,6 @@ class TestClickingBlocks(unittest.TestCase):
                 block = cls(confirm_pause_ms=1)
                 cdp = FakeCDP()
                 engine = Recorder()
-                # the pre-delay VALUES (500/800) are asserted on the block;
-                # the run compresses the same waits via the speed multiplier
-                engine.speed_multiplier = 0.01
                 self.assertEqual(self.run_block(block, cdp, engine),
                                  ActionResult.OK)
                 self.assertEqual(block.pre_delay_ms, expected_pre)
@@ -398,9 +388,7 @@ class TestClickingBlocks(unittest.TestCase):
     def test_a_highlight_disabled_tab_block_still_clicks(self):
         block = ClickBack(highlight_enabled=False, confirm_pause_ms=5000)
         cdp = FakeCDP()
-        engine = Recorder()
-        engine.speed_multiplier = 0.01  # compress the 800 ms pre-delay only
-        self.assertEqual(self.run_block(block, cdp, engine), ActionResult.OK)
+        self.assertEqual(self.run_block(block, cdp), ActionResult.OK)
         self.assertEqual([which for which, _ in cdp.expressions],
                          ["find", "staged", "click"])
 
@@ -411,7 +399,6 @@ class TestClickingBlocks(unittest.TestCase):
                            confirm_pause_ms=0, click_enabled=True)
         cdp = FakeCDP()
         engine = Recorder()
-        engine.speed_multiplier = 0.01  # field→probe mapping, not delays
         self.assertEqual(self.run_block(block, cdp, engine), ActionResult.OK)
         self.assertEqual(block.display_name, "My search")
         expressions = dict(cdp.expressions)
@@ -427,9 +414,7 @@ class TestClickingBlocks(unittest.TestCase):
         block = CustomFind(selector=".a", click_enabled=False,
                            confirm_pause_ms=0)
         cdp = FakeCDP()
-        engine = Recorder()
-        engine.speed_multiplier = 0.01  # find-only mode, not the pre-delay
-        self.assertEqual(self.run_block(block, cdp, engine), ActionResult.OK)
+        self.assertEqual(self.run_block(block, cdp), ActionResult.OK)
         self.assertEqual([which for which, _ in cdp.expressions], ["find"])
 
     def test_click_send_falls_back_once(self):
@@ -457,7 +442,6 @@ class TestClickingBlocks(unittest.TestCase):
         miss = {"found": False, "total": 0, "candidates": []}
         cdp = FakeCDP(find_seq=[miss, FOUND], click=CLICKED, staged=STAGED)
         engine = Recorder()
-        engine.speed_multiplier = 0.01  # the fallback path, not its pauses
         self.assertEqual(self.run_block(ClickSend(confirm_pause_ms=0), cdp,
                                         engine), ActionResult.OK)
         self.assertTrue(engine.has("send icon “send”"))
