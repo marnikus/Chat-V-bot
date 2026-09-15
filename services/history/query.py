@@ -4,7 +4,7 @@ import copy
 import json
 import logging
 
-from services.history.query_settings import HistoryQuerySettings
+from services.history.query_settings import HistoryQuerySettings, _db_stem
 
 log = logging.getLogger("chatbot")
 OLD_MAX_FILE_MB = 2
