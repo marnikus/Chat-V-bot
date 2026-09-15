@@ -19,8 +19,8 @@ Three kinds of check live here:
 3. **The gate is not vacuous** — a known over-limit function must actually be
    reported, and every override must be justified and still needed.
 
-Rule: docs/AGENT_RULES_CODE_QUALITY.md
-Worked example: docs/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md
+Rule: docs/current/AGENT_RULES.md (RULE 16; origin: docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md)
+Worked example: docs/archive/2026-09-10-quality-gates/RULE16_SIZE_COMPLEXITY_FIT_2026-09-10.md
 
 Run with:  python3 tests/test_rule16_new_code.py
 """

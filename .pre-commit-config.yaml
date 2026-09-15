@@ -5,7 +5,8 @@
 #
 # The hook calls the same script CI calls (tools/metrics/rule16_gate.py), so
 # there is one implementation of the limits and no chance of the two
-# disagreeing. See docs/AGENT_RULES_CODE_QUALITY.md.
+# disagreeing. See docs/current/AGENT_RULES.md (RULE 16; origin archived at
+# docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md).
 #
 # One hook for RULE 16, not one per RULE 16 check: the gate already reports
 # size, complexity, duplication, dead code and stale overrides in a single

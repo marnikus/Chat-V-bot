@@ -74,11 +74,11 @@ def pytest_runtest_teardown(item, nextitem):  # noqa: ANN001
         )
 
 
-# ── Gate 2: lane markers by location (W1 of the test-time plan) ─────────
+# ── Gate 2: lane markers by location (W1/W4.4 of the test-time plan) ─────
 # Applied per item at collection time, so `-m` deselection, xdist and
-# `--collect-only` all see them. Root-level tests/test_*.py stay un-tiered
-# until the W4.4 classification; slow/e2e files are labelled, not excluded —
-# the fast lane is opt-in (`-m "not slow and not e2e and not metrics"`).
+# `--collect-only` all see them. Root-level tests/test_*.py are the lane
+# machinery itself (node wrapper, executable gates); slow/e2e/metrics files
+# are labelled, not excluded — the fast lane is opt-in.
 
 def pytest_itemcollected(item):  # noqa: ANN001
     parts = item.path.parts

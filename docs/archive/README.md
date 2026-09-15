@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**107 documents in 23 groups.**
+**108 documents in 24 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,7 +35,8 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
-| [`2026-09-15-test-time-reduction/`](#2026-09-15-test-time-reduction) | 2 | Testing-process redesign (plan only): the measured 6:07 / wait-bound suite baseline, the zero-change xdist halving, and the four workstreams — parallel marker lanes, wait-tax removal, template-world fixtures, CI/coverage wiring. |
+| [`2026-09-15-test-time-reduction/`](#2026-09-15-test-time-reduction) | 2 | Testing-process redesign, executed and measured: the 6:07 / wait-bound suite baseline, the zero-change xdist halving, and the four workstreams — parallel marker lanes, wait-tax removal, template-world fixtures, CI/coverage wiring; closure in `reports/SUITE_TIME_2026-09-15.md`. |
+| [`2026-09-15-test-integration-principles/`](#2026-09-15-test-integration-principles) | 1 | How a new test is integrated after the speed work: lane placement by location and name, the 50 ms wait budget, dials-not-mocks, ratchet baselines that only improve — landed as the RULE 8 redesign in `docs/current/AGENT_RULES.md`. |
 
 ---
 
@@ -399,3 +400,19 @@ harness suites are green but wired into neither pytest nor CI.
 
 - [`TEST_TIME_REDUCTION_PLAN_2026-09-15.md`](2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) — The plan: the three taxes (wait, lifecycle, duplication), the what-is-already-done table that prevents re-doing RULE 8 / JS-harness / WebEngine work, the four workstreams W1–W4 with file-level changes and exit criteria, effort-vs-impact and expected-outcome tables, the rejected-ideas list, the RULE-compliance checklist and the re-measurement protocol.
 - [`SUITE_BASELINE_2026-09-15.md`](2026-09-15-test-time-reduction/SUITE_BASELINE_2026-09-15.md) — The raw baseline: environment and exact reproduction commands, headline run table (serial / `-n 2` / coverage / groups / node harness), the slowest-15 durations, file-level timings for the top ten, the 127-site `asyncio.sleep` census, suite composition and the doc-drift note for §7 counts.
+
+---
+
+## 2026-09-15-test-integration-principles
+
+Same-day follow-up to the speed work: the speed program shipped lanes, marks,
+ratchets and dials, and the documented *principles* for integrating a test had
+not caught up — RULE 8 was five lines from the harness era and SOR §7 still
+led with the serial command. The research → plan → implement record of the
+doctrine redesign that landed line-neutrally in
+`docs/current/AGENT_RULES.md` (RULE 8 extended, §16 tightenings paying for it)
+and `docs/current/SYSTEM_OF_RECORD.md` (§7 lanes, §8 truth fix, §9 pointer).
+
+*1 doc.*
+
+- [`TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md`](2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) — The research inventory of the shipped architecture (lanes, auto-marking, wait budget, JS-coverage pins, fast-settle dial, node wrapper, floors, pre-commit, blocked CI), the seven stale-doctrine findings, the redesigned principles P1–P7, the exact line ledger that kept both at-ceiling docs inside their budgets, the verification steps, and the rejected alternatives (a new RULE 20, a new current doc, editing archived plans).

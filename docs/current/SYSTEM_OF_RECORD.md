@@ -253,30 +253,31 @@ connects them to the window and starts the qasync loop.
 
 ## 7. Tests
 
+Lanes + principles: RULE 8 ([`AGENT_RULES.md`](AGENT_RULES.md)); marks in `pytest.ini`, auto-applied per item by `tests/conftest.py`; redesign: `docs/archive/2026-09-15-test-integration-principles/`.
+
 ```bash
-# Python (3206 tests + 903 subtests, incl. the 29 Node suites as pytest items);
-# webengine excluded by addopts; lanes: -n 4 + markers (pytest.ini)
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q -m "not webengine"
+# Whole suite, parallel — 3206 tests + 903 subtests, incl. the 29 Node suites
+# as pytest items; ~74 s on 2 cores. `-n 0` = serial; webengine auto-excluded.
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q -n 4 --dist loadfile
 
-# Front-end ad-hoc (the same suites as the pytest items above)
+# Fast lane ≤ 90 s: append  -m "not slow and not e2e and not metrics"
+# Labelled tail, serial:  -m "(slow or e2e or metrics) and not webengine"  ·  gate alone: .venv/bin/python tests/test_rule16_new_code.py
+
+# Front-end ad-hoc (the same suites the node wrapper collects as pytest items)
 for f in tests/test_*.js; do node "$f"; done
-
-# Quality gate that is executable (RULE 16)
-.venv/bin/python tests/test_rule16_new_code.py
 ```
 
-On a machine without GL/X11/NSS (apt blocked), build the stub libraries the
-repo already ships a builder for, and put them on `LD_LIBRARY_PATH`:
+On a machine without GL/X11/NSS (apt blocked), build the repo's stub-library builder and export it:
 
 ```bash
-.venv/bin/python tools/build_stubs.py .venv /tmp/stublibs
-export LD_LIBRARY_PATH=/tmp/stublibs
+.venv/bin/python tools/build_stubs.py .venv /tmp/stublibs && export LD_LIBRARY_PATH=/tmp/stublibs
 ```
 
 | Directory | What it pins |
 |---|---|
-| `tests/unit/*.py`, `tests/integration/*.py` | W4.4 lanes moved off the root: single-module contracts vs cross-module feature contracts (db manager, history services, grid, undo, private gate, blocks) |
-| `tests/unit/` | Per-module contracts: `actions/`, `app/`, `backend/`, `bridge_safety/`, `core/`, `services/`, `stores/` |
+| `tests/unit/` (auto `unit`) | Per-module contracts: `actions/`, `app/`, `backend/`, `bridge_safety/`, `core/`, `services/`, `stores/` |
+| `tests/integration/` (auto `integration`) | Cross-module feature contracts (db manager, history services, grid, undo, private gate, blocks) |
+| root `tests/test_*.py` | Lane machinery — `test_node_harness_suites.py` (the 29 JS suites as items), gates `test_rule16_new_code.py` / `test_wait_budget.py` / `test_js_coverage.py`, `test_sash_webengine.py`, the `_fast_clock.py` dials — plus the `*_e2e.py` lifecycles (auto `e2e` + `slow`) |
 | `tests/integration/safety_deletion/` | The 18 deletion regressions — result shape, fail-closed ordering, cancellation, shared media, symlinks |
 | `tests/integration/run_safety/` | Stop/pause contracts, cycle event order, cleanup |
 | `tests/integration/services/` | Service-layer contracts (run engine, history, db, collector, undo, layout, people) |
@@ -286,10 +287,8 @@ export LD_LIBRARY_PATH=/tmp/stublibs
 | `tests/unit/bridge_safety/test_boot_chain.py` | The shipped boot order end to end: real `Router` + real `ApplicationLifecycle` + real stores, the page asking before `startup` opens the world — the answer arrives with zero refresh calls |
 | `tests/integration/test_world_write_gate.py` | The world write gate and the verified archive undo: cross-connection exclusion, fail-open, `world_transaction` commit/rollback, delete → undo → redo, a refused undo, the session-sized trash (a delete is reversible in-session, erased on the next run) |
 
-**Frozen contracts** you must not break casually: the AREA D public-API
-snapshot (`tests/unit/backend/test_backend_api_snapshot.py`), the QWebChannel
-wire (`tests/unit/bridge_safety/test_router_contract.py`), the deletion result
-dict, and the collector status strings.
+**Frozen contracts** you must not break casually: the AREA D public-API snapshot (`tests/unit/backend/test_backend_api_snapshot.py`), the QWebChannel wire (`tests/unit/bridge_safety/test_router_contract.py`), the deletion result dict, and the collector status strings —
+and the ratchet baselines (`tests/wait_budget_baseline.txt`, `tests/js_coverage_baseline.json`), which only ever regenerate after reviewed drift (RULE 8).
 
 ---
 
@@ -299,7 +298,7 @@ dict, and the collector status strings.
 |---|---|---|
 | Function LOC / params / methods | ≤ 30 / ≤ 4 / ≤ 15 | mean 9.98 LOC; legacy offenders tracked, not worsened |
 | Radon CC / cognitive / nesting (new code) | ≤ 10 / ≤ 15 / ≤ 4 | project max CC **10** (no function over the gate), mean 3.09 · cognitive > 15 only on the two frozen exemptions · nesting max 4 |
-| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.83% / 87.02%** |
+| Line / branch coverage | ≥ 80% / ≥ 75%, never lower than baseline | **91.77% / 88.05%** |
 | Baseline snapshot | — | [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md) |
 | Ideal sizes (**preferences**, not gates) | function 4–20 lines · file 150–300 · module 5–15 files · context file 60–200 | median function 7 lines (63.6% in band) · median file 142 lines — RULE 18, re-measured 2026-09-12, measured in [`reports/IDEAL_SIZE_BASELINE_2026-09-11.md`](../../reports/IDEAL_SIZE_BASELINE_2026-09-11.md) |
 | Remediation order when code is over the line | nesting → cyclomatic → cognitive → **size last** | RULE 19 |
@@ -310,6 +309,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-15 | [Test-integration principles](../archive/2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) · [the time plan it documents](../archive/2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) | Why tests land in lanes now, the 50 ms wait budget, dials-not-mocks speed, ratchet baselines that only improve |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |

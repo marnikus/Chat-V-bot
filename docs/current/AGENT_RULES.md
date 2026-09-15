@@ -164,12 +164,29 @@ Distinguish "stopped" from "failed" in the return value — reusing `None` for
 both produced a bogus "lost the page context" error. `asyncio.CancelledError`
 always propagates untouched; only `RunStopped` maps to the `"stopped"` outcome.
 
-## RULE 8 — Tests execute the real thing
+## RULE 8 — Tests execute the real thing — and land in a lane
 
 JavaScript probes are tested by running them through `tests/js_harness.js`
 against a DOM stub, not by asserting on generated strings. Pipelines are tested
 against a fake CDP client that behaves like the real page, including lazy
 loading. If a test would pass with the feature deleted, it is not a test.
+
+How a new test is integrated (`pytest.ini` marks; `tests/conftest.py` auto-marks at collection):
+
+* **Lane by location and name — that is the whole registration.** Per-module
+  contract → `tests/unit/`; cross-module contract → `tests/integration/`;
+  real DB lifecycle → `tests/*_e2e.py`; an executable gate (sizes, budgets,
+  floors) carries `metrics`, a lane of its own, kept out of the fast lane.
+* **Time budget: ≤ 50 ms of real sleep per test.** More is a contract, not
+  convenience: `slow` + a `# wait-budget:` reason — `tests/test_wait_budget.py`
+  fails on any NEW one. Speed comes from dials, not mocks: `tests/_fast_clock.py`
+  dials `SettleSpec` at construction (the real loop still runs); mocking the
+  loop away deletes the test.
+* **Ratchet baselines only improve** — `tests/wait_budget_baseline.txt`, `tests/js_coverage_baseline.json`
+  regenerate only after drift is reviewed and named in the commit.
+* **A new JS suite needs no registration** — `tests/test_*.js` is collected by
+  `tests/test_node_harness_suites.py`; refresh the JS coverage pins in the same
+  change. A UI file with no suite stays pinned at 0.0 until it gets one.
 
 ## RULE 9 — a guard that skips work must not stall the stack
 
@@ -313,8 +330,7 @@ the saved file rather than the remote URL.
 Mandatory for every change to production Python. Numbers, scopes, tools and
 exceptions are frozen here. Origin and rationale:
 [`docs/archive/2026-09-10-quality-gates/CODE_QUALITY_GATES_DESIGN_2026-09-10.md`](../archive/2026-09-10-quality-gates/CODE_QUALITY_GATES_DESIGN_2026-09-10.md).
-Executable form: `tests/test_rule16_new_code.py` (run it; do not re-derive).
-Baseline snapshot:
+Executable form: `tests/test_rule16_new_code.py` (run it; do not re-derive). Baseline snapshot:
 [`reports/CODE_QUALITY_METRICS_2026-09-10.md`](../../reports/CODE_QUALITY_METRICS_2026-09-10.md).
 
 ### 16.0 When this applies
@@ -324,12 +340,10 @@ Baseline snapshot:
 | New production function/class in `core/`, `actions/`, `backend/`, `bridge/`, `services/`, `stores/`, `app/`, `main.py` | **Hard fail** if any threshold in §16.1–§16.2 is exceeded |
 | Edit of an existing function that already violates a threshold (legacy) | Must not **worsen** the metric; prefer reduce (§16.5) |
 | Tests, `tools/`, docs, HTML dumps, generated caches | **Out of scope** for size/CC (tests still must exist for new production paths) |
-| Embedded JavaScript inside Python string builders (`dom_probe`, highlight probes) | Length limit **does not** force a split of the JS payload. CC of the Python wrapper still applies (§16.1.5) |
 | Compatibility facades / `__init__` that only re-export | Method-count / class-LOC may be waived with an override comment (§16.4) |
 
-If a change would pass with the feature deleted, it is not a test (RULE 8).
 Coverage that only executes lines without asserting behavior does **not**
-satisfy §16.3.
+satisfy §16.3 (RULE 8).
 
 ### 16.1 Size and volume — hard limits on **new** code
 
@@ -340,27 +354,24 @@ satisfy §16.3.
 | Parameters per function | ≤ 3 | **> 4** | Exclude leading `self` / `cls`. Count keyword-only args. Count `*args` and `**kwargs` as **one each**. |
 | Direct methods per class | ≤ 10 | **> 15** | Methods defined on the class body only (not inherited). Include `__init__`, properties' fget/fset if defined as `def` on the class. |
 
-These are the **fail** lines. The sizes to *aim at* — for functions, files,
-modules and context files — are RULE 18.
+These are the **fail** lines; the sizes to *aim at* — functions, files, modules, context files — are RULE 18.
 
 **16.1.1 When approaching a limit**
 
-1. **Do not** split a function into `foo_part1` / `foo_part2` solely to game
-   LOC. Extraction is allowed only when the helper's name states a real
-   responsibility (`_announce_stopped`, `_try_prepare_cycle_queue`).
-2. **Do not** hide parameters behind a catch-all `**kwargs` to dodge the param
-   cap. Block settings stay as explicit instance attributes (RULE 3). Wide
-   `__init__` on action blocks is **legacy**; new blocks take ≤ 4 constructor
-   params besides `self`.
-3. New classes that would exceed 15 methods must be designed as collaborating
-   types *before* writing the 16th method.
+1. **Do not** split a function into `foo_part1` / `foo_part2` to game LOC.
+   Extraction is allowed only when the helper names a real responsibility
+   (`_announce_stopped`, `_try_prepare_cycle_queue`).
+2. **Do not** hide parameters behind a catch-all `**kwargs` to dodge the param cap.
+   Block settings stay explicit instance attributes (RULE 3); wide `__init__` on
+   action blocks is **legacy** — new blocks take ≤ 4 constructor params besides `self`.
+3. New classes that would exceed 15 methods must be designed as collaborating types *before* writing the 16th method.
 
 **16.1.5 Embedded-JS exception (explicit)**
 
-`backend/dom_probe.py` `build_probe` is 122 LOC because it embeds a JS probe.
-**Do not refactor that builder to meet 30 LOC.** New probe builders may exceed
-30 LOC **only** when the excess is a single JS/HTML string literal. The Python
-control flow around that literal must still be CC ≤ 10 and nesting ≤ 4.
+Embedded JavaScript in Python string builders (`dom_probe`, highlight probes): the length limit never forces a split of the JS payload. `backend/dom_probe.py`
+`build_probe`'s 122 LOC are exactly this — **do not refactor that builder to meet 30 LOC.** New probe builders may
+exceed 30 LOC **only** when the excess is one JS/HTML string literal; the Python
+control flow around it stays CC ≤ 10 and nesting ≤ 4.
 
 ### 16.2 Complexity — block merge if exceeded on new code
 
@@ -370,20 +381,18 @@ control flow around that literal must still be CC ≤ 10 and nesting ≤ 4.
 | Cognitive complexity | `cognitive-complexity` 1.3.x | **> 15** | Library default. Nested functions scored separately. |
 | Nesting depth | custom AST walker (same definition as the baseline report) | **> 4** | Maximum ancestry of `if` / loops / `with` / `try` / `match`. `elif` is nested AST `if`. Sibling blocks do **not** add. |
 
-**Anti-gaming (non-negotiable).** Forbidden: one-line helpers that only re-host
-the original body; dispatch tables of lambdas whose only purpose is to hide `if`
-count; inferring control flow from a flag to drop a real exception branch.
-Allowed: deleting **dead** branches; extracting a helper that already exists as
-a named concept in the domain; replacing `except Exception` + `isinstance`
-scaffolding with a narrow `except RunStopped`.
+**Anti-gaming (non-negotiable).** Forbidden: one-line helpers that only re-host the
+original body; dispatch tables of lambdas whose only purpose is to hide `if` count;
+inferring control flow from a flag to drop a real exception branch. Allowed:
+deleting **dead** branches; extracting a helper that already exists as a named
+concept in the domain; replacing `except Exception` + `isinstance` scaffolding
+with a narrow `except RunStopped`.
 
-Floor example: four independent binary outcomes cannot cost less than CC 5
-(1 base + 4 branches). Do not lower CC by deleting a real decision.
+Floor example: four independent binary outcomes cost at least CC 5 (1 base + 4 branches) — real decisions are not deleted to reach a number.
 
 ### 16.3 Test coverage — new code must be tested
 
-Global floors (must not go down; measured 2026-09-10: line **90.44%**,
-branch **84.38%**):
+Global floors (must not go down; measured 2026-09-10: line **90.44%**, branch **84.38%**):
 
 | Metric | Target | Tool | Fail rule |
 |---|---:|---|---|
@@ -394,14 +403,12 @@ branch **84.38%**):
 | Test-to-code ratio | ~1:1 nonblank non-comment Python LOC | audit script | warn, do not fail |
 | Combined line+branch % from coverage.py | informational only | — | **not** the gate |
 
-Branch 75% is read from `coverage.json`
-(`totals.covered_branches / totals.num_branches`), not from
-`--cov-fail-under` (that flag is line-only).
+Branch 75% is read from `coverage.json` (`totals.covered_branches /
+totals.num_branches`), not from `--cov-fail-under` (line-only flag).
 
 **What "tested" means.** For every new production function: at least one test
 that would **fail if the function were deleted** or its boolean inverted; empty
-vs broken distinguished (RULE 4); stop/cancel paths honoured if it loops
-(RULE 7); JS probes go through `tests/js_harness.js` (RULE 8).
+vs broken distinguished (RULE 4); stop/cancel paths honoured (RULE 7).
 
 **Coverage command (copy-paste):**
 
@@ -415,8 +422,7 @@ QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=/tmp/stublibs \
 ```
 
 (`LD_LIBRARY_PATH` is only needed on a machine without GL/X11/NSS — build the
-stubs with `tools/build_stubs.py`.) Do **not** add analysis packages to
-`requirements.txt`; they live in `requirements-dev.txt`.
+stubs with `tools/build_stubs.py`.) Analysis packages stay in `requirements-dev.txt`.
 
 ### 16.4 Smells and the override mechanism
 
@@ -437,19 +443,17 @@ def wide_legacy_adapter(self, a, b, c, d, e):  # quality-override: params=5 reas
     ...
 ```
 
-Strict format: `quality-override: <metric>=<value> reason=<one line, ≥ 20 chars>`
-with `<metric>` ∈ `loc, class-loc, params, methods, cc, cognitive, nesting,
-coverage, vulture, dup`. The reason must name a **constraint** (wire format,
-generated JS, Qt slot signature), not "faster to ship". One override per metric
-per symbol; never an override to skip a test.
+Strict format: `quality-override: <metric>=<value> reason=<one line, ≥ 20 chars>`,
+`<metric>` ∈ `loc, class-loc, params, methods, cc, cognitive, nesting, coverage,
+vulture, dup`. The reason names a **constraint** (wire format, generated JS, Qt
+slot signature), not "faster to ship". One override per metric per symbol; never one to skip a test.
 
 ### 16.5 Legacy code (already over the line)
 
-Baseline audit: 64/1532 functions CC>10, 73 functions LOC>30, 11 classes over
-the old 300-LOC cap. You **must** not increase CC, cognitive, nesting, LOC,
-params or method count of a legacy offender, and must not add methods to a class
-already over 15 without netting down. Touch a hotspot only with tests that lock
-current behaviour first.
+You **must** not increase CC, cognitive, nesting, LOC, params or method count of
+a legacy offender, nor add methods to a class already over 15 without netting
+down (audit counts sit in the baseline snapshot linked above); touch a hotspot
+only with tests that lock current behaviour first.
 
 Landmines (need a design doc before "quickly fixing CC"): `Collector` (216/40,
 over both axes), `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
@@ -461,10 +465,9 @@ over both axes), `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
 1. **Understand the problem fully.** Read [`SYSTEM_OF_RECORD.md`](SYSTEM_OF_RECORD.md)
    and rules 1–15, plus the size ideals in RULE 18. Then the matching archived
    design — [`docs/archive/README.md`](../archive/README.md) indexes all of them.
-2. **Research and design the structure in a doc first** when the change moves
-   complexity across files (new class, extraction from a hotspot). Record
-   current radon numbers, target numbers, and the dishonest reductions you
-   rejected. Put it in `docs/archive/<YYYY-MM-DD>-<topic>/` (RULE 17).
+2. **Research and design moving complexity in a doc first** (new class,
+   hotspot extraction): record current radon numbers, targets, rejected
+   dishonest reductions. Put it in `docs/archive/<YYYY-MM-DD>-<topic>/` (RULE 17).
 3. **Tests first** for behaviour changes (RULE 8). Refactors claiming
    behaviour-preservation run the existing suite as the equivalence gate.
 4. **Measure**: `radon cc -s path/to/file.py`. Any new function at `C` or worse
@@ -483,18 +486,15 @@ over both axes), `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
 [ ] no new vulture unused-import findings; no new duplication groups
 [ ] quality-override comments used only with a real constraint
 [ ] did not game metrics with dummy helpers
-[ ] new code aims at the RULE 18 ideals (function 4-20 lines, file 150-300,
-    module 5-15 files); every deviation carries an `ideal-size:` reason
-[ ] any complexity/size remediation followed the RULE 19 order
-    (nesting -> cyclomatic -> cognitive -> size last)
+[ ] new code aims at the RULE 18 ideals; every deviation carries an `ideal-size:` reason
+[ ] any remediation followed the RULE 19 order (nesting -> cyclomatic -> cognitive -> size last)
 [ ] SYSTEM_OF_RECORD.md + docs/README.md updated if behaviour/docs moved
 ```
 
 ### 16.8 Not required of one session
 
-A live metrics dashboard; mutation testing of the whole tree (start with pure
-modules); refactoring every legacy hotspot to green; putting radon/vulture in
-`requirements.txt`.
+A live metrics dashboard; whole-tree mutation testing (start with pure modules);
+refactoring every legacy hotspot to green; radon/vulture in `requirements.txt`.
 
 ---
 

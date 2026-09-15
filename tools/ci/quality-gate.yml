@@ -20,7 +20,8 @@
 # it is the only record of the intended CI configuration.
 #
 # Runs the same gate script the pre-commit hook runs, so a bypassed hook still
-# fails the build. See docs/AGENT_RULES_CODE_QUALITY.md.
+# fails the build. See docs/current/AGENT_RULES.md (RULE 16; origin archived at
+# docs/archive/2026-09-10-agent-rules-v1/AGENT_RULES_CODE_QUALITY.md).
 #
 # Two jobs, deliberately split: the gate needs no system libraries at all
 # (pure AST + radon), so it must never be the thing that fails because a Qt
