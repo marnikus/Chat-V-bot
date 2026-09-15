@@ -34,6 +34,7 @@ from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
 from services.history import HistoryDeps  # noqa: E402
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from _fast_clock import fast_settle  # noqa: E402
 
 
 class ConnectedPage(FakePage):
@@ -43,6 +44,7 @@ class ConnectedPage(FakePage):
 class ServiceCase(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
+        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         media_cfg = dict(self.cfg.get("history", "media", default={}) or {})

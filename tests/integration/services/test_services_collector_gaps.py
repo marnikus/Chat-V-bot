@@ -28,6 +28,7 @@ from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))), "tests"))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from _fast_clock import fast_settle  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -38,6 +39,7 @@ class ConnectedPage(FakePage):
 
 class CollectorCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.db = HistoryDB(os.path.join(self.dir, "history.db"))
         await self.db.init()

@@ -254,11 +254,11 @@ connects them to the window and starts the qasync loop.
 ## 7. Tests
 
 ```bash
-# Python (3168 tests + 902 subtests); webengine excluded by default addopts,
-# parallel lane: add -n auto (fast-lane filters: pytest.ini / docs archive 2026-09-15-test-time-reduction)
+# Python (3201 tests + 902 subtests, incl. the 29 Node suites as pytest items);
+# webengine excluded by addopts; lanes: -n auto + markers (pytest.ini)
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests -q -m "not webengine"
 
-# Front-end (29 Node harness files)
+# Front-end ad-hoc (the same suites as the pytest items above)
 for f in tests/test_*.js; do node "$f"; done
 
 # Quality gate that is executable (RULE 16)

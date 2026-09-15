@@ -39,6 +39,7 @@ from services.history import HistoryDeps  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
 from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
+from _fast_clock import fast_settle  # noqa: E402
 
 
 class ConnectedPage(FakePage):
@@ -55,6 +56,7 @@ async def wait_for(box, timeout=3.0):
 
 class RecollectCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         self.page = ConnectedPage([])

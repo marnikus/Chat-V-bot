@@ -48,6 +48,7 @@ from stores.history_db import HistoryDB  # noqa: E402
 from stores.user_memory import UserMemory, UserRecord  # noqa: E402
 
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from _fast_clock import fast_settle  # noqa: E402
 
 
 class ConnectedPage(FakePage):
@@ -55,8 +56,19 @@ class ConnectedPage(FakePage):
 
 
 async def settle(times=40, step=0.02):
-    """Let the scheduled tasks of one undo finish."""
+    """Let the scheduled tasks of one undo finish.
+
+    The spawned undo tasks poll in real time (world-open / write-gate
+    waits), so the 0.02 s per-iteration pace stays — but the loop exits as
+    soon as no other task is pending instead of always sleeping the full
+    40×20 ms. Quiet cases pay ~20 ms, busy ones behave exactly as before.
+    """
+    me = asyncio.current_task()
     for _ in range(times):
+        others = [t for t in asyncio.all_tasks()
+                  if t is not me and not t.done()]
+        if not others:
+            return
         await asyncio.sleep(step)
 
 
@@ -460,6 +472,7 @@ class WorldCase(unittest.IsolatedAsyncioTestCase):
     """The app's own wiring: UserMemory and HistoryService share the file."""
 
     async def asyncSetUp(self):
+        self.enterContext(fast_settle())
         self.dir = tempfile.mkdtemp()
         self.world = os.path.join(self.dir, "v.db")
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))

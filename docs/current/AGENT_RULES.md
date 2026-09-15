@@ -406,12 +406,12 @@ vs broken distinguished (RULE 4); stop/cancel paths honoured if it loops
 **Coverage command (copy-paste):**
 
 ```bash
+# parallel form (adopted 2026-09-15, W4.2: line 91.77 / branch 88.05 ≥ the
+# serial run it replaced; ~2× faster). `-n 0` falls back to the serial form.
 QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=/tmp/stublibs \
-.venv/bin/python -m coverage run --branch \
-  --source=core,actions,backend,bridge,services,stores,app,main \
-  -m pytest tests -q \
-  -m "not webengine"
-COVERAGE_FILE=.coverage .venv/bin/python -m coverage json -o coverage.json
+.venv/bin/python -m pytest tests -q -n auto --dist loadfile -m "not webengine" \
+  --cov=core --cov=actions --cov=backend --cov=bridge --cov=services --cov=stores --cov=app --cov=main \
+  --cov-branch --cov-report=json:coverage.json
 ```
 
 (`LD_LIBRARY_PATH` is only needed on a machine without GL/X11/NSS — build the
