@@ -1,12 +1,13 @@
 /* Minimal DOM stub good enough to execute the generated probe expressions.
-   Reads {expr, html} JSON on stdin, prints the probe's JSON result plus the
-   observable side effects (clicks dispatched, overlays created). */
+   Reads one payload {exprs, nodes} — or a list {payloads: [...]} (W3.2 batch,
+   one node spawn per test file instead of one per probe) — on stdin, prints
+   the JSON result(s) plus the observable side effects (clicks dispatched,
+   overlays created). Every payload gets a FRESH DOM, effects list and timers,
+   exactly as if it had been run in its own process. */
 'use strict';
 
-let chunks = '';
-process.stdin.on('data', (d) => { chunks += d; });
-process.stdin.on('end', () => {
-  const { exprs, nodes } = JSON.parse(chunks);
+function runPayload(input) {
+  const { exprs, nodes } = input;
   const effects = { clicks: [], overlays: [], scrolled: [] };
   let idSeq = 0;
 
@@ -134,5 +135,17 @@ process.stdin.on('end', () => {
   }
   effects.overlays = overlaysPerPhase;
   effects.timers = timers.map((t) => t.ms);
-  process.stdout.write(JSON.stringify({ results, effects }));
+  return { results, effects };
+}
+
+let chunks = '';
+process.stdin.on('data', (d) => { chunks += d; });
+process.stdin.on('end', () => {
+  const input = JSON.parse(chunks);
+  if (Array.isArray(input.payloads)) {
+    process.stdout.write(JSON.stringify(
+      { payloads: input.payloads.map((p) => runPayload(p)) }));
+  } else {
+    process.stdout.write(JSON.stringify(runPayload(input)));
+  }
 });

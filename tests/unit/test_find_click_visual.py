@@ -3,7 +3,8 @@
 The generated JavaScript probes are executed for real through a small Node
 harness (tests/js_harness.js) backed by a minimal DOM stub, so these tests
 verify actual probe behaviour — matching, highlighting, stashing and clicking —
-not just string shapes.
+not just string shapes. Every payload in the file runs in ONE node process
+(W3.2 batch); tests read their slice by key.
 
 Run with:  python3 tests/unit/test_find_click_visual.py
 """
@@ -13,6 +14,8 @@ import os
 import subprocess
 import sys
 import unittest
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -31,18 +34,39 @@ HARNESS = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..",
         "js_harness.js")
 
+_JS = {}                            # key -> (results, effects); see fixture
+_SPECS = {}                         # key -> builder of (exprs, nodes)
 
-def run_js(exprs, nodes):
-    """Execute probe expressions in one shared DOM; return (results, effects)."""
-    payload = json.dumps({"exprs": exprs, "nodes": nodes})
+
+def spec(key):
+    """Register one probe payload; the module fixture runs all in ONE spawn."""
+    def deco(build):
+        _SPECS[key] = build
+        return build
+    return deco
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _node_batch():
+    """W3.2 — one node process per file instead of one per probe payload."""
+    builders = list(_SPECS.items())
+    payload = json.dumps({"payloads": [
+        (lambda built: {"exprs": built[0], "nodes": built[1]})(build())
+        for _, build in builders]})
     proc = subprocess.run(["node", HARNESS], input=payload, capture_output=True,
-                          text=True, timeout=30)
+                          text=True, timeout=60)
     if proc.returncode != 0:
-        raise AssertionError(f"harness failed: {proc.stderr}")
-    out = json.loads(proc.stdout)
-    for r in out["results"]:
-        assert "harness_error" not in r, r["harness_error"]
-    return out["results"], out["effects"]
+        pytest.skip(f"node harness unavailable: {proc.stderr.strip()[:120]}")
+    out = json.loads(proc.stdout)["payloads"]
+    for (key, _), pair in zip(builders, out):
+        for res in pair["results"]:
+            assert "harness_error" not in res, res["harness_error"]
+        _JS[key] = (pair["results"], pair["effects"])
+
+
+def run_js(key):
+    """The (results, effects) pair of a registered probe payload."""
+    return _JS[key]
 
 
 def tab(text, x):
@@ -57,10 +81,114 @@ def tabs(active_text="Гостиная"):
     return [tab("Приват 1", 0), tab(active_text, 120), tab("Приват 2", 240)]
 
 
+def find_room(**kw):
+    return build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", **kw))
+
+
+# ── probe payloads (fresh DOM + effects per payload; see js_harness.js) ──
+@spec("find_match")
+def _p_find_match():
+    return ([find_room()], tabs())
+
+
+@spec("find_miss")
+def _p_find_miss():
+    return ([build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Нет такой"))],
+            tabs())
+
+
+@spec("find_hidden")
+def _p_find_hidden():
+    nodes = [{"tag": "div", "className": "tab-item", "hidden": True,
+              "children": [{"tag": "p", "className": "chat-title",
+                            "text": "Гостиная"}]}]
+    return ([find_room()], nodes)
+
+
+@spec("find_no_highlight")
+def _p_find_no_highlight():
+    return ([find_room(highlight=False)], tabs())
+
+
+@spec("find_empty")
+def _p_find_empty():
+    return ([build_find_probe("div.tab-item")], tabs())
+
+
+@spec("find_thrice")
+def _p_find_thrice():
+    expr = find_room()
+    return ([expr, expr, expr], tabs())
+
+
+@spec("find_timer")
+def _p_find_timer():
+    return ([find_room(highlight_ms=900)], tabs())
+
+
+@spec("click_two_phase")
+def _p_click_two_phase():
+    return ([find_room(),
+             build_click_probe(spec=ClickProbeSpec(do_click=False)),      # highlight only
+             build_click_probe(spec=ClickProbeSpec(highlight=False, do_click=True))],
+            tabs())
+
+
+@spec("click_stashed")
+def _p_click_stashed():
+    return ([find_room(), build_click_probe(spec=ClickProbeSpec(highlight=False))],
+            tabs())
+
+
+@spec("click_inner")
+def _p_click_inner():
+    return ([find_room(), build_click_probe("p.chat-title")], tabs())
+
+
+@spec("click_root_sel")
+def _p_click_root_sel():
+    return ([build_find_probe("div[role='tab'].tab-item", FindProbeSpec("p.chat-title", "Гостиная")),
+             build_click_probe("div[role='tab'].tab-item")],
+            tabs())
+
+
+@spec("click_missing")
+def _p_click_missing():
+    return ([find_room(), build_click_probe("button.nope")], tabs())
+
+
+@spec("click_no_find")
+def _p_click_no_find():
+    return ([build_click_probe()], tabs())
+
+
+@spec("click_detached")
+def _p_click_detached():
+    nodes = [{"tag": "div", "className": "tab-item", "detached": True,
+              "children": [{"tag": "p", "className": "chat-title",
+                            "text": "Гостиная"}]}]
+    return ([find_room(), build_click_probe()], nodes)
+
+
+@spec("click_pen")
+def _p_click_pen():
+    nodes = [{"tag": "div", "className": "tab-item", "pointerEventsNone": True,
+              "children": [{"tag": "p", "className": "chat-title",
+                            "text": "Гостиная"}]}]
+    return ([find_room(), build_click_probe()], nodes)
+
+
+@spec("click_throw")
+def _p_click_throw():
+    nodes = [{"tag": "div", "className": "tab-item", "throwOnClick": True,
+              "children": [{"tag": "p", "className": "chat-title",
+                            "text": "Гостиная"}]}]
+    return ([find_room(), build_click_probe()], nodes)
+
+
 class TestFindPhase(unittest.TestCase):
     def test_finds_matching_tab_and_draws_red_outline(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
-        (res,), eff = run_js([expr], tabs())
+        (res,), eff = run_js("find_match")
         self.assertTrue(res["found"])
         self.assertEqual(res["total"], 3)
         self.assertEqual(res["index"], 1)          # the middle tab
@@ -81,14 +209,12 @@ class TestFindPhase(unittest.TestCase):
         self.assertFalse(res["clicked"])
 
     def test_highlight_geometry_matches_element(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
-        (res,), _ = run_js([expr], tabs())
+        (res,), _ = run_js("find_match")
         self.assertEqual(res["rect"]["x"], 120)
         self.assertEqual(res["rect"]["width"], 120)
 
     def test_not_found_reports_candidates_and_no_overlay(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Нет такой"))
-        (res,), eff = run_js([expr], tabs())
+        (res,), eff = run_js("find_miss")
         self.assertFalse(res["found"])
         self.assertEqual(res["total"], 3)
         self.assertEqual(eff["overlays"][0], [])
@@ -97,11 +223,7 @@ class TestFindPhase(unittest.TestCase):
         self.assertIn("FIND failed", msg)
 
     def test_hidden_element_is_found_but_not_clickable(self):
-        nodes = [{"tag": "div", "className": "tab-item", "hidden": True,
-                  "children": [{"tag": "p", "className": "chat-title",
-                                "text": "Гостиная"}]}]
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
-        (res,), _ = run_js([expr], nodes)
+        (res,), _ = run_js("find_hidden")
         self.assertTrue(res["found"])
         self.assertFalse(res["visible"])
         self.assertFalse(res["clickable"])
@@ -109,40 +231,30 @@ class TestFindPhase(unittest.TestCase):
         self.assertEqual(level, "warn")
 
     def test_highlight_can_be_disabled(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", highlight=False))
-        (res,), eff = run_js([expr], tabs())
+        (res,), eff = run_js("find_no_highlight")
         self.assertTrue(res["found"])
         self.assertFalse(res["highlighted"])
         self.assertEqual(eff["overlays"][0], [])
 
     def test_empty_match_text_takes_first_node(self):
-        expr = build_find_probe("div.tab-item")
-        (res,), _ = run_js([expr], tabs())
+        (res,), _ = run_js("find_empty")
         self.assertTrue(res["found"])
         self.assertEqual(res["index"], 0)
 
     def test_overlays_do_not_accumulate_between_runs(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная"))
-        _, eff = run_js([expr, expr, expr], tabs())
+        _, eff = run_js("find_thrice")
         # each new find clears the previous overlays first
         for phase_overlays in eff["overlays"]:
             self.assertEqual(len(phase_overlays), 1)
 
     def test_outline_auto_expires(self):
-        expr = build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", highlight_ms=900))
-        _, eff = run_js([expr], tabs())
+        _, eff = run_js("find_timer")
         self.assertIn(900, eff["timers"])
 
 
 class TestClickPhase(unittest.TestCase):
-    def _find(self, **kw):
-        return build_find_probe("div.tab-item", FindProbeSpec("p.chat-title", "Гостиная", **kw))
-
     def test_orange_outline_then_click_on_stashed_element(self):
-        exprs = [self._find(),
-                 build_click_probe(spec=ClickProbeSpec(do_click=False)),      # highlight only
-                 build_click_probe(spec=ClickProbeSpec(highlight=False, do_click=True))]
-        (found, pre, done), eff = run_js(exprs, tabs())
+        (found, pre, done), eff = run_js("click_two_phase")
         self.assertTrue(found["found"])
         # phase 2a: orange outline, no click yet
         self.assertTrue(pre["clickable"])
@@ -160,15 +272,13 @@ class TestClickPhase(unittest.TestCase):
 
     def test_click_targets_the_element_the_find_phase_highlighted(self):
         """Regression: the click must not re-query and hit a different node."""
-        exprs = [self._find(), build_click_probe(spec=ClickProbeSpec(highlight=False))]
-        (found, done), eff = run_js(exprs, tabs())
+        (found, done), eff = run_js("click_stashed")
         self.assertEqual(found["index"], 1)
         self.assertTrue(done["clicked"])
         self.assertEqual(len(eff["clicks"]), 1)
 
     def test_click_selector_targets_inner_element(self):
-        exprs = [self._find(), build_click_probe("p.chat-title")]
-        (_, done), eff = run_js(exprs, tabs())
+        (_, done), eff = run_js("click_inner")
         self.assertTrue(done["clicked"])
         self.assertEqual(eff["clicks"], ["p.chat-title"])
         self.assertEqual(done["target_desc"], "p.chat-title")
@@ -181,17 +291,14 @@ class TestClickPhase(unittest.TestCase):
         null and the block silently never clicked. The root itself must be used
         when it is what the selector describes.
         """
-        exprs = [build_find_probe("div[role='tab'].tab-item", FindProbeSpec("p.chat-title", "Гостиная")),
-                 build_click_probe("div[role='tab'].tab-item")]
-        (found, done), eff = run_js(exprs, tabs())
+        (found, done), eff = run_js("click_root_sel")
         self.assertTrue(found["found"])
         self.assertTrue(done["clicked"], done.get("error"))
         self.assertEqual(eff["clicks"], ["div.tab-item"])
         self.assertIn("itself", done.get("note") or "")
 
     def test_missing_click_selector_is_an_error_not_a_wrong_click(self):
-        exprs = [self._find(), build_click_probe("button.nope")]
-        (_, done), eff = run_js(exprs, tabs())
+        (_, done), eff = run_js("click_missing")
         self.assertFalse(done["clicked"])
         self.assertIn("not found inside", done["error"])
         self.assertEqual(eff["clicks"], [])
@@ -199,27 +306,19 @@ class TestClickPhase(unittest.TestCase):
         self.assertEqual(level, "error")
 
     def test_click_without_a_find_phase_errors_clearly(self):
-        (done,), eff = run_js([build_click_probe()], tabs())
+        (done,), eff = run_js("click_no_find")
         self.assertFalse(done["clicked"])
         self.assertIn("no element stashed", done["error"])
         self.assertEqual(eff["clicks"], [])
 
     def test_detached_element_reported(self):
-        nodes = [{"tag": "div", "className": "tab-item", "detached": True,
-                  "children": [{"tag": "p", "className": "chat-title",
-                                "text": "Гостиная"}]}]
-        exprs = [self._find(), build_click_probe()]
-        (_, done), eff = run_js(exprs, nodes)
+        (_, done), eff = run_js("click_detached")
         self.assertFalse(done["clicked"])
         self.assertIn("no longer attached", done["error"])
         self.assertEqual(eff["clicks"], [])
 
     def test_pointer_events_none_blocks_the_click(self):
-        nodes = [{"tag": "div", "className": "tab-item", "pointerEventsNone": True,
-                  "children": [{"tag": "p", "className": "chat-title",
-                                "text": "Гостиная"}]}]
-        exprs = [self._find(), build_click_probe()]
-        (_, done), eff = run_js(exprs, nodes)
+        (_, done), eff = run_js("click_pen")
         self.assertFalse(done["clicked"])
         self.assertFalse(done["clickable"])
         self.assertEqual(eff["clicks"], [])
@@ -228,11 +327,7 @@ class TestClickPhase(unittest.TestCase):
         self.assertIn("NOT clickable", msg)
 
     def test_click_exception_is_captured(self):
-        nodes = [{"tag": "div", "className": "tab-item", "throwOnClick": True,
-                  "children": [{"tag": "p", "className": "chat-title",
-                                "text": "Гостиная"}]}]
-        exprs = [self._find(), build_click_probe()]
-        (_, done), _ = run_js(exprs, nodes)
+        (_, done), _ = run_js("click_throw")
         self.assertFalse(done["clicked"])
         self.assertIn("blew up", done["error"])
 

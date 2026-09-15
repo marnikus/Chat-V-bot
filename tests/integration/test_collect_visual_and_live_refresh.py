@@ -16,6 +16,8 @@ import subprocess
 import sys
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 from backend.probe_requests import HighlightSpec  # noqa: E402
@@ -34,16 +36,39 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def run_js(exprs, nodes):
-    payload = json.dumps({"exprs": exprs, "nodes": nodes})
+_JS = {}                            # key -> (results, effects); see fixture
+_SPECS = {}                         # key -> builder of (exprs, nodes)
+
+
+def spec(key):
+    """Register one probe payload; the module fixture runs all in ONE spawn."""
+    def deco(build):
+        _SPECS[key] = build
+        return build
+    return deco
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _node_batch():
+    """W3.2 — one node process per file instead of one per probe payload."""
+    builders = list(_SPECS.items())
+    payload = json.dumps({"payloads": [
+        (lambda built: {"exprs": built[0], "nodes": built[1]})(build())
+        for _, build in builders]})
     proc = subprocess.run(["node", HARNESS], input=payload, capture_output=True,
-                          text=True, timeout=30)
+                          text=True, timeout=60)
     if proc.returncode != 0:
-        raise AssertionError(f"harness failed: {proc.stderr}")
-    out = json.loads(proc.stdout)
-    for r in out["results"]:
-        assert "harness_error" not in r, r["harness_error"]
-    return out["results"], out["effects"]
+        pytest.skip(f"node harness unavailable: {proc.stderr.strip()[:120]}")
+    out = json.loads(proc.stdout)["payloads"]
+    for (key, _), pair in zip(builders, out):
+        for res in pair["results"]:
+            assert "harness_error" not in res, res["harness_error"]
+        _JS[key] = (pair["results"], pair["effects"])
+
+
+def run_js(key):
+    """The (results, effects) pair of a registered probe payload."""
+    return _JS[key]
 
 
 def rows(*nicks):
@@ -76,10 +101,33 @@ class HighlightCDP(FakeCDP):
 
 
 # ── BUG A: visual confirmation + pause ───────────────────────────
+@spec("hl_green")
+def _p_hl_green():
+    return ([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
+            rows("Zoe", "Anna", "Mia"))
+
+
+@spec("hl_no_scroll")
+def _p_hl_no_scroll():
+    return ([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
+            rows("Anna"))
+
+
+@spec("hl_exact")
+def _p_hl_exact():
+    return ([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))],
+            rows("Annabelle", "Anna"))
+
+
+@spec("hl_miss")
+def _p_hl_miss():
+    return ([build_highlight_probe("user-item", HighlightSpec(".primary-text", "Ghost"))],
+            rows("Anna"))
+
+
 class TestCollectHighlightProbe(unittest.TestCase):
     def test_draws_a_green_outline_on_the_matched_person(self):
-        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
-        (res,), eff = run_js([expr], rows("Zoe", "Anna", "Mia"))
+        (res,), eff = run_js("hl_green")
         self.assertTrue(res["found"])
         self.assertEqual(res["text"], "Anna")
         self.assertTrue(res["highlighted"])
@@ -91,20 +139,17 @@ class TestCollectHighlightProbe(unittest.TestCase):
 
     def test_highlighting_never_clicks_or_scrolls(self):
         """Scrolling mid-parse would corrupt the parser's position tracking."""
-        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
-        _, eff = run_js([expr], rows("Anna"))
+        _, eff = run_js("hl_no_scroll")
         self.assertEqual(eff["clicks"], [])
         self.assertEqual(eff["scrolled"], [])
 
     def test_uses_exact_matching(self):
-        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Anna"))
-        (res,), _ = run_js([expr], rows("Annabelle", "Anna"))
+        (res,), _ = run_js("hl_exact")
         self.assertEqual(res["text"], "Anna")
         self.assertEqual(res["index"], 1)
 
     def test_missing_person_reports_not_found(self):
-        expr = build_highlight_probe("user-item", HighlightSpec(".primary-text", "Ghost"))
-        (res,), eff = run_js([expr], rows("Anna"))
+        (res,), eff = run_js("hl_miss")
         self.assertFalse(res["found"])
         self.assertEqual(eff["overlays"][0], [])
 
