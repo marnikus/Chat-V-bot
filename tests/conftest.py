@@ -20,6 +20,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# W4.4 (2026-09-15-test-time-reduction): the root files were classified into
+# tests/unit/ and tests/integration/ by behaviour, but shared fakes stay
+# cross-importable by module name (test_chat_parser_delta.FakePage lives under
+# unit/, most of its consumers under integration/). pytest inserts each test
+# file's own directory; it does NOT add the other lane directories, so the
+# harness pins all three here to keep those imports deterministic wherever a
+# file lands.
+_TESTS = os.path.dirname(os.path.abspath(__file__))
+for _sub in (_TESTS, os.path.join(_TESTS, "unit"),
+             os.path.join(_TESTS, "integration")):
+    if _sub not in sys.path:
+        sys.path.insert(0, _sub)
+
 # ── Gate 1a: real PySide6 must be importable before anything else ─────────
 from PySide6.QtCore import QObject  # noqa: E402
 

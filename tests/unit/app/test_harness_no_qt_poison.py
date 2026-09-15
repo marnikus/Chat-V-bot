@@ -20,7 +20,7 @@ if ROOT not in sys.path:
 
 class TestNoQtPoisoning(unittest.TestCase):
     def test_former_poisoner_modules_leave_real_qt(self):
-        importlib.import_module("tests.test_main_entry")
+        importlib.import_module("tests.integration.test_main_entry")
         importlib.import_module(
             "tests.integration.services.test_run_service_paths")
 
