@@ -1,20 +1,15 @@
 """The three-tier byte fetcher behind the media cache.
 
-The download half of `stores/media_store.py`. Bytes are tried in order: an
-in-page `fetch()` (the page owns the session cookies), a cookied Python
-download, and finally the response body of the request the browser already
-made for the visible `<img>` (CDP `Network.getResponseBody`). Everything is
-best-effort — a dead URL or a CORS block leaves a `failed` row, never an
-exception in the UI.
+Download half of `stores/media_store.py`. Bytes tried in order: in-page
+`fetch()` (page owns session cookies), cookied Python download, and CDP
+`Network.getResponseBody`. Best-effort — dead URL or CORS block leaves
+`failed` row, never exception in UI.
 
-H-C4: network-body finisher (_fetch_via_network, _finish_network_body,
-_NetworkWatch) moved to `media_network.py` (≤200 LOC, named responsibility).
-This file keeps orchestration.
+H-C4: network finisher moved to `media_network.py`. H-C5: HTTP tiers moved
+to `media_fetch_http.py`, predicates extracted per RULE 19 step 3.
+Orchestration only here — 150-300 LOC ideal.
 
-The switches and caps (`enabled`, `paused`, `cdp`, `max_file_bytes`) are read
-off the `MediaStore` at call time: that is what lets a backfill pause the
-queue between two rows, and what lets a retry succeed after the cap was
-raised.
+Design: AREA_C H-C4 + H-C5 MI lift.
 """
 
 from __future__ import annotations
@@ -22,60 +17,63 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import json
 import logging
 import os
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
-import aiohttp
-
-from backend import chat_agent_js
+from stores.media_fetch_http import MediaFetchHttp
 from stores.media_layout import _extension, _now, infer_kind
-from stores.media_network import NetworkBodyFinisher, _NetworkWatch  # noqa: F401  re-export for tests
+from stores.media_network import NetworkBodyFinisher, _NetworkWatch  # noqa: F401
 
 log = logging.getLogger("chatbot")
 
 
-async def _session_cookies(cdp, url: str) -> str:
-    try:
-        return await cdp.get_cookies(url)
-    except Exception:  # noqa: BLE001
-        return ""
+def _is_data_or_special(url: str) -> bool:
+    return url.startswith(("data:", "blob:", "javascript:", "about:"))
 
 
-_FALLBACK_REFERER = "https://ru.virt-chat.com/"
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-)
+def _is_absolute_url(url: str) -> bool:
+    return "://" in url
 
 
-def _download_headers(url: str, cookies: str) -> dict:
-    parsed = urlparse(str(url or ""))
-    referer = f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc else _FALLBACK_REFERER
-    headers = {
-        "User-Agent": _USER_AGENT,
-        "Referer": referer,
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
-    }
-    if cookies:
-        headers["Cookie"] = cookies
-    return headers
+def _is_http_base(base: str) -> bool:
+    return str(base or "").startswith(("http://", "https://"))
 
 
-async def _read_download(resp, cap: int) -> dict:
-    if resp.status != 200:
-        return {"ok": False, "error": f"HTTP {resp.status}"}
-    data = await resp.read()
-    if len(data) > cap:
-        return {"ok": False, "error": "too large (%d bytes, cap %d)" % (len(data), cap)}
-    return {
-        "ok": True,
-        "b64": base64.b64encode(data).decode(),
-        "mime": resp.headers.get("Content-Type", ""),
-        "bytes": len(data),
-    }
+def _has_evaluate(cdp) -> bool:
+    return callable(getattr(cdp, "evaluate", None))
+
+
+def _is_enabled(owner) -> bool:
+    return bool(owner.enabled and not owner.paused and owner.cdp is not None)
+
+
+def _is_valid_limit(limit: int) -> bool:
+    return int(limit) > 0
+
+
+def _is_payload_ok(payload: dict) -> bool:
+    return bool(payload.get("ok"))
+
+
+def _is_empty_data(data: bytes) -> bool:
+    return not data
+
+
+def _is_too_large(size: int, cap: int) -> bool:
+    return size > cap
+
+
+def _is_cached_row(row: dict, path: str) -> bool:
+    return row.get("state") == "cached" and bool(path) and os.path.exists(path)
+
+
+def _is_failed_or_skipped(state: str) -> bool:
+    return state in ("failed", "skipped")
+
+
+def _is_valid_row(row: dict | None) -> bool:
+    return bool(row and row.get("url"))
 
 
 def _download_errors(payload: dict, errors: list) -> list:
@@ -84,24 +82,24 @@ def _download_errors(payload: dict, errors: list) -> list:
 
 
 class MediaFetcher:
-    """The three-tier byte fetcher behind the media cache."""
+    """Three-tier fetcher — orchestration only."""
 
     def __init__(self, owner):
         self._owner = owner
         self._network = NetworkBodyFinisher(self)
+        self._http = MediaFetchHttp(owner)
 
     async def process_pending(self, limit: int = 25) -> int:
-        if not self._owner.enabled or self._owner.paused or self._owner.cdp is None:
+        if not _is_enabled(self._owner):
             return 0
-        limit = int(limit)
-        if limit <= 0:
+        if not _is_valid_limit(limit):
             return 0
         rows = await self._owner.db.fetchdicts(
-            "SELECT id, url, kind, owner, day FROM media WHERE state='pending' ORDER BY id LIMIT ?", (limit,)
+            "SELECT id, url, kind, owner, day FROM media WHERE state='pending' ORDER BY id LIMIT ?", (int(limit),)
         )
         stored = 0
         for row in rows:
-            if not self._owner.enabled or self._owner.paused:
+            if not _is_enabled(self._owner):
                 break
             if await self._fetch_one(row):
                 stored += 1
@@ -111,12 +109,12 @@ class MediaFetcher:
         text = str(url or "").strip()
         if not text:
             return text
-        if text.startswith(("data:", "blob:", "javascript:", "about:")) or "://" in text:
+        if _is_data_or_special(text) or _is_absolute_url(text):
             return text
-        if callable(getattr(self._owner.cdp, "evaluate", None)):
+        if _has_evaluate(self._owner.cdp):
             try:
                 base = await self._owner.cdp.evaluate("document.baseURI")
-                if str(base or "").startswith(("http://", "https://")):
+                if _is_http_base(str(base)):
                     return urljoin(str(base), text)
             except Exception:  # noqa: BLE001
                 pass
@@ -125,7 +123,7 @@ class MediaFetcher:
     async def _fetch_one(self, row: dict) -> bool:
         url = await self._abs_url(row["url"])
         payload, errors = await self._download(url)
-        if not payload.get("ok"):
+        if not _is_payload_ok(payload):
             reason = "CORS/page fetch failed: " + " / ".join(dict.fromkeys(errors))
             await self._owner._fail(row["id"], reason)
             return False
@@ -134,24 +132,24 @@ class MediaFetcher:
         except Exception as exc:  # noqa: BLE001
             await self._owner._fail(row["id"], f"undecodable payload: {exc}")
             return False
-        if not data:
+        if _is_empty_data(data):
             await self._owner._fail(row["id"], "empty payload")
             return False
-        if len(data) > self._owner.max_file_bytes:
+        if _is_too_large(len(data), self._owner.max_file_bytes):
             await self._owner._skip(row["id"], "too large (%d bytes, cap %d)" % (len(data), self._owner.max_file_bytes))
             return False
         return await self._file_bytes(row, url, data, payload)
 
     async def _download(self, url: str) -> tuple[dict, list]:
-        payload = await self._fetch_in_page(url)
-        errors: list = [] if payload.get("ok") else [payload.get("error") or ""]
-        for step in (self._fetch_via_python, self._fetch_via_network):
-            if payload.get("ok"):
+        payload = await self._http.fetch_in_page(url)
+        errors: list = [] if _is_payload_ok(payload) else [payload.get("error") or ""]
+        for step in (self._http.fetch_via_python, self._fetch_via_network):
+            if _is_payload_ok(payload):
                 break
             payload = await step(url)
-            if not payload.get("ok"):
+            if not _is_payload_ok(payload):
                 errors.append(payload.get("error") or "")
-        if payload.get("ok"):
+        if _is_payload_ok(payload):
             return payload, []
         return payload, _download_errors(payload, errors)
 
@@ -175,38 +173,6 @@ class MediaFetcher:
         await self._owner.db.commit()
         return True
 
-    async def _fetch_in_page(self, url: str) -> dict:
-        try:
-            raw = await self._owner.cdp.evaluate(chat_agent_js.fetch_media_expression(url))
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": f"probe error: {exc}"}
-        payload = raw
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except (TypeError, ValueError):
-                payload = None
-        if not isinstance(payload, dict) or not payload.get("ok"):
-            reason = (payload or {}).get("error") if isinstance(payload, dict) else "no answer from the page"
-            return {"ok": False, "error": str(reason or "no answer")}
-        return payload
-
-    async def _fetch_via_python(self, url: str) -> dict:
-        if callable(self._owner._http_fetcher):
-            return await self._owner._http_fetcher(url)
-        if self._owner.cdp is None or not hasattr(self._owner.cdp, "get_cookies"):
-            return {"ok": False, "error": "no authenticated download available"}
-        cookies = await _session_cookies(self._owner.cdp, url)
-        try:
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url, headers=_download_headers(url, cookies), timeout=timeout, allow_redirects=True
-                ) as resp:
-                    return await _read_download(resp, self._owner.max_file_bytes)
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": str(exc)}
-
     async def _fetch_via_network(self, url: str) -> dict:
         return await self._network._fetch_via_network(url)
 
@@ -226,9 +192,9 @@ class MediaFetcher:
 
     async def requeue(self, media_id, reason: str = "retry") -> bool:
         row = await self._owner.get(media_id)
-        if not row or not row.get("url"):
+        if not _is_valid_row(row):
             return False
-        if row.get("state") not in ("failed", "skipped"):
+        if not _is_failed_or_skipped(row.get("state") or ""):
             return False
         await self._owner.db.execute(
             "UPDATE media SET state='pending', fail_reason='', recovered_at=?, recovery_attempts=recovery_attempts+1, last_used=? WHERE id=?",
@@ -241,10 +207,10 @@ class MediaFetcher:
         row = await self._owner.get(media_id)
         if not row:
             return {"state": "missing", "id": media_id, "path": "", "url": ""}
-        if not self._owner.enabled or self._owner.paused or self._owner.cdp is None:
+        if not _is_enabled(self._owner):
             return await self._owner.path_for(media_id)
         path = row.get("cache_path") or ""
-        if row.get("state") == "cached" and path and os.path.exists(path):
+        if _is_cached_row(row, path):
             return await self._owner.path_for(media_id)
         await self._owner.db.execute(
             "UPDATE media SET state='pending', fail_reason='', recovered_at=?, recovery_attempts=recovery_attempts+1, last_used=? WHERE id=?",

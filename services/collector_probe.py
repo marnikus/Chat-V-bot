@@ -3,6 +3,7 @@
 Phases PROBE / GATE / NICK (read-only page state + nick adoption).
 
 Design: AREA_C H-C4 — helper named by responsibility, ≤200 LOC.
+H-C5 MI lift: named predicates (RULE 19 step 3).
 """
 
 from __future__ import annotations
@@ -45,8 +46,38 @@ class Probe:
         return [str(o or "").strip() for o in (self.state.get("out_authors") or [])]
 
 
+# ── predicates ────────────────────────────────
+def _is_state_ok(state: dict) -> bool:
+    return bool(state.get("ok", True))
+
+
+def _is_private_tab(state: dict) -> bool:
+    return state.get("tab") == "private"
+
+
+def _has_partner_nick(nick: str) -> bool:
+    return bool(nick)
+
+
+def _is_group_tab(participants: int, require_two: bool) -> bool:
+    return require_two and participants > 0 and participants != 2
+
+
+def _is_single_out_author(outs: list, nick: str) -> bool:
+    singles = [o for o in outs if o]
+    return len(singles) == 1 and singles[0].lower() != nick.lower()
+
+
+def _is_saved_nick_stale(saved: str, detected: str, outs: list) -> bool:
+    if not saved or not detected:
+        return False
+    if detected.lower() == saved.lower():
+        return False
+    return saved.lower() not in {o.lower() for o in outs if o}
+
+
 class CollectorProbe:
-    """Phases PROBE / GATE / NICK (read-only page state + nick adoption)."""
+    """Phases PROBE / GATE / NICK."""
 
     def __init__(self, host, agent_version: int):
         self._host = host
@@ -83,17 +114,16 @@ class CollectorProbe:
     def refuse_tab(self, probe: Probe) -> Optional[Refusal]:
         host = self._host
         state = probe.state
-        if not state.get("ok", True):
+        if not _is_state_ok(state):
             host._log("No chat on this page (state not ok)", "warn")
             return Refusal(CollectorState.NOT_PRIVATE, "Not in private tab now")
-        if state.get("tab") != "private":
+        if not _is_private_tab(state):
             host._log(f"Active tab is “{state.get('tab')}”, not private —", "warn", state.get("me") or "")
             return Refusal(CollectorState.NOT_PRIVATE, "Not in private tab now")
         refusal = self._participants_refusal(host, state)
         if refusal is not None:
             return refusal
-        nick = probe.partner_nick
-        if not nick:
+        if not _has_partner_nick(probe.partner_nick):
             host._log("No partner nick in the active tab", "warn")
             return Refusal(CollectorState.NOT_PRIVATE, "Not in private tab now")
         return None
@@ -101,10 +131,8 @@ class CollectorProbe:
     @staticmethod
     def _participants_refusal(host, state: dict) -> Optional[Refusal]:
         participants = int(state.get("participants") or 0)
-        if host._settings["require_two_participants"] and participants > 0 and participants != 2:
-            host._log(
-                f"Refused: {participants} participants, not a private chat", "warn", state.get("partner") or ""
-            )
+        if _is_group_tab(participants, host._settings["require_two_participants"]):
+            host._log(f"Refused: {participants} participants, not a private chat", "warn", state.get("partner") or "")
             return Refusal(CollectorState.GROUP_TAB, f"Group tab ({participants} people) — not collected")
         return None
 
@@ -116,7 +144,7 @@ class CollectorProbe:
             host.configure(my_nick=detected_me)
             host._detected_my_nick = detected_me
             host._log(f"Detected My Nick as “{detected_me}”", "info", nick)
-        elif self._saved_nick_stale(host, detected_me, probe.out_authors):
+        elif _is_saved_nick_stale(host.my_nick, detected_me, probe.out_authors):
             previous = host.my_nick
             host.configure(my_nick=detected_me)
             host._detected_my_nick = detected_me
@@ -125,16 +153,10 @@ class CollectorProbe:
 
     @staticmethod
     def _single_out_author(outs: list, nick: str) -> str:
-        singles = [o for o in outs if o]
-        if len(singles) == 1 and singles[0].lower() != nick.lower():
-            return singles[0]
+        if _is_single_out_author(outs, nick):
+            return [o for o in outs if o][0]
         return ""
 
     @staticmethod
     def _saved_nick_stale(host, detected_me: str, outs: list) -> bool:
-        return (
-            bool(host.my_nick)
-            and bool(detected_me)
-            and detected_me.lower() != host.my_nick.lower()
-            and host.my_nick.lower() not in {o.lower() for o in outs if o}
-        )
+        return _is_saved_nick_stale(host.my_nick, detected_me, outs)

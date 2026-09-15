@@ -420,24 +420,31 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # services/run/requests.py (the module that already owns the run family's
 # value objects); progress.py re-exports the name so the P0-2 runtime pin
 # still holds. Nothing was added to reach this: the group is simply gone.
+# Maintenance 2026-09-15 (H-B2b + H-C5): two entries change.
+#
+# DISSOLVED — ('services/history/query.py', 'services/undo_world.py',
+# 'stores/preset_store.py'). query.py went from 174 → 109 + 77 (settings
+# split), so its import header no longer matches undo_world/preset_store.
+# The shared window is now only between undo_world and preset_store.
+#
+# ADDED — ('services/collector_archive.py', 'services/collector_probe.py'),
+# span 6 at archive.py:9 and probe.py:9: the collector family's standard
+# header (from __future__ / logging / dataclasses / typing Optional /
+# CollectorState). No logic copied, same pattern as other collector pairs.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector_field.py"),
     ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
      "bridge/people_bridge.py"),
-    # The standard bridge import header — a match of imports, not logic.
-    # (`bot_prompt_bridge.py` was in this group until 2026-09-13, when the
-    # Prompt Editor and the AI Settings dialog moved their shared wiring into
-    # `BotSideBridge` and its import list changed.)
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
     ("bridge/context.py", "services/wiring_requests.py"),
+    ("services/collector_archive.py", "services/collector_probe.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
     ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
-    ("services/history/query.py", "services/undo_world.py",
-     "stores/preset_store.py"),
+    ("services/undo_world.py", "stores/preset_store.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),
