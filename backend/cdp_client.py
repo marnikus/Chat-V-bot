@@ -32,6 +32,7 @@ from typing import Any, Callable, Optional
 from PySide6.QtCore import QObject, Signal
 
 from backend import cdp_client_transport as transport
+from backend.cdp_client_wire import WireCommands
 from backend.cdp_client_events import CdpEvents
 
 log = logging.getLogger("chatbot")
@@ -116,13 +117,26 @@ class CdpLease:
         self._locked = False
 
 
-class CDPClient(QObject):
+class CDPClient(QObject, WireCommands):
     """WebSocket client for Chrome DevTools Protocol.
 
-    Method count is one below the ideal fifteen-plus-one only because the
-    public command surface (frozen by ~20 importers and by the API
-    snapshot) is flat on this class; the bodies of all of them live in the
-    two part modules, so the class itself is a thin, fully testable seam.
+    What stays on this class is the state and the lifecycle: construction (the
+    socket handle, the pending map, the receive task, the priority lease, the
+    event table), the three lifecycle verbs (`connect`, `disconnect`, `send`),
+    the receive loop, the two properties, the event fan-out and tab discovery.
+    The nine CDP *command* verbs are inherited from `WireCommands`
+    (`backend/cdp_client_wire.py`, Round J step J-8 — its own module because
+    the snapshot pins those signatures textually; see its docstring), which
+    brings
+    the class from twenty methods to eleven — inside the fifteen-method limit
+    without a ratchet row, while every command stays callable on the client
+    exactly as before (`cdp.evaluate(...)`).
+
+    Inheriting them also keeps the two historical test seams intact: a test
+    that shadows `cdp.send` on the instance still wins over the class, and
+    `cdp._ws` / `cdp._connected` are still plain instance attributes written by
+    the transport functions, because those functions write to the object they
+    are handed.
     """
 
     connected = Signal()
@@ -182,45 +196,3 @@ class CDPClient(QObject):
                         item.get("url", ""),
                         item.get("webSocketDebuggerUrl", ""))
                 for item in await transport.fetch_tabs(self)]
-
-    # ── command helpers (bodies in cdp_client_transport.py) ───────
-    async def add_binding(self, name: str) -> bool:
-        """Expose `window[name](payload)` as a `Runtime.bindingCalled` event."""
-        return await transport.add_binding(self, name)
-
-    async def add_script_on_new_document(self, source: str) -> str:
-        """Re-inject `source` after every navigation. Returns its identifier."""
-        return await transport.add_script_on_new_document(self, source)
-
-    async def remove_script_on_new_document(self, identifier: str) -> bool:
-        if not identifier:
-            return False
-        return await transport.remove_script_on_new_document(self, identifier)
-
-    async def evaluate(self, expression: str) -> Any:
-        return await transport.evaluate(self, expression)
-
-    async def get_cookies(self, url: str = "") -> str:
-        """A `Cookie` header string for the given origin.
-
-        Used by the media cache's Python download path: the browser tab can
-        load `images.virt-chat.com` through an `<img>` tag with the session
-        cookies (no CORS), but the in-page `fetch()` needed for the old cache
-        can be blocked by CORS. Downloading from Python with the same cookies
-        bypasses that while still authenticating like the page.
-        """
-        return await transport.cookie_header(self, url)
-
-    async def click_at(self, x: float, y: float) -> None:
-        await transport.click_at(self, x, y)
-
-    async def mouse_wheel(self, dx: float, dy: float, x: float,
-                          y: float) -> None:
-        await transport.mouse_wheel(self, dx, dy, x, y)
-
-    async def get_element_rect(self, selector: str) -> Optional[dict]:
-        return await transport.get_element_rect(self, selector)
-
-    async def set_file_input_files(self, selector: str,
-                                   files: list[str]) -> None:
-        await transport.set_file_input_files(self, selector, files)
