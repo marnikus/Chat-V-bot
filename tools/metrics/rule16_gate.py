@@ -34,15 +34,17 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
+# H-B2b split: PersonPageRequest moved to history_query_request.py,
+# _person_item to history_query_projection.py — OWNED follows the move.
 OWNED = [
-    ("backend/history_query.py", "PersonPageRequest", "needle"),
-    ("backend/history_query.py", "PersonPageRequest", "where"),
-    ("backend/history_query.py", "PersonPageRequest", "order"),
-    ("backend/history_query.py", "PersonPageRequest", "spec"),
-    ("backend/history_query.py", "PersonPageRequest", "columns"),
-    ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
+    ("backend/history_query_request.py", "PersonPageRequest", "needle"),
+    ("backend/history_query_request.py", "PersonPageRequest", "where"),
+    ("backend/history_query_request.py", "PersonPageRequest", "order"),
+    ("backend/history_query_request.py", "PersonPageRequest", "spec"),
+    ("backend/history_query_request.py", "PersonPageRequest", "columns"),
+    ("backend/history_query_request.py", "PersonPageRequest", "resolved_dir"),
     ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
+    ("backend/history_query_projection.py", None, "_person_item"),
     ("bridge/history_bridge.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
     # ── Speed multiplier (2026-09-13, ported onto the G line) ────
@@ -231,6 +233,10 @@ OWNED = [
 # (`search` + `_fts_query` / `_like_escape` / `_snippet`), which took the class
 # to the measured 266/14. Re-frozen there — the remaining half of H-B2 (the row
 # projection) can still shrink it, but nothing may hand the 96 LOC back.
+# H-B2b (2026-09-15) moved PersonPageRequest to `history_query_request.py`
+# (51 LOC) and row projection to `history_query_projection.py` (93 LOC),
+# taking HistoryQuery facade from 266/14 → 179/13 (measured). Re-frozen at
+# 179/13 — the projection is pure mapping, the request is value object.
 # `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
 # ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
 # documents, shipped while the file sat outside the OWNED scan. The Speed
@@ -239,7 +245,7 @@ OWNED = [
 # is module-level and the call site is net-zero lines, deliberately, so the
 # ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 266, "methods": 14},
+    ("backend/history_query.py", "HistoryQuery"): {"loc": 179, "methods": 13},
     ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 180, "methods": 27},
     ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
                                                        "methods": 12},

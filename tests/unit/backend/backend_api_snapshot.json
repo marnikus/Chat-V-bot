@@ -2792,7 +2792,18 @@
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query_projection": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.history_query_request": {
+   "classes": {
     "PersonPageRequest": {
      "ancestry": [
       "PersonPageRequest",
