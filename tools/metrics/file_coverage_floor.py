@@ -34,6 +34,11 @@ FLOOR = 80.0
 # Measured 2026-09-14 from coverage.json after Area C splits + Area A JS splits
 # + Area B splits (cdp_client, history_bridge, history_query_search).
 # Area A + Area B + Area C files added with current low coverage to ratchet up.
+# 2026-09-15: added media_fetch_http (58.5%) from H-C5 split, removed stale
+# window_preset_service (now facade 48 LOC, covered), history_repo_restore
+# (now 200 LOC, covered), history_bridge_settings (still exists but 100% and
+# not in coverage report — keep? removed as stale per floor tool, will re-add
+# if it reappears below floor).
 RATCHET: Dict[str, float] = {
     "backend/cdp_client.py": 63.1,
     "backend/cdp_client_events.py": 56.8,
@@ -44,7 +49,6 @@ RATCHET: Dict[str, float] = {
     "bridge/history_bridge_delete.py": 90.2,
     "bridge/history_bridge_media.py": 65.9,
     "bridge/history_bridge_read.py": 14.2,
-    "bridge/history_bridge_settings.py": 100.0,
     "bridge/label_bridge.py": 78.0,
     "bridge/layout_bridge.py": 67.3,
     "bridge/people_bridge.py": 76.1,
@@ -58,14 +62,13 @@ RATCHET: Dict[str, float] = {
     "services/history/legacy.py": 0.0,
     "services/history/mutate.py": 63.2,
     "services/history/settings.py": 0.0,
-    "services/window_preset_service.py": 60.2,
     "stores/history_repo_append.py": 66.9,
     "stores/history_repo_lifecycle.py": 66.7,
-    "stores/history_repo_restore.py": 30.6,
     "stores/history_repo_slots.py": 35.0,
     "stores/history_schema_legacy.py": 17.2,
     "stores/history_schema_repair.py": 54.3,
     "stores/media_fetch.py": 51.1,
+    "stores/media_fetch_http.py": 58.5,
     "stores/media_network.py": 24.5,
 }
 
