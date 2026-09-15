@@ -33,6 +33,7 @@ from backend.history_query import (  # noqa: E402
     HistoryQuery,
     PersonPageRequest,
 )
+from backend.history_query_rows import clamp  # noqa: E402
 from backend.history_query_search import _fts_query, _like_escape  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
 from stores.history_requests import AppendRequest  # noqa: E402
@@ -164,11 +165,10 @@ class TestPaginationEdges(QueryCase):
                          "limit 0 is falsy → the default page size")
         page = await self.q.page("Nick", limit=10 ** 6)
         self.assertEqual(len(page["items"]), 5)
-        self.assertEqual(HistoryQuery._clamp(None), 50)
-        self.assertEqual(HistoryQuery._clamp("garbage"), 50)
-        self.assertEqual(HistoryQuery._clamp(-5), 1,
-                         "a negative limit clamps to 1")
-        self.assertEqual(HistoryQuery._clamp(10 ** 9), MAX_LIMIT)
+        self.assertEqual(clamp(None), 50)
+        self.assertEqual(clamp("garbage"), 50)
+        self.assertEqual(clamp(-5), 1, "a negative limit clamps to 1")
+        self.assertEqual(clamp(10 ** 9), MAX_LIMIT)
 
     async def test_offset_beyond_end_is_empty_not_error(self):
         await self.seed(n=5)

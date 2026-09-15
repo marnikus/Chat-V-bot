@@ -14,6 +14,28 @@ from __future__ import annotations
 
 import json
 
+from backend.history_query import (
+    DEFAULT_LIMIT, DEFAULT_SORT, PersonPageRequest,
+)
+
+
+def _person_request(opts: dict) -> PersonPageRequest:
+    """The UI's JSON blob as a `PersonPageRequest`.
+
+    Lives here rather than on the wire facade (Round J step J-1): it is the
+    read side's input shape, and the facade is down to the signals and the
+    `@Slot` table. `dir` defaults to `""` — the sort key's *natural*
+    direction — so a payload written before the sortable headers existed
+    means exactly what it meant.
+    """
+    return PersonPageRequest(
+        q=str(opts.get("q") or ""),
+        limit=int(opts.get("limit") or DEFAULT_LIMIT),
+        offset=int(opts.get("offset") or 0),
+        sort=str(opts.get("sort") or DEFAULT_SORT),
+        dir=str(opts.get("dir") or ""),
+        include_deleted=bool(opts.get("include_deleted")))
+
 
 async def history_page(bridge, req_id: str, nick: str, anchor_json) -> None:
     """One page of a person's messages — newest-first, or around an anchor.
@@ -71,8 +93,13 @@ async def history_stats(bridge, req_id: str, nick: str) -> None:
                                                        ensure_ascii=False))
 
 
-async def userdb_page(bridge, req_id: str, req) -> None:
-    """One page of the all-time user database, with label pills attached."""
+async def userdb_page(bridge, req_id: str, query_json) -> None:
+    """One page of the all-time user database, with label pills attached.
+
+    Takes the JS blob, not a built request: decoding the payload is this
+    side's job now, so the wire facade never has to know the request shape.
+    """
+    req = _person_request(bridge._json_arg(query_json))
     payload = await bridge.ctx.archive.query.list_persons(req)
     payload["req_id"] = req_id
     payload["my_nick"] = bridge.ctx.archive.my_nick

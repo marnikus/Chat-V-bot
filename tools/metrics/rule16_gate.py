@@ -34,6 +34,8 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
+# Rows follow the code: `_person_request` moved to bridge/history_bridge_read.py
+# in Round J step J-1, so its row moved with it (RULE 16 §16.6).
 OWNED = [
     ("backend/history_query.py", "PersonPageRequest", "needle"),
     ("backend/history_query.py", "PersonPageRequest", "where"),
@@ -42,8 +44,8 @@ OWNED = [
     ("backend/history_query.py", "PersonPageRequest", "columns"),
     ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
     ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
-    ("bridge/history_bridge.py", None, "_person_request"),
+    ("backend/history_query_rows.py", None, "person_item"),
+    ("bridge/history_bridge_read.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
     # ── Speed multiplier (2026-09-13, ported onto the G line) ────
     ("actions/speed.py", None, "coerce_multiplier"),
@@ -222,15 +224,16 @@ OWNED = [
 # Round H step H-B1 (`2026-09-14`, AREA_B_BACKEND_BRIDGE_DESIGN §3) then moved
 # the twenty-one @Slot bodies into the four `history_bridge_*` part modules:
 # 467 LOC / 44 -> 180 LOC / 27 methods — the seven Signals and the twenty-one
-# @Slots the QWebChannel wire pins, plus the guarded runner (`_run_async` /
-# `_schedule`), `_json_arg`, `_ask` and `_run_if_archive`. Re-frozen at the
-# measured 180/27: the slots cannot shrink (the frontend calls every one of
-# them by name), so the LOC axis is where the split's gain lives.
-# `HistoryQuery` was re-frozen at 362/14 by the sortable-columns feature; Round
-# H step H-B2 moved the FTS/LIKE back-end into `backend/history_query_search.py`
-# (`search` + `_fts_query` / `_like_escape` / `_snippet`), which took the class
-# to the measured 266/14. Re-frozen there — the remaining half of H-B2 (the row
-# projection) can still shrink it, but nothing may hand the 96 LOC back.
+# @Slots the QWebChannel wire pins, the guarded runner (`_run_async`) and
+# `_json_arg`. Round J step J-1 moved `_person_request` to the read part and
+# the guard policy (`_schedule` / `_ask` / `_run_if_archive`) to
+# history_bridge_wire.py, so it is re-frozen at the measured 158/24: the slots
+# cannot shrink (the frontend calls every one of them by name), which is why
+# the LOC axis is where the split's gain lives — and why 158 is still 8 over
+# CLASS_LIMITS' 150 while the row is what makes that acceptable.
+# `HistoryQuery` went 362/14 (sortable columns) → 266/14 (H-B2a, the FTS/LIKE
+# back-end) → **off this table** (J-2, the row projection + the read SQL):
+# see the note inside RATCHET.
 # `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
 # ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
 # documents, shipped while the file sat outside the OWNED scan. The Speed
@@ -239,8 +242,12 @@ OWNED = [
 # is module-level and the call site is net-zero lines, deliberately, so the
 # ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 266, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 180, "methods": 27},
+    # `HistoryQuery` was here at 266/14 and left the ratchet in Round J step J-2:
+    # the SQL moved to history_query_reads.py, so the class is 70/10 — inside
+    # CLASS_LIMITS, enforced by the per-file class loop below with no exemption.
+    # Deleting the row is the point of the ratchet: an exemption that fits
+    # should not survive as a licence to grow back (RULE 16 §16.6).
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 158, "methods": 24},
     ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
                                                        "methods": 12},
 }
