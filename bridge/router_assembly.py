@@ -26,7 +26,7 @@ compat surface could move to another module without renaming a single method.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Type
 
 from PySide6.QtCore import QMetaMethod, QObject, Signal, Slot
 

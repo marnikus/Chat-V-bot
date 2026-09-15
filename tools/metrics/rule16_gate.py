@@ -367,6 +367,26 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # `_rep` into one shared reporter module is a real refactor beyond this
 # structural step; recorded as Round G backlog (plan §4, G7).
 #
+# MOVED AGAIN — ('backend/media_handler.py', 'backend/message_injector_field.py')
+# is now ('backend/media_dialog.py', 'backend/message_injector_field.py'), span 7
+# at media_dialog.py:52. Round J step J-6 splits the attachment family, and the
+# `_rep` reporter helper went with the page side of it: the module that owns the
+# report/refusal plumbing the pipeline steps share. The clone span itself is
+# byte-identical (the helper and its `log` fallback were transcribed verbatim),
+# and the file that now carries media_handler's copy is media_dialog.py. The
+# debt is unchanged in kind and count — still exactly one duplicated helper —
+# so the key follows the move again rather than pretending the debt dissolved.
+# Deduping `_rep` into one shared reporter module remains the deferred refactor
+# recorded as Round G backlog (plan §4, G7); J-6 is a structural step and does
+# not silently absorb it.
+#
+# ADDED — ('backend/media_dialog.py', 'services/history/runtime.py'), span 6 at
+# media_dialog.py:27 and runtime.py:24: the plain `from __future__ / asyncio /
+# json / logging / os` header, the same kind of noise as every other header
+# group here. All four imports are genuinely used in media_dialog.py (asyncio
+# for the verification poll, json for the probe reply, os for the file paths),
+# so — per §18.5 — the span is not shrunk with a cosmetic import shuffle.
+#
 # ADDED — ('services/db_deletion_flow_remove.py',
 # 'services/db_deletion_scan.py'), span 7 at flow_remove.py:10 and
 # scan.py:13: the deletion family's standard header (`from __future__` /
@@ -423,7 +443,8 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # still holds. Nothing was added to reach this: the group is simply gone.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("backend/media_handler.py", "backend/message_injector_field.py"),
+    ("backend/media_dialog.py", "backend/message_injector_field.py"),
+    ("backend/media_dialog.py", "services/history/runtime.py"),
     ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
      "bridge/people_bridge.py"),
     # The standard bridge import header — a match of imports, not logic.

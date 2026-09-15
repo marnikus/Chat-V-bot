@@ -41,7 +41,6 @@ from bridge.router_assembly import (                        # noqa: F401
     BRIDGE_CLASSES, BRIDGE_SPECS, _ROUTER_METHODS, _meta_members,
     _router_method,
 )
-from bridge.people_bridge import PeopleBridge
 from core.events import LogMessage
 from services.world_events import announce_world_live
 from stores.preset_store import PresetStore
