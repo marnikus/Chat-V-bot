@@ -324,9 +324,20 @@ class TestOtherAreasKeepImporting(ApiSurfaceCase):
         # family's value objects — and progress.py re-exports the name to keep
         # the P0-2 runtime pin. The stores/ surface is untouched; this is the
         # services-side shrinking case, same shape as the 42 -> 41 entry.
-        self.assertEqual(count, 43,
+        # 43 -> 46 (2026-09-15, Round J step J-3): `backend/config_manager.py`
+        # (511 lines) split into the facade plus config_defaults.py /
+        # config_owners.py / config_view.py. The monolith's eight stores
+        # imports stay where they are (the facade still constructs every
+        # store); the three names its DEFAULTS tree was built from
+        # (SETTINGS_DEFAULTS, DEFAULT_BOOKMARKS, LABELS_DEFAULT) moved with the
+        # tree into config_defaults.py, and config_owners.py reuses that
+        # module's SETTINGS_DEFAULTS line instead of importing the store twice
+        # (measured: +3 net, not +4). The stores/ surface itself is untouched;
+        # this is the same "another area legitimately grows" case as the G7
+        # entries above, ledgered rather than absorbed.
+        self.assertEqual(count, 46,
                          "stores/ must be refactored without touching a single "
-                         "import in another area (integrated baseline: 43)")
+                         "import in another area (integrated baseline: 46)")
 
 
 if __name__ == "__main__":
