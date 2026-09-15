@@ -30,7 +30,22 @@ from typing import Optional
 
 from stores.history_db import HistoryDB
 
-from backend.history_query_search import _like_escape, _snippet, search
+from backend.history_query_search import _fts_query, _like_escape, _snippet, search
+
+# Re-export for backward compatibility (tests import from this module)
+__all__ = [
+    "PersonPageRequest",
+    "HistoryQuery",
+    "SORT_COLUMNS",
+    "DEFAULT_SORT",
+    "SORT_TIEBREAK",
+    "DEFAULT_LIMIT",
+    "MAX_LIMIT",
+    "_fts_query",
+    "_like_escape",
+    "_snippet",
+    "search",
+]
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 500

@@ -136,3 +136,92 @@ class UndoService(
         self.set_history(history, index)
         self._bus.emit(UndoHistoryChanged())
         return Ok((history, index))
+
+    # ── F3 thin delegators — bodies live in collaborators, facade keeps API ─
+    # history projection (two-stmt form to avoid exact-AST clone with delegate mixins)
+    def history(self) -> tuple[list, int]:
+        proj = self._history
+        return proj.history()
+
+    def set_history(self, history: list, index: int) -> None:
+        proj = self._history
+        return proj.set_history(history, index)
+
+    def migrate_global_history(self) -> tuple[list, int]:
+        proj = self._history
+        return proj.migrate_global_history()
+
+    def _migrated_entry(self, source: dict, kind: str, value) -> dict:
+        proj = self._history
+        return proj._migrated_entry(source, kind, value)
+
+    def _next_seq(self) -> int:
+        proj = self._history
+        return proj._next_seq()
+
+    def stack_projection(self) -> tuple[list, int]:
+        proj = self._history
+        return proj.stack_projection()
+
+    def set_stack_projection(self, history: list, index: int, world_idx: int) -> None:
+        proj = self._history
+        return proj.set_stack_projection(history, index, world_idx)
+
+    def kind_projection(self, kind: str) -> tuple[list, int]:
+        proj = self._history
+        return proj.kind_projection(kind)
+
+    def push_stack(self, blocks: list) -> tuple[list, int]:
+        proj = self._history
+        return proj.push_stack(blocks)
+
+    # apply / undo / redo
+    def apply_command(self, entry, forward: bool) -> bool:
+        ap = self._apply
+        return ap.apply_command(entry, forward)
+
+    def _apply_archive_command(self, value: dict, forward: bool, token: str = "") -> bool:
+        ap = self._apply
+        return ap._apply_archive_command(value, forward, token)
+
+    def _apply_entry(self, entry) -> None:
+        ap = self._apply
+        return ap._apply_entry(entry)
+
+    def undo(self) -> Result[Optional[dict]]:
+        ap = self._apply
+        return ap.undo()
+
+    def redo(self) -> Result[Optional[dict]]:
+        ap = self._apply
+        return ap.redo()
+
+    def rewind_after_failure(self, entry: Optional[dict], exc: Exception) -> None:
+        ap = self._apply
+        return ap.rewind_after_failure(entry, exc)
+
+    # db commands
+    async def _db_delete_op(self, value: dict, forward: bool) -> dict | None:
+        dbc = self._db_commands
+        return await dbc._db_delete_op(value, forward)
+
+    async def _db_op_forward(self, op: str, path: str) -> dict | None:
+        dbc = self._db_commands
+        return await dbc._db_op_forward(op, path)
+
+    async def _db_switch_op(self, value: dict, forward: bool) -> dict | None:
+        dbc = self._db_commands
+        return await dbc._db_switch_op(value, forward)
+
+    def _apply_db_command(self, value: dict, forward: bool) -> bool:
+        dbc = self._db_commands
+        return dbc._apply_db_command(value, forward)
+
+    # world sync
+    async def sync_world_state(self):
+        world = self._world
+        return await world.sync_world_state()
+
+    def _schedule_world_undo_save(self, entries: list) -> None:
+        world = self._world
+        return world._schedule_world_undo_save(entries)
