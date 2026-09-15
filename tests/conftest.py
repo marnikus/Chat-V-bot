@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -57,3 +59,26 @@ def pytest_runtest_teardown(item, nextitem):  # noqa: ANN001
             f"(last item: {item.nodeid}). Qt stubs must be scoped with "
             "mock.patch.dict(sys.modules, ...) and restored before teardown."
         )
+
+
+# ── Gate 2: lane markers by location (W1 of the test-time plan) ─────────
+# Applied per item at collection time, so `-m` deselection, xdist and
+# `--collect-only` all see them. Root-level tests/test_*.py stay un-tiered
+# until the W4.4 classification; slow/e2e files are labelled, not excluded —
+# the fast lane is opt-in (`-m "not slow and not e2e and not metrics"`).
+
+def pytest_itemcollected(item):  # noqa: ANN001
+    parts = item.path.parts
+    name = item.path.name
+    if "unit" in parts:
+        item.add_marker(pytest.mark.unit)
+    elif "integration" in parts:
+        item.add_marker(pytest.mark.integration)
+    if name == "test_sash_webengine.py":
+        item.add_marker(pytest.mark.webengine)
+        item.add_marker(pytest.mark.slow)
+    elif name == "test_rule16_new_code.py":
+        item.add_marker(pytest.mark.metrics)
+    elif name.endswith("_e2e.py"):
+        item.add_marker(pytest.mark.e2e)
+        item.add_marker(pytest.mark.slow)

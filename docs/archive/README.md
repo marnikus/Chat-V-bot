@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**105 documents in 22 groups.**
+**107 documents in 23 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -35,6 +35,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-rules-appendices/`](#2026-09-13-rules-appendices) | 1 | Detail moved out of [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md) to keep it inside its §18.4 reading budget — RULE 19's remediation ladder and worked case studies. |
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 5 | Round H (plan only, not implemented): the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. |
+| [`2026-09-15-test-time-reduction/`](#2026-09-15-test-time-reduction) | 2 | Testing-process redesign (plan only): the measured 6:07 / wait-bound suite baseline, the zero-change xdist halving, and the four workstreams — parallel marker lanes, wait-tax removal, template-world fixtures, CI/coverage wiring. |
 
 ---
 
@@ -379,3 +380,22 @@ the repository has**, holding the largest file (1,361 lines), the largest class
 - [`AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_B_BACKEND_BRIDGE_DESIGN_2026-09-14.md) — Area B: the four files over 500 lines in `backend/`+`bridge/`, the four-way responsibility split of `HistoryBridge` (reads / deletions / media / settings) with the QWebChannel slot surface kept on the facade, the search-vs-projection split of `history_query.py` plus its last mutation survivor, and the coverage-first steps for the two files the suite reaches worst (`history_bridge` 66.4%, `cdp_client` 65.2%).
 - [`AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_C_SERVICES_STORES_DESIGN_2026-09-14.md) — Area C: the measured separation between the 7 delegation facades (73–86% one-line methods — do not split) and the 17 genuinely incoherent classes; the run family, the undo family and the DB/world family decomposed by phase and by operation; the four store planners (cohesive but 306–407 LOC) extracted by named helper module; and the dense-file pass that a lines-only sort cannot see (`window_preset_service` MI 30.6 in 326 lines, `run/progress` 31.0, `history/mutate` 34.9).
 - [`AREA_D_VERIFICATION_DESIGN_2026-09-14.md`](2026-09-14-round-h/AREA_D_VERIFICATION_DESIGN_2026-09-14.md) — Area D, no production files: mutation from one module to a platform measurement (the second job, and the measured 159 → 910 reachable-mutant widening sequenced after Area B), the RULE 8 double audit that would have caught the fake which hid the dead label store, a per-file coverage floor with a ratchet so the global average stops hiding `message_injector_send.py` at 26.3%, and the baseline/document currency work (RULE 16 §16.3 still quotes the 2026-09-10 floors).
+
+---
+
+## 2026-09-15-test-time-reduction
+
+The testing-process redesign for **speed**, written from a same-day measurement
+of the whole suite rather than principles. **Plan only: no production code,
+test code, config or workflow was changed to produce it.** Headline measured
+facts: the full suite is 3,168 tests in 367 s serial and is *wait-bound*
+(wall ≈ 2.7× CPU; `tests/unit` ≈ 6.7×); it passes 3,168/3,168 under
+`pytest -n 2` with **zero tree changes** (181.5 s); the ten slowest files are
+≈ 40 % of serial time; the single slowest test is the RULE 16 clone scan
+running inside pytest; the coverage-gate command costs 519 s; the 29 Node
+harness suites are green but wired into neither pytest nor CI.
+
+*2 docs.*
+
+- [`TEST_TIME_REDUCTION_PLAN_2026-09-15.md`](2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) — The plan: the three taxes (wait, lifecycle, duplication), the what-is-already-done table that prevents re-doing RULE 8 / JS-harness / WebEngine work, the four workstreams W1–W4 with file-level changes and exit criteria, effort-vs-impact and expected-outcome tables, the rejected-ideas list, the RULE-compliance checklist and the re-measurement protocol.
+- [`SUITE_BASELINE_2026-09-15.md`](2026-09-15-test-time-reduction/SUITE_BASELINE_2026-09-15.md) — The raw baseline: environment and exact reproduction commands, headline run table (serial / `-n 2` / coverage / groups / node harness), the slowest-15 durations, file-level timings for the top ten, the 127-site `asyncio.sleep` census, suite composition and the doc-drift note for §7 counts.

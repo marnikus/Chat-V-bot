@@ -265,7 +265,9 @@ class TestRetryPolicy(unittest.IsolatedAsyncioTestCase):
                 raise TimeoutError("nope")
             return "ok"
 
-        policy = RetryPolicy(max_retries=3)
+        # retry COUNT is the contract; the backoff clock is not (base_delay=0
+        # is this file's own pattern, cf. the raises-without-fallback case)
+        policy = RetryPolicy(max_retries=3, base_delay=0)
         self.assertEqual(await policy.retry_with_backoff(op), "ok")
         self.assertEqual(len(calls), 3)
 
@@ -285,7 +287,7 @@ class TestRetryPolicy(unittest.IsolatedAsyncioTestCase):
         async def fallback(exc):
             return f"fell back: {exc}"
 
-        policy = RetryPolicy(max_retries=2)
+        policy = RetryPolicy(max_retries=2, base_delay=0)
         self.assertIn("fell back",
                       await policy.retry_with_backoff(op, fallback=fallback))
         self.assertEqual(len(calls), 3)  # 2 retries + the final attempt

@@ -17,6 +17,7 @@ import os
 import sys
 import time
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
@@ -26,6 +27,7 @@ from core.events import (EventBus, LabelsChanged, PeopleChanged,  # noqa: E402
                          UserDbChanged)
 from services.undo_service import restart_world  # noqa: E402
 from services.wiring_requests import RestartDeps  # noqa: E402
+import services.world_events as world_events  # noqa: E402
 from services.world_events import (announce_world_live,  # noqa: E402
                                    run_when_world_open, wait_for_world_open)
 
@@ -215,7 +217,10 @@ class TestRunWhenWorldOpen(unittest.IsolatedAsyncioTestCase):
         async def work():
             raise RuntimeError("history database is not open")
 
-        with self.assertLogs("chatbot", level="WARNING"):
+        # The real 15 s production grace, shortened — WAIT_S is read at call
+        # time precisely so a test can do this instead of sleeping 15 s.
+        with mock.patch.object(world_events, "WAIT_S", 0.2), \
+                self.assertLogs("chatbot", level="WARNING"):
             await run_when_world_open("people", work(), store,
                                       lambda scope, msg: seen.append(msg))
         self.assertEqual(seen, ["history database is not open"],

@@ -87,6 +87,8 @@ jobs:
       - name: Run the suite
         env:
           QT_QPA_PLATFORM: offscreen
-        # test_sash_webengine.py needs a real GPU/GL context and cannot run
-        # headless on a runner; it is deselected locally for the same reason.
-        run: python -m pytest -q --deselect tests/test_sash_webengine.py
+        # The webengine marker carries the GPU/GL test; it is excluded here,
+        # and the default addopts exclude it locally for the same reason.
+        # The suite is worker-safe by convention (see requirements-dev.txt),
+        # so the runner's cores are used via pytest-xdist.
+        run: python -m pytest -q -n auto --dist loadfile -m "not webengine"

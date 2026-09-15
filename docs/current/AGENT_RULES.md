@@ -410,7 +410,7 @@ QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=/tmp/stublibs \
 .venv/bin/python -m coverage run --branch \
   --source=core,actions,backend,bridge,services,stores,app,main \
   -m pytest tests -q \
-  --deselect=tests/test_sash_webengine.py::TestSashWebEngine::test_grid_in_real_webengine
+  -m "not webengine"
 COVERAGE_FILE=.coverage .venv/bin/python -m coverage json -o coverage.json
 ```
 

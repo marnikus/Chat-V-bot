@@ -178,7 +178,7 @@ class TestWaitPage(unittest.TestCase):
                         RuntimeError("detached"), RuntimeError("detached"),
                         '{"found": true, "total": 1, "visible": true, '
                         '"disabled": false}'])
-        engine = Recorder()
+        engine = Recorder(speed_multiplier=0.02)  # real retry loop, fast clock
         block = WaitPageLoad(target_selector="textarea", timeout_ms=5000)
         out = run(block.execute("N", cdp, engine))
         self.assertEqual(out, ActionResult.OK)
@@ -221,18 +221,19 @@ class MarkEngine(Recorder):
 class TestMarkMessaged(unittest.TestCase):
 
     def test_no_engine_fails(self):
-        self.assertEqual(run(MarkMessaged().execute("N", None, None)),
+        self.assertEqual(run(MarkMessaged(pre_delay_ms=0)
+                             .execute("N", None, None)),
                          ActionResult.FAIL)
 
     def test_no_saved_nick_fails_with_the_pick_person_hint(self):
         engine = Recorder(selected_nick="")
-        out = run(MarkMessaged().execute("N", None, engine))
+        out = run(MarkMessaged(pre_delay_ms=0).execute("N", None, engine))
         self.assertEqual(out, ActionResult.FAIL)
         self.assertTrue(engine.has("Pick Person", "error"), engine.lines)
 
     def test_engine_without_marking_support_fails(self):
         engine = Recorder(selected_nick="Anna")
-        out = run(MarkMessaged().execute("N", None, engine))
+        out = run(MarkMessaged(pre_delay_ms=0).execute("N", None, engine))
         self.assertEqual(out, ActionResult.FAIL)
         self.assertTrue(engine.has("does not support marking", "error"),
                         engine.lines)
@@ -243,18 +244,20 @@ class TestMarkMessaged(unittest.TestCase):
         for status, expected in cases.items():
             with self.subTest(status=status):
                 engine = MarkEngine(status)
-                out = run(MarkMessaged().execute("N", None, engine))
+                # the verdict matrix is under test, not the 500 ms pre-delay
+                out = run(MarkMessaged(pre_delay_ms=0)
+                          .execute("N", None, engine))
                 self.assertEqual(out, expected)
 
     def test_marked_nick_is_the_memory_one_not_the_queue_one(self):
         engine = MarkEngine("ok", selected_nick="Zoe")
-        run(MarkMessaged().execute("QueueNick", None, engine))
+        run(MarkMessaged(pre_delay_ms=0).execute("QueueNick", None, engine))
         self.assertTrue(engine.has("“Zoe”", "success"), engine.lines)
         self.assertFalse(any("QueueNick" in m for m, _ in engine.lines))
 
     def test_raising_hook_is_reported_and_fails(self):
         engine = MarkEngine(RuntimeError("db locked"))
-        out = run(MarkMessaged().execute("N", None, engine))
+        out = run(MarkMessaged(pre_delay_ms=0).execute("N", None, engine))
         self.assertEqual(out, ActionResult.FAIL)
         self.assertTrue(engine.has("db locked", "error"), engine.lines)
 
