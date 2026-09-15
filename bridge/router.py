@@ -41,6 +41,7 @@ from bridge.layout_bridge import LayoutBridge
 from bridge.people_bridge import PeopleBridge
 from bridge.stack_bridge import StackBridge
 from bridge.undo_bridge import UndoBridge
+from bridge.window_preset_bridge import WindowPresetBridge
 from core.events import LogMessage
 from services.people_service import people_row
 from services.run import normalize_blocks
@@ -54,7 +55,7 @@ log = logging.getLogger("chatbot")
 BRIDGE_CLASSES = [CdpBridge, StackBridge, FileBridge, PeopleBridge,
                   HistoryBridge, LabelBridge, DbBridge, CollectorBridge,
                   UndoBridge, LayoutBridge, BotBridge, BotPromptBridge,
-                  BotSettingsBridge]
+                  BotSettingsBridge, WindowPresetBridge]
 
 # Qt type-name → Python type for signature rebuilding
 _QT_TYPES = {

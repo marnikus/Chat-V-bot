@@ -62,12 +62,36 @@ const WindowPresetsActions = {
   exportSelected() { if (this.selectedName) this.export(this.selectedName); },
 
   export(name) {
-    const bridge = typeof App !== 'undefined' ? App.bridge : null;
-    if (!bridge || !bridge.export_window_preset) { this._message('Export requires the desktop bridge to choose a folder.', 'error'); return; }
-    let handled = false;
-    const done = (raw) => { if (handled) return; handled = true; this._handleExportResponse(name, raw); };
-    try { const result = bridge.export_window_preset(name, done); if (typeof result === 'string' || (result && typeof result === 'object')) done(result); }
-    catch (error) { done(JSON.stringify({ ok: false, error: error.message })); }
+    const self = this;
+    this._getDocument(name, (doc) => {
+      if (!doc) { self._message('Preset “' + name + '” not found.', 'error'); return; }
+      const bridge = typeof App !== 'undefined' ? App.bridge : null;
+      if (bridge && bridge.export_window_preset) {
+        let handled = false;
+        const done = (raw) => { if (handled) return; handled = true; self._handleExportResponse(name, raw); };
+        try { const result = bridge.export_window_preset(name, done); if (typeof result === 'string' || (result && typeof result === 'object')) done(result); }
+        catch (error) { done(JSON.stringify({ ok: false, error: error.message })); }
+        return;
+      }
+      self._exportViaDownload(doc);
+    });
+  },
+
+  _exportViaDownload(doc) {
+    try {
+      const text = JSON.stringify(doc, null, 2) + '\n';
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (doc.name || 'window-preset').replace(/[^\w-]+/g, '-') + '.json';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+      this._message('Exported “' + doc.name + '” via download.', 'success');
+    } catch (e) {
+      this._message('Export failed: ' + e.message, 'error');
+    }
   },
 
   _handleExportResponse(name, raw) {
