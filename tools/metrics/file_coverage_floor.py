@@ -32,12 +32,19 @@ FLOOR = 80.0
 # Ratchet: files below FLOOR today. Value is the minimal coverage that must
 # not decrease. May only rise; once a file reaches FLOOR it can be removed.
 # Measured 2026-09-14 from coverage.json after Area C splits + Area A JS splits
-# (line 93.16%, branch 88.85% post-D, but split files start low).
-# Area A + Area C files added with current low coverage to ratchet up.
+# + Area B splits (cdp_client, history_bridge, history_query_search).
+# Area A + Area B + Area C files added with current low coverage to ratchet up.
 RATCHET: Dict[str, float] = {
     "backend/cdp_client.py": 63.1,
+    "backend/cdp_client_events.py": 56.8,
+    "backend/cdp_client_transport.py": 89.9,
+    "backend/history_query_search.py": 14.7,
     "bridge/collector_bridge.py": 72.1,
     "bridge/history_bridge.py": 62.3,
+    "bridge/history_bridge_delete.py": 90.2,
+    "bridge/history_bridge_media.py": 65.9,
+    "bridge/history_bridge_read.py": 14.2,
+    "bridge/history_bridge_settings.py": 100.0,
     "bridge/label_bridge.py": 78.0,
     "bridge/layout_bridge.py": 67.3,
     "bridge/people_bridge.py": 76.1,

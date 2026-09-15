@@ -219,6 +219,18 @@ OWNED = [
 # The method count drops by one because the gate counts nested defs through
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
+# Round H step H-B1 (`2026-09-14`, AREA_B_BACKEND_BRIDGE_DESIGN §3) then moved
+# the twenty-one @Slot bodies into the four `history_bridge_*` part modules:
+# 467 LOC / 44 -> 180 LOC / 27 methods — the seven Signals and the twenty-one
+# @Slots the QWebChannel wire pins, plus the guarded runner (`_run_async` /
+# `_schedule`), `_json_arg`, `_ask` and `_run_if_archive`. Re-frozen at the
+# measured 180/27: the slots cannot shrink (the frontend calls every one of
+# them by name), so the LOC axis is where the split's gain lives.
+# `HistoryQuery` was re-frozen at 362/14 by the sortable-columns feature; Round
+# H step H-B2 moved the FTS/LIKE back-end into `backend/history_query_search.py`
+# (`search` + `_fts_query` / `_like_escape` / `_snippet`), which took the class
+# to the measured 266/14. Re-frozen there — the remaining half of H-B2 (the row
+# projection) can still shrink it, but nothing may hand the 96 LOC back.
 # `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
 # ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
 # documents, shipped while the file sat outside the OWNED scan. The Speed
@@ -227,8 +239,8 @@ OWNED = [
 # is module-level and the call site is net-zero lines, deliberately, so the
 # ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    ("backend/history_query.py", "HistoryQuery"): {"loc": 266, "methods": 14},
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 180, "methods": 27},
     ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
                                                        "methods": 12},
 }
@@ -393,6 +405,15 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
 # dropping or reordering an import to dissolve the window would either delete a
 # used name or reintroduce pylint C0411 — the cosmetic span-shrinking §18.5
 # forbids.
+# Maintenance 2026-09-14 (Round H, Area C step H-C1): one entry DISSOLVED —
+# ('services/run/coordinator.py', 'services/run/progress.py'). The cloned
+# window was the `try: from stores.user_memory import UserRecord / except
+# Exception: @dataclass class UserRecord …` import guard, which coordinator.py
+# and progress.py each carried a byte-identical copy of. H-C1 splits the run
+# ladder's queue half out of progress.py, and the guard now exists once, in
+# services/run/requests.py (the module that already owns the run family's
+# value objects); progress.py re-exports the name so the P0-2 runtime pin
+# still holds. Nothing was added to reach this: the group is simply gone.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
     ("backend/media_handler.py", "backend/message_injector_field.py"),

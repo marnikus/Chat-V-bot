@@ -8,28 +8,32 @@ Search has two interchangeable back-ends: FTS5 when SQLite offers it, a
 `text_lc LIKE` scan when it does not. Both fold case for Cyrillic — the
 `text_lc` column is lower-cased in Python, because SQLite's own LIKE folds
 ASCII only.
+
+The back-end itself lives in `backend/history_query_search.py` (Round H step
+H-B2): `search` plus the request-text-to-SQL guards `_fts_query` /
+`_like_escape` / `_snippet`. This module keeps the `HistoryQuery` surface
+(page / around / stats / list_persons / the two search entry points) that the
+archive services and the bridges call.
 """
 
-# ideal-size: 601 lines reason=scheduled debt, not a frozen contract — the
+# ideal-size: 531 lines reason=scheduled debt, not a frozen contract — the
 # AREA-D snapshot freeze this note used to cite was lifted by owner ruling
 # 2026-09-13 (docs/archive/2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md
-# §1c). The split is tracked in that plan's §4 as step G7 backlog.
+# §1c). Step H-B2 moved the search back-end out of this file; the row
+# projection (`_person_item` and friends) is the remaining half of that step.
 
 from __future__ import annotations
 
-import logging
 import os
-import re
 from dataclasses import dataclass
 from typing import Optional
 
 from stores.history_db import HistoryDB
 
-log = logging.getLogger("chatbot")
+from backend.history_query_search import _like_escape, _snippet, search
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 500
-SNIPPET_RADIUS = 40
 
 #: The Full User Database's sortable columns — key → the columns it orders
 #: by, each with its **natural** direction: what a first click on that header
@@ -64,36 +68,6 @@ DEFAULT_SORT = "recent"
 #: twice or never while the user scrolls. `nick` is unique, which makes the
 #: resulting order total.
 SORT_TIEBREAK: tuple[str, ...] = ("nick_lc", "id")
-
-
-def _like_escape(text: str) -> str:
-    return (text.replace("\\", "\\\\").replace("%", "\\%")
-                .replace("_", "\\_"))
-
-
-def _fts_query(raw: str) -> str:
-    """Turn user input into a safe FTS5 MATCH expression.
-
-    Every token is quoted, so `AND`, `*`, quotes and stray punctuation are
-    data, never syntax.
-    """
-    tokens = [t for t in re.split(r"[^\w\u0400-\u04FF]+", raw or "") if t]
-    if not tokens:
-        return ""
-    return " ".join('"%s"' % t.replace('"', '""') for t in tokens)
-
-
-def _snippet(text: str, needle: str, radius: int = SNIPPET_RADIUS) -> str:
-    body = text or ""
-    if not needle:
-        return body[: radius * 2]
-    pos = body.lower().find(needle.lower())
-    if pos < 0:
-        return body[: radius * 2]
-    start = max(0, pos - radius)
-    end = min(len(body), pos + len(needle) + radius)
-    return ("…" if start else "") + body[start:end] + ("…" if end < len(body)
-                                                       else "")
 
 
 @dataclass(frozen=True)
@@ -458,53 +432,9 @@ class HistoryQuery:
 
     async def _search(self, person_id: Optional[int], query: str, limit: int,
                       offset: int):
-        text = (query or "").strip()
-        if not text:
-            return [], 0
-        where = "p.deleted_at IS NULL AND m.deleted_at=''"
-        params: list = []
-        if person_id is not None:
-            where += " AND m.person_id=?"
-            params.append(person_id)
-
-        select = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
-                  "md.state AS media_state, md.cache_path AS cache_path, "
-                  "p.nick AS nick FROM messages m "
-                  "JOIN persons p ON p.id = m.person_id "
-                  "LEFT JOIN media md ON md.id = m.media_id ")
-
-        if self.db.fts_enabled:
-            match = _fts_query(text)
-            if not match:
-                return [], 0
-            try:
-                base = (select +
-                        "JOIN messages_fts f ON f.rowid = m.id "
-                        f"WHERE {where} AND messages_fts MATCH ? ")
-                total = int(await self.db.scalar(
-                    "SELECT COUNT(*) FROM messages m "
-                    "JOIN persons p ON p.id = m.person_id "
-                    "JOIN messages_fts f ON f.rowid = m.id "
-                    f"WHERE {where} AND messages_fts MATCH ?",
-                    params + [match], 0))
-                rows = await self.db.fetchdicts(
-                    base + "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
-                    params + [match, limit, offset])
-                return rows, total
-            except Exception as e:                    # noqa: BLE001
-                log.warning("FTS search failed (%s) — using LIKE", e)
-
-        needle = "%" + _like_escape(text.lower()) + "%"
-        total = int(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages m "
-            "JOIN persons p ON p.id = m.person_id "
-            f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\'",
-            params + [needle], 0))
-        rows = await self.db.fetchdicts(
-            select + f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\' "
-            "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
-            params + [needle, limit, offset])
-        return rows, total
+        """The FTS/LIKE back-end lives in `history_query_search.search`; the
+        method stays because both search entry points read through it."""
+        return await search(self.db, person_id, query, limit, offset)
 
     # ── the user database window ─────────────────────────────────
     @staticmethod
