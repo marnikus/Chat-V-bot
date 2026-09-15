@@ -6,9 +6,9 @@ and are linked from here.
 
 | | |
 |---|---|
-| Last verified against code | 2026-09-13 (this checkout) |
-| Test suite | `2829 passed, 6 skipped, 1 deselected, 1 xfailed, 894 subtests passed` + 27 green Node harness files |
-| Coverage (measured, `--branch`, 8 production packages) | line **91.83%** · branch **87.02%** (floors: 80% / 75%) |
+| Last verified against code | 2026-09-15 (this checkout) |
+| Test suite | `3206 passed, 2 skipped, 1 deselected, 1 xfailed, 903 subtests passed` incl. 29 green Node suites |
+| Coverage (measured, `--branch`, 8 production packages) | line **91.77%** · branch **88.05%** (floors: 80% / 75%) |
 | Rules every code change must obey | [`docs/current/AGENT_RULES.md`](AGENT_RULES.md) |
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |

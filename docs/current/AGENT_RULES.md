@@ -406,9 +406,8 @@ vs broken distinguished (RULE 4); stop/cancel paths honoured if it loops
 **Coverage command (copy-paste):**
 
 ```bash
-# parallel form (adopted 2026-09-15, W4.2: line 91.77 / branch 88.05 ≥ the
-# serial run it replaced; -n 4 measures faster than auto on 2 cores, same
-# totals, 132 s). `-n 0` falls back to the serial form.
+# parallel form (adopted 2026-09-15, W4.2: line 91.77 / branch 88.05 ≥ the serial
+# run it replaced; -n 4 beats auto on 2 cores, same totals, 132 s). -n 0 = serial.
 QT_QPA_PLATFORM=offscreen LD_LIBRARY_PATH=/tmp/stublibs \
 .venv/bin/python -m pytest tests -q -n 4 --dist loadfile -m "not webengine" \
   --cov=core --cov=actions --cov=backend --cov=bridge --cov=services --cov=stores --cov=app --cov=main \

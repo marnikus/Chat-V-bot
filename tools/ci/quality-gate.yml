@@ -7,6 +7,8 @@
 #   workflow `.github/workflows/quality-gate.yml` without `workflows`
 #   permission)
 #
+# Re-attempted 2026-09-15 after the session reconnected GitHub: same refusal.
+# Activation still needs a human with `workflows` permission:
 # A GitHub App token cannot author workflow files. Someone with `workflows`
 # permission has to activate it, by copying it into place:
 #
