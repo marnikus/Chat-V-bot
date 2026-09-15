@@ -8,7 +8,7 @@ from __future__ import annotations
 from bridge.stack_bridge_blocks import CustomBlocks
 from bridge.stack_bridge_composer import Composer
 from bridge.stack_bridge_presets import StackPresets, TemplatePresets
-from bridge.stack_bridge_run import RunControl
+from bridge.stack_bridge_run import RunControl, clean_blocks, schedule
 
 
 class StackBridgeParts:
