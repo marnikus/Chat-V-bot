@@ -200,6 +200,24 @@ class TestPaginationEdges(QueryCase):
         self.assertEqual(db["messages"], 0)
 
 
+class TestFacadeDelegation(QueryCase):
+    """The facade's own lines: every public method is a delegation to the
+    reads module, and a delegation that nothing calls is a hole in the file's
+    coverage that no reading of the SQL can see (Round J step J-2 put the SQL
+    in `backend/history_query_reads.py`)."""
+
+    async def test_gaps_through_the_facade(self):
+        await self.seed("Nick", n=3)
+        persons = await self.q.list_persons(PersonPageRequest())
+        person_id = persons["items"][0]["id"]
+        gaps = await self.q.gaps(person_id)
+        self.assertIsInstance(gaps, list,
+                              "the facade answers for a person we have data for")
+
+    async def test_gaps_for_an_unknown_person_is_empty(self):
+        self.assertEqual(await self.q.gaps(4242), [])
+
+
 class TestEmptyDatabaseCounters(QueryCase):
 
     async def test_stats_on_an_empty_db_are_zeros(self):

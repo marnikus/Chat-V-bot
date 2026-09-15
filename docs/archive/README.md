@@ -9,7 +9,7 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**107 documents in 23 groups.**
+**108 documents in 24 groups.**
 
 | Group | Docs | What it covers |
 |---|---:|---|
@@ -36,6 +36,7 @@ catch up with the code — write a new dated doc instead (RULE 17).
 | [`2026-09-13-speed-multiplier/`](#2026-09-13-speed-multiplier) | 1 | The global wait-speed multiplier: one coefficient scaling every user-facing wait of a run, and why the semantics are global rather than positional. |
 | [`2026-09-14-round-h/`](#2026-09-14-round-h) | 6 | Round H: the 2026-09-14 re-measurement against the six metric categories, why the un-gated JavaScript frontend is now the biggest structural problem, and the four areas — frontend, backend/bridge spine, services/stores cohesion, verification — each with its own file ownership, steps, targets and owner decisions. Areas A, C and D remain plans; Area B was partly rebuilt (step H-B6, H-B1 and the search half of H-B2) and that rebuild has its own record here. |
 | [`2026-09-14-round-i/`](#2026-09-14-round-i) | 1 | Round I: the sleep ratchet and wait-inventory work on the two worst files, the functions over the length cap, and the tests that only passed by luck. |
+| [`2026-09-15-round-j-area-b-closure/`](#2026-09-15-round-j-area-b-closure) | 1 | Round J: the eight Area B criteria the rebuild left open, each met — the history-bridge wire facade, the `history_query` and `config_manager` families, the DOM-highlight and media payload modules, the router split with the `Router(ctx=…)` parameter object, the parser gate/settle split, and `CDPClient`'s inherited command verbs. |
 
 ---
 
@@ -396,3 +397,20 @@ its second half was implemented in the same session.
 *1 doc.*
 
 - [`ROUND_I_DESIGN_2026-09-14.md`](2026-09-14-round-i/ROUND_I_DESIGN_2026-09-14.md) — The ranking by impact × feasibility, the sleep/wait ratchet and the `history_query` steps, the tests that only passed by luck, and what is carried forward.
+
+---
+
+## 2026-09-15-round-j-area-b-closure
+
+Round J — closing Area B. Round H's rebuild landed H-B1, H-B6 and the search
+half of H-B2, and this round closed the remaining eight criteria *measured*
+against the tree, one commit per step, with the area's own floor (MI ≥ 45, no
+file over 500 lines) taken in the same pass. Every step's numbers, the three
+places the plan was corrected by measurement (the API snapshot records
+definition sites, not re-exports; the `inherited` route for moved members; the
+PEP 563 signature rendering) and the closing battery are in the *As built*
+half of the design.
+
+*1 doc.*
+
+- [`ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md`](2026-09-15-round-j-area-b-closure/ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md) — The eight open criteria re-measured, the three findings that decide how each step is done, the nine steps with their file ownership, what the round does not do, the definition of done, and the as-built record: what landed, what the plan got wrong and why.

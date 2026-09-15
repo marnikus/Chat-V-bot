@@ -1994,33 +1994,36 @@
       "CDPClient",
       "QObject",
       "Object",
+      "WireCommands",
       "object"
      ],
      "attrs": {},
      "bases": [
-      "QObject"
+      "QObject",
+      "WireCommands"
      ],
      "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
+     "inherited": {
       "add_binding": "(self, name: str) -> bool",
       "add_script_on_new_document": "(self, source: str) -> str",
-      "base_url": "<property>",
       "click_at": "(self, x: float, y: float) -> None",
-      "connect": "(self, ws_url: str) -> bool",
-      "disconnect": "(self) -> None",
       "evaluate": "(self, expression: str) -> Any",
-      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
       "get_cookies": "(self, url: str = '') -> str",
       "get_element_rect": "(self, selector: str) -> Optional[dict]",
-      "is_connected": "<property>",
       "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
+      "remove_script_on_new_document": "(self, identifier: str) -> bool",
+      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+     },
+     "methods": {
+      "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
+      "base_url": "<property>",
+      "connect": "(self, ws_url: str) -> bool",
+      "disconnect": "(self) -> None",
+      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
+      "is_connected": "<property>",
       "off_event": "(self, method: str, callback: Optional[Callable] = None) -> None",
       "on_event": "(self, method: str, callback: Callable) -> Callable",
-      "remove_script_on_new_document": "(self, identifier: str) -> bool",
-      "send": "(self, method: str, params: dict | None = None) -> dict",
-      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+      "send": "(self, method: str, params: dict | None = None) -> dict"
      }
     },
     "CdpLease": {
@@ -2125,6 +2128,35 @@
    },
    "values": {}
   },
+  "backend.cdp_client_wire": {
+   "classes": {
+    "WireCommands": {
+     "ancestry": [
+      "WireCommands",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "add_binding": "(self, name: str) -> bool",
+      "add_script_on_new_document": "(self, source: str) -> str",
+      "click_at": "(self, x: float, y: float) -> None",
+      "evaluate": "(self, expression: str) -> Any",
+      "get_cookies": "(self, url: str = '') -> str",
+      "get_element_rect": "(self, selector: str) -> Optional[dict]",
+      "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
+      "remove_script_on_new_document": "(self, identifier: str) -> bool",
+      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "backend.chat_agent_js": {
    "classes": {},
    "functions": {
@@ -2144,14 +2176,17 @@
     "ChatParser": {
      "ancestry": [
       "ChatParser",
+      "SettleMixin",
       "object"
      ],
      "attrs": {},
      "bases": [
-      "object"
+      "SettleMixin"
      ],
      "fields": {},
-     "inherited": {},
+     "inherited": {
+      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'"
+     },
      "methods": {
       "__init__": "(self, cdp, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40)",
       "drain": "(self) -> 'list[MessageRecord]'",
@@ -2160,7 +2195,6 @@
       "pause": "(self) -> 'None'",
       "restore_scroll": "(self, top: 'int') -> 'dict'",
       "scroll_to_top": "(self) -> 'dict'",
-      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'",
       "slice": "(self, start: 'int', end: 'int') -> 'list[MessageRecord]'",
       "state": "(self) -> 'dict'"
      }
@@ -2220,6 +2254,32 @@
     "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
     "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', query: 'PrivateQuery' = PrivateQuery(items=None, require_private=True)) -> 'PrivateCheck'"
    },
+   "values": {}
+  },
+  "backend.chat_parser_gate": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_parser_settle": {
+   "classes": {
+    "SettleMixin": {
+     "ancestry": [
+      "SettleMixin",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'"
+     }
+    }
+   },
+   "functions": {},
    "values": {}
   },
   "backend.chat_sync": {
@@ -2630,11 +2690,70 @@
    "functions": {},
    "values": {}
   },
+  "backend.config_defaults": {
+   "classes": {},
+   "functions": {
+    "deep_merge": "(base: 'dict', overlay: 'Any') -> 'dict'",
+    "json_dumps": "(data: 'Any') -> 'str'",
+    "set_nested": "(tree: 'Any', path, value) -> 'bool'"
+   },
+   "values": {}
+  },
   "backend.config_manager": {
    "classes": {
     "ConfigManager": {
      "ancestry": [
       "ConfigManager",
+      "ConfigView",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "ConfigView"
+     ],
+     "fields": {},
+     "inherited": {
+      "data": "(self) -> 'dict[str, Any]'",
+      "get_state": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
+      "set_state": "(self, save: 'bool' = True, **updates: 'Any') -> 'None'",
+      "state_data": "(self) -> 'dict[str, Any]'",
+      "to_dict": "(self) -> 'str'"
+     },
+     "methods": {
+      "__init__": "(self, path: 'str' = 'config.json')",
+      "get": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "get_copy": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "load": "(self) -> 'None'",
+      "named_all": "(self, section: 'str') -> 'dict[str, Any]'",
+      "named_delete": "(self, section: 'str', name: 'str', save: 'bool' = True) -> 'bool'",
+      "named_get": "(self, section: 'str', name: 'str', default: 'Any' = None) -> 'Any'",
+      "named_set": "(self, section: 'str', name: 'str', value: 'Any', save: 'bool' = True) -> 'None'",
+      "save": "(self) -> 'None'",
+      "set": "(self, *keys_and_value: 'Any') -> 'None'",
+      "validate": "(self) -> 'list[str]'"
+     }
+    }
+   },
+   "functions": {
+    "json_dumps": "(data: 'Any') -> 'str'"
+   },
+   "values": {}
+  },
+  "backend.config_owners": {
+   "classes": {},
+   "functions": {
+    "build": "(manager) -> 'dict'",
+    "owner_for": "(manager, section: 'str')",
+    "route_of": "(section: 'str') -> 'str'",
+    "store_for": "(manager, section: 'str')"
+   },
+   "values": {}
+  },
+  "backend.config_view": {
+   "classes": {
+    "ConfigView": {
+     "ancestry": [
+      "ConfigView",
       "object"
      ],
      "attrs": {},
@@ -2644,27 +2763,16 @@
      "fields": {},
      "inherited": {},
      "methods": {
-      "__init__": "(self, path: 'str' = 'config.json')",
       "data": "(self) -> 'dict[str, Any]'",
-      "get": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
-      "get_copy": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
       "get_state": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
-      "load": "(self) -> 'None'",
-      "named_all": "(self, section: 'str') -> 'dict[str, Any]'",
-      "named_delete": "(self, section: 'str', name: 'str', save: 'bool' = True) -> 'bool'",
-      "named_get": "(self, section: 'str', name: 'str', default: 'Any' = None) -> 'Any'",
-      "named_set": "(self, section: 'str', name: 'str', value: 'Any', save: 'bool' = True) -> 'None'",
-      "save": "(self) -> 'None'",
-      "set": "(self, *keys_and_value: 'Any') -> 'None'",
       "set_state": "(self, save: 'bool' = True, **updates: 'Any') -> 'None'",
       "state_data": "(self) -> 'dict[str, Any]'",
-      "to_dict": "(self) -> 'str'",
-      "validate": "(self) -> 'list[str]'"
+      "to_dict": "(self) -> 'str'"
      }
     }
    },
    "functions": {
-    "json_dumps": "(data: 'Any') -> 'str'"
+    "state_default": "(key: 'str', default: 'Any') -> 'Any'"
    },
    "values": {}
   },
@@ -2746,6 +2854,14 @@
     "interpret_click": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_click_target": "(result) -> tuple[str, str]",
     "interpret_find": "(result, label: str = 'element') -> tuple[str, str]"
+   },
+   "values": {}
+  },
+  "backend.dom_highlight_js": {
+   "classes": {},
+   "functions": {
+    "base_out_js": "() -> str",
+    "splice": "(body: str, **fragments) -> str"
    },
    "values": {}
   },
@@ -2850,6 +2966,36 @@
    "functions": {},
    "values": {}
   },
+  "backend.history_query_reads": {
+   "classes": {},
+   "functions": {
+    "around": "(q, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
+    "db_stats": "(q) -> 'dict'",
+    "gaps": "(q, person_id: 'int') -> 'list[dict]'",
+    "list_persons": "(q, req) -> 'dict'",
+    "page": "(q, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'",
+    "person_stats": "(q, nick: 'str') -> 'dict'",
+    "search": "(q, person_id: 'Optional[int]', query: 'str', limit: 'int', offset: 'int')",
+    "search_global": "(q, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
+    "search_person": "(q, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+   },
+   "values": {}
+  },
+  "backend.history_query_rows": {
+   "classes": {},
+   "functions": {
+    "apply_specs": "(data: 'dict', specs) -> 'dict'",
+    "clamp": "(limit: 'Optional[int]') -> 'int'",
+    "day_bounds": "(db, pid: 'int') -> 'tuple[str, str, int]'",
+    "item": "(row) -> 'dict'",
+    "item_media": "(data: 'dict') -> 'dict | None'",
+    "my_nicks": "(row) -> 'list'",
+    "person_item": "(row, my_nicks: 'list') -> 'dict'",
+    "person_row": "(db, nick: 'str')",
+    "stat_int": "(data: 'dict', key: 'str') -> 'int'"
+   },
+   "values": {}
+  },
   "backend.history_query_search": {
    "classes": {},
    "functions": {
@@ -2877,6 +3023,11 @@
    "functions": {
     "setup_logger": "(log_dir: str = 'logs', level: int = 20) -> logging.Logger"
    },
+   "values": {}
+  },
+  "backend.media_dialog": {
+   "classes": {},
+   "functions": {},
    "values": {}
   },
   "backend.media_handler": {
@@ -2941,6 +3092,14 @@
     "attach_with_options": "(cdp: backend.cdp_client.CDPClient, options: backend.media_handler.AttachOptions) -> bool",
     "list_image_files": "(folder: str, file_pattern: str) -> list[str]",
     "parse_patterns": "(file_pattern: str) -> list[str]"
+   },
+   "values": {}
+  },
+  "backend.media_handler_js": {
+   "classes": {},
+   "functions": {
+    "count_messages_js": "(shell_css: str) -> str",
+    "readback_js": "(input_css: str) -> str"
    },
    "values": {}
   },

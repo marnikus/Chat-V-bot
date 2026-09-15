@@ -225,6 +225,98 @@ methods), which is what the two pinned test files exercise.
   AGENT_RULES.md` §18.2/§18.3 measurements, `docs/README.md` and
   `docs/archive/README.md` indexes, and the *as-built* half of this document.
 
+## 3b. As built (2026-09-15, same session)
+
+Nine steps, nine commits, plus the closing one. Line counts are `wc -l`, the
+convention §1's table used; MI is `radon mi -s`.
+
+| # | Criterion | Target | At `6e03a53` | As built | Where |
+|---|---|---|---:|---:|---|
+| 1 | H-B1 file | ≤ 200 | 241 | **199** (MI 59.2) | `bridge/history_bridge.py` |
+| 2 | H-B2 facade | ≤ 350 | 531 | **250** (MI 60.9) | `backend/history_query.py` |
+| 3 | H-B2 `HistoryQuery` methods | ≤ 10 | 14 | **10** (70 LOC) | `backend/history_query.py` |
+| 4 | H-B2 MI | ≥ 50 | 42.0 | **60.9** | `backend/history_query.py` |
+| 5 | H-B3 file · methods · coverage | ≤ 300 · ≤ 15 · ≥ 90% | 511 · 20 · 85.8% | **186 · 13 · 100%** | `backend/config_manager.py` |
+| 6 | H-B4 file + payload module | ≤ 300 | 514, embedded | **232** (MI 60.0) + `dom_highlight_js.py` 293 | `backend/dom_highlight.py` |
+| 7 | H-B5 router constructor | ≤ 4 params | 8 | **3** (`ctx`, `parent`, `**legacy`) | `bridge/router.py` |
+| 8 | H-B5 media_handler · chat_parser | split by responsibility | 474 · 426, unsplit | **250** · **258** (+5 part modules) | `backend/media_*`, `backend/chat_parser*` |
+| 9 | H-B6 `CDPClient` methods | ≤ 15 | 20 | **11** (79 LOC; 9 more inherited) | `backend/cdp_client.py` |
+
+Every row is met. The area floor §1 listed as unfinished:
+
+* **zero files over 500 lines** anywhere (was 3);
+* `backend/` + `bridge/`: **251 files, median 126**, and only two over the
+  300-line band — `bridge/file_bridge.py` (333) and
+  `bridge/stack_bridge_parts.py` (334), the two §4 defers to Round K;
+* below MI 45 in `backend/` + `bridge/`: none of the files this round touched
+  (the worst now are the same two Round K files plus `chat_sync_session.py`).
+
+The eleven new modules, measured:
+
+| Module | Lines | MI | Module | Lines | MI |
+|---|---:|---:|---|---:|---:|
+| `bridge/history_bridge_wire.py` | 80 | 80.8 | `backend/config_defaults.py` | 135 | 78.9 |
+| `bridge/history_bridge_read.py` | 119 | 69.1 | `backend/config_owners.py` | 243 | 59.3 |
+| `backend/history_query_rows.py` | 159 | 68.1 | `backend/config_view.py` | 108 | 73.7 |
+| `backend/history_query_reads.py` | 271 | 55.6 | `backend/dom_highlight_js.py` | 293 | 100.0 |
+| `bridge/router_assembly.py` | 207 | 67.9 | `backend/media_handler_js.py` | 105 | 95.0 |
+| `bridge/router_legacy.py` | 199 | 62.1 | `backend/media_dialog.py` | 201 | 63.9 |
+| `backend/chat_parser_gate.py` | 181 | 61.4 | `backend/chat_parser_settle.py` | 91 | 71.7 |
+| `backend/cdp_client_wire.py` | 78 | 85.8 | | | |
+
+### Where the plan was corrected by measurement
+
+Three step descriptions could not be built as written, and each was corrected
+only after the reason was measured:
+
+1. **(J-3, J-6, J-7) The API snapshot records *definition sites*, not
+   re-exports.** The plan moved `json_dumps` (J-3), `AttachOptions` (J-6),
+   `PrivateCheck` / `title_matches` / `verify_private` (J-7) and expected a
+   re-export to keep the surface. It does not: `dump_public_api.py` keeps a
+   symbol only where `__module__` matches, so a moved public name reads as
+   *removed*. Established by experiment (moving `PrivateCheck` into a scratch
+   module and re-importing it makes `--diff` print
+   `backend.chat_parser.PrivateCheck (classes) removed`), and resolved by
+   keeping those names *defined* in their historical module and moving only
+   the machinery around them.
+2. **(J-5, J-7, J-8) A parameter object / mixin needs the snapshot's
+   `inherited` route, and `Router.__init__` is a slot.** `ConfigManager`,
+   `ChatParser` and `CDPClient` all lose their own method bodies to a base
+   (`ConfigView`, `SettleMixin`, `WireCommands`) with the signatures unchanged —
+   the drift `_class_drift` explicitly sanctions.
+3. **(J-8) `from __future__ import annotations` changes the *recorded*
+   signature.** The plan put `WireCommands` in `backend/cdp_client_transport.py`;
+   that module has the future import, which stringifies annotations, and the
+   snapshot then reads `(self, expression: 'str') -> 'Any'` where it recorded
+   `(self, expression: str) -> Any` — all nine verbs reported as changed.
+   So the mixin lives in its own module, `backend/cdp_client_wire.py`, the one
+   file in the family without the future import, with `Optional[dict]` spelled
+   as recorded. Regenerating the snapshot to bless a rendering artifact was
+   rejected. (J-6's `media_dialog.py` and J-7's new modules carry the future
+   import as usual: nothing there is recorded.)
+
+Two smaller ones: J-5's `Router(ctx=…)` keeps the historical boot keywords
+through `**legacy` and reports unknown ones at debug level (the plan dropped
+them silently), and J-6's `_verify_sent` moved to the dialog module with the
+rest of the page conversation rather than staying in the handler.
+
+### Closing battery (J-9)
+
+| Check | Result |
+|---|---|
+| Full suite (`pytest tests`, offscreen, deselecting the real-WebEngine test) | **3283 passed**, 2 skipped, 1 deselected, 1 xfailed, 934 subtests |
+| Same suite under `--branch` coverage | **94.06% line / 89.89% branch** (17,320 stmts · 3,968 branches). The *same command* on a worktree at `6e03a53` gives **93.83% / 89.49%** (17,197 · 3,966) — so both axes improved, and that pre-round run reproduces the number the Round H record quotes to the digit |
+| `backend/config_manager.py` coverage | **100%** (≥ 90% required); `backend/history_query.py` **100%** (it was 98.9% as a 531-line file) |
+| Per touched family, full suite before → after | every one of the eight is at or above its pre-round number |
+| `rule16_gate.py --with-clones` | green — "All owned functions fit. Ratchet intact. No stale overrides.", 0 new clone groups, 0 stale baseline entries |
+| API snapshot | regenerated **additively**: 71 → **82 modules**, +11 new, **0 removed**, 0 `import_error`; `CDPClient` 9 own + 9 `inherited`, `ChatParser` 9 + 1, `ConfigManager` 11 + 5 |
+| Block wire snapshot | unchanged (byte-identical) |
+| Family (line% / branch%), `6e03a53` → as built | `history_bridge` 94.9/90.3 → **95.0/91.9** · `history_query` 98.9/91.2 → **99.0/91.2** · `config_manager` 85.8/67.6 → **98.0/89.7** · `dom_highlight` 96.8/94.4 → **96.8/94.4** · `router` 100/95.0 → **100/95.2** · `media_handler` 91.7/97.4 → **92.1/97.4** · `chat_parser` 90.7/83.3 → **91.3/83.3** · `cdp_client` 97.5/89.1 → **97.6/89.1** |
+| Coverage measurement note | a family is the files the split produced (e.g. `chat_parser.py` + `chat_parser_gate.py` + `chat_parser_settle.py`), so a moved line cannot count as a lost one. The first instrument was a *subset* run on both sides; the full-suite run above replaced it, and it also corrected the subset's apparent `history_bridge` −0.2pp to +0.1pp |
+| J-2 follow-up | driving that measurement found `HistoryQuery._search` was left behind by the SQL move — a private shim with no caller and a docstring that no longer described it. Deleted, and `gaps()` (public, snapshot-pinned, previously uncovered) got a facade test in `tests/test_history_query_edges.py`, which is outside the mutation job's selection |
+| I-1.3 sleep ratchet | **64 / 64** unchanged; every new test is a yield-point test |
+| Git state | one commit per step (`e9bdb1b` J-3 … `187147a` J-8) plus the closing commit, pushed to `arena/01a0a1d3-chat-v-bot` (PR #4) |
+
 ## 4. What this round deliberately does not do
 
 * `bridge/stack_bridge_parts.py` (333 / 39.7), `bridge/file_bridge.py`

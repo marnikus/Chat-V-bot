@@ -589,6 +589,17 @@ reference implementation of that count is the AST walker in
   3 still over 500** — `backend/history_query.py` (531, whose H-B2 half moved
   the FTS/LIKE back-end into `backend/history_query_search.py`),
   `backend/dom_highlight.py` (514), `backend/config_manager.py` (511).
+  **2026-09-15, after Round J (Area B closed): 251 files, median 126, ZERO
+  over 500.** The three offenders above — `backend/history_query.py` (531),
+  `backend/dom_highlight.py` (514), `backend/config_manager.py` (511) — are now
+  256 / 232 / 186, and `bridge/history_bridge.py` 241 → 199,
+  `bridge/router.py` 486 → 204, `backend/media_handler.py` 474 → 250,
+  `backend/chat_parser.py` 426 → 258: eleven new part modules, every one inside
+  the band, each with its measurement in the Round J as-built table
+  ([`2026-09-15-round-j-area-b-closure/`](../archive/2026-09-15-round-j-area-b-closure/ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md)).
+  Two files still sit above the 300-line band, both Round K's by explicit
+  ruling: `bridge/stack_bridge_parts.py` (334) and `bridge/file_bridge.py`
+  (333).
   `bridge/history_bridge.py` left the band (544 → 241) when H-B1 moved its
   twenty-one @Slot bodies into the four `history_bridge_*` parts, and
   `backend/cdp_client.py` went 331 → 226 with the transport/events split (H-B6):
@@ -613,7 +624,13 @@ reference implementation of that count is the AST walker in
 * *Measured:* re-measure rather than trusting numbers written here — directories
   move. 2026-09-13: in band `core/`, `app/`, `bridge/`, `services/history/`,
   `services/run/`; past 15 files and held only by prefix families `services/`,
-  `stores/`, `backend/`, `actions/`. Cohesion is what earns the counting and it is
+  `stores/`, `backend/`, `actions/`. 2026-09-15 (Round J): `bridge/` is 25 raw
+  files, and it is a family-count directory now like the others — the router
+  trio (`router.py` + `router_assembly.py` + `router_legacy.py`), the
+  `history_bridge_*` six, the `bot_*_bridge` family and the eleven domain
+  bridges; `backend/` is 58 raw files over the same kind of prefix families
+  (`history_query_*`, `config_*`, `chat_parser_*`, `media_*`, `cdp_client_*`,
+  `dom_*`). Count families, not files: a split adds a name, not a module. Cohesion is what earns the counting and it is
   testable, not taste: `collector_*` share the `CollectorState` vocabulary and the
   `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
   protocol, and `stores/`'s eight single-domain stores each import the JSON write

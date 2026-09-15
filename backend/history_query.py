@@ -227,12 +227,6 @@ class HistoryQuery:
         """Search the whole archive, grouped per person, busiest first."""
         return await reads.search_global(self, query, limit, per_person)
 
-    async def _search(self, person_id: Optional[int], query: str, limit: int,
-                      offset: int):
-        """The FTS/LIKE back-end lives in `history_query_search.search`; the
-        method stays because both search entry points read through it."""
-        return await reads.search(self, person_id, query, limit, offset)
-
     # ── the user database window ─────────────────────────────────
     async def list_persons(self, req: PersonPageRequest) -> dict:
         """One page of the Full User Database, in the order the header asks.
