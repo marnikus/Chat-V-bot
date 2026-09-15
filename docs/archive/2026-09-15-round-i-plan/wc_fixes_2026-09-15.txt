@@ -1,0 +1,5 @@
+  487 bridge/router.py
+  135 ui/js/window-presets-actions.js
+   23 stores/history_repo_identity.py
+   30 bridge/stack_bridge_parts.py
+  675 total
