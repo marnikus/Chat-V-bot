@@ -1,8 +1,7 @@
 """Criteria / filter engine for user evaluation."""
 
 import logging
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import dataclass, asdict
 import json
 import aiosqlite
 

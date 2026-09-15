@@ -50,7 +50,11 @@ LIMITS, OWNED, RATCHET, OVERRIDES = (gate.LIMITS, gate.OWNED, gate.RATCHET,
 # A real function in this repo that is over the limit (53 LOC at the time of
 # writing). Used to prove the measurement detects a breach, so a green gate
 # cannot simply be a gate that measures nothing.
-CANARY = ("backend/history_query.py", "HistoryQuery", "page")
+#: A function nobody is about to shrink: `HistoryDB.init` lays out the schema
+#: (54 LOC). It was `HistoryQuery.page` until Round J step J-2 turned that into
+#: a three-line delegation — the canary's own rule is to pick another when it
+#: genuinely fits.
+CANARY = ("stores/history_db.py", "HistoryDB", "init")
 
 
 class TestTheGateIsNotVacuous(unittest.TestCase):
@@ -163,22 +167,30 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
         self.assertEqual(rows[key]["violations"], [])
 
     def test_enforcement_actually_fires_on_real_oversized_classes(self):
-        """The strongest check: with the ratchet lifted, the two genuinely
-        oversized legacy classes must be reported. Proves the loop is wired to
-        real measurement rather than passing because nothing was examined."""
+        """The strongest check: with the ratchet lifted, every class it still
+        exempts must be reported. Proves the loop is wired to real measurement
+        rather than passing because nothing was examined — and it follows the
+        ratchet, so a row that fits (and should be deleted) shows up here as a
+        class that is *no longer* over the cap instead of silently weakening
+        the check."""
         saved = dict(gate.RATCHET)
+        self.assertTrue(saved, "an empty ratchet makes this test vacuous")
+        over = {(rel, name) for (rel, name) in saved
+                if gate.class_violations(gate.classes(rel)[name])}
+        self.assertTrue(
+            over, "every ratcheted class now fits — delete the rows instead of "
+                  "keeping a test that cannot fail")
         gate.RATCHET.clear()
         try:
             breaches = gate.run()["breaches"]
         finally:
             gate.RATCHET.update(saved)
-        self.assertTrue(
-            any("HistoryQuery" in b and "loc" in b for b in breaches),
-            "with the ratchet lifted, HistoryQuery (340 LOC) must breach the "
-            f"{gate.CLASS_LIMITS['loc']} cap; got: {breaches}")
-        self.assertTrue(
-            any("HistoryBridge" in b for b in breaches),
-            f"HistoryBridge must breach too; got: {breaches}")
+        missing = [f"{rel}::{name}" for rel, name in sorted(over)
+                   if not any(name in b and rel in b for b in breaches)]
+        self.assertEqual(
+            missing, [],
+            "with the ratchet lifted these classes must breach the "
+            f"{gate.CLASS_LIMITS} caps; got: {breaches}")
 
 
 class TestPreExistingDebtDoesNotGrow(unittest.TestCase):

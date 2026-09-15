@@ -9,8 +9,8 @@ from backend.criteria_engine import CriteriaEngine
 from backend.bridge import Bridge
 from core.di import Container
 from core.events import EventBus
-from services.history import HistoryService
-from services.run import ActionEngine
+from services.history import HistoryDeps, HistoryService
+from services.run import ActionEngine, RunDeps
 from stores.user_memory import UserMemory
 
 
@@ -29,13 +29,13 @@ def create_container() -> Container:
         port=c.get("config").get("chrome", "port", default=9222)))
     container.register("memory", lambda c: UserMemory(queue_path(c.get("config"))))
     container.register("criteria", lambda _c: CriteriaEngine())
-    container.register("engine", lambda c: ActionEngine(
+    container.register("engine", lambda c: ActionEngine(RunDeps(
         cdp=c.get("cdp"), memory=c.get("memory"), criteria=c.get("criteria"),
-        bus=c.get("bus")))
-    container.register("history", lambda c: HistoryService(
+        bus=c.get("bus"))))
+    container.register("history", lambda c: HistoryService(HistoryDeps(
         cdp=c.get("cdp"), config=c.get("config"),
         session_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
-        memory=c.get("memory")))
+        memory=c.get("memory"))))
     container.register("bridge", lambda c: Bridge(
         cdp=c.get("cdp"), memory=c.get("memory"), criteria=c.get("criteria"),
         engine=c.get("engine"), config=c.get("config")))

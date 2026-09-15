@@ -174,22 +174,23 @@ loading. If a test would pass with the feature deleted, it is not a test.
 ## RULE 9 — a guard that skips work must not stall the stack
 
 A setting that makes a phase decline to do its work is only allowed to skip
-*that work*, never the phases downstream of it. When Scroll & Parse skips
-collection because of the backlog guard, `_run_collect_phase()` still returns
-`await self._memory.get_queue()`, so the people already waiting are worked
-through. If it returned `[]` instead, ticking the checkbox would quietly stop
-the entire pipeline — the exact opposite of what the user asked for.
+*that work*, never the phases downstream of it. The rule was born on the
+retired backlog guard: when Scroll & Parse skipped collection, the collect
+phase still returned the memory queue — returning `[]` instead would have
+quietly stopped the entire pipeline, the exact opposite of what the user
+asked for. The guard's knobs are retired (`_RETIRED_KNOBS`); the rule stays,
+and its live carrier is `ScrollRunPart._read_unmessaged`.
 
 Two corollaries:
 
-* **Fail open.** Counting the backlog fails open to `0` at both layers
-  (`ActionEngine.backlog_count()` and `ScrollParse._read_backlog()`), so a
-  counting error can never silently stop collection.
+* **Fail open.** The un-messaged read fails open to an empty set → normal
+  collection, so a read problem can never silently stop the block (the old
+  backlog counting failed open to `0` at both of its layers — same principle).
 * **Skipping is success.** A skipped run returns `ActionResult.OK`, not a
   failure — the guard firing is correct behaviour.
 
-Note the asymmetry, which is intended: a *normal* collect phase returns only the
-people it just collected, while a *skipped* one returns the whole waiting queue.
+The old asymmetry is worth remembering: a *normal* collect phase returned only
+the people it just collected, while a *skipped* one returned the whole queue.
 
 ## RULE 10 — one control per decision
 
@@ -450,10 +451,10 @@ params or method count of a legacy offender, and must not add methods to a class
 already over 15 without netting down. Touch a hotspot only with tests that lock
 current behaviour first.
 
-Landmines (need a design doc before "quickly fixing CC"): `ScrollParser`,
-`Collector`, `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
+Landmines (need a design doc before "quickly fixing CC"): `Collector` (216/40,
+over both axes), `HistoryBridge`, `UndoService`, `services/run/coordinator.py`,
 `stores/label_state.py`, `backend/history_query.py`, `services/db_lifecycle.py`,
-`backend/tab_matcher.py`, `actions/wait_page.py`.
+`backend/tab_matcher.py`, `actions/wait_page.py` — `ScrollParser` came off in G2.
 
 ### 16.6 Agent workflow (implementation process)
 
@@ -579,17 +580,36 @@ reference implementation of that count is the AST walker in
   next feature, then split by single responsibility (RULE 19 §19.4 has the
   worked pattern: `services/run/`, `stores/history_repo*`, `services/db_deletion*`).
 * *Measured:* re-run §18.6's `wc -l` rather than trusting a number written here —
-  files move. 2026-09-13: **171 files, median 136, 7 still over 500**. Five of the
-  seven are `backend/` files the frozen AREA D snapshot forbids splitting; the
-  reason, and the decision it needs, are in
-  [`ROUND_F_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md)
-  §2 and §7. Of the other two, `bridge/history_bridge.py` carries step F4's §18.5
-  note naming its Qt slot contract, and `services/db_deletion_flow.py` sits inside
-  the F1 family — recorded as its next candidate rather than given a note, because
-  §18.5 wants a constraint named and only scope applies; the same reasoning parks
-  `services/collector_tick.py` inside the F2 family. How steps F1–F3 produced the
-  three families, recorded against every number they aimed at:
-  [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
+  files move. 2026-09-13, after Rounds G2/G3: **186 files, median 134, 4 still
+  over 500**: `backend/history_query.py` (601), `bridge/history_bridge.py` (544,
+  whose §18.5 note names its live Qt slot contract), `backend/dom_highlight.py`
+  (514), `backend/config_manager.py` (507) — still open after Round G, whose G7
+  took the scheduled backlog items instead (two of the four are §16.5
+  landmines). **2026-09-14, after Round H Areas C + B: 237 files, median 124,
+  3 still over 500** — `backend/history_query.py` (531, whose H-B2 half moved
+  the FTS/LIKE back-end into `backend/history_query_search.py`),
+  `backend/dom_highlight.py` (514), `backend/config_manager.py` (511).
+  **2026-09-15, after Round J (Area B closed): 251 files, median 126, ZERO
+  over 500.** The three offenders above — `backend/history_query.py` (531),
+  `backend/dom_highlight.py` (514), `backend/config_manager.py` (511) — are now
+  256 / 232 / 186, and `bridge/history_bridge.py` 241 → 199,
+  `bridge/router.py` 486 → 204, `backend/media_handler.py` 474 → 250,
+  `backend/chat_parser.py` 426 → 258: eleven new part modules, every one inside
+  the band, each with its measurement in the Round J as-built table
+  ([`2026-09-15-round-j-area-b-closure/`](../archive/2026-09-15-round-j-area-b-closure/ROUND_J_AREA_B_CLOSURE_DESIGN_2026-09-15.md)).
+  Two files still sit above the 300-line band, both Round K's by explicit
+  ruling: `bridge/stack_bridge_parts.py` (334) and `bridge/file_bridge.py`
+  (333).
+  `bridge/history_bridge.py` left the band (544 → 241) when H-B1 moved its
+  twenty-one @Slot bodies into the four `history_bridge_*` parts, and
+  `backend/cdp_client.py` went 331 → 226 with the transport/events split (H-B6):
+  [`AREA_B_REBUILD_2026-09-14.md`](../archive/2026-09-14-round-h/AREA_B_REBUILD_2026-09-14.md).
+  The owner ruling of 2026-09-13 (Round G design §1c) lifted the
+  AREA-D freeze protecting three of the old seven; G2/G3 then split the two
+  worst files (`chat_sync.py` 807 → seam + 5, `scroll_parser.py` 706 →
+  facade + 4) and the F1 family's next candidate (`db_deletion_flow.py` 509 →
+  seam + 3): [`2026-09-13-round-g-write-gate/`](../archive/2026-09-13-round-g-write-gate/);
+  F1–F3 family history: [`ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md`](../archive/2026-09-12-round-f-size-tail/ROUND_F2_F3_GOD_CLASS_DESIGN_2026-09-12.md)
   §8. Known debt (§16.5 landmines): do not grow them, extract when you next touch.
 
 ### 18.3 Modules — 5–15 cohesive files
@@ -604,18 +624,25 @@ reference implementation of that count is the AST walker in
 * *Measured:* re-measure rather than trusting numbers written here — directories
   move. 2026-09-13: in band `core/`, `app/`, `bridge/`, `services/history/`,
   `services/run/`; past 15 files and held only by prefix families `services/`,
-  `stores/`, `backend/`, `actions/`. Cohesion is what earns the counting and it is
+  `stores/`, `backend/`, `actions/`. 2026-09-15 (Round J): `bridge/` is 25 raw
+  files, and it is a family-count directory now like the others — the router
+  trio (`router.py` + `router_assembly.py` + `router_legacy.py`), the
+  `history_bridge_*` six, the `bot_*_bridge` family and the eleven domain
+  bridges; `backend/` is 58 raw files over the same kind of prefix families
+  (`history_query_*`, `config_*`, `chat_parser_*`, `media_*`, `cdp_client_*`,
+  `dom_*`). Count families, not files: a split adds a name, not a module. Cohesion is what earns the counting and it is
   testable, not taste: `collector_*` share the `CollectorState` vocabulary and the
   `host.` protocol, `undo_*` the timeline-entry vocabulary and the `owner`
   protocol, and `stores/`'s eight single-domain stores each import the JSON write
   layer while importing none of each other — eight modules, not one family.
-* `stores/` is therefore 37 files counting as **15** modules (`history_*`,
+* `stores/` is therefore 45 files counting as **15** modules (`history_*`,
   `label_*`, `media_*`, the write layer `jsonio` + `atomic` + `json_store`, three
-  aggregate/collaborator pairs, eight single-domain stores). Its sub-package remedy
-  is closed by contract rather than effort — AREA B's baseline keys are dotted
-  module paths, so moving `stores/history_*` into `stores/history/` breaks plan
-  §7.3 rule 1 — and merging is closed because it undoes the AREA B2 splits and
-  lands outside §18.2's band. So count families: `tools/metrics/stores_modules.py`
+  aggregate/collaborator pairs, eight single-domain stores). The family layout
+  stands on its own merits, not on a freeze: the AREA-B dotted-key contract that
+  once forbade the sub-package remedy was lifted by the owner ruling of
+  2026-09-13 (Round G design §1c), and moving or merging anyway would rewrite
+  37 import paths for no cohesion gain, outside §18.2's band. So count
+  families: `tools/metrics/stores_modules.py`
   measures and ratchets that count against the import graph, and a new loose file
   fails the gate until someone says where it belongs;
   `test_stores_module_families.py` enforces it in the suite. Why, with the merge
@@ -628,8 +655,9 @@ working: the files in `docs/current/`, a root `CLAUDE.md` / `AGENTS.md`, a
 package-level README. The test is not "is it complete?" but **"can an agent read
 all of it and still have room for the code it must change?"**
 
-* That single test is why `docs/current/` holds three files and 78 are archived
-  (RULE 17): a pointer outward beats a wall of prose.
+* That single test is why `docs/current/` holds three files and everything else
+  is archived (RULE 17 — `docs/archive/README.md` owns the count): a pointer
+  outward beats a wall of prose.
 * **Over 200 lines**, move the detail into `docs/archive/<date>-<topic>/` (or a
   linked appendix) and leave the link here. A context file is a map, not the
   territory.
@@ -641,13 +669,14 @@ all of it and still have room for the code it must change?"**
   detail into `docs/archive/` instead of adding lines.
 * `AGENT_RULES.md` is measured against a different budget: an agent must be able
   to load *all* the rules in one read, so splitting them would defeat the
-  purpose. **Budget: ~730 lines.** It is at that budget now — adding RULE 19
-  (2026-09-11) pushed it past the ~700 set when RULE 18 was written, and the
-  difference was paid by moving detail out, not by cutting norms: RULE 1's worked
-  code went to a linked appendix, the measurement dumps went to
-  `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, and the remediation prose that
-  RULE 18 and RULE 19 both carried now lives once, in RULE 19. The next rule
-  added here must do the same — extract first, then add.
+  purpose. **Budget: ~730 lines.** Adding RULE 19 (2026-09-11) pushed this file
+  past the ~700 set when RULE 18 was written, and the difference was paid by
+  moving detail out, not by cutting norms: RULE 1's worked code went to a linked
+  appendix, the measurement dumps went to
+  `reports/IDEAL_SIZE_BASELINE_2026-09-11.md`, the remediation prose that
+  RULE 18 and RULE 19 both carried now lives once, in RULE 19, and RULE 19's
+  ladder and worked case studies went to their own appendix (2026-09-13, G6 §5).
+  The next rule added here must do the same — extract first, then add.
 
 ### 18.5 When you exceed an ideal
 
@@ -682,82 +711,45 @@ count, not a line grep.
 > Splitting first turns one complicated function into several files that share
 > one complicated decision — greener metrics, worse code (§16.2 gaming).
 
-```
-Step 1:  Fix NESTING DEPTH first (> 4 → flatten)
-         ├── Guard clauses / early returns
-         ├── Invert conditions
-         └── Extract deeply nested blocks
+**Step 1 — nesting (> 4 → flatten).** Guard clauses: refuse early and return so
+the happy path is never indented. Invert conditions (`if not ok: return`, not
+`if ok:` around the body). Extract the *innermost* deep block first — smallest
+scope, safest move.
 
-Step 2:  Fix CYCLOMATIC COMPLEXITY (> 10 → simplify)
-         ├── Replace conditionals with polymorphism / dispatch
-         ├── Strategy pattern for branching
-         └── Lookup tables instead of if/elif chains
+**Step 2 — cyclomatic (> 10 → simplify).** Dispatch instead of branching on a
+type; strategies for interchangeable behaviour; lookup tables instead of if/elif
+chains — tables are data, not branches. Two interchangeable back-ends belong
+behind one call, not a branch at every call site. Never delete a real decision
+to reach the number — four independent binary outcomes cost CC 5 minimum (§16.2).
 
-Step 3:  Fix COGNITIVE COMPLEXITY (> 15 → clarify)
-         ├── Break compound boolean expressions into named variables
-         ├── Replace clever tricks with obvious code
-         └── Simplify control flow
+**Step 3 — cognitive (> 15 → clarify).** Name the compound: a called predicate
+reads, `if a and not b and c or d` does not. Obvious beats clever — a comment
+explaining a trick is a request to delete the trick.
 
-Step 4:  NOW check SIZE — it's probably already fixed
-         ├── If function still > 20 LOC → extract by concept
-         ├── If class still > 120 LOC → single responsibility split
-         └── If params > 3 → introduce parameter object
-```
+**Step 4 — size, last; it is usually already fixed.** If not, extract **by
+concept** with a name that already exists in the domain — never `foo_part1`. A
+class over the ideal gets a single-responsibility split; too many params get a
+parameter object (one typed request instead of five arguments).
 
 Steps 1–3 quote the **fail lines** (RULE 16: nesting 4, CC 10, cognitive 15).
 Step 4 quotes the **ideals** (RULE 18 / §16.1 "prefer": 20 / 120 / 3) — *not*
-fail lines, which are 30 / 150 / 4. Nothing in step 4 rejects a change on its own.
-
-Why the order works: each earlier step **deletes decisions**, and deleting
-decisions is what moves every later metric. Flattening a six-deep branch usually
-removes 2–4 CC; a lookup table replacing an `if/elif` chain removes the CC, the
-nesting *and* most of the cognitive load; and a function whose branches are gone
-is often short enough that no extraction is needed at all.
-
-**19.1 Step 1 — nesting (> 4).** Guard clauses: refuse early and return so the
-happy path is never indented — structurally, the way `services/db_deletion_flow.py`
-raises `_PhaseRefusal` from a phase and catches it once in `delete_world`,
-instead of 27 nested early-return blocks. Invert (`if not ok: return`, not
-`if ok:` around the body). Extract the *innermost* deep block first — smallest
-scope, safest move. Measured by the AST walker in `tests/test_rule16_new_code.py`.
-
-**19.2 Step 2 — cyclomatic (> 10).** Dispatch instead of branching on a type:
-the 16 blocks are a registry lookup (`actions/registry.py` `get_action_class`),
-not an `if/elif` over block ids. Lookup tables are data, not branches:
-`choose_cycle_mode()` returns `CycleDecision(mode, reason)` from a precedence
-table; `DB_GROUP_SUFFIXES`, `MIME_EXT`, `IMAGE_EXT` are tuples/dicts. Two
-interchangeable back-ends behind one call, not a branch at every call site:
-archive search is FTS5 when SQLite offers it and a `text_lc LIKE` scan when it
-does not (`backend/history_query.py`). Never delete a real decision to reach the
-number — four independent binary outcomes cost CC 5 minimum (§16.2).
-
-**19.3 Step 3 — cognitive (> 15).** Name the compound: `if _is_self_chat(names)`
-reads, `if a and not b and c or d` does not; `StackFacts.has_mem_click` exists so
-nobody re-scans the stack inside a condition. Obvious beats clever — a comment
-explaining a trick is a request to delete the trick. Scored by
-`cognitive-complexity` 1.3.x.
-
-**19.4 Step 4 — size, last.** By now the function is often already inside the
-ideal. If not, extract **by concept** with a name that already exists in the
-domain (`_gate_before_cycle`, `_announce_stopped`, `inspect_stack`) — never
-`foo_part1`. A class over the ideal gets a single-responsibility split, the way
-`services/run/` and `stores/history_repo*` were split (§18.2). Too many params
-get a parameter object: `PersonPageRequest` in `backend/history_query.py` is the
-model — `needle` / `where` / `order` / `spec` / `columns` as properties of one
-typed request instead of five arguments.
+fail lines, which are 30 / 150 / 4. Nothing in step 4 rejects a change on its
+own. The order works because each earlier step **deletes decisions**, and
+deleting decisions is what moves every later metric: flattening a six-deep
+branch usually removes 2–4 CC, and a lookup table replacing an if/elif chain
+removes the CC, the nesting *and* most of the cognitive load at once.
 
 **19.5 When the ladder does not apply.** A function that is long but *flat* —
 sequential phases or a fallback ladder, little nesting — is not fixed by steps
-1–3. Two real cases: `DbLifecycle._delete_unlocked` was 631 LOC at CC 143
-because it ran seven sequential phases, and the fix was extraction by phase
-(`validate → scan → switch → detach → database → media → finalize`);
-`backend/message_injector.py` `_run_type_strategies` (70 LOC) is a verified
-typing ladder — value setter → Ctrl+V → `insertText` — whose length is three
-real attempts plus their read-backs, so it extracts per attempt, not per branch.
-In both, step 4 was the tool rather than the fallback. Read the shape before
-picking a step: nested → 1, branching → 2, dense → 3, long-and-flat → 4.
+1–3; there, step 4 (extract per phase or per attempt) is the tool rather than
+the fallback. Read the shape before picking a step: nested → 1, branching → 2,
+dense → 3, long-and-flat → 4.
 
 **19.6 Verify after every step.** `radon cc -s <file>`, then the gate:
 `.venv/bin/python tests/test_rule16_new_code.py`. A step is not finished because
 the number moved — it is finished when the existing suite is still green
 (§16.6 step 3), because steps 1–3 must be behaviour-preserving.
+
+The ASCII ladder and the worked repo case studies for every step:
+[`docs/archive/2026-09-13-rules-appendices/RULE19_REMEDIATION_LADDER.md`](../archive/2026-09-13-rules-appendices/RULE19_REMEDIATION_LADDER.md)
+(extracted from this file to keep it loadable in one read — RULE 18 §18.4).

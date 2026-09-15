@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -45,19 +46,34 @@ __all__ = ["MediaStore", "slugify_nick", "infer_kind", "IMAGE_EXT",
            "MIME_EXT", "TRANSLIT", "SAFE_CHARS", "RESERVED"]
 
 
+@dataclass(frozen=True)
+class MediaOptions:
+    """The four configuration knobs of the media cache.
+
+    Replaces the four config parameters of `MediaStore.__init__` (6 -> 3) —
+    G7 §2, the stores wide-parameter adjudication. `db` and `cdp` stay
+    constructor arguments: they are collaborators, not configuration.
+    Defaults match the signature this replaced exactly.
+    """
+
+    cache_dir: str = "saved_media"
+    max_file_mb: float = 25
+    max_cache_mb: float = 10
+    enabled: bool = True
+
+
 class MediaStore:
     """URL registry + on-disk byte cache for images and GIFs."""
 
-    def __init__(self, db: HistoryDB, cdp=None, cache_dir: str = "saved_media",
-                 max_file_mb: float = 25, max_cache_mb: float = 10,
-                 enabled: bool = True):
+    def __init__(self, db: HistoryDB, cdp=None, options: MediaOptions = None):
+        options = options or MediaOptions()
         self.db = db
         self.cdp = cdp
-        self.cache_dir = cache_dir
+        self.cache_dir = options.cache_dir
         self.now = datetime.now
-        self.max_file_bytes = int(float(max_file_mb) * 1024 * 1024)
-        self.max_cache_bytes = int(float(max_cache_mb) * 1024 * 1024)
-        self.enabled = bool(enabled)
+        self.max_file_bytes = int(float(options.max_file_mb) * 1024 * 1024)
+        self.max_cache_bytes = int(float(options.max_cache_mb) * 1024 * 1024)
+        self.enabled = bool(options.enabled)
         self.paused = False
         self._dirs: dict[str, str] = {}      # nick → person folder
         self._http_fetcher = None            # test hook for the Python downloader

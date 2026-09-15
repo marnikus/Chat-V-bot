@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
 
 
@@ -50,8 +51,7 @@ class ServiceCase(unittest.IsolatedAsyncioTestCase):
         self.page = ConnectedPage([raw(f"m{i}", idx=i) for i in range(4)])
         self.db_a = os.path.join(self.dir, "world_a.db")
         self.db_b = os.path.join(self.dir, "world_b.db")
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_a)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_a))
         await self.service.init()
 
     async def asyncTearDown(self):
@@ -126,6 +126,34 @@ class TestSettings(ServiceCase):
             "SELECT value FROM app_settings WHERE key='media_max_file_mb'")
         self.assertTrue(rows, "per-world setting not persisted")
         self.assertEqual(float(json.loads(rows[0][0])), 9.0)
+
+    async def test_the_persist_task_is_referenced_until_it_finishes(self):
+        """The fire-and-forget persist must hold a reference to its task.
+
+        CPython's event loop keeps only a *weak* reference to a pending task,
+        so `loop.create_task(work())` with nothing holding the result can be
+        collected before it runs and the write is silently dropped. That was
+        latent here until 2026-09-14, when the larger Round H suite made
+        `test_patch_lands_in_the_worlds_app_settings` — which sleeps 50 ms and
+        hopes — fail twice running; holding the task made the full suite green
+        again (3186 passed).
+
+        Forcing the collection on demand proved unreliable in isolation, so
+        this asserts the invariant that actually changed instead: while the
+        task is pending the service references it, and it stops referencing it
+        once it has run. That is deterministic and it fails on the old code.
+        """
+        self.service.apply_settings({"media": {"max_file_mb": 9}})
+        pending = self.service.__dict__.get("_pending_persist_tasks")
+        self.assertTrue(pending,
+                        "the persist task is unreferenced and can be collected")
+        await asyncio.sleep(0.05)
+        rows = await self.service.db.fetchall(
+            "SELECT value FROM app_settings WHERE key='media_max_file_mb'")
+        self.assertTrue(rows, "per-world setting not persisted")
+        self.assertEqual(float(json.loads(rows[0][0])), 9.0)
+        self.assertFalse(self.service.__dict__["_pending_persist_tasks"],
+                         "a finished task must be released again")
 
     async def test_a_per_world_cap_travels_with_its_world(self):
         """Documented dual-write: a patch lands in the world's

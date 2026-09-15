@@ -21,7 +21,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT)
 
-from stores.media_fetch import _NetworkWatch                       # noqa: E402
+# Round H H-C4 moved the raw download helpers out of media_fetch.py.
+from stores.media_download import _NetworkWatch                    # noqa: E402
 from stores.media_store import MediaStore                          # noqa: E402
 
 

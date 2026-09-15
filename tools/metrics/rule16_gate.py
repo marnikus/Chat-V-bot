@@ -34,6 +34,8 @@ CLASS_LIMITS = {"loc": 150, "methods": 15}
 
 # ── policy ────────────────────────────────────────────────────────
 # Functions the sortable-columns feature owns. (file, class or None, function.)
+# Rows follow the code: `_person_request` moved to bridge/history_bridge_read.py
+# in Round J step J-1, so its row moved with it (RULE 16 §16.6).
 OWNED = [
     ("backend/history_query.py", "PersonPageRequest", "needle"),
     ("backend/history_query.py", "PersonPageRequest", "where"),
@@ -42,9 +44,171 @@ OWNED = [
     ("backend/history_query.py", "PersonPageRequest", "columns"),
     ("backend/history_query.py", "PersonPageRequest", "resolved_dir"),
     ("backend/history_query.py", "HistoryQuery", "list_persons"),
-    ("backend/history_query.py", None, "_person_item"),
-    ("bridge/history_bridge.py", None, "_person_request"),
+    ("backend/history_query_rows.py", None, "person_item"),
+    ("bridge/history_bridge_read.py", None, "_person_request"),
     ("bridge/history_bridge.py", "HistoryBridge", "userdb_page"),
+    # ── Speed multiplier (2026-09-13, ported onto the G line) ────
+    ("actions/speed.py", None, "coerce_multiplier"),
+    ("actions/speed.py", None, "read_multiplier"),
+    ("actions/speed.py", None, "scale_ms"),
+    ("actions/speed.py", None, "_fmt_rate"),
+    ("actions/speed.py", None, "describe"),
+    ("actions/speed.py", None, "_is_active_speed"),
+    ("actions/speed.py", None, "resolve_stack_multiplier"),
+    ("actions/speed_multiplier.py", "SpeedMultiplier", "__init__"),
+    ("actions/speed_multiplier.py", "SpeedMultiplier", "execute"),
+    # the feature's two touchpoints inside already-split G-line modules:
+    ("actions/scroll_parse_run.py", None, "_with_run_speed"),
+    ("services/run/run_lifecycle.py", "RunLifecycleMixin",
+     "_resolve_run_speed"),
+    ("actions/base.py", "BaseAction", "pre_delay"),
+    # ── AI Bot Chat + Grok Prompt Editor (2026-09-13) ────────────
+    ("services/bot_grok.py", None, "mask"),
+    ("services/bot_grok.py", 'GrokSettings', "__init__"),
+    ("services/bot_grok.py", 'GrokSettings', "active_id"),
+    ("services/bot_grok.py", 'GrokSettings', "_bucket"),
+    ("services/bot_grok.py", 'GrokSettings', "_read"),
+    ("services/bot_grok.py", 'GrokSettings', "api_key"),
+    ("services/bot_grok.py", 'GrokSettings', "url"),
+    ("services/bot_grok.py", 'GrokSettings', "model"),
+    ("services/bot_grok.py", 'GrokSettings', "endpoint"),
+    ("services/bot_grok.py", 'GrokSettings', "timeout_s"),
+    ("services/bot_grok.py", None, "reply_text"),
+    ("services/bot_grok.py", 'GrokClient', "__init__"),
+    ("services/bot_grok.py", 'GrokClient', "spec"),
+    ("services/bot_grok.py", 'GrokClient', "_payload"),
+    ("services/bot_grok.py", 'GrokClient', "_session"),
+    ("services/bot_grok.py", 'GrokClient', "_post"),
+    ("services/bot_grok.py", 'GrokClient', "complete"),
+    ("services/bot_grok.py", None, "client_for"),
+    ("services/bot_prompts.py", None, "default_text"),
+    ("services/bot_prompts.py", None, "title_of"),
+    ("services/bot_prompts.py", None, "is_usable"),
+    ("services/bot_prompts.py", 'PromptLibrary', "__init__"),
+    ("services/bot_prompts.py", 'PromptLibrary', "_stored"),
+    ("services/bot_prompts.py", 'PromptLibrary', "text"),
+    ("services/bot_prompts.py", 'PromptLibrary', "all"),
+    ("services/bot_prompts.py", 'PromptLibrary', "save"),
+    ("services/bot_prompts.py", 'PromptLibrary', "reset"),
+    ("services/bot_prompts.py", 'PromptLibrary', "render"),
+    ("services/bot_reactions.py", None, "parse"),
+    ("services/bot_reactions.py", 'ReactionLabels', "__init__"),
+    ("services/bot_reactions.py", 'ReactionLabels', "_def_for"),
+    ("services/bot_reactions.py", 'ReactionLabels', "ensure_defs"),
+    ("services/bot_reactions.py", 'ReactionLabels', "reaction_ids"),
+    ("services/bot_reactions.py", 'ReactionLabels', "active"),
+    ("services/bot_reactions.py", 'ReactionLabels', "_one_reaction"),
+    ("services/bot_reactions.py", 'ReactionLabels', "apply"),
+    ("services/bot_reactions.py", 'ReactionLabels', "clear"),
+    ("services/bot_reactions.py", 'ReactionLabels', "state_of"),
+    ("services/bot_variables.py", 'Variable', "__init__"),
+    ("services/bot_variables.py", 'Variable', "as_dict"),
+    ("services/bot_variables.py", None, "catalog"),
+    ("services/bot_variables.py", None, "count_of"),
+    ("services/bot_variables.py", None, "is_known"),
+    ("services/bot_variables.py", None, "tail"),
+    ("services/bot_variables.py", None, "resolve"),
+    ("services/bot_variables.py", None, "fill"),
+    ("services/bot_variables.py", None, "unknown_names"),
+    ("services/bot_variables.py", None, "malformed"),
+    ("services/bot_variables.py", None, "validate"),
+    ("services/bot_providers.py", 'ProviderSpec', "as_dict"),
+    ("services/bot_providers.py", None, "spec_of"),
+    ("services/bot_providers.py", None, "catalog"),
+    ("services/bot_providers.py", None, "endpoint"),
+    ("services/bot_providers.py", None, "headers_of"),
+    ("services/bot_providers.py", None, "body_of"),
+    ("services/bot_providers.py", None, "openai_reply"),
+    ("services/bot_providers.py", None, "gemini_text"),
+    ("services/bot_providers.py", None, "no_candidate"),
+    ("services/bot_providers.py", None, "gemini_reply"),
+    ("services/bot_providers.py", None, "reply_of"),
+    ("bridge/bot_bridge.py", None, "_emit_answer"),
+    ("bridge/bot_bridge.py", None, "_guarded"),
+    ("bridge/bot_bridge.py", None, "schedule"),
+    ("bridge/bot_bridge.py", None, "label_edit_of"),
+    ("bridge/bot_bridge.py", 'BotSideBridge', "__init__"),
+    ("bridge/bot_bridge.py", 'BotSideBridge', "_chat_bridge"),
+    ("bridge/bot_bridge.py", 'BotBridge', "__init__"),
+    ("bridge/bot_bridge.py", 'BotBridge', "service"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_load_today"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_suggest_reply"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_analyze_reaction"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_send_message"),
+    ("bridge/bot_bridge.py", 'BotBridge', "_parser"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_reaction_state"),
+    ("bridge/bot_bridge.py", 'BotBridge', "bot_apply_reaction"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "_prompts"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "_presets"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_get_prompts"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_save_prompt"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_reset_prompt"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_preview_prompt"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_get_variables"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_check_prompt"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_get_presets"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_save_preset"),
+    ("bridge/bot_prompt_bridge.py", 'BotPromptBridge', "bot_delete_preset"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge', "_connections"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge', "bot_connections"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge',
+     "bot_save_connection"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge',
+     "bot_delete_connection"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge',
+     "bot_use_connection"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge',
+     "bot_test_connection"),
+    ("services/named_section.py", 'NamedSection', "__init__"),
+    ("services/named_section.py", 'NamedSection', "_all"),
+    ("services/bot_connections.py", None, "slug"),
+    ("services/bot_connections.py", 'Connection', "__init__"),
+    ("services/bot_connections.py", 'Connection', "provider"),
+    ("services/bot_connections.py", 'Connection', "spec"),
+    ("services/bot_connections.py", 'Connection', "title"),
+    ("services/bot_connections.py", 'Connection', "api_key"),
+    ("services/bot_connections.py", 'Connection', "model"),
+    ("services/bot_connections.py", 'Connection', "url"),
+    ("services/bot_connections.py", 'Connection', "endpoint"),
+    ("services/bot_connections.py", 'Connection', "problem"),
+    ("services/bot_connections.py", 'Connection', "state"),
+    ("services/bot_connections.py", 'ConnectionStore', "all"),
+    ("services/bot_connections.py", 'ConnectionStore', "_seed_missing"),
+    ("services/bot_connections.py", 'ConnectionStore', "get"),
+    ("services/bot_connections.py", 'ConnectionStore', "active_id"),
+    ("services/bot_connections.py", 'ConnectionStore', "active"),
+    ("services/bot_connections.py", 'ConnectionStore', "save"),
+    ("services/bot_connections.py", 'ConnectionStore', "_merged"),
+    ("services/bot_connections.py", 'ConnectionStore', "delete"),
+    ("services/bot_connections.py", 'ConnectionStore', "use"),
+    ("services/bot_connections.py", 'ConnectionStore', "_adopt_legacy"),
+    ("services/bot_presets.py", None, "slug"),
+    ("services/bot_presets.py", 'PresetLibrary', "for_template"),
+    ("services/bot_presets.py", 'PresetLibrary', "get"),
+    ("services/bot_presets.py", 'PresetLibrary', "save"),
+    ("services/bot_presets.py", 'PresetLibrary', "delete"),
+    ("bridge/bot_settings_bridge.py", 'BotSettingsBridge', "_probe"),
+    ("services/bot_chat.py", None, "empty_detail"),
+    ("services/bot_chat.py", None, "scoped_page"),
+    ("services/bot_chat.py", None, "open_partner"),
+    ("services/bot_chat.py", None, "check_recipient"),
+    ("services/bot_chat.py", None, "deliver"),
+    ("services/bot_chat.py", 'BotChatService', "__init__"),
+    ("services/bot_chat.py", 'BotChatService', "labels"),
+    ("services/bot_chat.py", 'BotChatService', "load"),
+    ("services/bot_chat.py", 'BotChatService', "today"),
+    ("services/bot_chat.py", 'BotChatService', "context_of"),
+    ("services/bot_chat.py", 'BotChatService', "active_label_name"),
+    ("services/bot_chat.py", 'BotChatService', "preview"),
+    ("services/bot_chat.py", 'BotChatService', "suggest_reply"),
+    ("services/bot_chat.py", 'BotChatService', "analyze_reaction"),
+    ("services/bot_chat.py", 'BotChatService', "reaction_state"),
+    ("services/bot_chat.py", 'BotChatService', "apply_reaction"),
+    ("services/bot_transcript.py", None, "today_key"),
+    ("services/bot_transcript.py", None, "item_text"),
+    ("services/bot_transcript.py", None, "as_transcript"),
+    ("services/bot_transcript.py", None, "items_of_day"),
+    ("services/bot_transcript.py", None, "last_inbound"),
 ]
 
 # Pre-existing oversized classes this feature cannot split — the AREA D API
@@ -57,9 +221,35 @@ OWNED = [
 # The method count drops by one because the gate counts nested defs through
 # `ast.walk`, and the inner `async def guarded()` is gone: 26 LOC and one
 # method of real shrink, locked here so it cannot be handed back.
+# Round H step H-B1 (`2026-09-14`, AREA_B_BACKEND_BRIDGE_DESIGN §3) then moved
+# the twenty-one @Slot bodies into the four `history_bridge_*` part modules:
+# 467 LOC / 44 -> 180 LOC / 27 methods — the seven Signals and the twenty-one
+# @Slots the QWebChannel wire pins, the guarded runner (`_run_async`) and
+# `_json_arg`. Round J step J-1 moved `_person_request` to the read part and
+# the guard policy (`_schedule` / `_ask` / `_run_if_archive`) to
+# history_bridge_wire.py, so it is re-frozen at the measured 158/24: the slots
+# cannot shrink (the frontend calls every one of them by name), which is why
+# the LOC axis is where the split's gain lives — and why 158 is still 8 over
+# CLASS_LIMITS' 150 while the row is what makes that acceptable.
+# `HistoryQuery` went 362/14 (sortable columns) → 266/14 (H-B2a, the FTS/LIKE
+# back-end) → **off this table** (J-2, the row projection + the read SQL):
+# see the note inside RATCHET.
+# `ScrollRunPart` is the G7.5 run-pipeline half of the monolithic
+# ScrollParse: 12 methods, 197 LOC of SPAN — the size its split ledger
+# documents, shipped while the file sat outside the OWNED scan. The Speed
+# port (2026-09-13) registers the file here, so the class becomes gated;
+# it is frozen at exactly that size — the port's `_with_run_speed` helper
+# is module-level and the call site is net-zero lines, deliberately, so the
+# ratchet could not be handed any growth.
 RATCHET = {
-    ("backend/history_query.py", "HistoryQuery"): {"loc": 362, "methods": 14},
-    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 467, "methods": 44},
+    # `HistoryQuery` was here at 266/14 and left the ratchet in Round J step J-2:
+    # the SQL moved to history_query_reads.py, so the class is 70/10 — inside
+    # CLASS_LIMITS, enforced by the per-file class loop below with no exemption.
+    # Deleting the row is the point of the ratchet: an exemption that fits
+    # should not survive as a licence to grow back (RULE 16 §16.6).
+    ("bridge/history_bridge.py", "HistoryBridge"): {"loc": 158, "methods": 24},
+    ("actions/scroll_parse_run.py", "ScrollRunPart"): {"loc": 197,
+                                                       "methods": 12},
 }
 
 # Escape hatch. A limit that can never be bent gets bypassed silently, which is
@@ -70,7 +260,10 @@ RATCHET = {
 #     deleted, so the hatch cannot become a dumping ground.
 OVERRIDES: dict[tuple, str] = {}
 
-SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
+SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py",
+               "services/bot_grok.py", "services/bot_prompts.py",
+               "services/bot_reactions.py", "services/bot_chat.py",
+               "bridge/bot_bridge.py", "bridge/bot_prompt_bridge.py"]
 
 # Exact-AST clone groups already in the tree at 53ba5fb, measured with
 # `python tools/metrics/clone_scan.py .`. The spec fails on *new* groups, not
@@ -160,21 +353,136 @@ SMELL_FILES = ["backend/history_query.py", "bridge/history_bridge.py"]
 # splitting the imports to break the span is exactly the cosmetic
 # span-shrinking §18.5 forbids, and would reintroduce pylint C0411. Same
 # situation as the F1 pair below and the two F2 pairs above.
+#
+# ── Round G step G3 (flow family split, injector family split) ──────
+#
+# MOVED — ('backend/media_handler.py', 'backend/message_injector.py') is
+# now ('backend/media_handler.py', 'backend/message_injector_field.py'),
+# span 7 at media_handler.py:118 and message_injector_field.py:68. The
+# cloned content is the byte-identical `_rep` reporter helper (the
+# report-callback with the logging fallback), which the injector split
+# moved into the field module verbatim. The debt is unchanged in kind and
+# count — media_handler still carries its own copy — so the baseline key
+# follows the move instead of pretending the debt dissolved. Deduping
+# `_rep` into one shared reporter module is a real refactor beyond this
+# structural step; recorded as Round G backlog (plan §4, G7).
+#
+# MOVED AGAIN — ('backend/media_handler.py', 'backend/message_injector_field.py')
+# is now ('backend/media_dialog.py', 'backend/message_injector_field.py'), span 7
+# at media_dialog.py:52. Round J step J-6 splits the attachment family, and the
+# `_rep` reporter helper went with the page side of it: the module that owns the
+# report/refusal plumbing the pipeline steps share. The clone span itself is
+# byte-identical (the helper and its `log` fallback were transcribed verbatim),
+# and the file that now carries media_handler's copy is media_dialog.py. The
+# debt is unchanged in kind and count — still exactly one duplicated helper —
+# so the key follows the move again rather than pretending the debt dissolved.
+# Deduping `_rep` into one shared reporter module remains the deferred refactor
+# recorded as Round G backlog (plan §4, G7); J-6 is a structural step and does
+# not silently absorb it.
+#
+# ADDED — ('backend/media_dialog.py', 'services/history/runtime.py'), span 6 at
+# media_dialog.py:27 and runtime.py:24: the plain `from __future__ / asyncio /
+# json / logging / os` header, the same kind of noise as every other header
+# group here. All four imports are genuinely used in media_dialog.py (asyncio
+# for the verification poll, json for the probe reply, os for the file paths),
+# so — per §18.5 — the span is not shrunk with a cosmetic import shuffle.
+#
+# ADDED — ('services/db_deletion_flow_remove.py',
+# 'services/db_deletion_scan.py'), span 7 at flow_remove.py:10 and
+# scan.py:13: the deletion family's standard header (`from __future__` /
+# asyncio / logging / os / `from services import db_deletion` /
+# db_media_scan / the module `log`). No logic is copied. Every name is
+# genuinely used in flow_remove.py: asyncio for the three CancelledError
+# re-raises, logging for the three log.debug failure lines, os throughout
+# the unlink/prune phases, db_deletion for canonical /
+# build_deletion_inventory / prune_empty_dirs / is_within,
+# DB_GROUP_SUFFIXES in _remove_database_group, scan_world_media in
+# _rescan_keep. vulture at confidence 90 reports nothing in the file, so
+# there is no unused import whose removal would dissolve the window
+# honestly. Tried and rejected: reordering or splitting the imports to
+# break the span is the cosmetic span-shrinking §18.5 forbids and would
+# reintroduce C0411. Same situation as the F1 pair
+# ('services/db_deletion_inventory.py', 'services/db_deletion_policy.py').
+# Maintenance 2026-09-13 (Round G, step G4): two entries change.
+#
+# REMOVED — ('services/run/__init__.py', 'services/run_service/__init__.py').
+# W6 extended the lazy __getattr__ re-exports of services/run/__init__.py with
+# RunDeps/StepContext, which broke the shared import/__all__ header window the
+# group was frozen on; clone_scan no longer reports it, so the baseline
+# ratchets down by one.
+#
+# ADDED — ('bridge/context.py', 'services/wiring_requests.py'). Same header
+# noise as the others: W7 turned BridgeContext into a dataclass and the W5
+# bundle module opens with the identical four statements — __future__,
+# dataclass, typing (Any, Optional), core.events.EventBus. Both genuinely
+# need exactly those imports (each annotates Optional[EventBus] fields and
+# Any-typed collaborators); no logic is copied. A click_user|scroll_parse
+# group W8 briefly created was dissolved instead of recorded — NewTabCheck
+# .before is Optional[dict] (the annotation _verify_new_tab always had), so
+# click_user does not import Any and the shared window stays under MIN_SPAN.
+# Maintenance 2026-09-13 (AI Bot Chat): `bridge/bot_bridge.py` joined the
+# existing ('bridge/cdp_bridge.py', 'bridge/people_bridge.py') group, which
+# grows to three files. It is the same standard bridge header the other groups
+# here are — `from __future__ / asyncio / json / logging / PySide6.QtCore
+# (QObject, Signal, Slot) / from core.events import …` — and no logic is
+# copied. Every name is genuinely used in bot_bridge.py: `asyncio.ensure_future`
+# schedules the Grok call, `json.dumps` shapes every answer, `log.warning`
+# reports a raising service, the three Qt names declare the slots and signals,
+# and `LogMessage` puts a failure in the log console. Tried and rejected:
+# dropping or reordering an import to dissolve the window would either delete a
+# used name or reintroduce pylint C0411 — the cosmetic span-shrinking §18.5
+# forbids.
+# Maintenance 2026-09-14 (Round H, Area C step H-C1): one entry DISSOLVED —
+# ('services/run/coordinator.py', 'services/run/progress.py'). The cloned
+# window was the `try: from stores.user_memory import UserRecord / except
+# Exception: @dataclass class UserRecord …` import guard, which coordinator.py
+# and progress.py each carried a byte-identical copy of. H-C1 splits the run
+# ladder's queue half out of progress.py, and the guard now exists once, in
+# services/run/requests.py (the module that already owns the run family's
+# value objects); progress.py re-exports the name so the P0-2 runtime pin
+# still holds. Nothing was added to reach this: the group is simply gone.
 CLONE_BASELINE = frozenset({
     ("actions/click_back.py", "actions/click_main_tab.py"),
-    ("backend/media_handler.py", "backend/message_injector.py"),
-    ("bridge/cdp_bridge.py", "bridge/people_bridge.py"),
+    ("backend/media_dialog.py", "backend/message_injector_field.py"),
+    ("backend/media_dialog.py", "services/history/runtime.py"),
+    ("bridge/bot_bridge.py", "bridge/cdp_bridge.py",
+     "bridge/people_bridge.py"),
+    # The standard bridge import header — a match of imports, not logic.
+    # (`bot_prompt_bridge.py` was in this group until 2026-09-13, when the
+    # Prompt Editor and the AI Settings dialog moved their shared wiring into
+    # `BotSideBridge` and its import list changed.)
     ("bridge/collector_bridge.py", "bridge/label_bridge.py",
      "bridge/layout_bridge.py", "bridge/undo_bridge.py"),
     ("bridge/db_bridge.py", "bridge/history_bridge.py"),
+    ("bridge/context.py", "services/wiring_requests.py"),
     ("services/collector_partner.py", "services/collector_report.py"),
+    ("services/db_deletion_flow_remove.py", "services/db_deletion_scan.py"),
     ("services/db_deletion_inventory.py", "services/db_deletion_policy.py"),
     ("services/history/query.py", "services/undo_world.py"),
-    ("services/run/__init__.py", "services/run_service/__init__.py"),
-    ("services/run/coordinator.py", "services/run/progress.py"),
+    ("services/run/error_recovery.py", "services/run/step_report.py"),
     ("stores/atomic.py", "stores/jsonio.py"),
     ("stores/labels_file_store.py", "stores/session_store.py",
      "stores/settings_store.py"),
+    # Round H Area C, 2026-09-14 — the H-C2/H-C4 splits each left a module
+    # beside the file it was cut out of, and both halves import the same
+    # schema/request constants. The scanner's MIN_SPAN is 6 statements, so a
+    # shared import list of that length reads as a clone. Inspected on the
+    # day: all three matches are imports only, no shared logic.
+    #
+    #   history_schema_legacy.py:26 | history_schema_repair.py:24
+    #       the seven `stores.history_schema` constants both halves need
+    #   history_prepend.py:19       | history_repo_append.py:17
+    #       the history_models / history_requests names both halves need
+    #   mutate_import.py:16         | preset_store.py:16
+    #       a coincidence: `copy`, `logging`, `os`, `datetime` in that order
+    #
+    # The alternatives were considered and rejected as cosmetic dodges under
+    # §18.5: reordering or splitting an import list to break the window would
+    # make the code worse to read while hiding the match instead of recording
+    # it. Re-check these three if either file's imports change.
+    ("stores/history_prepend.py", "stores/history_repo_append.py"),
+    ("stores/history_schema_legacy.py", "stores/history_schema_repair.py"),
+    ("services/history/mutate_import.py", "stores/preset_store.py"),
 })
 
 

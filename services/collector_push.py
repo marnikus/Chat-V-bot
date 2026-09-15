@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import logging
 
-from backend.chat_parser import verify_private
+from backend.chat_parser import PrivateQuery, verify_private
 from services.collector_states import CollectorState
+from stores.history_requests import AppendRequest
 
 log = logging.getLogger("chatbot")
 
@@ -71,14 +72,14 @@ class PushPath:
              "partner": data.get("partner") or self._o._nick,
              "title": data.get("title") or data.get("partner") or "",
              "me": data.get("me") or ""},
-            self._o._nick, self._o.my_nick, items=items)
+            self._o._nick, self._o.my_nick, PrivateQuery(items=items))
 
     async def _append_push(self, items: list):
         """Store the pushed records; None when the write raised."""
         try:
-            return await self._o.repo.append(self._o._nick, items,
+            return await self._o.repo.append(AppendRequest(self._o._nick, items,
                                           my_nick=self._o.my_nick,
-                                          align=False, now=self._o.now())
+                                          align=False, now=self._o.now()))
         except Exception as e:                        # noqa: BLE001
             log.warning("push append failed: %s", e)
             return None

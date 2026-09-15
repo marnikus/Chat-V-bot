@@ -16,6 +16,17 @@ persist). This module stays the import site for all of it, so no caller changed
 
 Chunked reads are paced and interruptible, so a 3000-message bootstrap never
 blocks the UI and stops promptly when the user says stop (RULE 7).
+
+The family (Round J step J-7): this module is the public contract — the gate's
+entry point (`verify_private`, whose guard ORDER is the contract), `PrivateCheck`
+and `title_matches`, the reader/value builders (`align`, `parse_records`), the
+`ChatParser` DOM surface and `sync_conversation()`. The gate's decision
+machinery is in `backend/chat_parser_gate.py`, the settle policy in
+`backend/chat_parser_settle.py`. Both are imported here; neither imports this
+module back except through `chat_parser_gate._check()`'s documented local
+import of `PrivateCheck`. The API snapshot pins `PrivateCheck`, `title_matches`
+and `verify_private` to *this* module, which is why the public half did not
+move with the machinery.
 """
 
 from __future__ import annotations
@@ -24,12 +35,19 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Callable, Iterable, Optional
+from typing import Iterable, Optional
 
 from backend import chat_agent_js, chat_text
+from backend.chat_parser_gate import (  # noqa: F401  (re-exported: family internals)
+    _GateNames, _authors_of, _check, _is_self_chat, _split_authors,
+    _strangers_verdict, _tab_gate, _partner_gate, _title_gate,
+    _foreign_authors,
+)
+from backend.chat_parser_settle import SettleMixin
 from backend.chat_sync import (  # noqa: F401  (re-exported: the seam, §3.1)
     SLICE_RETRIES, SyncOptions, merge_live as _merge_live, run_sync)
+from backend.parser_requests import (  # noqa: F401  (re-exported with the gate)
+    PrivateQuery, SettleSpec)
 from stores.history_models import (MAX_LIVE_ITEMS, Alignment,  # noqa: F401
                                     AppendResult,  # noqa: F401
                                     MessageRecord,  # noqa: F401
@@ -98,10 +116,6 @@ class PrivateCheck:
         return bool(self.ok)
 
 
-_distinct = chat_text.distinct
-_authors_from_items = chat_text.authors_from_items
-
-
 def title_matches(title: str, nick: str) -> bool:
     """Step 2: does the active tab title name this person?"""
     want, have = _norm(nick), _norm(title)
@@ -110,91 +124,8 @@ def title_matches(title: str, nick: str) -> bool:
     return have == want or want in have
 
 
-@dataclass(frozen=True)
-class _GateNames:
-    """The five nicks the gate compares, each normalised exactly once.
-
-    The page hands these over in whatever shape its DOM had them — padded,
-    doubled spaces, non-strings — and every comparison below (and every
-    message shown to the user) must use the same collapse, or a nick that
-    reads fine to a human refuses its own chat.
-    """
-
-    target: str = ""          # the person we think we are collecting
-    partner: str = ""         # the nick the page says we are talking to
-    title: str = ""           # the raw ACTIVE TAB title
-    me_cfg: str = ""          # My Nick from the settings
-    me_state: str = ""        # the pane's own user list
-
-    @classmethod
-    def read(cls, state: dict, nick: str, my_nick: str) -> "_GateNames":
-        clean = chat_text.clean
-        return cls(target=clean(nick),
-                   partner=clean(state.get("partner")),
-                   title=str(state.get("title") or state.get("partner") or ""),
-                   me_cfg=clean(my_nick),
-                   me_state=clean(state.get("me")))
-
-    @property
-    def effective_me(self) -> str:
-        # the pane's own user list is the authoritative "me": a configured My
-        # Nick can go stale when the user renames themselves on the site, and
-        # the stale value must not make this gate refuse the chat (2026-09-08)
-        return self.me_cfg or self.me_state
-
-    def refuse(self, reason: str, detail: str) -> "PrivateCheck":
-        return PrivateCheck(False, reason, detail, self.me_cfg, self.partner)
-
-
-def _is_self_chat(names: _GateNames) -> bool:
-    """Writing to your own chat can look like a perfect conversation."""
-    effective = names.effective_me
-    return bool(effective and _norm(effective) == _norm(names.target)
-                and (not names.me_state
-                     or _norm(names.me_state) == _norm(names.target)))
-
-
-def _split_authors(state: dict, names: _GateNames) -> tuple:
-    """Some pages report only one flat `authors` list — guess the sides."""
-    everyone = _distinct(state.get("authors"))
-    ins = [a for a in everyone
-           if _norm(a) != _norm(names.effective_me or names.target)]
-    outs = [a for a in everyone if _norm(a) == _norm(names.effective_me)]
-    return ins, outs
-
-
-def _authors_of(state: dict, items, names: _GateNames) -> Optional[tuple]:
-    """Step 1's raw material: (inbound, outbound) authors, or None when the
-    page cannot tell who wrote what."""
-    if items is not None:
-        return _authors_from_items(items)
-    if not ("in_authors" in state or "out_authors" in state
-            or "authors" in state):
-        return None
-    ins = _distinct(state.get("in_authors"))
-    outs = _distinct(state.get("out_authors"))
-    return (ins, outs) if (ins or outs) else _split_authors(state, names)
-
-
-def _foreign_authors(outs, names: _GateNames) -> tuple:
-    """Who wrote outbound lines that is neither me nor my partner.
-
-    "Me" is often undetectable — the page does not always label my own
-    messages — so a single outbound author is taken to be me (that is the
-    `me` the caller reports back); more than one, and we cannot tell, so all
-    of them count as strangers.
-    """
-    me = names.me_cfg or names.me_state or (outs[0] if len(outs) == 1 else "")
-    if me:
-        return me, [a for a in outs
-                    if _norm(a) != _norm(me)
-                    and _norm(a) != _norm(names.me_state)
-                    and _norm(a) != _norm(names.target)]
-    return me, list(outs) if len(outs) > 1 else []
-
-
 def verify_private(state: dict, nick: str, my_nick: str = "",
-                   items=None, require_private: bool = True) -> PrivateCheck:
+                   query: PrivateQuery = PrivateQuery()) -> PrivateCheck:
     """The gate. `ok` is False unless BOTH steps pass.
 
     RULE 15: this is the only place the private-chat decision is made, and it
@@ -206,7 +137,7 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
     # The guard ORDER is part of the contract: the run panel shows whichever
     # reason fired first, so not_private → no_partner → title → self_chat →
     # authors must stay in that sequence.
-    refusal = _tab_gate(state, names, require_private)
+    refusal = _tab_gate(state, names, query.require_private)
     if refusal is not None:
         return refusal
     refusal = _partner_gate(names)
@@ -217,61 +148,22 @@ def verify_private(state: dict, nick: str, my_nick: str = "",
         return refusal
 
     # ── step 1: exactly two nicks ─────────────────────────────────
-    authors = _authors_of(state, items, names)
+    authors = _authors_of(state, query.items, names)
     if authors is None:
         return names.refuse("no_author_data",
                             "this page cannot tell me who wrote what")
     return _strangers_verdict(authors, names)
 
 
-def _tab_gate(state: dict, names, require_private: bool):
-    """The tab-is-private guard; None when the tab passes it."""
-    if require_private and str(state.get("tab") or "") != "private":
-        return names.refuse("not_private",
-                            "the active tab is not a private chat")
-    return None
-
-
-def _partner_gate(names):
-    """The tab-names-a-person guard; None when a partner is present."""
-    if not names.target or not names.partner:
-        return names.refuse("no_partner",
-                            "the active tab does not name a person")
-    return None
-
-
-def _title_gate(names):
-    """The tab-title guard and the self-chat guard, in their pinned order."""
-    # ── step 2: the tab title ─────────────────────────────────────
-    if not title_matches(names.title, names.target):
-        return names.refuse(
-            "title_mismatch",
-            f"the active tab is “{chat_text.clean(names.title)}”, "
-            f"not “{names.target}”")
-    if _is_self_chat(names):
-        return names.refuse("self_chat", "the partner is my own nick")
-    return None
-
-
-def _strangers_verdict(authors, names) -> PrivateCheck:
-    """Who else writes here: ok when only the two of us do."""
-    ins, outs = authors
-    me, foreign = _foreign_authors(outs, names)
-    strangers = _distinct([a for a in ins
-                           if _norm(a) != _norm(names.target)] + foreign)
-    if not strangers:
-        return PrivateCheck(True, "ok", "", me, names.partner, [])
-    shown = ", ".join(strangers[:3]) + ("…" if len(strangers) > 3 else "")
-    return PrivateCheck(False, "strangers",
-                        f"other people write here: {shown}",
-                        me, names.partner, strangers)
-
-
 _payload = chat_text.payload
 
 
-class ChatParser:
-    """Talks to the in-page agent through CDP evaluates."""
+class ChatParser(SettleMixin):
+    """Talks to the in-page agent through CDP evaluates.
+
+    The three waiting methods (`settle_after_top`, `_poll_snapshot`,
+    `_settle_exit`) come from `SettleMixin`; everything else is below.
+    """
 
     def __init__(self, cdp, chunk_size: int = 80, chunk_pause_ms: int = 40):
         self.cdp = cdp
@@ -341,101 +233,26 @@ class ChatParser:
                 raw = {}
         return raw if isinstance(raw, dict) else {}
 
-    async def settle_after_top(self, first_state: dict,
-                               wait_ms: int = 300,
-                               stable_polls: int = 3,
-                               max_wait_s: float = 6.0,
-                               minimum_count: int = 0) -> dict:
-        """Poll until the pane is at the top and older lines stopped arriving.
-
-        The chat loads older history asynchronously when it is scrolled up, so
-        the collector must wait for the DOM to settle before it reads. A slow
-        or virtualised page must not be mistaken for an empty chat: if the
-        conversation had messages before the scroll and the DOM loses them
-        while it re-renders older lines, `minimum_count` keeps us polling until
-        the visible count returns (and stays) above that floor. A page that
-        times out reports `_settled=False` so the caller knows the full scan
-        is incomplete and must be retried.
-        """
-        floor = max(0, int(minimum_count or 0))
-        last_count = int(first_state.get("count") or 0)
-        stable = 0
-        deadline = asyncio.get_event_loop().time() + max_wait_s
-        state = first_state
-        while stable < stable_polls:
-            state, count, settled = await self._poll_snapshot(floor)
-            stable = stable + 1 if settled and count == last_count else 0
-            last_count = count
-            state["_settled"] = stable >= stable_polls
-            done = self._settle_exit(state, stable, stable_polls, deadline)
-            if done is not None:
-                return done
-            await asyncio.sleep(wait_ms / 1000.0)
-        state["_settled"] = True
-        return state
-
-    async def _poll_snapshot(self, floor: int) -> tuple:
-        """One settle poll → (state, visible count, at-top-and-above-floor).
-
-        The count floor is what keeps a slow or virtualised page from being
-        mistaken for an empty chat while it re-renders older lines.
-        """
-        state = await self.state()
-        state = state if isinstance(state, dict) else {}
-        count = int(state.get("count") or 0)
-        scroll = state.get("scroll") or {}
-        return state, count, bool(scroll.get("atTop")) and count >= floor
-
-    @staticmethod
-    def _settle_exit(state: dict, stable: int, stable_polls: int,
-                     deadline: float) -> Optional[dict]:
-        """The loop's exit — the state to return — or None to poll again.
-
-        A timeout reports `_settled=False` so the caller knows the full scan
-        is incomplete and must be retried.
-        """
-        if stable >= stable_polls:
-            return state
-        if asyncio.get_event_loop().time() >= deadline:
-            state["_settled"] = False
-            return state
-        return None
-
     async def pause(self) -> None:
         if self.chunk_pause_ms:
             await asyncio.sleep(self.chunk_pause_ms / 1000.0)
 
 
 async def sync_conversation(parser: ChatParser, repo: HistoryRepo, nick: str,
-                            my_nick: str = "",
-                            require_private: bool = False,
-                            verify_partner: bool = False,
-                            max_messages: Optional[int] = None,
-                            chunk_pause_ms: Optional[int] = None,
-                            should_stop: Optional[Callable[[], bool]] = None,
-                            on_progress: Optional[Callable[[int, int], None]] = None,
-                            now: Optional[datetime] = None,
-                            backfill_older: bool = False,
-                            backfill_wait_s: float = 2.0,
-                            media=None) -> SyncResult:
+                            options: Optional[SyncOptions] = None) -> SyncResult:
     """Bring the archive up to date with what the page currently shows.
 
-    With `backfill_older=True` the pane is first scrolled to its first message
-    (and put back after the read). This is the “full history from the
+    With `options.backfill_older=True` the pane is first scrolled to its first
+    message (and put back after the read). This is the “full history from the
     beginning” path: the in-page virtualiser only keeps recent nodes, so the
     earliest lines visit the DOM only after scrolling up.
 
     The algorithm itself is in `backend.chat_sync` (see its module docstring
     for the phase map); this signature is the public contract of the archive
     reader and stays put — it is what `services/collector_service` and the
-    COLLECT_HISTORY block call. The keyword arguments are gathered into a
-    `SyncOptions` and handed to `run_sync()`, which returns the same
-    `SyncResult` this function always returned.
+    COLLECT_HISTORY block call. The knobs travel as one typed `SyncOptions`
+    (Round G step 4: the gathering this body used to do now happens at the
+    call sites, which already knew every value by name); `options=None`
+    means all defaults.
     """
-    options = SyncOptions.from_kwargs(
-        my_nick=my_nick, require_private=require_private,
-        verify_partner=verify_partner, max_messages=max_messages,
-        chunk_pause_ms=chunk_pause_ms, should_stop=should_stop,
-        on_progress=on_progress, now=now, backfill_older=backfill_older,
-        backfill_wait_s=backfill_wait_s, media=media)
     return await run_sync(parser, repo, nick, options)

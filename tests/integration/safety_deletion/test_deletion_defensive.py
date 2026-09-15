@@ -19,9 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 import services.db_deletion_inventory as INV  # noqa: E402
 import services.db_deletion_paths as PATHS  # noqa: E402
 from services.db_deletion import (  # noqa: E402
-    DeletionOutcome, build_deletion_inventory, canonical,
-    classify_candidate, collect_discovered_files, plan_deletion,
-    prune_empty_dirs, unlink_one)
+    CandidateContext, DeletionOutcome, DeletionSpec,
+    build_deletion_inventory, canonical, classify_candidate,
+    collect_discovered_files, plan_deletion, prune_empty_dirs, unlink_one)
 
 
 def write(path, data=b"x"):
@@ -258,22 +258,14 @@ class TestClassifyDefensive(unittest.TestCase):
     def test_islink_raises_retains(self):
         a = write(os.path.join(self.vf, "a.jpg"))
         with mock.patch("os.path.islink", side_effect=OSError("boom")):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(), other_world_folders=frozenset(),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:symlink")
 
     def test_canonical_raises_outside(self):
         outside = write(os.path.join(self.tmp, "o.jpg"))
         with mock.patch.object(PATHS, "canonical",
                                side_effect=RuntimeError("boom")):
-            v = classify_candidate(
-                candidate_abs=outside, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(), other_world_folders=frozenset(),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=outside, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         # is_within False (canonical boom) → root check also booms → outside
         self.assertEqual(v, "retain:outside_root")
 
@@ -290,11 +282,7 @@ class TestClassifyDefensive(unittest.TestCase):
             return real(p)
 
         with mock.patch.object(PATHS, "canonical", side_effect=flaky):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(), other_world_folders=frozenset(),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         # root check swallowed → falls through to remove (regular file)
         self.assertEqual(v, "remove")
 
@@ -308,12 +296,7 @@ class TestClassifyDefensive(unittest.TestCase):
             return real(p)
 
         with mock.patch.object(PATHS, "canonical", side_effect=flaky):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(),
-                other_world_folders=frozenset(["/tmp/bad-other"]),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset(["/tmp/bad-other"])), is_discovered=False)
         self.assertEqual(v, "remove")
 
     def test_commonpath_valueerror_other(self):
@@ -330,12 +313,7 @@ class TestClassifyDefensive(unittest.TestCase):
             raise ValueError("mix")
 
         with mock.patch("os.path.commonpath", side_effect=flaky):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(),
-                other_world_folders=frozenset([self.base]),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset([self.base])), is_discovered=False)
         # ValueError swallowed → not other-world → remove
         self.assertEqual(v, "remove")
 
@@ -346,11 +324,7 @@ class TestClassifyDefensive(unittest.TestCase):
             def __str__(self):
                 raise RuntimeError("boom")
 
-        v = classify_candidate(
-            candidate_abs=a, base_abs=self.base,
-            victim_folder_abs=self.vf, folder_exclusive=True,
-            keep=frozenset([Bad()]), other_world_folders=frozenset(),
-            is_discovered=False)
+        v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset([Bad()]), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "remove")
 
     def test_keep_block_raises(self):
@@ -366,21 +340,13 @@ class TestClassifyDefensive(unittest.TestCase):
             return real(p)
 
         with mock.patch.object(PATHS, "canonical", side_effect=flaky):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset([a]), other_world_folders=frozenset(),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset([a]), other_world_folders=frozenset()), is_discovered=False)
         self.assertIn(v, ("remove", "retain:shared"))
 
     def test_isfile_raises(self):
         a = write(os.path.join(self.vf, "a.jpg"))
         with mock.patch("os.path.isfile", side_effect=OSError("boom")):
-            v = classify_candidate(
-                candidate_abs=a, base_abs=self.base,
-                victim_folder_abs=self.vf, folder_exclusive=True,
-                keep=frozenset(), other_world_folders=frozenset(),
-                is_discovered=False)
+            v = classify_candidate(candidate_abs=a, ctx=CandidateContext(base_abs=self.base, victim_folder_abs=self.vf, folder_exclusive=True, keep=frozenset(), other_world_folders=frozenset()), is_discovered=False)
         self.assertEqual(v, "retain:not_file")
 
 
@@ -394,12 +360,7 @@ class TestPlanDefensive(unittest.TestCase):
         a = write(os.path.join(vf, "a.jpg"))
         shared = write(os.path.join(vf, "s.jpg"))
         inv = _t.SimpleNamespace(worlds=[], complete=True)
-        plan = plan_deletion(
-            victim_abs="/tmp/v.db", victim_folder_abs=vf,
-            media_base_abs=base, footprint_files={a},
-            discovered_files={a, shared}, keep={shared},
-            folder_exclusive=True, other_world_folders=set(),
-            inventory=inv)
+        plan = plan_deletion(DeletionSpec(victim_abs="/tmp/v.db", victim_folder_abs=vf, media_base_abs=base, footprint_files={a}, discovered_files={a, shared}, keep={shared}, folder_exclusive=True, other_world_folders=set(), inventory=inv))
         # a dup skipped; shared discovered → retained
         self.assertIn(os.path.abspath(shared), plan.retained)
         self.assertIn(os.path.abspath(a), plan.candidates)

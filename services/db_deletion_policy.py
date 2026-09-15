@@ -104,9 +104,28 @@ def _non_file_reason(cand: str) -> str | None:
         return "retain:not_file"
 
 
-def classify_candidate(*, candidate_abs: str, base_abs: str,
-                       victim_folder_abs: str, folder_exclusive: bool,
-                       keep: frozenset, other_world_folders: frozenset,
+@dataclass(frozen=True)
+class CandidateContext:
+    """Immutable policy inputs shared by every classified candidate.
+
+    The fields are the old flat `classify_candidate` keywords verbatim, in
+    their old order (Round G step 4). `victim_folder_abs` travels with the
+    contract although the ladder reads the other four — dropping it is a
+    separate cleanup needing its own justification.
+    """
+
+    base_abs: str
+    victim_folder_abs: str
+    folder_exclusive: bool
+    keep: frozenset
+    other_world_folders: frozenset
+
+    def verdict(self, ap: str, is_discovered: bool) -> str:
+        return classify_candidate(candidate_abs=ap, ctx=self,
+                                  is_discovered=is_discovered)
+
+
+def classify_candidate(*, candidate_abs: str, ctx: CandidateContext,
                        is_discovered: bool) -> str:
     """Policy verdict for one candidate: 'remove' or 'retain:<reason>'.
 
@@ -115,37 +134,18 @@ def classify_candidate(*, candidate_abs: str, base_abs: str,
     ambiguous folder → file type).
     """
     cand = os.path.abspath(str(candidate_abs or ""))
-    base = os.path.abspath(str(base_abs or ""))
+    base = os.path.abspath(str(ctx.base_abs or ""))
     for reason in (
             _symlink_reason(candidate_abs),
             _outside_root_reason(cand, base),
             _exact_root_reason(cand, base),
-            _other_folder_reason(cand, other_world_folders),
-            _shared_reference_reason(cand, keep),
-            _ambiguous_folder_reason(is_discovered, folder_exclusive),
+            _other_folder_reason(cand, ctx.other_world_folders),
+            _shared_reference_reason(cand, ctx.keep),
+            _ambiguous_folder_reason(is_discovered, ctx.folder_exclusive),
             _non_file_reason(cand)):
         if reason:
             return reason
     return "remove"
-
-
-@dataclass(frozen=True)
-class _PathPolicy:
-    """Immutable policy inputs shared by both classified file groups."""
-
-    base: str
-    vfolder: str
-    exclusive: bool
-    keep: frozenset
-    others: frozenset
-
-    def verdict(self, ap: str, is_discovered: bool) -> str:
-        return classify_candidate(
-            candidate_abs=ap, base_abs=self.base,
-            victim_folder_abs=self.vfolder,
-            folder_exclusive=self.exclusive,
-            keep=self.keep, other_world_folders=self.others,
-            is_discovered=is_discovered)
 
 
 @dataclass
@@ -166,7 +166,7 @@ def _frozen_abspaths(group) -> frozenset:
 
 
 def _classify_file_group(group, is_discovered: bool,
-                         policy: _PathPolicy, buckets: _PolicyBuckets) -> None:
+                         policy: CandidateContext, buckets: _PolicyBuckets) -> None:
     """Classify one group (footprint or discovered) into the buckets."""
     for point in (group or set()):
         ap = os.path.abspath(str(point))
@@ -176,28 +176,44 @@ def _classify_file_group(group, is_discovered: bool,
         buckets.sort(ap, policy.verdict(ap, is_discovered))
 
 
-def plan_deletion(*, victim_abs: str, victim_folder_abs: str,
-                  media_base_abs: str, footprint_files: set[str],
-                  discovered_files: set[str], keep: set[str],
-                  folder_exclusive: bool,
-                  other_world_folders: set[str],
-                  inventory) -> DeletionPlan:
+@dataclass(frozen=True)
+class DeletionSpec:
+    """Everything `plan_deletion` needs to know, as one value.
+
+    The fields are the old keyword-only parameters verbatim, in their old
+    order (Round G step 4); `db_deletion_scan` builds this from its state.
+    """
+
+    victim_abs: str
+    victim_folder_abs: str
+    media_base_abs: str
+    footprint_files: set[str]
+    discovered_files: set[str]
+    keep: set[str]
+    folder_exclusive: bool
+    other_world_folders: set[str]
+    inventory: object
+
+
+def plan_deletion(spec: DeletionSpec) -> DeletionPlan:
     """Combine footprint + discovered − keep through the path policy."""
-    base = os.path.abspath(str(media_base_abs or ""))
-    vfolder = os.path.abspath(str(victim_folder_abs or ""))
-    policy = _PathPolicy(
-        base=base, vfolder=vfolder, exclusive=bool(folder_exclusive),
-        keep=_frozen_abspaths(keep),
-        others=_frozen_abspaths(other_world_folders))
+    base = os.path.abspath(str(spec.media_base_abs or ""))
+    vfolder = os.path.abspath(str(spec.victim_folder_abs or ""))
+    policy = CandidateContext(
+        base_abs=base, victim_folder_abs=vfolder,
+        folder_exclusive=bool(spec.folder_exclusive),
+        keep=_frozen_abspaths(spec.keep),
+        other_world_folders=_frozen_abspaths(spec.other_world_folders))
     buckets = _PolicyBuckets()
-    _classify_file_group(footprint_files, False, policy, buckets)
-    _classify_file_group(discovered_files, True, policy, buckets)
+    _classify_file_group(spec.footprint_files, False, policy, buckets)
+    _classify_file_group(spec.discovered_files, True, policy, buckets)
     return DeletionPlan(
-        victim_abs=os.path.abspath(str(victim_abs or "")),
+        victim_abs=os.path.abspath(str(spec.victim_abs or "")),
         victim_folder_abs=vfolder, media_base_abs=base,
-        footprint_files=_frozen_abspaths(footprint_files),
-        discovered_files=_frozen_abspaths(discovered_files),
+        footprint_files=_frozen_abspaths(spec.footprint_files),
+        discovered_files=_frozen_abspaths(spec.discovered_files),
         keep=policy.keep, candidates=frozenset(buckets.candidates),
         retained=frozenset(buckets.retained),
-        folder_exclusive=bool(folder_exclusive),
-        inventory=inventory, other_world_folders=policy.others)
+        folder_exclusive=bool(spec.folder_exclusive),
+        inventory=spec.inventory,
+        other_world_folders=policy.other_world_folders)

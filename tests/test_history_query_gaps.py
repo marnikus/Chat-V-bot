@@ -53,6 +53,7 @@ from backend.history_db import HistoryDB  # noqa: E402
 from backend.history_query import (  # noqa: E402
     DEFAULT_LIMIT, HistoryQuery, PersonPageRequest,
 )
+from backend.history_query_rows import my_nicks as _my_nicks  # noqa: E402
 
 #: What the default request must send the engine, verbatim. Written out rather
 #: than assembled from `req.where()` / `req.order()`: assembling it would
@@ -295,10 +296,10 @@ class TestTheIdentityListIsReadDefensively(unittest.TestCase):
 
     def test_a_row_without_the_column_reads_as_empty(self):
         for absent in ({}, {"my_nicks": None}, {"my_nicks": ""}):
-            self.assertEqual(HistoryQuery._my_nicks(absent), [], repr(absent))
+            self.assertEqual(_my_nicks(absent), [], repr(absent))
 
     def test_a_stored_list_comes_back_as_a_list(self):
-        self.assertEqual(HistoryQuery._my_nicks({"my_nicks": '["Me","Me2"]'}),
+        self.assertEqual(_my_nicks({"my_nicks": '["Me","Me2"]'}),
                          ["Me", "Me2"])
 
 

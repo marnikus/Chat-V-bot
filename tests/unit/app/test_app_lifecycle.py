@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from app.lifecycle import ApplicationLifecycle  # noqa: E402
+from app.lifecycle import AppDeps, ApplicationLifecycle  # noqa: E402
 
 
 class FakeApp:
@@ -73,10 +73,10 @@ class FakeBridge:
 
 
 def make_lifecycle(order, announce_boom=False, history_boom=False):
-    return ApplicationLifecycle(
+    return ApplicationLifecycle(AppDeps(
         app=FakeApp(), cdp=None, memory=FakeMemory(order),
         engine=None, history=FakeHistory(order, boom=history_boom),
-        bridge=FakeBridge(order, announce_boom=announce_boom))
+        bridge=FakeBridge(order, announce_boom=announce_boom)))
 
 
 class TestStartupAnnouncesTheReadyWorld(unittest.IsolatedAsyncioTestCase):

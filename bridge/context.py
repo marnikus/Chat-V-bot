@@ -13,30 +13,39 @@ a dependency is replaced.
 
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 from core.events import EventBus
 from services.cdp_service import CdpService
-from services.people_service import PeopleService
-from services.undo_service import UndoService
+from services.people_service import PeopleDeps, PeopleService
+from services.undo_service import UndoDeps, UndoService
 
 
+@dataclass(eq=False, repr=False)
 class BridgeContext:
-    """Shared, mutable wiring state for the bridge layer."""
+    """Shared, mutable wiring state for the bridge layer.
 
-    def __init__(self, cdp=None, memory=None, criteria=None, engine=None,
-                 config=None, presets=None, labels=None, dbs=None,
-                 archive=None, bus: EventBus | None = None):
-        self.bus = bus or EventBus()
-        self.cdp = cdp
-        self.memory = memory
-        self.criteria = criteria
-        self.engine = engine
-        self.config = config
-        self.presets = presets
-        self.labels = labels          # LabelStore (lazily built if None)
-        self.dbs = dbs                # DbManager (lazily built if None)
-        self.archive = archive        # HistoryService (attach_history)
+    The constructor is synthesized (Round G step 4): the fields are the old
+    ten ctor parameters verbatim, in their old order, every one defaulting
+    to None. `__post_init__` does exactly what the hand-written body did —
+    the bus fallback and the three lazy service slots — and `eq=False,
+    repr=False` keep identity comparison, so nothing downstream changes.
+    """
+
+    cdp: Any = None
+    memory: Any = None
+    criteria: Any = None
+    engine: Any = None
+    config: Any = None
+    presets: Any = None
+    labels: Any = None              # LabelStore (lazily built if None)
+    dbs: Any = None                 # DbManager (lazily built if None)
+    archive: Any = None             # HistoryService (attach_history)
+    bus: Optional[EventBus] = None
+
+    def __post_init__(self):
+        self.bus = self.bus or EventBus()
         # lazily-built services
         self._people_svc: Optional[PeopleService] = None
         self._undo_svc: Optional[UndoService] = None
@@ -59,16 +68,16 @@ class BridgeContext:
 
     # ── lazily-built services ────────────────────────────────────
     def _build_people(self) -> PeopleService:
-        self._people_svc = PeopleService(
+        self._people_svc = PeopleService(PeopleDeps(
             memory=self.memory, engine=self.engine,
-            labels=self.labels, undo=self._undo_svc, bus=self.bus)
+            labels=self.labels, undo=self._undo_svc, bus=self.bus))
         return self._people_svc
 
     def _build_undo(self) -> UndoService:
-        self._undo_svc = UndoService(
-            config=self.config, archive=self.archive,
-            people=self._people_svc, labels=self.labels, dbs=self.dbs,
-            memory=self.memory, engine=self.engine, bus=self.bus)
+        self._undo_svc = UndoService(self.config, UndoDeps(
+            archive=self.archive, people=self._people_svc,
+            labels=self.labels, dbs=self.dbs, memory=self.memory,
+            engine=self.engine, bus=self.bus))
         return self._undo_svc
 
     def _crosswire(self) -> None:
@@ -76,8 +85,8 @@ class BridgeContext:
         whichever service was built first captured a None for the other,
         so both refs are patched here after either build."""
         if self._people_svc is not None and self._undo_svc is not None:
-            self._people_svc.attach(undo=self._undo_svc)
-            self._undo_svc.attach(people=self._people_svc)
+            self._people_svc.attach(PeopleDeps(undo=self._undo_svc))
+            self._undo_svc.attach(UndoDeps(people=self._people_svc))
 
     @property
     def people(self) -> PeopleService:
@@ -108,15 +117,14 @@ class BridgeContext:
     def sync_services(self) -> None:
         """Re-attach the current dependencies to any built service."""
         if self._people_svc is not None:
-            self._people_svc.attach(memory=self.memory, engine=self.engine,
-                                    labels=self.labels, undo=self._undo_svc,
-                                    bus=self.bus)
+            self._people_svc.attach(PeopleDeps(
+                memory=self.memory, engine=self.engine,
+                labels=self.labels, undo=self._undo_svc, bus=self.bus))
         if self._undo_svc is not None:
-            self._undo_svc.attach(archive=self.archive,
-                                  people=self._people_svc,
-                                  labels=self.labels, dbs=self.dbs,
-                                  memory=self.memory, engine=self.engine,
-                                  bus=self.bus)
+            self._undo_svc.attach(UndoDeps(
+                archive=self.archive, people=self._people_svc,
+                labels=self.labels, dbs=self.dbs,
+                memory=self.memory, engine=self.engine, bus=self.bus))
         if self._cdp_svc is not None:
             self._cdp_svc.attach(cdp=self.cdp, bus=self.bus)
         self._crosswire()

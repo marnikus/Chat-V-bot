@@ -11,6 +11,7 @@ import logging
 from typing import Optional
 
 from actions.base import ActionResult, BlockField, MarkerBlock
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 
 log = logging.getLogger("chatbot")
@@ -30,10 +31,11 @@ class Pause(MarkerBlock):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
+        wait_ms = scale_ms(self.duration_ms, engine)
         if engine:
-            engine.report(f"⏸ Pausing for {self.duration_ms} ms", "info")
-        log.info("Pausing %d ms", self.duration_ms)
-        await asyncio.sleep(self.duration_ms / 1000.0)
+            engine.report(f"⏸ Pausing for {wait_ms} ms", "info")
+        log.info("Pausing %d ms", wait_ms)
+        await asyncio.sleep(wait_ms / 1000.0)
         if engine:
             engine.report("⏸ Pause finished", "info")
         return ActionResult.OK

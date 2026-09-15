@@ -35,6 +35,9 @@ class ActionContext:
     #: nick remembered by the most recent Click User / Pick Person block
     #: ({{nick}} in any block field resolves to it)
     selected_nick: str = ""
+    #: global wait-speed rate for this run (SPEED_MULTIPLIER block;
+    #: 1.0 = normal speed)
+    speed_multiplier: float = 1.0
 
     # ── engine-compatible surface ────────────────────────────────
     def report(self, message: str, level: str = "info") -> None:

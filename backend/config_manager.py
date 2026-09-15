@@ -8,6 +8,18 @@ with atomic saves. This class keeps the historical ConfigManager API —
 store, so the six backend consumers and every existing test keep working
 unchanged. New code receives the specific store it needs via DI instead.
 
+The parts (Round J step J-3) live next door, and the imports go one way:
+
+* `backend/config_defaults.py` — the shipped tree (`DEFAULTS`), the undo cap,
+  `SECTION_ROUTES`, and the two pure tree helpers;
+* `backend/config_owners.py` — the `_Owner` family: which store holds a
+  section and how it keeps it;
+* `backend/config_view.py` — `ConfigView`, the base class holding the
+  whole-tree read and the `state.*` surface.
+
+What stays here: construction (the stores, the owners, the one-time legacy
+migration), `load`/`save`, the section-level verbs and `validate`.
+
 File map (see stores/migration.py):
     config/settings.json    chrome/scroll/delays/ui/history/collector
     config/presets.json     stack_presets, template_presets
@@ -18,12 +30,12 @@ File map (see stores/migration.py):
     config/undo.json        state.undo_history + undo_history_index
 """
 
-# ideal-size: 502 lines reason=the frozen AREA D public-API snapshot
-# (tests/unit/backend/test_backend_api_snapshot.py, built by
-# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
-# only when this module owns it, so neither promoting this file to a package nor
-# thinning it into a re-export shim survives the contract. The size is a known,
-# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+# ideal-size: the facade keeps the constructor and the section-level verbs;
+# the defaults, the owners and the merged view are in config_defaults.py /
+# config_owners.py / config_view.py (Round J step J-3). The historical
+# public names (`DEFAULTS`, `MAX_STACK_HISTORY`, `json_dumps`) and the two
+# private ones the tests inspect (`_OWNERS`, `_SECTION_ROUTES`) are re-exported
+# below, because that is where the rest of the tree has always imported them.
 
 from __future__ import annotations
 
@@ -34,298 +46,27 @@ from typing import Any
 
 from stores.jsonio import config_dir_for
 from stores.migration import migrate_legacy_config
-from stores.settings_store import SettingsStore, SETTINGS_DEFAULTS
-from stores.bookmark_store import BookmarkStore, DEFAULT_BOOKMARKS
+from stores.settings_store import SettingsStore
+from stores.bookmark_store import BookmarkStore
 from stores.block_store import BlockStore
 from stores.session_store import SessionStore
 from stores.undo_store import UndoStore
-from stores.labels_file_store import LabelsFileStore, LABELS_DEFAULT
+from stores.labels_file_store import LabelsFileStore
 from stores.preset_store import PresetStore
 from stores.window_preset_store import WindowPresetStore
 
+from backend import config_owners as owners
+from backend import config_defaults
+from backend.config_defaults import (                      # noqa: F401
+    DEFAULTS, MAX_STACK_HISTORY, SECTION_ROUTES as _SECTION_ROUTES,
+)
+from backend.config_owners import OWNERS as _OWNERS         # noqa: F401
+from backend.config_view import ConfigView
+
 log = logging.getLogger("chatbot")
 
-#: History limits (unchanged)
-MAX_STACK_HISTORY = 100
 
-#: Compatibility default tree — the merged view of all store defaults.
-#: Kept because bridge code and tests import DEFAULTS to reason about
-#: fallbacks; writes never go here.
-DEFAULTS: dict[str, Any] = dict(SETTINGS_DEFAULTS)
-DEFAULTS.update({
-    "url_presets": list(DEFAULT_BOOKMARKS),
-    "stack_presets": {},
-    "template_presets": {},
-    "custom_blocks": [],
-    "labels": copy.deepcopy(LABELS_DEFAULT),
-    "state": {
-        "undo_history": [],
-        "db_recent": [],
-        "my_nick_recent": [],
-        "undo_history_index": -1,
-        "grid_layout": None,
-        "block_config_pinned": False,
-        "window_states": {"closed": [], "minimized": []},
-        "window_geometry": None,
-        "grid_layout_history": [],
-        "grid_layout_history_index": -1,
-    },
-})
-
-#: state keys owned by the undo store rather than the session store
-_UNDO_STATE_KEYS = ("undo_history", "undo_history_index")
-
-#: Top-level keys routed away from the settings store, to the STORE that owns
-#: them (the attribute name on `ConfigManager`, which is also the key of
-#: `_OWNERS` below). An unlisted section belongs to `settings.json`.
-_SECTION_ROUTES = {
-    "url_presets": "bookmarks",
-    "custom_blocks": "blocks",
-    "labels": "labels_file",
-    "stack_presets": "presets",
-    "template_presets": "presets",
-}
-
-_UNSET = object()
-
-
-# ── section owners ───────────────────────────────────────────────
-#
-# Every store answers the same three verbs, so the facade dispatches once
-# instead of re-deriving "which store is this, and what shape does it keep
-# data in" inside `get()` and `set()`. That dispatch used to be a five-branch
-# `if/elif` chain in each of them (nesting 14 in `set()`), which is exactly
-# where the "a section is a string now" class of bug lived: the chain had to
-# know each store's quirks, and adding a section meant editing both.
-#
-# `read()`/`write()` take the REST of the key path (the section is already
-# routed away) and are total: a hostile path degrades to the caller's
-# default instead of raising, because these values come out of a file a human
-# may have edited.
-
-def _deep_merge(base: dict, overlay: Any) -> dict:
-    """`overlay` on top of `base`, dict by dict.
-
-    A non-dict in the overlay wins wholesale — that is how a section that a
-    malformed `set()` flattened into a scalar stays visible instead of
-    crashing the merge.
-    """
-    if not isinstance(overlay, dict):
-        return overlay
-    out = dict(base)
-    for key, value in overlay.items():
-        current = out.get(key)
-        out[key] = (_deep_merge(current, value)
-                    if isinstance(current, dict) and isinstance(value, dict)
-                    else value)
-    return out
-
-
-def _set_nested(tree: Any, path, value) -> bool:
-    """Write `value` at `path` inside `tree`, creating the dicts on the way."""
-    node = tree
-    for key in path[:-1]:
-        if not isinstance(node, dict):
-            return False
-        if not isinstance(node.get(key), dict):
-            node[key] = {}
-        node = node[key]
-    if not isinstance(node, dict):
-        return False
-    node[path[-1]] = value
-    return True
-
-
-class _Owner:
-    """One store's side of the façade. Subclasses say how their store keeps data."""
-
-    #: the `ConfigManager` attribute holding the store this owner drives
-    store_name: str = "settings"
-
-    def __init__(self, manager: "ConfigManager", store_name: str = "settings"):
-        self._m = manager
-        self.store_name = store_name
-
-    def _store(self):
-        return getattr(self._m, self.store_name)
-
-    # ── the three verbs ──────────────────────────────────────────
-    def read(self, section: str, rest, default: Any = None) -> Any:
-        raise NotImplementedError
-
-    def write(self, section: str, rest, value: Any) -> None:
-        raise NotImplementedError
-
-    def snapshot(self, section: str) -> Any:
-        raise NotImplementedError
-
-    # ── named access (presets, labels): the generic whole-map form ──
-    def named_all(self, section: str) -> dict:
-        raw = self.read(section, (), {})
-        raw = copy.deepcopy(raw) if isinstance(raw, dict) else {}
-        return raw
-
-    def named_get(self, section: str, name: str, default: Any = None) -> Any:
-        return self.named_all(section).get(str(name), default)
-
-    def named_set(self, section: str, name: str, value: Any) -> None:
-        items = self.named_all(section)
-        items[str(name)] = value
-        self.write(section, (), items)
-
-    def named_delete(self, section: str, name: str) -> bool:
-        items = self.named_all(section)
-        if str(name) not in items:
-            return False
-        del items[str(name)]
-        self.write(section, (), items)
-        return True
-
-
-class _SettingsOwner(_Owner):
-    """`config/settings.json` — a nested tree with documented defaults.
-
-    Reads go to the store, which walks its own data and falls back to
-    `SETTINGS_DEFAULTS` per key; writes must first make sure the path the
-    store is about to `setdefault` through is walkable (a scalar standing
-    where a dict belongs used to raise `AttributeError` from inside
-    `dict.setdefault` and left the section half-written).
-    """
-
-    store_name = "settings"
-
-    def read(self, section: str, rest, default: Any = None) -> Any:
-        # deliberately NOT copied: `get()` hands out the live node for
-        # settings sections, and callers that want a copy use `get_copy()`.
-        # (Pinned by test_config_manager_contract's ledger #4 detector.)
-        return self._store().get(section, *rest, default=default)
-
-    def write(self, section: str, rest, value: Any) -> None:
-        store = self._store()
-        self._repair_path(store, (section, *rest))
-        store.set(section, *rest, value)
-
-    @staticmethod
-    def _repair_path(store, path) -> None:
-        node = store.data()
-        for depth, key in enumerate(path[:-1]):
-            if not isinstance(node, dict) or key not in node:
-                return                      # `setdefault` will create it
-            node = node[key]
-            if not isinstance(node, dict):
-                store.set(*path[:depth + 1], {})     # flatten the garbage away
-                return
-
-    def snapshot(self, section: str) -> dict:
-        """The whole settings tree: every documented section, file wins."""
-        return _deep_merge(copy.deepcopy(SETTINGS_DEFAULTS),
-                           self._store().data())
-
-
-class _ListOwner(_Owner):
-    """`bookmarks.json` / `blocks.json` — one list per section, nothing inside it."""
-
-    def read(self, section: str, rest, default: Any = None) -> Any:
-        if rest:
-            return default                    # a list has no keys to walk
-        return copy.deepcopy(self._store().all())
-
-    def write(self, section: str, rest, value: Any) -> None:
-        # the section IS the list: anything that is not a list is the caller
-        # handing us a mistake, and writing `null` into the file is worse
-        self._store().set_all(value if isinstance(value, list) else [])
-
-    def snapshot(self, section: str) -> list:
-        return self.read(section, (), [])
-
-
-class _DictOwner(_Owner):
-    """`labels.json` — one dict, keyed by the caller."""
-
-    store_name = "labels_file"
-
-    def read(self, section: str, rest, default: Any = None) -> Any:
-        node = self._store().data()
-        if not rest:
-            return copy.deepcopy(node)
-        for key in rest:
-            if not isinstance(node, dict):
-                return default
-            node = node.get(key, _UNSET)
-            if node is _UNSET:
-                return default
-        return node
-
-    def write(self, section: str, rest, value: Any) -> None:
-        store = self._store()
-        if not rest:
-            store.set_data(value)
-            return
-        data = copy.deepcopy(store.data())
-        if _set_nested(data, tuple(rest), value):
-            store.set_data(data)
-
-    def snapshot(self, section: str) -> dict:
-        return self.read(section, (), {})
-
-
-class _NamedOwner(_Owner):
-    """`presets.json` — sections of `{name: payload}`, owned by PresetStore."""
-
-    store_name = "presets"
-
-    def read(self, section: str, rest, default: Any = None) -> Any:
-        store = self._store()
-        if rest:
-            return store.named_get(section, rest[0], default)
-        return copy.deepcopy(store.named_all(section))
-
-    def write(self, section: str, rest, value: Any) -> None:
-        store = self._store()
-        if rest:
-            # set(section, name, value) — the name is the first key after the
-            # section. (The old chain only accepted a name at `len(rest) == 2`
-            # and silently dropped the real value; nothing called it that way.)
-            store.named_set(section, rest[0], value)
-            return
-        if isinstance(value, dict):
-            self._replace_all(section, value)
-
-    def _replace_all(self, section: str, value: dict) -> None:
-        store = self._store()
-        for name in list(store.named_all(section)):
-            store.named_delete(section, name)
-        for name, item in value.items():
-            store.named_set(section, name, item)
-
-    def snapshot(self, section: str) -> dict:
-        return self._store().named_all(section)
-
-    # the store keeps named maps itself: use it, do not rebuild them
-    def named_all(self, section: str) -> dict:
-        return self._store().named_all(section)
-
-    def named_get(self, section: str, name: str, default: Any = None) -> Any:
-        return self._store().named_get(section, name, default)
-
-    def named_set(self, section: str, name: str, value: Any) -> None:
-        self._store().named_set(section, name, value)
-
-    def named_delete(self, section: str, name: str) -> bool:
-        return bool(self._store().named_delete(section, name))
-
-
-#: route name (a `_SECTION_ROUTES` value) → the owner class that speaks it
-_OWNERS: dict[str, type] = {
-    "settings": _SettingsOwner,
-    "bookmarks": _ListOwner,
-    "blocks": _ListOwner,
-    "labels_file": _DictOwner,
-    "presets": _NamedOwner,
-}
-
-
-class ConfigManager:
+class ConfigManager(ConfigView):
     """Load, access, and persist configuration across the split stores."""
 
     def __init__(self, path: str = "config.json"):
@@ -351,8 +92,7 @@ class ConfigManager:
         # bridge constructs with PresetStore(config=self)
         self.presets = PresetStore(config=self)
         self.window_presets = WindowPresetStore(config=self)
-        self._owners = {name: owner(self, name)
-                        for name, owner in _OWNERS.items()}
+        self._owners = owners.build(self)
         log.info("Config loaded from %s", self._dir)
 
     # ── persistence ──────────────────────────────────────────────
@@ -378,27 +118,12 @@ class ConfigManager:
         self.presets.save()
         self.window_presets.save()
 
-    # ── internal routing ─────────────────────────────────────────
-    def _owner_for(self, section: str) -> _Owner:
-        """The one place that decides who owns a section."""
-        return self._owners[_SECTION_ROUTES.get(section, "settings")]
-
-    def _route_of(self, section: str) -> str:
-        return _SECTION_ROUTES.get(section, "settings")
-
-    def _store_for(self, section: str):
-        """Legacy name for the routing question: kept because tests and the
-        bridge reason about it. It answers with the OWNER now, not the raw
-        store, because that is what knows how to read the section."""
-        owner = self._owner_for(section)
-        return owner._store()
-
     # ── access ───────────────────────────────────────────────────
     def get(self, *keys: str, default: Any = None) -> Any:
         if not keys:
             return default
         section, rest = keys[0], keys[1:]
-        return self._owner_for(section).read(section, rest, default)
+        return owners.owner_for(self, section).read(section, rest, default)
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:
         """Deep copy of the value so callers can mutate it safely."""
@@ -409,101 +134,53 @@ class ConfigManager:
         if not keys:
             return
         section, rest = keys[0], keys[1:]
-        self._owner_for(section).write(section, rest, value)
-
-    def to_dict(self) -> str:
-        return json_dumps(self.data())
-
-    def data(self) -> dict[str, Any]:
-        """Full JSON-serialisable merged data (for get_app_state etc.).
-
-        Every documented settings section is present even when the file holds
-        nothing for it: `get()` serves those defaults, so a view built out of
-        the stored keys alone would show a fresh install as an empty app.
-        """
-        merged = self._owners["settings"].snapshot("settings")
-        for section in _SECTION_ROUTES:
-            merged[section] = self._owner_for(section).snapshot(section)
-        merged["state"] = self.state_data()
-        return merged
-
-    def state_data(self) -> dict[str, Any]:
-        """The session file over the documented `state` defaults.
-
-        `get_state()` promises a default for every key it knows about, so the
-        merged view has to agree with it — a fresh install still has a
-        `grid_layout` and a `db_recent`, they are just not in the file yet.
-        """
-        state = _deep_merge(copy.deepcopy(DEFAULTS.get("state") or {}),
-                            self.session.data())
-        state["undo_history"] = self.undo.history()
-        state["undo_history_index"] = self.undo.index()
-        return state
+        owners.owner_for(self, section).write(section, rest, value)
 
     # ── named sub-stores (presets keyed by name) ─────────────────
     def named_all(self, section: str) -> dict[str, Any]:
-        return self._owner_for(section).named_all(section)
+        return owners.owner_for(self, section).named_all(section)
 
     def named_get(self, section: str, name: str, default: Any = None) -> Any:
-        return self._owner_for(section).named_get(section, name, default)
+        return owners.owner_for(self, section).named_get(section, name, default)
 
     def named_set(self, section: str, name: str, value: Any,
                   save: bool = True) -> None:
-        self._owner_for(section).named_set(section, name, value)
+        owners.owner_for(self, section).named_set(section, name, value)
         if save:
             self.save()
 
     def named_delete(self, section: str, name: str,
                      save: bool = True) -> bool:
-        ok = self._owner_for(section).named_delete(section, name)
+        ok = owners.owner_for(self, section).named_delete(section, name)
         if ok and save:
             self.save()
         return ok
-
-    # ── last-session state ───────────────────────────────────────
-    def get_state(self, key: str, default: Any = None) -> Any:
-        if key in _UNDO_STATE_KEYS:
-            return (self.undo.history() if key == "undo_history"
-                    else self.undo.index())
-        value = self.session.get(key, _UNSET)
-        if value is not _UNSET:
-            return value
-        return self._state_default(key, default)
-
-    def _state_default(self, key: str, default: Any) -> Any:
-        """The documented `state.*` default, if there is one."""
-        defaults_state = DEFAULTS.get("state", {})
-        if isinstance(defaults_state, dict) and key in defaults_state:
-            return copy.deepcopy(defaults_state[key])
-        return default
-
-    def set_state(self, save: bool = True, **updates: Any) -> None:
-        undo_updates = {k: v for k, v in updates.items()
-                        if k in _UNDO_STATE_KEYS}
-        session_updates = {k: v for k, v in updates.items()
-                           if k not in _UNDO_STATE_KEYS}
-        if undo_updates:
-            self.undo.save_state(undo_updates.get("undo_history",
-                                                  self.undo.history()),
-                                 undo_updates.get("undo_history_index",
-                                                  self.undo.index()),
-                                 save_now=save)
-        if session_updates:
-            self.session.set(save_now=save, **session_updates)
-        if undo_updates and not session_updates:
-            return
-        # a save was requested for sections that write through the
-        # settings store too (e.g. grid_layout also mirrored) — flush
-        # everything for callers that expect a whole-file save
-        if save:
-            self.settings.save()
-            self.labels_file.flush()
 
     # ── validation ───────────────────────────────────────────────
     def validate(self) -> list[str]:
         return self.settings.validate()
 
+    # ── the routing questions, answered by the owners module ─────
+    def _owner_for(self, section: str):
+        """The owner of a section. Part of the tested surface (the owners are
+        per-store singletons and `named_*` routes on identity), so the private
+        name stays on the class as a delegation."""
+        return owners.owner_for(self, section)
+
+    def _store_for(self, section: str):
+        """Legacy name kept for tests and the bridge: it answers with the raw
+        store behind a section, through the owner that knows how to read it."""
+        return owners.store_for(self, section)
+
 
 def json_dumps(data: Any) -> str:
-    import json
-    return json.dumps(data, ensure_ascii=False)
+    """The project's JSON spelling, for the callers that import it from here.
+
+    Defined rather than re-imported: the API snapshot records it as this
+    module's public function, and the implementation still has exactly one
+    home (`config_defaults.json_dumps`).
+    """
+    return config_defaults.json_dumps(data)
+
+
+__all__ = ["ConfigManager", "DEFAULTS", "MAX_STACK_HISTORY", "json_dumps"]

@@ -38,6 +38,7 @@ from core.events import LogMessage  # noqa: E402
 from core.result import Err  # noqa: E402
 from services import undo_service  # noqa: E402
 from services.history import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from services.history import trash  # noqa: E402
 from services.undo_archive import (ArchiveCommands, _disagrees,  # noqa: E402
                                    _outcome, _person_verdict, _reason,
@@ -191,6 +192,194 @@ class TestGateUnit(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls["other"], 1, "other errors must not be retried")
 
 
+class TestWriteTurnUnion(unittest.IsolatedAsyncioTestCase):
+    """F3c: the turn holds the gate for the UNION of its writers.
+
+    One connection carrying two overlapping write transactions is the shape
+    that desynchronised the single ``held`` flag from the gate's depth (found
+    live in the 2026-09-13 world-switch flake: the first commit cleared the
+    flag, the second writer re-entered, and the turn stayed held by a closed
+    connection — after which every writer on that world waited WAIT_S and
+    failed OPEN, the 2026-09-11 bug class). Each test pins one half of the
+    remedy; the two overlapping-commit tests and the stranger-commit test
+    fail against the pre-fix flag version, and the second-statement test is
+    what a naive shared counter would fail (`_gated` begins per STATEMENT but
+    ends per COMMIT). Interleavings are forced with events, not sleeps:
+    docs/archive/2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md §5.
+    """
+
+    async def asyncSetUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.world = os.path.join(self.dir, "turn.db")
+
+    def turn(self):
+        return world_lock.WriteTurn(object(), self.world)
+
+    @staticmethod
+    async def _in_own_task(coro):
+        """Run `coro` as a separate task — `current_task()` is the writer key."""
+        task = asyncio.ensure_future(coro)
+        await task
+
+    async def test_the_gate_survives_the_first_of_two_overlapping_commits(self):
+        turn, gate = self.turn(), world_lock.gate_for(self.world)
+        wrote1, wrote2 = asyncio.Event(), asyncio.Event()
+        commit1, commit2 = asyncio.Event(), asyncio.Event()
+
+        async def writer(wrote, commit_on):
+            self.assertTrue(await turn.begin())
+            wrote.set()
+            await commit_on.wait()
+            turn.end()
+
+        t1 = asyncio.ensure_future(writer(wrote1, commit1))
+        await wrote1.wait()
+        t2 = asyncio.ensure_future(writer(wrote2, commit2))
+        await wrote2.wait()
+
+        commit1.set()                       # the first transaction commits…
+        await t1
+        self.assertTrue(turn.held, "the second transaction is still open")
+        self.assertTrue(gate.busy, "the gate must outlive the first commit")
+        original = world_lock.WAIT_S        # …and exclusion must still bite:
+        world_lock.WAIT_S = 0.05
+        try:
+            async with world_lock.world_write(self.world, object()) as got:
+                self.assertFalse(got, "a foreign connection may not write "
+                                      "mid-transaction")
+        finally:
+            world_lock.WAIT_S = original
+
+        commit2.set()                       # the last commit frees the world
+        await t2
+        self.assertFalse(turn.held)
+        self.assertFalse(gate.busy, "the union ends with its last writer")
+
+    async def test_a_second_statement_of_one_transaction_never_double_holds(self):
+        turn, gate = self.turn(), world_lock.gate_for(self.world)
+        self.assertTrue(await turn.begin())     # first write statement
+        self.assertTrue(await turn.begin())     # the same task's next statement
+        self.assertTrue(gate.busy)
+        turn.end()                              # the ONE commit of the task
+        self.assertFalse(turn.held)
+        self.assertFalse(gate.busy, "one commit ends one task's transaction")
+
+    async def test_a_commit_from_a_task_that_never_wrote_releases_nothing(self):
+        turn, gate = self.turn(), world_lock.gate_for(self.world)
+        wrote, commit = asyncio.Event(), asyncio.Event()
+
+        async def writer():
+            await turn.begin()
+            wrote.set()
+            await commit.wait()
+            turn.end()
+
+        t1 = asyncio.ensure_future(writer())
+        await wrote.wait()
+
+        async def stranger():
+            turn.end()                          # commits work it never began
+
+        await self._in_own_task(stranger())
+        self.assertTrue(turn.held, "a stranger's end must not release the "
+                                   "writer's turn")
+        self.assertTrue(gate.busy)
+        commit.set()
+        await t1
+        self.assertFalse(turn.held)
+        self.assertFalse(gate.busy)
+
+    async def test_drop_gives_back_every_writer_of_a_dead_connection(self):
+        turn, gate = self.turn(), world_lock.gate_for(self.world)
+        wrote1, wrote2 = asyncio.Event(), asyncio.Event()
+        gone = asyncio.Event()
+
+        async def writer(wrote):
+            await turn.begin()
+            wrote.set()
+            await gone.wait()
+            turn.end()                          # a no-op after the drop
+
+        t1 = asyncio.ensure_future(writer(wrote1))
+        await wrote1.wait()
+        t2 = asyncio.ensure_future(writer(wrote2))
+        await wrote2.wait()
+
+        turn.drop()                             # the connection died (close)
+        self.assertFalse(turn.held)
+        self.assertFalse(gate.busy, "a dead connection must not hold the "
+                                    "world — that is the §8.10 leak")
+        gone.set()
+        await asyncio.gather(t1, t2)
+        self.assertFalse(gate.busy, "the writers' late ends stay no-ops")
+
+    async def test_a_fail_open_turn_still_tracks_and_ends_cleanly(self):
+        """I-17's fail-open: a turn that never GOT the gate still tracks its
+        writer, and its `end` must not disturb the real holder's turn."""
+        turn, gate = self.turn(), world_lock.gate_for(self.world)
+        foreign = object()
+        self.assertTrue(await gate.enter(foreign))    # another connection holds it
+        original = world_lock.WAIT_S
+        world_lock.WAIT_S = 0.05
+        try:
+            self.assertFalse(await turn.begin(),
+                             "a stuck world fails the turn OPEN, never hangs")
+            self.assertTrue(turn.held, "the writer is tracked gate or not")
+        finally:
+            world_lock.WAIT_S = original
+        turn.end()
+        self.assertFalse(turn.held)
+        self.assertTrue(gate.busy, "the foreign holder keeps its turn")
+        self.assertIs(gate.holder, foreign,
+                      "a fail-open leave must not release the real holder")
+        gate.leave(foreign)
+        self.assertFalse(gate.busy)
+
+    async def test_overlapping_transactions_on_one_real_history_db(self):
+        """The §8.10 journal, end to end: real writes, real commits, one file."""
+        db = HistoryDB(self.world)
+        try:
+            await db.init()
+            gate = world_lock.gate_for(self.world)
+            self.assertFalse(gate.busy, "init() hands the turn back")
+            wrote1, wrote2 = asyncio.Event(), asyncio.Event()
+            commit1, commit2 = asyncio.Event(), asyncio.Event()
+
+            async def writer(key, wrote, commit_on):
+                await db.set_meta(key, "v")     # a real INSERT through _gated
+                wrote.set()
+                await commit_on.wait()
+                await db.commit()               # _release ends the turn
+
+            t1 = asyncio.ensure_future(writer("k1", wrote1, commit1))
+            await wrote1.wait()
+            t2 = asyncio.ensure_future(writer("k2", wrote2, commit2))
+            await wrote2.wait()
+
+            commit1.set()
+            await t1
+            self.assertTrue(db.turn.held, "k2's transaction is still open")
+            self.assertTrue(gate.busy)
+            original = world_lock.WAIT_S
+            world_lock.WAIT_S = 0.05
+            try:
+                async with world_lock.world_write(self.world, object()) as got:
+                    self.assertFalse(got, "the world must stay excluded while "
+                                          "one connection has uncommitted rows")
+            finally:
+                world_lock.WAIT_S = original
+
+            commit2.set()
+            await t2
+            self.assertFalse(db.turn.held)
+            self.assertFalse(gate.busy)
+            self.assertEqual(await db.get_meta("k1"), "v")
+            self.assertEqual(await db.get_meta("k2"), "v",
+                             "both overlapping writes really landed")
+        finally:
+            await db.close()
+
+
 class TestArchiveFacts(unittest.IsolatedAsyncioTestCase):
     """The pure helpers decide what the log may say — pin them directly."""
 
@@ -277,8 +466,7 @@ class WorldCase(unittest.IsolatedAsyncioTestCase):
         self.memory = UserMemory(self.world)
         await self.memory.init()
         self.page = ConnectedPage([])
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.world, memory=self.memory)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.world, memory=self.memory))
         await self.service.init()
         self.service.collector.configure(my_nick="Me")
         br = Bridge.__new__(Bridge)
@@ -656,8 +844,7 @@ class TestTrashLifecycle(WorldCase):
         await self.service.db.init()          # … and its stamp is left behind
         await self.service.db.set_meta("session", "a previous app run")
         await self.service.db.close()
-        fresh = HistoryService(cdp=ConnectedPage([]), config=self.cfg,
-                               db_path=self.world, memory=self.memory)
+        fresh = HistoryService(HistoryDeps(cdp=ConnectedPage([]), config=self.cfg, db_path=self.world, memory=self.memory))
         await fresh.init()                    # … and the world is opened
         try:
             self.assertIsNone(await fresh.repo.get_person("Mloni"),

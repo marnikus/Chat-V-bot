@@ -1,21 +1,21 @@
 {
   "window_states": {
     "closed": [
-      "filters",
-      "stats"
+      "stats",
+      "filters"
     ],
     "minimized": []
   },
-  "grid_layout": "{\"v\":3,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[70,30]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[34.93312352478363,18.017309205350116,47.04956726986625]}}",
+  "grid_layout": "{\"v\":4,\"tree\":{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"stats\"},{\"t\":\"split\",\"dir\":\"col\",\"children\":[{\"t\":\"leaf\",\"id\":\"composer\"},{\"t\":\"leaf\",\"id\":\"labels\"}],\"sizes\":[33.96485825061182,66.03514174938819]},{\"t\":\"leaf\",\"id\":\"filters\"}],\"sizes\":[35,32.5,32.5]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"stack\"},{\"t\":\"leaf\",\"id\":\"config\"}],\"sizes\":[63.829787234042556,36.17021276595745]}],\"sizes\":[35.35630383711825,64.64369616288175]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"people\"},{\"t\":\"leaf\",\"id\":\"log\"}],\"sizes\":[61.82458888018794,38.17541111981206]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"history\"},{\"t\":\"leaf\",\"id\":\"userdb\"},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"collector\"},{\"t\":\"leaf\",\"id\":\"dbconn\"}],\"sizes\":[51.967709384460136,48.03229061553986]}],\"sizes\":[24.058084772370485,29.43485086342229,46.507064364207224]}],\"sizes\":[44.25087108013937,27.526132404181187,28.222996515679444]},{\"t\":\"split\",\"dir\":\"row\",\"children\":[{\"t\":\"leaf\",\"id\":\"botchat\"},{\"t\":\"leaf\",\"id\":\"botprompt\"}],\"sizes\":[59.671104150352384,40.32889584964761]}],\"sizes\":[68.36335160532498,31.63664839467502]}}",
   "last_stack": [
     {
       "max_scrolls": 1000,
-      "scroll_pause_ms": 200,
-      "scroll_delta_y": 1000,
-      "viewport_selector": "cdk-virtual-scroll-viewport",
+      "scroll_pause_ms": 1000,
+      "scroll_delta_y": 1500,
+      "viewport_selector": "cdk-virtual-scroll-viewport.users-list-viewport",
       "load_timeout_ms": 2500,
       "stall_threshold": 100,
-      "min_new_users": 0,
+      "min_new_users": 150,
       "person_selector": "user-item",
       "nick_selector": ".primary-text",
       "highlight_enabled": true,
@@ -25,26 +25,51 @@
       "scroll_only": true,
       "filter_female": "yes",
       "filter_registered": "no",
-      "filter_guest": "no",
-      "filter_anonymous": "no",
+      "filter_guest": "any",
+      "filter_anonymous": "any",
       "pre_delay_ms": 300,
-      "enabled": true,
+      "enabled": false,
       "block_id": "SCROLL_PARSE"
     },
     {
-      "selector": "div[role='tab'].tab-item",
-      "child_selector": "p.chat-title",
-      "tab_name": "Гостиная",
+      "custom_name": "Clean Search bar",
+      "selector": "button[matsuffix]",
+      "label_selector": "",
+      "match_text": "",
+      "click_enabled": true,
+      "click_selector": "",
       "highlight_enabled": true,
       "confirm_pause_ms": 700,
+      "highlight_ms": 1200,
       "pre_delay_ms": 500,
       "enabled": true,
-      "block_id": "CLICK_MAIN_TAB"
+      "block_id": "CUSTOM_FIND"
     },
     {
+      "pick_mode": "random_new",
       "enabled": true,
-      "block_id": "CONDITIONAL_SKIP",
-      "pre_delay_ms": 0
+      "block_id": "TAKE_PERSON",
+      "pre_delay_ms": 500
+    },
+    {
+      "text": "{{nick}}",
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "SEARCH_USERS"
+    },
+    {
+      "duration_ms": 1000,
+      "enabled": true,
+      "block_id": "PAUSE",
+      "pre_delay_ms": 500
+    },
+    {
+      "message": "{{nick}}",
+      "use_composer": false,
+      "typing_speed_ms": 30,
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "TYPE_MESSAGE"
     },
     {
       "selector": "user-item",
@@ -59,18 +84,56 @@
       "respect_order": false,
       "use_person_from_memory": false,
       "pre_delay_ms": 1000,
+      "enabled": false,
+      "block_id": "CLICK_USER"
+    },
+    {
+      "pre_delay_ms": 300,
+      "enabled": true,
+      "block_id": "MARK_MESSAGED"
+    },
+    {
+      "selector": "user-item",
+      "label_selector": ".primary-text",
+      "click_selector": ".user-container",
+      "tab_selector": "div[role='tab'].tab-item",
+      "tab_title_selector": "p.chat-title",
+      "verify_new_tab": true,
+      "tab_pause_ms": 800,
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "respect_order": false,
+      "use_person_from_memory": true,
+      "pre_delay_ms": 1000,
       "enabled": true,
       "block_id": "CLICK_USER"
     },
     {
-      "target_selector": "textarea[placeholder='Сообщение']",
-      "timeout_ms": 5000,
-      "pre_delay_ms": 200,
-      "enabled": true,
-      "block_id": "WAIT_PAGE_LOAD"
+      "selector": "div[role='tab'].tab-item",
+      "child_selector": "p.chat-title",
+      "tab_name": "Гостиная",
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "pre_delay_ms": 500,
+      "enabled": false,
+      "block_id": "CLICK_MAIN_TAB"
     },
     {
-      "message": "",
+      "custom_name": "Text Area MSG",
+      "selector": "textarea",
+      "label_selector": "",
+      "match_text": "",
+      "click_enabled": true,
+      "click_selector": "",
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "highlight_ms": 1200,
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "CUSTOM_FIND"
+    },
+    {
+      "message": "Привеееет, скучаешь ... ?",
       "use_composer": false,
       "typing_speed_ms": 30,
       "pre_delay_ms": 500,
@@ -88,15 +151,71 @@
       "block_id": "CLICK_SEND"
     },
     {
-      "multiplier": 0.5,
-      "enabled": false,
-      "block_id": "SPEED_MULTIPLIER",
-      "pre_delay_ms": 0
+      "folder_path": "F:\\AI\\art\\cash yeah\\erotic",
+      "file_pattern": "gif",
+      "rotation_mode": "random",
+      "simulate_dialog": true,
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "verify_timeout_ms": 8000,
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "ATTACH_IMAGE"
+    },
+    {
+      "duration_ms": 1000,
+      "enabled": true,
+      "block_id": "PAUSE",
+      "pre_delay_ms": 500
+    },
+    {
+      "custom_name": "Close Tab",
+      "selector": "div[role=\"tab\"]:has(mat-icon[data-mat-icon-name=\"user\"])",
+      "label_selector": "p.chat-title",
+      "match_text": "{{nick}}",
+      "click_enabled": true,
+      "click_selector": "button.tab-close-button",
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "highlight_ms": 1200,
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "CUSTOM_FIND"
+    },
+    {
+      "selector": "div[role='tab'].tab-item",
+      "child_selector": "p.chat-title",
+      "tab_name": "Гостиная",
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "pre_delay_ms": 800,
+      "enabled": true,
+      "block_id": "CLICK_BACK"
+    },
+    {
+      "custom_name": "Scroll viewport",
+      "selector": "cdk-virtual-scroll-viewport",
+      "label_selector": "",
+      "match_text": "",
+      "click_enabled": true,
+      "click_selector": "",
+      "highlight_enabled": true,
+      "confirm_pause_ms": 700,
+      "highlight_ms": 1200,
+      "pre_delay_ms": 500,
+      "enabled": true,
+      "block_id": "CUSTOM_FIND"
     },
     {
       "repeat_count": 20,
       "enabled": true,
       "block_id": "REPEAT_LOOP",
+      "pre_delay_ms": 500
+    },
+    {
+      "multiplier": 0.3,
+      "enabled": true,
+      "block_id": "SPEED_MULTIPLIER",
       "pre_delay_ms": 500
     }
   ],
@@ -111,5 +230,8 @@
     "width": 2560,
     "height": 1377
   },
-  "last_url_preset": "devtools://devtools/bundled/devtools_app.html?remoteBase=https://chrome-devtools-frontend.appspot.com/serve_file/@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174/&targetType=tab&can_dock=true&panel=elements"
+  "last_url_preset": "https://ru.virt-chat.com/chat",
+  "my_nick_recent": [
+    "Оу_Давай"
+  ]
 }

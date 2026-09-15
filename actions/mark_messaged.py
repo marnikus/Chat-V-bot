@@ -69,7 +69,7 @@ class MarkMessaged(BaseAction):
         saved in memory, an engine that cannot mark, a person missing from the
         list, or the mark landing. The status table above owns the wording.
         """
-        await self.pre_delay()
+        await self.pre_delay(engine)
         if engine is None:
             log.warning("Mark Messaged: no engine — cannot mark anything")
             return ActionResult.FAIL

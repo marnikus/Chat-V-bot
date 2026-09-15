@@ -24,9 +24,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.history_db import HistoryDB  # noqa: E402
-from backend.history_models import MessageRecord, fingerprint  # noqa: E402
+from backend.history_models import MessageRecord, fingerprint, LineIdentity  # noqa: E402
 from backend.history_query import HistoryQuery, PersonPageRequest  # noqa: E402
 from backend.history_repo import HistoryRepo  # noqa: E402
+from stores.history_requests import AppendRequest  # noqa: E402
 
 NOW = datetime(2026, 9, 6, 18, 30, 0)
 
@@ -35,7 +36,7 @@ def rec(text="hi", direction="in", from_nick="Nick", time="17:31",
         kind="text", media=None, occ=0, idx=0):
     payload = media["url"] if media else text
     return MessageRecord(
-        fp=fingerprint(direction, from_nick, time, kind, payload, occ),
+        fp=fingerprint(LineIdentity(direction, from_nick, time, kind, payload), occ),
         direction=direction, from_nick=from_nick, kind=kind, text=text,
         media_url=(media or {}).get("url", ""),
         media_kind=(media or {}).get("kind", ""),
@@ -62,7 +63,7 @@ class QueryCase(unittest.IsolatedAsyncioTestCase):
                      from_nick=my_nick if i % 2 else nick,
                      time="1%d:%02d" % (i // 60, i % 60))
                  for i in range(start, start + n)]
-        await self.repo.append(nick, batch, my_nick=my_nick, now=NOW)
+        await self.repo.append(AppendRequest(nick, batch, my_nick=my_nick, now=NOW))
 
 
 class TestPaging(QueryCase):
@@ -115,10 +116,10 @@ class TestPaging(QueryCase):
         self.assertTrue(page["missing"])
 
     async def test_message_items_carry_both_nicks_and_media(self):
-        await self.repo.append("Nick", [
+        await self.repo.append(AppendRequest("Nick", [
             rec(text="", kind="gif", idx=0,
                 media={"url": "https://x/y.gif", "kind": "gif"})],
-            my_nick="Me", now=NOW)
+            my_nick="Me", now=NOW))
         item = (await self.q.page("Nick"))["items"][0]
         self.assertEqual(item["from_nick"], "Nick")
         self.assertEqual(item["my_nick"], "Me")
@@ -128,8 +129,8 @@ class TestPaging(QueryCase):
 
     async def test_gaps_are_reported_with_the_page(self):
         await self.seed(n=5)
-        await self.repo.append("Nick", [rec(text="after the hole", idx=99)],
-                               now=NOW)
+        await self.repo.append(AppendRequest("Nick", [rec(text="after the hole", idx=99)],
+                               now=NOW))
         page = await self.q.page("Nick")
         self.assertEqual(len(page["gaps"]), 1)
         self.assertEqual(page["gaps"][0]["after_ord"], 5)
@@ -142,9 +143,9 @@ class TestSearch(QueryCase):
                  rec(text="nothing to see", idx=2),
                  rec(text="", kind="gif", idx=3,
                      media={"url": "https://x/cat.gif", "kind": "gif"})]
-        await self.repo.append("Nick", batch, my_nick="Me", now=NOW)
-        await self.repo.append("Other", [rec(text="привет from Other", idx=0,
-                                             from_nick="Other")], now=NOW)
+        await self.repo.append(AppendRequest("Nick", batch, my_nick="Me", now=NOW))
+        await self.repo.append(AppendRequest("Other", [rec(text="привет from Other", idx=0,
+                                             from_nick="Other")], now=NOW))
 
     async def test_search_in_one_conversation_is_case_insensitive_cyrillic(self):
         await self.seed_text()
@@ -176,7 +177,7 @@ class TestSearch(QueryCase):
 
     async def test_search_clamps_and_says_so(self):
         batch = [rec(text=f"needle {i}", idx=i) for i in range(30)]
-        await self.repo.append("Nick", batch, now=NOW)
+        await self.repo.append(AppendRequest("Nick", batch, now=NOW))
         res = await self.q.search_person("Nick", "needle", limit=10)
         self.assertEqual(len(res["items"]), 10)
         self.assertEqual(res["total"], 30)

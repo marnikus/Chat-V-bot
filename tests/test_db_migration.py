@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from backend.label_store import LabelStore  # noqa: E402
 from backend.user_memory import UserMemory  # noqa: E402
 
@@ -52,9 +53,7 @@ class MigrationCase(unittest.IsolatedAsyncioTestCase):
         self.legacy_path = os.path.join(self.dir, "chatbot.db")
         await self._make_legacy_queue(["Ann", "Bob"])
         self.memory = None                 # bound by the tests, like main.py
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.world_path,
-                                      memory=None)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.world_path, memory=None))
         await self.service.init()          # no memory → nothing to migrate yet
 
     async def asyncTearDown(self):

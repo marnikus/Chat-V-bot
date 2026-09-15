@@ -42,7 +42,7 @@ class TestWindowSets(unittest.TestCase):
     def test_every_window_id_is_known_at_least_once(self):
         for wid in LS.WINDOW_IDS:
             self.assertIn(wid, LS.LEGACY_WINDOW_IDS | LS.NEW_WINDOW_IDS)
-        self.assertEqual(LS.GRID_VERSION, 3)
+        self.assertEqual(LS.GRID_VERSION, 4)
 
     def test_default_tree_contains_every_window_once(self):
         tree = LS.default_grid_tree()
@@ -176,7 +176,7 @@ class TestParsePayload(unittest.TestCase):
         self.assertEqual(err, "payload must be an object")
 
     def test_unsupported_version(self):
-        for v in (0, 4, "3", None):
+        for v in (0, LS.GRID_VERSION + 1, "3", None):
             _, err = LS.parse_grid_payload(json.dumps(
                 {"v": v, "tree": LS.default_grid_tree()}))
             self.assertTrue(err and "unsupported version" in err, err)
@@ -203,6 +203,13 @@ class TestParsePayload(unittest.TestCase):
         tree = split_of(ids, spelling="type")
         parsed, err = LS.parse_grid_payload(payload(tree, v=2))
         self.assertIsNone(err)
+        self.assertEqual(sorted(LS.leaf_ids(parsed)), sorted(LS.WINDOW_IDS))
+
+    def test_v3_upgraded(self):
+        """v4 added the two AI windows; a v3 arrangement must survive."""
+        ids = sorted(LS.V3_WINDOW_IDS)
+        parsed, err = LS.parse_grid_payload(payload(split_of(ids), v=3))
+        self.assertIsNone(err, "a pre-update layout must never be rejected")
         self.assertEqual(sorted(LS.leaf_ids(parsed)), sorted(LS.WINDOW_IDS))
 
 
@@ -235,12 +242,12 @@ class TestMigrate(unittest.TestCase):
 
 class TestCanonicalAndLegacy(unittest.TestCase):
     def test_canonical_payload_is_compact(self):
-        raw = json.dumps({"v": 3, "tree": LS.default_grid_tree()},
+        raw = json.dumps({"v": LS.GRID_VERSION, "tree": LS.default_grid_tree()},
                          ensure_ascii=False, indent=2)
         out, err = LS.canonical_grid_payload(raw)
         self.assertIsNone(err)
         self.assertNotIn("\n", out)
-        self.assertEqual(json.loads(out)["v"], 3)
+        self.assertEqual(json.loads(out)["v"], LS.GRID_VERSION)
 
     def test_canonical_rejects_invalid(self):
         out, err = LS.canonical_grid_payload("{bad")

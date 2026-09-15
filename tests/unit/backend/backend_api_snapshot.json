@@ -742,6 +742,26 @@
     "text": "''"
    }
   },
+  "SPEED_MULTIPLIER": {
+   "class": "actions.speed_multiplier.SpeedMultiplier",
+   "init": "(self, multiplier: float = 1.0, **kw)",
+   "schema": {
+    "multiplier": {
+     "default": "1.0",
+     "label": "'Speed coefficient — 1.0 = normal'",
+     "type": "'number'"
+    }
+   },
+   "schema_keys": [
+    "multiplier"
+   ],
+   "to_dict": {
+    "block_id": "'SPEED_MULTIPLIER'",
+    "enabled": "True",
+    "multiplier": "1.0",
+    "pre_delay_ms": "0"
+   }
+  },
   "TAKE_PERSON": {
    "class": "actions.take_person.TakePerson",
    "init": "(self, pick_mode: str = 'random_new', **kw)",
@@ -864,7 +884,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -918,7 +938,7 @@
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      }
     },
@@ -996,7 +1016,7 @@
      "inherited": {
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1027,10 +1047,11 @@
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
+      "click_runner": "(self)",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
@@ -1056,7 +1077,7 @@
       "as_dict": "(self) -> 'dict'",
       "display_name": "<property>",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1075,6 +1096,32 @@
   "actions.base_action": {
    "classes": {},
    "functions": {},
+   "values": {}
+  },
+  "actions.cancellation": {
+   "classes": {
+    "RunStopped": {
+     "ancestry": [
+      "RunStopped",
+      "Exception",
+      "BaseException",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "Exception"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {}
+    }
+   },
+   "functions": {
+    "await_with_stop": "(awaitable_factory: 'Callable[[], Awaitable[Any]]', engine, *, slice_s: 'float' = 0.05, deadline_monotonic: 'float | None' = None) -> 'Any'",
+    "check_stopped": "(engine) -> 'None'",
+    "is_stop_requested": "(engine) -> 'bool'",
+    "sleep_with_stop": "(delay_s: 'float', engine, *, slice_s: 'float' = 0.02) -> 'None'"
+   },
    "values": {}
   },
   "actions.click_back": {
@@ -1102,6 +1149,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1109,7 +1157,7 @@
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1145,6 +1193,7 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
@@ -1152,7 +1201,7 @@
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1187,13 +1236,14 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "find_label": "(self) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1225,13 +1275,41 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
       "__init__": "(self, selector: str = 'user-item', label_selector: str = '.primary-text', click_selector: str = '.user-container', tab_selector: str = \"div[role='tab'].tab-item\", tab_title_selector: str = 'p.chat-title', verify_new_tab: bool = True, tab_pause_ms: int = 800, highlight_enabled: bool = True, confirm_pause_ms: int = 700, respect_order: bool = False, use_person_from_memory: bool = False, pre_delay_ms: int = 1000, **kw)",
       "config_schema": "(self) -> dict",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    },
+    "NewTabCheck": {
+     "ancestry": [
+      "NewTabCheck",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "before": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "label": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      },
+      "nick": {
+       "default": "<_MISSING_TYPE>",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, nick: str, label: str, before: Optional[dict] = None) -> None"
      }
     }
    },
@@ -1260,7 +1338,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'"
+      "pre_delay": "(self, engine=None) -> 'None'"
      },
      "methods": {
       "__init__": "(self, target: 'str' = 'active', mode: 'str' = 'incremental', require_private: 'bool' = True, max_messages: 'int' = 0, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40, download_media: 'bool' = True, fail_if_empty: 'bool' = False, **kwargs)",
@@ -1301,7 +1379,7 @@
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1326,7 +1404,8 @@
       "criteria": "None",
       "history": "None",
       "memory": "None",
-      "selected_nick": "''"
+      "selected_nick": "''",
+      "speed_multiplier": "1.0"
      },
      "bases": [
       "object"
@@ -1375,11 +1454,15 @@
       "selected_nick": {
        "default": "''",
        "type": "str"
+      },
+      "speed_multiplier": {
+       "default": "1.0",
+       "type": "float"
       }
      },
      "inherited": {},
      "methods": {
-      "__init__": "(self, cdp: 'Any' = None, memory: 'Any' = None, criteria: 'Any' = None, history: 'Any' = None, report_fn: 'Callable[..., None]' = <function ActionContext.<lambda> at 0xADDR>, composer_text: 'str' = '', selected_nick: 'str' = '', _stop_checker: 'Optional[Callable[[], bool]]' = None, _mark_messaged: 'Optional[Callable[[str], Any]]' = None, _unmessaged_nicks: 'Optional[Callable[[], Any]]' = None, _queue_order: 'Optional[Callable[[list], list]]' = None) -> None",
+      "__init__": "(self, cdp: 'Any' = None, memory: 'Any' = None, criteria: 'Any' = None, history: 'Any' = None, report_fn: 'Callable[..., None]' = <function ActionContext.<lambda> at 0xADDR>, composer_text: 'str' = '', selected_nick: 'str' = '', speed_multiplier: 'float' = 1.0, _stop_checker: 'Optional[Callable[[], bool]]' = None, _mark_messaged: 'Optional[Callable[[str], Any]]' = None, _unmessaged_nicks: 'Optional[Callable[[], Any]]' = None, _queue_order: 'Optional[Callable[[list], list]]' = None) -> None",
       "is_stopping": "(self) -> 'bool'",
       "mark_person_messaged": "(self, nick: 'str') -> 'str'",
       "note_selected": "(self, nick: 'str') -> 'None'",
@@ -1416,13 +1499,14 @@
      "fields": {},
      "inherited": {
       "as_dict": "(self) -> 'dict'",
+      "click_runner": "(self)",
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "fallback_attempts": "(self) -> 'tuple'",
       "find_kwargs": "(self, engine: 'Optional[object]' = None) -> 'dict'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1460,7 +1544,7 @@
      "inherited": {
       "config_schema": "(self) -> 'dict'",
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1498,7 +1582,7 @@
       "display_name": "<property>",
       "marker_message": "(self, user_nick: 'str') -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1567,7 +1651,7 @@
       "display_name": "<property>",
       "execute": "(self, user_nick: 'str', cdp, engine: 'Optional[object]' = None) -> 'str'",
       "panel_schema": "(self) -> 'dict'",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1581,6 +1665,74 @@
   },
   "actions.scroll_parse": {
    "classes": {
+    "PipelineRun": {
+     "ancestry": [
+      "PipelineRun",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "cbs": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "engine": {
+       "default": "None",
+       "type": "Any"
+      },
+      "known_messaged": {
+       "default": "None",
+       "type": "Any"
+      },
+      "panel_criteria": {
+       "default": "None",
+       "type": "Any"
+      },
+      "seek_nicks": {
+       "default": "None",
+       "type": "Any"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, engine: Any = None, panel_criteria: Any = None, known_messaged: Any = None, seek_nicks: Any = None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> None"
+     }
+    },
+    "ScrollCallbacks": {
+     "ancestry": [
+      "ScrollCallbacks",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "log_cb": {
+       "default": "None",
+       "type": "Any"
+      },
+      "on_collect": {
+       "default": "None",
+       "type": "Any"
+      },
+      "on_reject": {
+       "default": "None",
+       "type": "Any"
+      },
+      "should_stop": {
+       "default": "None",
+       "type": "Any"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, log_cb: Any = None, on_collect: Any = None, on_reject: Any = None, should_stop: Any = None) -> None"
+     }
+    },
     "ScrollParse": {
      "ancestry": [
       "ScrollParse",
@@ -1599,17 +1751,42 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
       "__init__": "(self, max_scrolls: int = 50, scroll_pause_ms: int = 800, scroll_delta_y: int = 300, viewport_selector: str = 'cdk-virtual-scroll-viewport.users-list-viewport', load_timeout_ms: int = 2500, stall_threshold: int = 3, min_new_users: int = 1, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, purge_rejected: bool = True, scroll_only: bool = False, filter_female: str = 'yes', filter_registered: str = 'no', filter_guest: str = 'yes', filter_anonymous: str = 'no', pre_delay_ms: int = 300, **kw)",
       "build_filter": "(self, panel_criteria=None) -> backend.person_filter.PersonFilter",
-      "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollParser",
+      "build_parser": "(self, cdp: backend.cdp_client.CDPClient, panel_criteria=None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> backend.scroll_parser.ScrollParser",
       "config_schema": "(self) -> dict",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str",
-      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None, panel_criteria=None, known_messaged: set | None = None, on_collect=None, on_reject=None, should_stop=None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
-      "to_scroll_options": "(self, panel_criteria=None, log_cb=None, on_collect=None, on_reject=None, should_stop=None) -> backend.scroll_parser.ScrollOptions"
+      "run_pipeline": "(self, cdp: backend.cdp_client.CDPClient, run: Optional[actions.scroll_parse.PipelineRun] = None) -> backend.scroll_parser_model.CollectResult",
+      "to_scroll_options": "(self, panel_criteria=None, cbs: Optional[actions.scroll_parse.ScrollCallbacks] = None) -> backend.scroll_parser_model.ScrollOptions"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.scroll_parse_run": {
+   "classes": {
+    "ScrollRunPart": {
+     "ancestry": [
+      "ScrollRunPart",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, block)",
+      "build_filter": "(self, panel_criteria=None) -> 'PersonFilter'",
+      "build_parser": "(self, cdp: 'CDPClient', panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollParser'",
+      "run": "(self, cdp: 'CDPClient', run: 'Optional[PipelineRun]' = None) -> 'CollectResult'",
+      "to_scroll_options": "(self, panel_criteria=None, cbs: 'Optional[ScrollCallbacks]' = None) -> 'ScrollOptions'"
      }
     }
    },
@@ -1636,12 +1813,62 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
       "__init__": "(self, text: str = '', pre_delay_ms: int = 500, **kw)",
       "config_schema": "(self) -> dict",
+      "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "actions.speed": {
+   "classes": {},
+   "functions": {
+    "coerce_multiplier": "(value) -> 'float'",
+    "describe": "(multiplier) -> 'str'",
+    "read_multiplier": "(engine) -> 'float'",
+    "resolve_stack_multiplier": "(blocks) -> 'float'",
+    "scale_ms": "(ms, engine=None) -> 'int'"
+   },
+   "values": {}
+  },
+  "actions.speed_multiplier": {
+   "classes": {
+    "SpeedMultiplier": {
+     "ancestry": [
+      "SpeedMultiplier",
+      "MarkerBlock",
+      "DeclaredSettings",
+      "BaseAction",
+      "ABC",
+      "object"
+     ],
+     "attrs": {
+      "FIELDS": "(BlockField(name='multiplier', type='number', label='Speed coefficient — 1.0 = normal', default=<object object at 0x…>, options=(), help='', clean=<function coerce_multiplier at 0x…>, request=None),)",
+      "block_id": "'SPEED_MULTIPLIER'",
+      "icon": "'⏩'",
+      "name": "'Speed Multiplier'"
+     },
+     "bases": [
+      "MarkerBlock"
+     ],
+     "fields": {},
+     "inherited": {
+      "as_dict": "(self) -> 'dict'",
+      "config_schema": "(self) -> 'dict'",
+      "display_name": "<property>",
+      "marker_message": "(self, user_nick: 'str') -> 'str'",
+      "panel_schema": "(self) -> 'dict'",
+      "pre_delay": "(self, engine=None) -> 'None'",
+      "to_dict": "(self) -> 'dict'"
+     },
+     "methods": {
+      "__init__": "(self, multiplier: float = 1.0, **kw)",
       "execute": "(self, user_nick: str, cdp: backend.cdp_client.CDPClient, engine: Optional[object] = None) -> str"
      }
     }
@@ -1669,7 +1896,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1704,7 +1931,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1737,7 +1964,7 @@
      "fields": {},
      "inherited": {
       "display_name": "<property>",
-      "pre_delay": "(self) -> 'None'",
+      "pre_delay": "(self, engine=None) -> 'None'",
       "to_dict": "(self) -> 'dict'"
      },
      "methods": {
@@ -1767,33 +1994,36 @@
       "CDPClient",
       "QObject",
       "Object",
+      "WireCommands",
       "object"
      ],
      "attrs": {},
      "bases": [
-      "QObject"
+      "QObject",
+      "WireCommands"
      ],
      "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
+     "inherited": {
       "add_binding": "(self, name: str) -> bool",
       "add_script_on_new_document": "(self, source: str) -> str",
-      "base_url": "<property>",
       "click_at": "(self, x: float, y: float) -> None",
-      "connect": "(self, ws_url: str) -> bool",
-      "disconnect": "(self) -> None",
       "evaluate": "(self, expression: str) -> Any",
-      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
       "get_cookies": "(self, url: str = '') -> str",
       "get_element_rect": "(self, selector: str) -> Optional[dict]",
-      "is_connected": "<property>",
       "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
+      "remove_script_on_new_document": "(self, identifier: str) -> bool",
+      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+     },
+     "methods": {
+      "__init__": "(self, host: str = '127.0.0.1', port: int = 9222, parent: Optional[PySide6.QtCore.QObject] = None)",
+      "base_url": "<property>",
+      "connect": "(self, ws_url: str) -> bool",
+      "disconnect": "(self) -> None",
+      "fetch_tabs": "(self) -> list[backend.cdp_client.TabInfo]",
+      "is_connected": "<property>",
       "off_event": "(self, method: str, callback: Optional[Callable] = None) -> None",
       "on_event": "(self, method: str, callback: Callable) -> Callable",
-      "remove_script_on_new_document": "(self, identifier: str) -> bool",
-      "send": "(self, method: str, params: dict | None = None) -> dict",
-      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+      "send": "(self, method: str, params: dict | None = None) -> dict"
      }
     },
     "CdpLease": {
@@ -1854,6 +2084,79 @@
    "functions": {},
    "values": {}
   },
+  "backend.cdp_client_events": {
+   "classes": {
+    "CdpEvents": {
+     "ancestry": [
+      "CdpEvents",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self)",
+      "dispatch": "(self, frame: 'dict') -> 'None'",
+      "off_event": "(self, method: 'str', callback: 'Callable | None' = None) -> 'None'",
+      "on_event": "(self, method: 'str', callback: 'Callable') -> 'Callable'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.cdp_client_transport": {
+   "classes": {},
+   "functions": {
+    "add_binding": "(client, name: 'str') -> 'bool'",
+    "add_script_on_new_document": "(client, source: 'str') -> 'str'",
+    "click_at": "(client, x: 'float', y: 'float') -> 'None'",
+    "close_client": "(client) -> 'None'",
+    "cookie_header": "(client, url: 'str' = '') -> 'str'",
+    "evaluate": "(client, expression: 'str') -> 'Any'",
+    "fetch_tabs": "(client) -> 'list[dict]'",
+    "get_element_rect": "(client, selector: 'str') -> 'dict | None'",
+    "mouse_wheel": "(client, dx: 'float', dy: 'float', x: 'float', y: 'float') -> 'None'",
+    "open_client": "(client, ws_url: 'str') -> 'bool'",
+    "raw_send": "(client, method: 'str', params: 'dict | None' = None) -> 'dict'",
+    "receive_loop": "(client) -> 'None'",
+    "remove_script_on_new_document": "(client, identifier: 'str') -> 'bool'",
+    "set_file_input_files": "(client, selector: 'str', files: 'list[str]') -> 'None'"
+   },
+   "values": {}
+  },
+  "backend.cdp_client_wire": {
+   "classes": {
+    "WireCommands": {
+     "ancestry": [
+      "WireCommands",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "add_binding": "(self, name: str) -> bool",
+      "add_script_on_new_document": "(self, source: str) -> str",
+      "click_at": "(self, x: float, y: float) -> None",
+      "evaluate": "(self, expression: str) -> Any",
+      "get_cookies": "(self, url: str = '') -> str",
+      "get_element_rect": "(self, selector: str) -> Optional[dict]",
+      "mouse_wheel": "(self, dx: float, dy: float, x: float, y: float) -> None",
+      "remove_script_on_new_document": "(self, identifier: str) -> bool",
+      "set_file_input_files": "(self, selector: str, files: list[str]) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "backend.chat_agent_js": {
    "classes": {},
    "functions": {
@@ -1873,14 +2176,17 @@
     "ChatParser": {
      "ancestry": [
       "ChatParser",
+      "SettleMixin",
       "object"
      ],
      "attrs": {},
      "bases": [
-      "object"
+      "SettleMixin"
      ],
      "fields": {},
-     "inherited": {},
+     "inherited": {
+      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'"
+     },
      "methods": {
       "__init__": "(self, cdp, chunk_size: 'int' = 80, chunk_pause_ms: 'int' = 40)",
       "drain": "(self) -> 'list[MessageRecord]'",
@@ -1889,7 +2195,6 @@
       "pause": "(self) -> 'None'",
       "restore_scroll": "(self, top: 'int') -> 'dict'",
       "scroll_to_top": "(self) -> 'dict'",
-      "settle_after_top": "(self, first_state: 'dict', wait_ms: 'int' = 300, stable_polls: 'int' = 3, max_wait_s: 'float' = 6.0, minimum_count: 'int' = 0) -> 'dict'",
       "slice": "(self, start: 'int', end: 'int') -> 'list[MessageRecord]'",
       "state": "(self) -> 'dict'"
      }
@@ -1945,17 +2250,22 @@
    "functions": {
     "align": "(dom_fps, tail_fps) -> 'Alignment'",
     "parse_records": "(raw: 'Iterable') -> 'list[MessageRecord]'",
-    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', my_nick: 'str' = '', require_private: 'bool' = False, verify_partner: 'bool' = False, max_messages: 'Optional[int]' = None, chunk_pause_ms: 'Optional[int]' = None, should_stop: 'Optional[Callable[[], bool]]' = None, on_progress: 'Optional[Callable[[int, int], None]]' = None, now: 'Optional[datetime]' = None, backfill_older: 'bool' = False, backfill_wait_s: 'float' = 2.0, media=None) -> 'SyncResult'",
+    "sync_conversation": "(parser: 'ChatParser', repo: 'HistoryRepo', nick: 'str', options: 'Optional[SyncOptions]' = None) -> 'SyncResult'",
     "title_matches": "(title: 'str', nick: 'str') -> 'bool'",
-    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', items=None, require_private: 'bool' = True) -> 'PrivateCheck'"
+    "verify_private": "(state: 'dict', nick: 'str', my_nick: 'str' = '', query: 'PrivateQuery' = PrivateQuery(items=None, require_private=True)) -> 'PrivateCheck'"
    },
    "values": {}
   },
-  "backend.chat_sync": {
+  "backend.chat_parser_gate": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_parser_settle": {
    "classes": {
-    "ChunkReader": {
+    "SettleMixin": {
      "ancestry": [
-      "ChunkReader",
+      "SettleMixin",
       "object"
      ],
      "attrs": {},
@@ -1965,82 +2275,22 @@
      "fields": {},
      "inherited": {},
      "methods": {
-      "__init__": "(self, session: \"'SyncSession'\")",
-      "read": "(self) -> 'None'"
+      "settle_after_top": "(self, first_state: 'dict', spec: 'Optional[SettleSpec]' = None) -> 'dict'"
      }
-    },
-    "DeltaAligner": {
-     "ancestry": [
-      "DeltaAligner",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "apply": "(self, session: \"'SyncSession'\") -> 'None'",
-      "split": "(collected, cursor: 'dict') -> 'list'"
-     }
-    },
-    "ReadPlan": {
-     "ancestry": [
-      "ReadPlan",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {
-      "count": {
-       "default": "0",
-       "type": "int"
-      },
-      "gap": {
-       "default": "False",
-       "type": "bool"
-      },
-      "head_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "head_sig": {
-       "default": "''",
-       "type": "str"
-      },
-      "mode": {
-       "default": "'full'",
-       "type": "str"
-      },
-      "start": {
-       "default": "0",
-       "type": "int"
-      },
-      "streaming": {
-       "default": "True",
-       "type": "bool"
-      },
-      "tail_any": {
-       "default": "''",
-       "type": "str"
-      },
-      "tail_sig": {
-       "default": "''",
-       "type": "str"
-      }
-     },
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
-      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
-      "delta": "<property>",
-      "is_empty": "<property>",
-      "signatures": "<property>"
-     }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync": {
+   "classes": {},
+   "functions": {
+    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync_options": {
+   "classes": {
     "SyncOptions": {
      "ancestry": [
       "SyncOptions",
@@ -2106,7 +2356,13 @@
       "progress": "(self, done: 'int', total: 'int') -> 'None'",
       "stopping": "(self) -> 'bool'"
      }
-    },
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_persist": {
+   "classes": {
     "SyncPersister": {
      "ancestry": [
       "SyncPersister",
@@ -2131,6 +2387,70 @@
       "write_backfill": "(self, records) -> 'None'",
       "write_batch": "(self, records) -> 'None'"
      }
+    }
+   },
+   "functions": {
+    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'"
+   },
+   "values": {}
+  },
+  "backend.chat_sync_plan": {
+   "classes": {
+    "ReadPlan": {
+     "ancestry": [
+      "ReadPlan",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "count": {
+       "default": "0",
+       "type": "int"
+      },
+      "gap": {
+       "default": "False",
+       "type": "bool"
+      },
+      "head_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "head_sig": {
+       "default": "''",
+       "type": "str"
+      },
+      "mode": {
+       "default": "'full'",
+       "type": "str"
+      },
+      "start": {
+       "default": "0",
+       "type": "int"
+      },
+      "streaming": {
+       "default": "True",
+       "type": "bool"
+      },
+      "tail_any": {
+       "default": "''",
+       "type": "str"
+      },
+      "tail_sig": {
+       "default": "''",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, mode: 'str' = 'full', count: 'int' = 0, start: 'int' = 0, streaming: 'bool' = True, gap: 'bool' = False, head_sig: 'str' = '', tail_sig: 'str' = '', head_any: 'str' = '', tail_any: 'str' = '') -> None",
+      "cursor_kwargs": "(self, dom_count: 'int', *, complete: 'bool' = True) -> 'dict'",
+      "delta": "<property>",
+      "is_empty": "<property>",
+      "signatures": "<property>"
+     }
     },
     "SyncPlanner": {
      "ancestry": [
@@ -2150,7 +2470,51 @@
       "signature": "(value) -> 'str'",
       "signatures": "(state: 'dict') -> 'dict'"
      }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_read": {
+   "classes": {
+    "ChunkReader": {
+     "ancestry": [
+      "ChunkReader",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "read": "(self) -> 'None'"
+     }
     },
+    "DeltaAligner": {
+     "ancestry": [
+      "DeltaAligner",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "apply": "(self, session: \"'SyncSession'\") -> 'None'",
+      "split": "(collected, cursor: 'dict') -> 'list'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.chat_sync_session": {
+   "classes": {
     "SyncSession": {
      "ancestry": [
       "SyncSession",
@@ -2281,12 +2645,31 @@
       "restore_if_needed": "(self) -> 'None'",
       "restore_viewport": "(self, position: 'Optional[int]' = None) -> 'int'"
      }
+    },
+    "SyncViewport": {
+     "ancestry": [
+      "SyncViewport",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, session: \"'SyncSession'\")",
+      "fetch_settled_state": "(self) -> 'None'",
+      "prepare_backfill": "(self) -> 'None'",
+      "recover_emptied_pane": "(self) -> 'None'",
+      "restore": "(self, position: 'Optional[int]' = None) -> 'int'",
+      "settle_at_top": "(self) -> 'None'",
+      "settled_ok": "(self) -> 'bool'",
+      "window_end": "(self, position: 'Optional[int]') -> 'int'"
+     }
     }
    },
-   "functions": {
-    "merge_live": "(result: 'SyncResult', appended, baseline: 'int' = 0) -> 'None'",
-    "run_sync": "(parser, repo, nick: 'str', options: 'Optional[SyncOptions]' = None, **legacy) -> 'SyncResult'"
-   },
+   "functions": {},
    "values": {}
   },
   "backend.chat_text": {
@@ -2307,11 +2690,70 @@
    "functions": {},
    "values": {}
   },
+  "backend.config_defaults": {
+   "classes": {},
+   "functions": {
+    "deep_merge": "(base: 'dict', overlay: 'Any') -> 'dict'",
+    "json_dumps": "(data: 'Any') -> 'str'",
+    "set_nested": "(tree: 'Any', path, value) -> 'bool'"
+   },
+   "values": {}
+  },
   "backend.config_manager": {
    "classes": {
     "ConfigManager": {
      "ancestry": [
       "ConfigManager",
+      "ConfigView",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "ConfigView"
+     ],
+     "fields": {},
+     "inherited": {
+      "data": "(self) -> 'dict[str, Any]'",
+      "get_state": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
+      "set_state": "(self, save: 'bool' = True, **updates: 'Any') -> 'None'",
+      "state_data": "(self) -> 'dict[str, Any]'",
+      "to_dict": "(self) -> 'str'"
+     },
+     "methods": {
+      "__init__": "(self, path: 'str' = 'config.json')",
+      "get": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "get_copy": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
+      "load": "(self) -> 'None'",
+      "named_all": "(self, section: 'str') -> 'dict[str, Any]'",
+      "named_delete": "(self, section: 'str', name: 'str', save: 'bool' = True) -> 'bool'",
+      "named_get": "(self, section: 'str', name: 'str', default: 'Any' = None) -> 'Any'",
+      "named_set": "(self, section: 'str', name: 'str', value: 'Any', save: 'bool' = True) -> 'None'",
+      "save": "(self) -> 'None'",
+      "set": "(self, *keys_and_value: 'Any') -> 'None'",
+      "validate": "(self) -> 'list[str]'"
+     }
+    }
+   },
+   "functions": {
+    "json_dumps": "(data: 'Any') -> 'str'"
+   },
+   "values": {}
+  },
+  "backend.config_owners": {
+   "classes": {},
+   "functions": {
+    "build": "(manager) -> 'dict'",
+    "owner_for": "(manager, section: 'str')",
+    "route_of": "(section: 'str') -> 'str'",
+    "store_for": "(manager, section: 'str')"
+   },
+   "values": {}
+  },
+  "backend.config_view": {
+   "classes": {
+    "ConfigView": {
+     "ancestry": [
+      "ConfigView",
       "object"
      ],
      "attrs": {},
@@ -2321,27 +2763,16 @@
      "fields": {},
      "inherited": {},
      "methods": {
-      "__init__": "(self, path: 'str' = 'config.json')",
       "data": "(self) -> 'dict[str, Any]'",
-      "get": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
-      "get_copy": "(self, *keys: 'str', default: 'Any' = None) -> 'Any'",
       "get_state": "(self, key: 'str', default: 'Any' = None) -> 'Any'",
-      "load": "(self) -> 'None'",
-      "named_all": "(self, section: 'str') -> 'dict[str, Any]'",
-      "named_delete": "(self, section: 'str', name: 'str', save: 'bool' = True) -> 'bool'",
-      "named_get": "(self, section: 'str', name: 'str', default: 'Any' = None) -> 'Any'",
-      "named_set": "(self, section: 'str', name: 'str', value: 'Any', save: 'bool' = True) -> 'None'",
-      "save": "(self) -> 'None'",
-      "set": "(self, *keys_and_value: 'Any') -> 'None'",
       "set_state": "(self, save: 'bool' = True, **updates: 'Any') -> 'None'",
       "state_data": "(self) -> 'dict[str, Any]'",
-      "to_dict": "(self) -> 'str'",
-      "validate": "(self) -> 'list[str]'"
+      "to_dict": "(self) -> 'str'"
      }
     }
    },
    "functions": {
-    "json_dumps": "(data: 'Any') -> 'str'"
+    "state_default": "(key: 'str', default: 'Any') -> 'Any'"
    },
    "values": {}
   },
@@ -2417,19 +2848,27 @@
    "classes": {},
    "functions": {
     "build_clear_probe": "() -> str",
-    "build_click_probe": "(click_selector: Optional[str] = None, highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff9500', caption: str = 'CLICK', do_click: bool = True) -> str",
-    "build_find_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', highlight: bool = True, highlight_ms: int = 1200, color: str = '#ff2d2d', caption: str = 'FOUND', max_candidates: int = 6) -> str",
-    "build_highlight_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'exact', color: str = '#00c853', caption: str = 'MATCH', highlight_ms: int = 900, clear_first: bool = True) -> str",
+    "build_click_probe": "(click_selector: Optional[str] = None, spec: Optional[backend.probe_requests.ClickProbeSpec] = None) -> str",
+    "build_find_probe": "(selector: str, spec: Optional[backend.probe_requests.FindProbeSpec] = None) -> str",
+    "build_highlight_probe": "(selector: str, spec: Optional[backend.probe_requests.HighlightSpec] = None) -> str",
     "interpret_click": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_click_target": "(result) -> tuple[str, str]",
     "interpret_find": "(result, label: str = 'element') -> tuple[str, str]"
    },
    "values": {}
   },
+  "backend.dom_highlight_js": {
+   "classes": {},
+   "functions": {
+    "base_out_js": "() -> str",
+    "splice": "(body: str, **fragments) -> str"
+   },
+   "values": {}
+  },
   "backend.dom_probe": {
    "classes": {},
    "functions": {
-    "build_probe": "(selector: str, label_selector: Optional[str] = None, match_text: Optional[str] = None, match_mode: str = 'contains', click: bool = False, click_selector: Optional[str] = None, click_root: bool = False, max_candidates: int = 6) -> str",
+    "build_probe": "(selector: str, spec: Optional[backend.probe_requests.ProbeSpec] = None) -> str",
     "interpret": "(result, label: str = 'element') -> tuple[str, str]",
     "interpret_wait": "(result, label: str = 'element') -> tuple[str, str]"
    },
@@ -2469,9 +2908,99 @@
       "search_global": "(self, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
       "search_person": "(self, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
      }
+    },
+    "PersonPageRequest": {
+     "ancestry": [
+      "PersonPageRequest",
+      "object"
+     ],
+     "attrs": {
+      "dir": "''",
+      "include_deleted": "False",
+      "limit": "50",
+      "offset": "0",
+      "q": "''",
+      "sort": "'recent'"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "dir": {
+       "default": "''",
+       "type": "str"
+      },
+      "include_deleted": {
+       "default": "False",
+       "type": "bool"
+      },
+      "limit": {
+       "default": "50",
+       "type": "int"
+      },
+      "offset": {
+       "default": "0",
+       "type": "int"
+      },
+      "q": {
+       "default": "''",
+       "type": "str"
+      },
+      "sort": {
+       "default": "'recent'",
+       "type": "str"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, q: 'str' = '', limit: 'int' = 50, offset: 'int' = 0, sort: 'str' = 'recent', dir: 'str' = '', include_deleted: 'bool' = False) -> None",
+      "columns": "(self) -> 'str'",
+      "needle": "(self) -> 'str'",
+      "order": "(self) -> 'tuple[str, list]'",
+      "resolved_dir": "(self) -> 'str'",
+      "spec": "(self) -> 'tuple[tuple[str, str], ...]'",
+      "where": "(self) -> 'tuple[str, list]'"
+     }
     }
    },
    "functions": {},
+   "values": {}
+  },
+  "backend.history_query_reads": {
+   "classes": {},
+   "functions": {
+    "around": "(q, nick: 'str', ord_: 'int', radius: 'int' = 25) -> 'dict'",
+    "db_stats": "(q) -> 'dict'",
+    "gaps": "(q, person_id: 'int') -> 'list[dict]'",
+    "list_persons": "(q, req) -> 'dict'",
+    "page": "(q, nick: 'str', before_ord: 'Optional[int]' = None, after_ord: 'Optional[int]' = None, limit: 'int' = 50) -> 'dict'",
+    "person_stats": "(q, nick: 'str') -> 'dict'",
+    "search": "(q, person_id: 'Optional[int]', query: 'str', limit: 'int', offset: 'int')",
+    "search_global": "(q, query: 'str', limit: 'int' = 200, per_person: 'int' = 20) -> 'dict'",
+    "search_person": "(q, nick: 'str', query: 'str', limit: 'int' = 50, offset: 'int' = 0) -> 'dict'"
+   },
+   "values": {}
+  },
+  "backend.history_query_rows": {
+   "classes": {},
+   "functions": {
+    "apply_specs": "(data: 'dict', specs) -> 'dict'",
+    "clamp": "(limit: 'Optional[int]') -> 'int'",
+    "day_bounds": "(db, pid: 'int') -> 'tuple[str, str, int]'",
+    "item": "(row) -> 'dict'",
+    "item_media": "(data: 'dict') -> 'dict | None'",
+    "my_nicks": "(row) -> 'list'",
+    "person_item": "(row, my_nicks: 'list') -> 'dict'",
+    "person_row": "(db, nick: 'str')",
+    "stat_int": "(data: 'dict', key: 'str') -> 'int'"
+   },
+   "values": {}
+  },
+  "backend.history_query_search": {
+   "classes": {},
+   "functions": {
+    "search": "(db, person_id, query: 'str', limit: 'int', offset: 'int')"
+   },
    "values": {}
   },
   "backend.history_repo": {
@@ -2494,6 +3023,11 @@
    "functions": {
     "setup_logger": "(log_dir: str = 'logs', level: int = 20) -> logging.Logger"
    },
+   "values": {}
+  },
+  "backend.media_dialog": {
+   "classes": {},
+   "functions": {},
    "values": {}
   },
   "backend.media_handler": {
@@ -2554,10 +3088,18 @@
     }
    },
    "functions": {
-    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str, file_pattern: str = '*.jpg, *.jpeg, *.png, *.gif', mode: str = 'sequential', simulate_dialog: bool = True, verify_timeout_ms: int = 8000, highlight_enabled: bool = True, confirm_pause_ms: int = 700, report: Optional[Callable] = None, verify_poll_ms: int = 200) -> bool",
+    "attach_image": "(cdp: backend.cdp_client.CDPClient, folder_path: str = '', options: Optional[backend.media_handler.AttachOptions] = None, **legacy) -> bool",
     "attach_with_options": "(cdp: backend.cdp_client.CDPClient, options: backend.media_handler.AttachOptions) -> bool",
     "list_image_files": "(folder: str, file_pattern: str) -> list[str]",
     "parse_patterns": "(file_pattern: str) -> list[str]"
+   },
+   "values": {}
+  },
+  "backend.media_handler_js": {
+   "classes": {},
+   "functions": {
+    "count_messages_js": "(shell_css: str) -> str",
+    "readback_js": "(input_css: str) -> str"
    },
    "values": {}
   },
@@ -2569,10 +3111,88 @@
   "backend.message_injector": {
    "classes": {},
    "functions": {
-    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool",
     "type_message": "(cdp: backend.cdp_client.CDPClient, text: str, typing_speed_ms: int = 30, report: Optional[Callable] = None) -> bool",
     "type_search": "(cdp: backend.cdp_client.CDPClient, text: str, report: Optional[Callable] = None) -> bool"
    },
+   "values": {}
+  },
+  "backend.message_injector_field": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.message_injector_send": {
+   "classes": {},
+   "functions": {
+    "click_send": "(cdp: backend.cdp_client.CDPClient, report: Optional[Callable] = None) -> bool"
+   },
+   "values": {}
+  },
+  "backend.message_injector_type": {
+   "classes": {},
+   "functions": {},
+   "values": {}
+  },
+  "backend.parser_requests": {
+   "classes": {
+    "PrivateQuery": {
+     "ancestry": [
+      "PrivateQuery",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "items": {
+       "default": "None",
+       "type": "Any"
+      },
+      "require_private": {
+       "default": "True",
+       "type": "bool"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, items: 'Any' = None, require_private: 'bool' = True) -> None"
+     }
+    },
+    "SettleSpec": {
+     "ancestry": [
+      "SettleSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "max_wait_s": {
+       "default": "6.0",
+       "type": "float"
+      },
+      "minimum_count": {
+       "default": "0",
+       "type": "int"
+      },
+      "stable_polls": {
+       "default": "3",
+       "type": "int"
+      },
+      "wait_ms": {
+       "default": "300",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, wait_ms: 'int' = 300, stable_polls: 'int' = 3, max_wait_s: 'float' = 6.0, minimum_count: 'int' = 0) -> None"
+     }
+    }
+   },
+   "functions": {},
    "values": {}
   },
   "backend.person_filter": {
@@ -2609,15 +3229,43 @@
       "PersonFilter",
       "object"
      ],
-     "attrs": {},
+     "attrs": {
+      "anonymous": "'no'",
+      "female": "'yes'",
+      "guest": "'yes'",
+      "panel_criteria": "None",
+      "registered": "'no'"
+     },
      "bases": [
       "object"
      ],
-     "fields": {},
+     "fields": {
+      "anonymous": {
+       "default": "'no'",
+       "type": "str"
+      },
+      "female": {
+       "default": "'yes'",
+       "type": "str"
+      },
+      "guest": {
+       "default": "'yes'",
+       "type": "str"
+      },
+      "panel_criteria": {
+       "default": "None",
+       "type": "Optional"
+      },
+      "registered": {
+       "default": "'no'",
+       "type": "str"
+      }
+     },
      "inherited": {},
      "methods": {
       "__call__": "(self, person: dict) -> bool",
-      "__init__": "(self, female: str = 'yes', registered: str = 'no', guest: str = 'yes', anonymous: str = 'no', panel_criteria: Optional[object] = None)",
+      "__init__": "(self, female: str = 'yes', registered: str = 'no', guest: str = 'yes', anonymous: str = 'no', panel_criteria: Optional[object] = None) -> None",
+      "__post_init__": "(self)",
       "check": "(self, person: dict) -> backend.person_filter.FilterVerdict",
       "describe": "(self) -> str",
       "is_empty": "<property>",
@@ -2636,7 +3284,297 @@
    "functions": {},
    "values": {}
   },
+  "backend.probe_requests": {
+   "classes": {
+    "ClickProbeSpec": {
+     "ancestry": [
+      "ClickProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'CLICK'",
+       "type": "str"
+      },
+      "color": {
+       "default": "'#ff9500'",
+       "type": "str"
+      },
+      "do_click": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight_ms": {
+       "default": "1200",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, highlight: 'bool' = True, highlight_ms: 'int' = 1200, color: 'str' = '#ff9500', caption: 'str' = 'CLICK', do_click: 'bool' = True) -> None"
+     }
+    },
+    "FindProbeSpec": {
+     "ancestry": [
+      "FindProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'FOUND'",
+       "type": "str"
+      },
+      "color": {
+       "default": "'#ff2d2d'",
+       "type": "str"
+      },
+      "highlight": {
+       "default": "True",
+       "type": "bool"
+      },
+      "highlight_ms": {
+       "default": "1200",
+       "type": "int"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'contains'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "max_candidates": {
+       "default": "6",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'contains', highlight: 'bool' = True, highlight_ms: 'int' = 1200, color: 'str' = '#ff2d2d', caption: 'str' = 'FOUND', max_candidates: 'int' = 6) -> None"
+     }
+    },
+    "HighlightSpec": {
+     "ancestry": [
+      "HighlightSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "caption": {
+       "default": "'MATCH'",
+       "type": "str"
+      },
+      "clear_first": {
+       "default": "True",
+       "type": "bool"
+      },
+      "color": {
+       "default": "'#00c853'",
+       "type": "str"
+      },
+      "highlight_ms": {
+       "default": "900",
+       "type": "int"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'exact'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'exact', color: 'str' = '#00c853', caption: 'str' = 'MATCH', highlight_ms: 'int' = 900, clear_first: 'bool' = True) -> None"
+     }
+    },
+    "ProbeSpec": {
+     "ancestry": [
+      "ProbeSpec",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "click": {
+       "default": "False",
+       "type": "bool"
+      },
+      "click_root": {
+       "default": "False",
+       "type": "bool"
+      },
+      "click_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "label_selector": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "match_mode": {
+       "default": "'contains'",
+       "type": "str"
+      },
+      "match_text": {
+       "default": "None",
+       "type": "Optional[str]"
+      },
+      "max_candidates": {
+       "default": "6",
+       "type": "int"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, label_selector: 'Optional[str]' = None, match_text: 'Optional[str]' = None, match_mode: 'str' = 'contains', click: 'bool' = False, click_selector: 'Optional[str]' = None, click_root: 'bool' = False, max_candidates: 'int' = 6) -> None"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
   "backend.scroll_parser": {
+   "classes": {
+    "ScrollParser": {
+     "ancestry": [
+      "ScrollParser",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, cdp: 'CDPClient', options: 'ScrollOptions | None' = None, criteria=None)",
+      "collect": "(self, progress_cb=None, min_new_users: 'int' = 0, known_messaged: 'set | None' = None, seek_nicks: 'set | None' = None) -> 'CollectResult'",
+      "from_options": "(cls, cdp: 'CDPClient', options: 'ScrollOptions', criteria=None) -> \"'ScrollParser'\"",
+      "max_scrolls": "<property>",
+      "parse": "(self, progress_cb=None) -> 'tuple[list, list]'",
+      "set_log_cb": "(self, cb) -> 'None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_dom": {
+   "classes": {
+    "ScrollDom": {
+     "ancestry": [
+      "ScrollDom",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "confirm_person": "(self, nick: 'str') -> 'bool'",
+      "do_scroll": "(self) -> 'bool'",
+      "new_people": "(self, snap: 'dict', seen_before: 'set', waited: 'int') -> 'bool'",
+      "scroll_stopped": "(snap: 'dict', prev_top: 'float') -> 'tuple[bool, float]'",
+      "settle": "(self, seen_before: 'set', prev_top: 'float') -> 'dict | None'",
+      "settle_poll": "(self, snap: 'dict', prev_top: 'float', stable: 'int') -> 'tuple[int, float, bool]'",
+      "snapshot": "(self) -> 'dict | None'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_judge": {
+   "classes": {
+    "PersonJudge": {
+     "ancestry": [
+      "PersonJudge",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "collect_one": "(self, record, nick: 'str', reason: 'str', run: 'PassState') -> 'None'",
+      "consume_batch": "(self, run: 'PassState') -> 'None'",
+      "hold_confirmation": "(self, shown: 'bool') -> 'None'",
+      "judge": "(self, nick: 'str', item: 'dict', run: 'PassState') -> 'None'",
+      "notify_collected": "(self, record, result) -> 'None'",
+      "notify_rejected": "(self, record, reason: 'str', result) -> 'None'",
+      "reject_one": "(self, record, reason: 'str', run: 'PassState') -> 'None'",
+      "seek_hit": "(self, nick: 'str', item: 'dict', run: 'PassState') -> 'bool'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_loop": {
+   "classes": {
+    "ScrollLoop": {
+     "ancestry": [
+      "ScrollLoop",
+      "object"
+     ],
+     "attrs": {},
+     "bases": [
+      "object"
+     ],
+     "fields": {},
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, parser)",
+      "advance": "(self, run: 'PassState', scroll_i: 'int') -> 'bool'",
+      "finish": "(self, run: 'PassState') -> 'CollectResult'",
+      "first_snapshot": "(self, run: 'PassState') -> 'bool'",
+      "list_is_over": "(self, run: 'PassState') -> 'bool'",
+      "open_pass": "(self, *, known_messaged, seek_nicks, min_new_users, progress_cb) -> 'PassState'",
+      "scroll_and_settle": "(self, run: 'PassState') -> 'bool'",
+      "scroll_loop": "(self, run: 'PassState') -> 'None'",
+      "target_reached": "(self, run: 'PassState') -> 'bool'"
+     }
+    }
+   },
+   "functions": {},
+   "values": {}
+  },
+  "backend.scroll_parser_model": {
    "classes": {
     "CollectResult": {
      "ancestry": [
@@ -2704,6 +3642,76 @@
      "methods": {
       "__init__": "(self, all_people: list = <factory>, collected: list = <factory>, scrolls: int = 0, reached_end: bool = False, stopped_early: bool = False, stopped: bool = False, seeking: bool = False, found: object = None, rejected: dict = <factory>, rejected_people: list = <factory>, purged: list = <factory>) -> None",
       "new_unmessaged": "<property>"
+     }
+    },
+    "PassState": {
+     "ancestry": [
+      "PassState",
+      "object"
+     ],
+     "attrs": {
+      "min_new_users": "0",
+      "new_this_scroll": "0",
+      "no_new_count": "0",
+      "progress_cb": "None",
+      "seeking": "False"
+     },
+     "bases": [
+      "object"
+     ],
+     "fields": {
+      "collected_nicks": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "known_messaged": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "min_new_users": {
+       "default": "0",
+       "type": "int"
+      },
+      "new_this_scroll": {
+       "default": "0",
+       "type": "int"
+      },
+      "no_new_count": {
+       "default": "0",
+       "type": "int"
+      },
+      "options": {
+       "default": "<_MISSING_TYPE>",
+       "type": "ScrollOptions"
+      },
+      "person_filter": {
+       "default": "<_MISSING_TYPE>",
+       "type": "PersonFilter"
+      },
+      "progress_cb": {
+       "default": "None",
+       "type": "object"
+      },
+      "result": {
+       "default": "<_MISSING_TYPE>",
+       "type": "CollectResult"
+      },
+      "seek_nicks": {
+       "default": "<_MISSING_TYPE>",
+       "type": "set"
+      },
+      "seeking": {
+       "default": "False",
+       "type": "bool"
+      },
+      "snap": {
+       "default": "<_MISSING_TYPE>",
+       "type": "dict"
+      }
+     },
+     "inherited": {},
+     "methods": {
+      "__init__": "(self, result: backend.scroll_parser_model.CollectResult, person_filter: backend.person_filter.PersonFilter, options: backend.scroll_parser_model.ScrollOptions, seeking: bool = False, seek_nicks: set = <factory>, known_messaged: set = <factory>, min_new_users: int = 0, progress_cb: object = None, collected_nicks: set = <factory>, snap: dict = <factory>, new_this_scroll: int = 0, no_new_count: int = 0) -> None"
      }
     },
     "ScrollOptions": {
@@ -2791,26 +3799,6 @@
       "__post_init__": "(self)",
       "seconds": "(self, ms_attr: str) -> float"
      }
-    },
-    "ScrollParser": {
-     "ancestry": [
-      "ScrollParser",
-      "object"
-     ],
-     "attrs": {},
-     "bases": [
-      "object"
-     ],
-     "fields": {},
-     "inherited": {},
-     "methods": {
-      "__init__": "(self, cdp: backend.cdp_client.CDPClient, criteria=None, viewport_sel: str = 'cdk-virtual-scroll-viewport.users-list-viewport', scroll_dy: int = 300, pause_ms: int = 800, stall_threshold: int = 3, max_scrolls: int = 50, load_timeout_ms: int = 2500, poll_ms: int = 150, person_filter: backend.person_filter.PersonFilter | None = None, person_selector: str = 'user-item', nick_selector: str = '.primary-text', highlight_enabled: bool = True, highlight_ms: int = 900, confirm_pause_ms: int = 500, on_collect=None, on_reject=None, should_stop=None, log_cb=None)",
-      "collect": "(self, progress_cb=None, min_new_users: int = 0, known_messaged: set | None = None, seek_nicks: set | None = None) -> backend.scroll_parser.CollectResult",
-      "from_options": "(cls, cdp: backend.cdp_client.CDPClient, options: backend.scroll_parser.ScrollOptions, criteria=None) -> 'ScrollParser'",
-      "max_scrolls": "<property>",
-      "parse": "(self, progress_cb=None) -> tuple[list, list]",
-      "set_log_cb": "(self, cb) -> None"
-     }
     }
    },
    "functions": {},
@@ -2896,7 +3884,7 @@
    },
    "functions": {
     "click_phase": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, found: dict, engine: Optional[object] = None) -> str",
-    "find_and_click": "(cdp: backend.cdp_client.CDPClient, *, selector: str, label_selector: str = '', match_text: str = '', match_mode: str = 'contains', click_enabled: bool = True, click_selector: str = '', highlight_enabled: bool = True, confirm_pause_ms: int = 700, highlight_ms: int = 1200, label: str = 'element', engine: Optional[object] = None) -> str",
+    "find_and_click": "(cdp: backend.cdp_client.CDPClient, request: Optional[backend.visual_click.ClickRequest] = None, engine: Optional[object] = None, **legacy) -> str",
     "find_and_click_exact": "(cdp: backend.cdp_client.CDPClient, *, text: str, **kw) -> str",
     "find_phase": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, engine: Optional[object] = None) -> Optional[dict]",
     "run_click": "(cdp: backend.cdp_client.CDPClient, request: backend.visual_click.ClickRequest, engine: Optional[object] = None) -> str"

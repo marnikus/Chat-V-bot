@@ -20,7 +20,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.history_query import _person_item  # noqa: E402
+from backend.history_query_rows import person_item as _person_item  # noqa: E402
 
 
 def row(**over):

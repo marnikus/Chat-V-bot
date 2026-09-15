@@ -36,6 +36,7 @@ from backend.config_manager import ConfigManager  # noqa: E402
 from backend.db_manager import DbManager  # noqa: E402
 from backend.history_db import SCHEMA_VERSION, TABLE_COLUMNS  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
@@ -61,9 +62,7 @@ class DbSwitchFlow(unittest.IsolatedAsyncioTestCase):
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         self.page = ConnectedPage([])
-        self.service = HistoryService(
-            cdp=self.page, config=self.cfg,
-            db_path=os.path.join(self.dir, "history.db"))
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=os.path.join(self.dir, "history.db")))
         await self.service.init()
         self.service.collector.configure(my_nick=ME)
         self.manager = DbManager(config=self.cfg, service=self.service,
@@ -232,8 +231,7 @@ class TestTheUserScenario(DbSwitchFlow):
 
         # reconnection (the user's log re-connected constantly) is silent
         await self.service.db.close()
-        reopened = HistoryService(
-            cdp=self.page, config=self.cfg, db_path=legacy)
+        reopened = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=legacy))
         await reopened.init()
         rows = await reopened.db.fetchall("SELECT COUNT(*) FROM messages")
         self.assertEqual(rows[0][0], 3)

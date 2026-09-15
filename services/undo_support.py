@@ -16,7 +16,6 @@ tests that read `UndoService._undo_pendings` keep working unchanged.
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 from typing import Any, Callable, Optional
 
@@ -224,17 +223,18 @@ class UndoWorldStore:
 
         * `save_world_undo` is DELETE-all-then-INSERT-all, so overlapping
           saves interleave and can leave the table holding half of one
-          timeline and half of another;
-        * the connection's `WriteTurn` tracks "held" with ONE flag, so the
+          timeline and half of another — a data race no gate can fix, and the
+          reason the queueing below stays even though the second bug is gone;
+        * the connection's `WriteTurn` tracked "held" with ONE flag, so the
           first save's commit cleared it while the second was still between
-          its statements. The second then re-entered the world gate
-          (depth 1 -> 2) and its own commit only decremented once, leaving
-          the writer turn held for good by a connection that was already
-          closed. Every later writer on that file then waited WAIT_S (15s)
-          and failed OPEN — writing without the exclusion the gate exists to
-          provide, which is the exact bug class the gate was added for
-          (2026-09-11: a Ctrl+Z reported success while the person stayed
-          deleted).
+          its statements; the second re-entered the world gate (depth 1 -> 2)
+          and its own commit only decremented once, leaving the writer turn
+          held for good by a closed connection. Every later writer then
+          waited WAIT_S (15s) and failed OPEN — the exact bug class the gate
+          was added for (2026-09-11: a Ctrl+Z reported success while the
+          person stayed deleted). The flag itself was fixed as residual risk
+          F3c: `WriteTurn` now holds the gate for the union of its writer
+          tasks (docs/archive/2026-09-13-round-g-write-gate/ROUND_G_DESIGN_2026-09-13.md §5).
 
         So a save requested while one is running is queued instead of started;
         the running task picks the newest queue up before it finishes. There is

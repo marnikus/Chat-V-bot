@@ -48,6 +48,7 @@ from services.run.hooks import (STANDALONE_NICK, USER_SCOPED_BLOCKS,  # noqa: E4
                                 normalize_blocks, norm_level)
 from services.run.state_machine import RunState, RunStateMachine  # noqa: E402
 from services.run import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from stores.user_memory import UserRecord  # noqa: E402
 
 
@@ -119,8 +120,7 @@ class EngineCase(unittest.IsolatedAsyncioTestCase):
 
     def make(self, users=None):
         self.memory = FakeMemory(users)
-        self.engine = ActionEngine(cdp=None, memory=self.memory,
-                                   criteria=None)
+        self.engine = ActionEngine(RunDeps(cdp=None, memory=self.memory, criteria=None))
         self.logs = []
         self.debug = []
         self.user_done = []
@@ -420,8 +420,7 @@ class ScrollParseBlock(BaseAction):
     async def execute(self, user_nick, cdp, engine=None):
         return ActionResult.OK
 
-    async def run_pipeline(self, cdp, engine, panel_criteria=None,
-                           known_messaged=None):
+    async def run_pipeline(self, cdp, run=None):
         if self.raise_pipeline:
             raise RuntimeError("collect exploded")
         return self._result

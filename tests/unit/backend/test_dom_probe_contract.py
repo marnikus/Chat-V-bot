@@ -27,6 +27,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
+from backend.probe_requests import ProbeSpec  # noqa: E402
 from backend.dom_probe import (  # noqa: E402
     MATCH_CONTAINS,
     MATCH_EXACT,
@@ -82,34 +83,25 @@ class TestBuildProbe(unittest.TestCase):
             os.unlink(path)
 
     def test_probe_is_valid_js_for_hostile_inputs(self):
-        expr = build_probe(
-            selector='div.a[title="x’y"]',
-            label_selector='.n"quote',
-            match_text='multi\nline \\ "text"',
-            click=True,
-            click_selector='button.it\'s',
-            max_candidates=3,
-        )
+        expr = build_probe(selector='div.a[title="x’y"]', spec=ProbeSpec(label_selector='.n"quote', match_text='multi\nline \\ "text"', click=True, click_selector='button.it\'s', max_candidates=3))
         self.check_valid_js(expr)       # must not be a syntax error
 
     def test_match_mode_switches_the_comparator(self):
-        contains = build_probe("div", match_text="x",
-                               match_mode=MATCH_CONTAINS)
-        exact = build_probe("div", match_text="x", match_mode=MATCH_EXACT)
+        contains = build_probe("div", ProbeSpec(match_text="x", match_mode=MATCH_CONTAINS))
+        exact = build_probe("div", ProbeSpec(match_text="x", match_mode=MATCH_EXACT))
         self.assertIn("var exact = false;", contains)
         self.assertIn("var exact = true;", exact)
 
     def test_candidate_cap_lands_in_the_js(self):
-        self.assertIn("slice(0, 3)", build_probe("div", max_candidates=3))
-        self.assertIn("slice(0, 12)", build_probe("div", max_candidates=12))
+        self.assertIn("slice(0, 3)", build_probe("div", ProbeSpec(max_candidates=3)))
+        self.assertIn("slice(0, 12)", build_probe("div", ProbeSpec(max_candidates=12)))
 
     def test_no_click_by_default_and_optional_click_target(self):
         self.assertNotIn("target.click()", build_probe("div"))
-        with_click = build_probe("div", click=True,
-                                 click_selector="button.go")
+        with_click = build_probe("div", ProbeSpec(click=True, click_selector="button.go"))
         self.assertIn("target.click()", with_click)
         self.assertIn("button.go", with_click)
-        root_click = build_probe("div", click=True, click_root=True)
+        root_click = build_probe("div", ProbeSpec(click=True, click_root=True))
         self.check_valid_js(root_click)
 
     def test_empty_optionals_become_null_not_empty_quotes(self):

@@ -50,7 +50,7 @@ class CustomFind(FindClickBlock):
                    clean=ms_floor, request="highlight_ms"),
     )
 
-    def __init__(self, custom_name: str = "", selector: str = "",
+    def __init__(self, custom_name: str = "", selector: str = "",  # quality-override: params=11 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  label_selector: str = "", match_text: str = "",
                  click_enabled: bool = True, click_selector: str = "",
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,

@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.chat_parser import (  # noqa: E402
     ChatParser,
+    SyncOptions,
     parse_records,
     sync_conversation,
 )
@@ -57,7 +58,7 @@ class ConcurrencyCase(unittest.IsolatedAsyncioTestCase):
         kw.setdefault("chunk_pause_ms", 0)
         kw.setdefault("now", NOW)
         return await sync_conversation(parser, self.repo, nick,
-                                       my_nick="Me", **kw)
+                                       SyncOptions.from_kwargs(my_nick="Me", **kw))
 
     async def rows_of(self, nick):
         person = await self.repo.get_person(nick)

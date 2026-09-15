@@ -37,6 +37,7 @@ from actions.click_user import ClickUser  # noqa: E402
 from actions.custom_find import CustomFind  # noqa: E402
 from actions.type_message import TypeMessage  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -190,7 +191,7 @@ class TestClickUserNotesSelection(unittest.TestCase):
 # ── engine expands {{nick}} on every block, per step ─────────────
 class TestEngineNickExpansion(unittest.TestCase):
     async def _engine(self, mem, *blocks):
-        eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+        eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
         eng._stack = list(blocks)
         await eng.execute(None)
         return eng
@@ -251,7 +252,7 @@ class TestEngineNickExpansion(unittest.TestCase):
         async def go():
             async with MemHarness() as mem:
                 await seed_user(mem, "Anna")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [StubClick()]
                 await eng.execute(None)
                 self.assertEqual(eng.selected_nick, "Anna")
@@ -269,7 +270,7 @@ class TestEngineNickExpansion(unittest.TestCase):
                 await seed_user(mem, "Anna")
                 boom = Boom(label="boom {{nick}} now")
                 consumer = Consumer(match_text="after {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [boom, consumer]
                 await eng.execute(None)      # must not raise
                 return boom, consumer
@@ -297,7 +298,7 @@ class TestRealCustomFindWiring(unittest.TestCase):
                     label_selector="p.chat-title",
                     match_text="{{nick}}",
                     pre_delay_ms=0)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [click, finder]
                 with mock.patch.object(custom_find_mod, "find_and_click",
                                        new=fake_find):

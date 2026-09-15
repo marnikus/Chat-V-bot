@@ -32,7 +32,7 @@ class ClickMainTab(FindClickBlock):
                    clean=ms_floor, request="confirm_pause_ms"),
     )
 
-    def __init__(self, selector: str = "div[role='tab'].tab-item",
+    def __init__(self, selector: str = "div[role='tab'].tab-item",  # quality-override: params=7 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data))
                  child_selector: str = "p.chat-title",
                  tab_name: str = "Гостиная",
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,

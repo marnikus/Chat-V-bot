@@ -20,8 +20,10 @@ Settings (see docs/archive/2026-09-06-collector-and-history/EXTRA_PAUSE_STATUS_A
 import logging
 from typing import Optional
 from actions.base_action import BaseAction, ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
-from backend.media_handler import attach_image, DEFAULT_FILE_PATTERN
+from backend.media_handler import (AttachOptions, attach_image,
+                                   DEFAULT_FILE_PATTERN)
 
 log = logging.getLogger("chatbot")
 
@@ -31,7 +33,7 @@ class AttachImage(BaseAction):
     name = "Attach Image"
     icon = "🖼️"
 
-    def __init__(self, folder_path: str = "", file_pattern: str = "",
+    def __init__(self, folder_path: str = "", file_pattern: str = "",  # quality-override: params=9 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  rotation_mode: str = "sequential",
                  simulate_dialog: bool = True, verify_timeout_ms: int = 8000,
                  highlight_enabled: bool = True, confirm_pause_ms: int = 700,
@@ -47,13 +49,15 @@ class AttachImage(BaseAction):
 
     async def execute(self, user_nick: str, cdp: CDPClient,
                       engine: Optional[object] = None) -> str:
-        await self.pre_delay()
+        await self.pre_delay(engine)
         report = engine.report if engine else None
-        ok = await attach_image(cdp, self.folder_path, self.file_pattern,
-                                self.rotation_mode, self.simulate_dialog,
-                                self.verify_timeout_ms,
-                                self.highlight_enabled,
-                                self.confirm_pause_ms, report)
+        ok = await attach_image(cdp, options=AttachOptions(
+            folder_path=self.folder_path, file_pattern=self.file_pattern,
+            mode=self.rotation_mode, simulate_dialog=self.simulate_dialog,
+            verify_timeout_ms=scale_ms(self.verify_timeout_ms, engine),
+            highlight_enabled=self.highlight_enabled,
+            confirm_pause_ms=scale_ms(self.confirm_pause_ms, engine),
+            report=report))
         return ActionResult.OK if ok else ActionResult.FAIL
 
     def config_schema(self) -> dict:

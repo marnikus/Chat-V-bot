@@ -35,6 +35,7 @@ from actions.base_action import (ActionRegistry, ActionResult,  # noqa: E402
 _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.cdp_client import CDPClient  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
@@ -79,8 +80,7 @@ class FullHarness:
         self.memory = UserMemory(os.path.join(base, "users.db"))
         self.config = ConfigManager(os.path.join(base, "config.json"))
         self.cdp = CDPClient()
-        self.engine = ActionEngine(cdp=self.cdp, memory=self.memory,
-                                   criteria=CriteriaEngine())
+        self.engine = ActionEngine(RunDeps(cdp=self.cdp, memory=self.memory, criteria=CriteriaEngine()))
         self.bridge = Bridge(cdp=self.cdp, memory=self.memory,
                              criteria=CriteriaEngine(), engine=self.engine,
                              config=self.config)

@@ -12,7 +12,7 @@ emitter (a UI refresh bug must not corrupt a database write).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Type, TypeVar
 
 log = logging.getLogger("chatbot")

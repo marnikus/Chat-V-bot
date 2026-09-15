@@ -11,8 +11,9 @@ Do NOT hand-roll a probe that calls ``element.click()`` inside a block; see
 
 Public API
 ----------
-``find_and_click(cdp, selector=..., ...)``
+``find_and_click(cdp, ClickRequest(...))``
     Locate an element (optionally by the text of a child) and click it.
+    Legacy callers may still pass the knobs as keyword arguments.
 ``find_and_click_exact(cdp, selector=..., label_selector=..., text=...)``
     Same, but the label text must match exactly — used when a nickname must
     not collide with a longer nickname that merely contains it.
@@ -26,6 +27,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from actions.base_action import ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.dom_highlight import (
     build_click_probe,
@@ -35,6 +37,7 @@ from backend.dom_highlight import (
     interpret_find,
 )
 from backend.dom_probe import MATCH_CONTAINS, MATCH_EXACT
+from backend.probe_requests import ClickProbeSpec, FindProbeSpec
 
 log = logging.getLogger("chatbot")
 
@@ -87,26 +90,24 @@ class ClickRequest:
     # ── the probes this request turns into ───────────────────────
     def find_probe(self) -> str:
         return build_find_probe(
-            selector=self.selector,
-            label_selector=self.label_selector or None,
-            match_text=self.match_text or None,
-            match_mode=self.match_mode,
-            highlight=self.highlight_enabled,
-            highlight_ms=self.highlight_ms,
-        )
+            self.selector,
+            FindProbeSpec(label_selector=self.label_selector or None,
+                          match_text=self.match_text or None,
+                          match_mode=self.match_mode,
+                          highlight=self.highlight_enabled,
+                          highlight_ms=self.highlight_ms))
 
     def staged_probe(self) -> str:
         """The ORANGE outline, without clicking yet."""
         return build_click_probe(
-            click_selector=self.click_selector or None,
-            highlight=self.highlight_enabled,
-            highlight_ms=self.highlight_ms,
-            do_click=False,
-        )
+            self.click_selector or None,
+            ClickProbeSpec(highlight=self.highlight_enabled,
+                           highlight_ms=self.highlight_ms, do_click=False))
 
     def click_probe(self) -> str:
-        return build_click_probe(click_selector=self.click_selector or None,
-                                 highlight=False, do_click=True)
+        return build_click_probe(self.click_selector or None,
+                                 ClickProbeSpec(highlight=False,
+                                                do_click=True))
 
     def holds_confirmation(self) -> bool:
         return bool(self.highlight_enabled and self.confirm_pause_ms > 0)
@@ -165,7 +166,8 @@ async def click_phase(cdp: CDPClient, request: ClickRequest, found: dict,
     if pre is None or not pre.get("clickable"):
         return ActionResult.FAIL
     if request.highlight_enabled and CLICK_PAUSE_MS > 0:
-        await asyncio.sleep(CLICK_PAUSE_MS / 1000.0)
+        beat_ms = scale_ms(CLICK_PAUSE_MS, engine)
+        await asyncio.sleep(beat_ms / 1000.0)
     done = await _dispatch(cdp, request, engine)
     if done is None:
         return ActionResult.FAIL
@@ -228,42 +230,26 @@ async def run_click(cdp: CDPClient, request: ClickRequest,
     if found is None:
         return ActionResult.FAIL
     if request.holds_confirmation():
-        _report(engine, f"⏸ Holding {request.confirm_pause_ms} ms for visual "
+        hold_ms = scale_ms(request.confirm_pause_ms, engine)
+        _report(engine, f"⏸ Holding {hold_ms} ms for visual "
                         "confirmation…", "info")
-        await asyncio.sleep(request.confirm_pause_ms / 1000.0)
+        await asyncio.sleep(hold_ms / 1000.0)
     return await click_phase(cdp, request, found, engine)
 
 
-async def find_and_click(
-    cdp: CDPClient,
-    *,
-    selector: str,
-    label_selector: str = "",
-    match_text: str = "",
-    match_mode: str = MATCH_CONTAINS,
-    click_enabled: bool = True,
-    click_selector: str = "",
-    highlight_enabled: bool = True,
-    confirm_pause_ms: int = 700,
-    highlight_ms: int = 1200,
-    label: str = "element",
-    engine: Optional[object] = None,
-) -> str:
+async def find_and_click(cdp: CDPClient,
+                         request: Optional[ClickRequest] = None,
+                         engine: Optional[object] = None,
+                         **legacy) -> str:
     """Run the two-phase find/click and return an :class:`ActionResult` value.
 
-    The thin façade over :func:`run_click`: this signature is what every
-    block in `actions/` calls (RULE 1), so it stays exactly as it is.
+    The thin façade over :func:`run_click` and the entry point every block in
+    `actions/` calls (RULE 1). Typed callers pass one :class:`ClickRequest`;
+    the legacy keyword form (``selector=...`` and friends, as blocks'
+    `to_dict()` carries it) is absorbed into the same object.
     """
     return await run_click(
-        cdp,
-        ClickRequest(selector=selector, label_selector=label_selector,
-                     match_text=match_text, match_mode=match_mode,
-                     click_enabled=click_enabled,
-                     click_selector=click_selector,
-                     highlight_enabled=highlight_enabled,
-                     confirm_pause_ms=confirm_pause_ms,
-                     highlight_ms=highlight_ms, label=label),
-        engine=engine)
+        cdp, request or ClickRequest.from_kwargs(**legacy), engine=engine)
 
 
 async def find_and_click_exact(cdp: CDPClient, *, text: str, **kw) -> str:

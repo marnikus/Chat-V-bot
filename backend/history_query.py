@@ -8,30 +8,46 @@ Search has two interchangeable back-ends: FTS5 when SQLite offers it, a
 `text_lc LIKE` scan when it does not. Both fold case for Cyrillic — the
 `text_lc` column is lower-cased in Python, because SQLite's own LIKE folds
 ASCII only.
+
+The two halves that are not the query surface live next door, split off in
+Round H step H-B2 and Round J step J-2:
+
+* `backend/history_query_search.py` — the FTS/LIKE back-end (`search`) and the
+  request-text-to-SQL guards (`_fts_query` / `_like_escape` / `_snippet`);
+* `backend/history_query_rows.py` — the row → payload projection
+  (`person_item`, `item`, `item_media`, the field specs, the counters) and the
+  three helpers the query methods share (`clamp`, `my_nicks`, `person_row`).
+
+What stays here is what the archive services and the bridges call:
+`PersonPageRequest`, `HistoryQuery` with page / around / gaps / the two search
+entry points / list_persons / db_stats / person_stats, `SORT_COLUMNS` and the
+limits. Those signatures are a frozen interface (Area B design §6).
 """
 
-# ideal-size: 596 lines reason=the frozen AREA D public-API snapshot
-# (tests/unit/backend/test_backend_api_snapshot.py, built by
-# tools/metrics/dump_public_api.py) skips packages outright and counts a symbol
-# only when this module owns it, so neither promoting this file to a package nor
-# thinning it into a re-export shim survives the contract. The size is a known,
-# justified constraint, not neglect: see docs/archive/2026-09-12-round-f-size-tail/ROUND_F_DESIGN_2026-09-12.md §2 and §7.
+# ideal-size: the facade is the query surface the services and bridges call;
+# the search back-end lives in history_query_search.py (H-B2a) and the row
+# projection in history_query_rows.py (J-2), so this file holds the SQL of the
+# paging / around / stats reads and nothing else.
 
 from __future__ import annotations
 
-import logging
-import os
-import re
 from dataclasses import dataclass
 from typing import Optional
 
 from stores.history_db import HistoryDB
 
-log = logging.getLogger("chatbot")
+from backend import history_query_reads as reads
+from backend.history_query_search import _like_escape
+from backend.history_query_rows import DEFAULT_LIMIT, MAX_LIMIT
 
-DEFAULT_LIMIT = 50
-MAX_LIMIT = 500
-SNIPPET_RADIUS = 40
+# `DEFAULT_LIMIT` / `MAX_LIMIT` are imported, not redefined: `history_query_rows`
+# owns them (it is the module that clamps), and every caller and test keeps
+# importing them from here — the module the archive has always used. They are
+# named in `__all__` because an import that exists to be imported *from* is
+# not dead code (vulture reads `__all__`; RULE 16's smell check does not take
+# prose for an answer).
+__all__ = ["DEFAULT_LIMIT", "DEFAULT_SORT", "HistoryQuery", "MAX_LIMIT",
+           "PersonPageRequest", "SORT_COLUMNS", "SORT_TIEBREAK"]
 
 #: The Full User Database's sortable columns — key → the columns it orders
 #: by, each with its **natural** direction: what a first click on that header
@@ -66,36 +82,6 @@ DEFAULT_SORT = "recent"
 #: twice or never while the user scrolls. `nick` is unique, which makes the
 #: resulting order total.
 SORT_TIEBREAK: tuple[str, ...] = ("nick_lc", "id")
-
-
-def _like_escape(text: str) -> str:
-    return (text.replace("\\", "\\\\").replace("%", "\\%")
-                .replace("_", "\\_"))
-
-
-def _fts_query(raw: str) -> str:
-    """Turn user input into a safe FTS5 MATCH expression.
-
-    Every token is quoted, so `AND`, `*`, quotes and stray punctuation are
-    data, never syntax.
-    """
-    tokens = [t for t in re.split(r"[^\w\u0400-\u04FF]+", raw or "") if t]
-    if not tokens:
-        return ""
-    return " ".join('"%s"' % t.replace('"', '""') for t in tokens)
-
-
-def _snippet(text: str, needle: str, radius: int = SNIPPET_RADIUS) -> str:
-    body = text or ""
-    if not needle:
-        return body[: radius * 2]
-    pos = body.lower().find(needle.lower())
-    if pos < 0:
-        return body[: radius * 2]
-    start = max(0, pos - radius)
-    end = min(len(body), pos + len(needle) + radius)
-    return ("…" if start else "") + body[start:end] + ("…" if end < len(body)
-                                                       else "")
 
 
 @dataclass(frozen=True)
@@ -198,325 +184,50 @@ class PersonPageRequest:
         return ", ".join(parts)
 
 
-def _person_item(row, my_nicks: list) -> dict:
-    """One person row, as the Full User Database shows it.
-
-    A module function rather than a method: the mapping is a pure projection
-    of one row, and `HistoryQuery` is already over its size budget.
-    """
-    data = dict(row)
-    return {
-        "id": int(data["id"]),
-        "nick": data["nick"],
-        "message_count": int(data.get("message_count") or 0),
-        "in_count": int(data.get("in_count") or 0),
-        "out_count": int(data.get("out_count") or 0),
-        "media_count": int(data.get("media_count") or 0),
-        "first_seen": data.get("first_seen") or "",
-        "last_seen": data.get("last_seen") or "",
-        "my_nicks": my_nicks,
-        "deleted": bool(data.get("deleted_at")),
-    }
-
-
-#: (output keys, source key, default, as_int) — the row→UI-item field map.
-#: Alias pairs share one source so the legacy and current spellings can never
-#: disagree (UI contract; see backend_api_snapshot.json).
-_FIELD_SPECS = (
-    (("id",), "id", 0, True),
-    (("ord",), "ord", 0, True),
-    (("fp",), "fp", "", False),
-    (("dir", "direction"), "direction", "in", False),
-    (("from", "from_nick"), "from_nick", "", False),
-    (("my_nick",), "my_nick", "", False),
-    (("kind",), "kind", "text", False),
-    (("text",), "text", "", False),
-)
-#: The fields after `media`, which the UI contract places between `text` and
-#: `time` — two tables so that position survives the loop.
-_FIELD_SPECS_TAIL = (
-    (("time", "ts_display"), "ts_display", "", False),
-    (("ts_resolved",), "ts_resolved", "", False),
-    (("day",), "day", "", False),
-    (("occ",), "occ", 0, True),
-)
-
-
-def _apply_specs(data: dict, specs) -> dict:
-    """One group of the UI item, coalesced and aliased per a field spec."""
-    out = {}
-    for keys, source, default, as_int in specs:
-        value = data.get(source) or default
-        for key in keys:
-            out[key] = int(value) if as_int else value
-    return out
-
-
-def _item_media(data: dict) -> dict | None:
-    """The joined media block for one message row, or None."""
-    if not data.get("media_id"):
-        return None
-    path = data.get("cache_path") or ""
-    state = data.get("media_state") or "pending"
-    # A cached row whose file vanished must not render as a broken
-    # <img> from a dead local path: report it as missing so the UI
-    # shows a "click to restore" marker instead.
-    if path and not os.path.exists(path):
-        state = "missing"
-        path = ""
-    return {"id": data.get("media_id"), "url": data.get("media_url"),
-            "kind": data.get("media_kind") or data.get("kind"),
-            "state": state, "path": path}
-
-
-def _stat_int(data: dict, key: str) -> int:
-    """One counter of a person row, tolerating NULL/absent."""
-    return int(data.get(key) or 0)
-
-
-async def _day_bounds(db, pid: int) -> tuple[str, str, int]:
-    """(first_day, last_day, distinct days) over the visible messages.
-
-    Module-level on purpose: `HistoryQuery` is already at the RULE 16
-    method cap (enforced by tests/test_rule16_new_code.py through
-    tools/metrics/rule16_gate.py), and this is a pure read over a db
-    handle — it needs nothing from the instance.
-    """
-    row = await db.fetchone(
-        "SELECT MIN(day) AS first_day, MAX(day) AS last_day, "
-        "COUNT(DISTINCT day) AS days FROM messages WHERE person_id=? "
-        "AND deleted_at=''", (pid,))
-    if not row:
-        return "", "", 0
-    return (row["first_day"] or ""), (row["last_day"] or ""), int(row["days"] or 0)
-
-
 class HistoryQuery:
-    """Every read the UI performs against the archive."""
+    """Every read the UI performs against the archive.
+
+    The class is the frozen surface (Area B design §6): the archive services
+    and the bridges call exactly these ten methods, and the API snapshot
+    pins their signatures to this module. The SQL itself lives next door —
+    paging / around / gaps / search / the counters in
+    `history_query_reads.py`, the row projection in `history_query_rows.py`,
+    the FTS-or-LIKE back-end in `history_query_search.py` — so each method
+    here is one delegation, and what used to be this file's size problem is
+    three testable modules.
+    """
 
     def __init__(self, db: HistoryDB):
         self.db = db
 
-    # ── helpers ──────────────────────────────────────────────────
-    @staticmethod
-    def _clamp(limit: Optional[int]) -> int:
-        try:
-            value = int(limit or DEFAULT_LIMIT)
-        except (TypeError, ValueError):
-            value = DEFAULT_LIMIT
-        return max(1, min(MAX_LIMIT, value))
-
-    async def _person_row(self, nick: str):
-        return await self.db.fetchone(
-            "SELECT * FROM persons WHERE nick=?",
-            (" ".join(str(nick or "").split()).strip(),))
-
-    @staticmethod
-    def _item(row) -> dict:
-        """One archive row as the UI item, key order and defaults intact."""
-        data = dict(row)
-        item = _apply_specs(data, _FIELD_SPECS)
-        item["media"] = _item_media(data)
-        item.update(_apply_specs(data, _FIELD_SPECS_TAIL))
-        return item
-
-    _SELECT = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
-               "md.state AS media_state, md.cache_path AS cache_path "
-               "FROM messages m LEFT JOIN media md ON md.id = m.media_id ")
-    #: soft-deleted rows are invisible to every read (they exist only so a
-    #: single Ctrl+Z can bring them back)
-    _COUNT_ALIVE = ("SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-                    "deleted_at=''")
-
-    # ── paging ───────────────────────────────────────────────────
+    # ── paging (SQL in history_query_reads.py) ───────────────────
     async def page(self, nick: str, before_ord: Optional[int] = None,
                    after_ord: Optional[int] = None,
                    limit: int = DEFAULT_LIMIT) -> dict:
         """One screen of a conversation, oldest-first inside the page."""
-        limit = self._clamp(limit)
-        person = await self._person_row(nick)
-        empty = {"nick": nick, "items": [], "has_more": False,
-                 "has_newer": False, "total": 0, "gaps": [], "missing": True,
-                 "my_nicks": []}
-        if not person:
-            return empty
-        pid = int(person["id"])
-        total = int(await self.db.scalar(
-            self._COUNT_ALIVE, (pid,), 0))
-
-        if after_ord is not None:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "AND m.ord>? ORDER BY m.ord LIMIT ?",
-                (pid, int(after_ord), limit))
-        elif before_ord is not None:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "AND m.ord<? ORDER BY m.ord DESC LIMIT ?",
-                (pid, int(before_ord), limit))
-            rows = list(reversed(rows))
-        else:
-            rows = await self.db.fetchdicts(
-                self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-                "ORDER BY m.ord DESC LIMIT ?", (pid, limit))
-            rows = list(reversed(rows))
-
-        items = [self._item(r) for r in rows]
-        first = items[0]["ord"] if items else 0
-        last = items[-1]["ord"] if items else 0
-        has_more = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-            "deleted_at='' AND ord<?",
-            (pid, first if items else 0), 0)) if items else False
-        has_newer = bool(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-            "deleted_at='' AND ord>?",
-            (pid, last), 0)) if items else False
-        return {
-            "nick": person["nick"],
-            "items": items,
-            "has_more": has_more,
-            "has_newer": has_newer,
-            "total": total,
-            "gaps": await self.gaps(pid),
-            "missing": False,
-            "my_nicks": self._my_nicks(person),
-        }
+        return await reads.page(self, nick, before_ord, after_ord, limit)
 
     async def around(self, nick: str, ord_: int, radius: int = 25) -> dict:
-        person = await self._person_row(nick)
-        if not person:
-            return {"nick": nick, "items": [], "anchor_ord": ord_,
-                    "missing": True, "has_more": False, "has_newer": False,
-                    "total": 0, "gaps": []}
-        pid = int(person["id"])
-        rows = await self.db.fetchdicts(
-            self._SELECT + "WHERE m.person_id=? AND m.deleted_at='' "
-            "AND m.ord BETWEEN ? AND ? "
-            "ORDER BY m.ord", (pid, int(ord_) - int(radius),
-                               int(ord_) + int(radius)))
-        items = [self._item(r) for r in rows]
-        return {
-            "nick": person["nick"],
-            "items": items,
-            "anchor_ord": int(ord_),
-            "missing": False,
-            "total": int(await self.db.scalar(self._COUNT_ALIVE, (pid,), 0)),
-            "has_more": bool(items) and items[0]["ord"] > 1,
-            "has_newer": bool(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-                "deleted_at='' AND ord>?",
-                (pid, items[-1]["ord"] if items else 0), 0)),
-            "gaps": await self.gaps(pid),
-        }
+        """The page containing `ord_`, for the "jump to a search hit" path."""
+        return await reads.around(self, nick, ord_, radius)
 
     async def gaps(self, person_id: int) -> list[dict]:
-        rows = await self.db.fetchdicts(
-            "SELECT after_ord, reason, detail, created_at FROM gaps "
-            "WHERE person_id=? ORDER BY after_ord", (person_id,))
-        return [{"ord": int(r["after_ord"]), "after_ord": int(r["after_ord"]),
-                 "reason": r["reason"], "detail": r["detail"],
-                 "at": r["created_at"]} for r in rows]
+        """The collection gaps of one person, oldest first."""
+        return await reads.gaps(self, person_id)
 
     # ── search ───────────────────────────────────────────────────
     async def search_person(self, nick: str, query: str,
                             limit: int = DEFAULT_LIMIT,
                             offset: int = 0) -> dict:
-        person = await self._person_row(nick)
-        if not person:
-            return {"items": [], "total": 0, "has_more": False,
-                    "nick": nick, "query": query}
-        rows, total = await self._search(int(person["id"]), query,
-                                         self._clamp(limit), int(offset or 0))
-        items = []
-        for row in rows:
-            item = self._item(row)
-            item["snippet"] = _snippet(item["text"], query.strip())
-            items.append(item)
-        return {"nick": person["nick"], "query": query, "items": items,
-                "total": total,
-                "has_more": total > (int(offset or 0) + len(items))}
+        """Search inside one conversation, newest first."""
+        return await reads.search_person(self, nick, query, limit, offset)
 
     async def search_global(self, query: str, limit: int = 200,
                             per_person: int = 20) -> dict:
-        rows, total = await self._search(None, query, self._clamp(limit), 0)
-        groups: dict[str, dict] = {}
-        for row in rows:
-            item = self._item(row)
-            nick = dict(row).get("nick") or ""
-            group = groups.setdefault(nick, {"nick": nick, "items": [],
-                                             "total": 0})
-            group["total"] += 1
-            if len(group["items"]) < per_person:
-                group["items"].append({
-                    "ord": item["ord"], "day": item["day"],
-                    "time": item["time"], "dir": item["dir"],
-                    "from": item["from"], "kind": item["kind"],
-                    "text": item["text"],
-                    "snippet": _snippet(item["text"], query.strip())})
-        ordered = sorted(groups.values(), key=lambda g: -g["total"])
-        return {"query": query, "groups": ordered, "total": total,
-                "persons": len(ordered)}
-
-    async def _search(self, person_id: Optional[int], query: str, limit: int,
-                      offset: int):
-        text = (query or "").strip()
-        if not text:
-            return [], 0
-        where = "p.deleted_at IS NULL AND m.deleted_at=''"
-        params: list = []
-        if person_id is not None:
-            where += " AND m.person_id=?"
-            params.append(person_id)
-
-        select = ("SELECT m.*, md.url AS media_url, md.kind AS media_kind, "
-                  "md.state AS media_state, md.cache_path AS cache_path, "
-                  "p.nick AS nick FROM messages m "
-                  "JOIN persons p ON p.id = m.person_id "
-                  "LEFT JOIN media md ON md.id = m.media_id ")
-
-        if self.db.fts_enabled:
-            match = _fts_query(text)
-            if not match:
-                return [], 0
-            try:
-                base = (select +
-                        "JOIN messages_fts f ON f.rowid = m.id "
-                        f"WHERE {where} AND messages_fts MATCH ? ")
-                total = int(await self.db.scalar(
-                    "SELECT COUNT(*) FROM messages m "
-                    "JOIN persons p ON p.id = m.person_id "
-                    "JOIN messages_fts f ON f.rowid = m.id "
-                    f"WHERE {where} AND messages_fts MATCH ?",
-                    params + [match], 0))
-                rows = await self.db.fetchdicts(
-                    base + "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
-                    params + [match, limit, offset])
-                return rows, total
-            except Exception as e:                    # noqa: BLE001
-                log.warning("FTS search failed (%s) — using LIKE", e)
-
-        needle = "%" + _like_escape(text.lower()) + "%"
-        total = int(await self.db.scalar(
-            "SELECT COUNT(*) FROM messages m "
-            "JOIN persons p ON p.id = m.person_id "
-            f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\'",
-            params + [needle], 0))
-        rows = await self.db.fetchdicts(
-            select + f"WHERE {where} AND m.text_lc LIKE ? ESCAPE '\\' "
-            "ORDER BY m.person_id, m.ord LIMIT ? OFFSET ?",
-            params + [needle, limit, offset])
-        return rows, total
+        """Search the whole archive, grouped per person, busiest first."""
+        return await reads.search_global(self, query, limit, per_person)
 
     # ── the user database window ─────────────────────────────────
-    @staticmethod
-    def _my_nicks(row) -> list:
-        import json
-        try:
-            return json.loads(dict(row).get("my_nicks") or "[]")
-        except Exception:                             # noqa: BLE001
-            return []
-
     async def list_persons(self, req: PersonPageRequest) -> dict:
         """One page of the Full User Database, in the order the header asks.
 
@@ -528,76 +239,12 @@ class HistoryQuery:
         The COUNT binds only the `where()` parameters; the page query binds
         `where()` + `order()` + limit/offset, in that order.
         """
-        limit = self._clamp(req.limit)
-        offset = max(0, int(req.offset or 0))
-        where, where_params = req.where()
-        order, order_params = req.order()
-        total = int(await self.db.scalar(
-            f"SELECT COUNT(*) FROM persons WHERE {where}", where_params, 0))
-        rows = await self.db.fetchdicts(
-            f"SELECT * FROM persons WHERE {where} ORDER BY {order} "
-            "LIMIT ? OFFSET ?", where_params + order_params + [limit, offset])
-        items = [_person_item(row, self._my_nicks(row)) for row in rows]
-        return {"items": items, "total": total,
-                "has_more": total > offset + len(items),
-                "offset": offset, "limit": limit, "query": req.q,
-                "sort": req.sort, "dir": req.resolved_dir()}
+        return await reads.list_persons(self, req)
 
     async def db_stats(self) -> dict:
-        persons = int(await self.db.scalar(
-            "SELECT COUNT(*) FROM persons WHERE deleted_at IS NULL", (), 0))
-        return {
-            "persons": persons,
-            "persons_deleted": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM persons WHERE deleted_at IS NOT NULL",
-                (), 0)),
-            "messages": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE deleted_at=''", (), 0)),
-            "messages_hidden": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE deleted_at<>''", (), 0)),
-            # alive messages only — consistent with the `messages` count,
-            # so the read-out never mixes hidden (undoable) rows in
-            "text_bytes": int(await self.db.scalar(
-                "SELECT COALESCE(SUM(LENGTH(text)),0) FROM messages "
-                "WHERE deleted_at=''", (), 0)),
-            "media": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM media", (), 0)),
-            "media_cached": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM media WHERE state='cached'", (), 0)),
-            "media_bytes": int(await self.db.scalar(
-                "SELECT SUM(bytes) FROM media WHERE state='cached'", (), 0)),
-            "gaps": int(await self.db.scalar("SELECT COUNT(*) FROM gaps",
-                                             (), 0)),
-            "fts": bool(self.db.fts_enabled),
-            "db_bytes": self.db.file_size(),
-            "path": self.db.path,
-        }
+        """The archive-wide counters of the user-database header."""
+        return await reads.db_stats(self)
 
     async def person_stats(self, nick: str) -> dict:
-        person = await self._person_row(nick)
-        if not person:
-            return {"nick": nick, "missing": True, "message_count": 0,
-                    "my_nicks": []}
-        data = dict(person)
-        pid = int(data["id"])
-        first_day, last_day, days = await _day_bounds(self.db, pid)
-        return {
-            "nick": data["nick"],
-            "missing": False,
-            "message_count": _stat_int(data, "message_count"),
-            "messages": _stat_int(data, "message_count"),
-            "in_count": _stat_int(data, "in_count"),
-            "out_count": _stat_int(data, "out_count"),
-            "media_count": _stat_int(data, "media_count"),
-            "my_nicks": self._my_nicks(person),
-            "first_seen": data.get("first_seen") or "",
-            "last_seen": data.get("last_seen") or "",
-            "first_day": first_day,
-            "last_day": last_day,
-            "days": days,
-            "hidden": int(await self.db.scalar(
-                "SELECT COUNT(*) FROM messages WHERE person_id=? AND "
-                "deleted_at<>''", (pid,), 0)),
-            "deleted": bool(data.get("deleted_at")),
-            "gaps": await self.gaps(pid),
-        }
+        """One person's counters, including first/last day and the gaps."""
+        return await reads.person_stats(self, nick)

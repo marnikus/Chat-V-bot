@@ -4,6 +4,7 @@
 **Status:** Complete to the floor the frozen contracts allow — 19 of 70 migrated, metric 70 → **51**
 **Design Reference:** ROUND_F_DESIGN_2026-09-12.md §6 (step F5), RULE 19 §19.4
 **Outcome record:** ROUND_F_DESIGN_2026-09-12.md §10 (first pass) and §11 (completion)
+**Continued in:** [`G4_PARAM_OBJECTS_DESIGN_2026-09-13.md`](../2026-09-13-round-g-write-gate/G4_PARAM_OBJECTS_DESIGN_2026-09-13.md) — Round G step 4 took the remaining-51 table this doc leaves behind down to its 18-entry floor (11 documented constraints + 7 deferred `stores/` offenders)
 
 ## Overview
 

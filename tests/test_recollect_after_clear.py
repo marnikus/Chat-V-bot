@@ -34,9 +34,11 @@ from PySide6.QtCore import QObject  # noqa: E402
 from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_chat_parser_delta import FakePage, raw  # noqa: E402
+from stores.history_requests import AppendRequest, MediaRecoveryRequest  # noqa: E402
 
 
 class ConnectedPage(FakePage):
@@ -56,9 +58,7 @@ class RecollectCase(unittest.IsolatedAsyncioTestCase):
         self.dir = tempfile.mkdtemp()
         self.cfg = ConfigManager(os.path.join(self.dir, "config.json"))
         self.page = ConnectedPage([])
-        self.service = HistoryService(
-            cdp=self.page, config=self.cfg,
-            db_path=os.path.join(self.dir, "history.db"))
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=os.path.join(self.dir, "history.db")))
         await self.service.init()
         self.service.collector.configure(my_nick="Me")
         self.repo = self.service.repo
@@ -218,7 +218,7 @@ class TestCountersTellTheTruth(RecollectCase):
         person = await self.repo.get_person("Svetik25")
         pid = int(person["id"])
         self.assertFalse(await self.repo.has_repairable_media(pid))
-        stats = await self.repo.recover_media(pid, [], media=None)
+        stats = await self.repo.recover_media(MediaRecoveryRequest(pid, [], media=None))
         self.assertEqual(stats["scanned"], 0,
                          "hidden rows must not enter the repair pass")
 
@@ -226,15 +226,15 @@ class TestCountersTellTheTruth(RecollectCase):
         """A line parsed before its text rendered (empty row) is healed in
         place when the real text arrives — not stored twice (Bug 2)."""
         empty = raw("", from_nick="Svetik25", time="10:00")
-        await self.repo.append("Svetik25", [empty], my_nick="Me",
-                               align=False)
+        await self.repo.append(AppendRequest("Svetik25", [empty], my_nick="Me",
+                               align=False))
         rows = await self.service.db.fetchall(
             "SELECT id, text FROM messages ORDER BY id")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][1], "", "the too-early parse stored an empty row")
         real = raw("Привет :-*", from_nick="Svetik25", time="10:00")
-        await self.repo.append("Svetik25", [real], my_nick="Me",
-                               align=False)
+        await self.repo.append(AppendRequest("Svetik25", [real], my_nick="Me",
+                               align=False))
         rows = await self.service.db.fetchall(
             "SELECT id, text FROM messages ORDER BY id")
         self.assertEqual(len(rows), 1, "the empty slot must be filled, "

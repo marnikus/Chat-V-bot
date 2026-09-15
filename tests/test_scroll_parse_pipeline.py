@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from actions.base_action import ActionResult  # noqa: E402
 from actions.click_user import ClickUser, build_tab_count_js  # noqa: E402
-from actions.scroll_parse import ScrollParse  # noqa: E402
+from actions.scroll_parse import PipelineRun, ScrollParse  # noqa: E402
 from backend.person_filter import (  # noqa: E402
     ANY,
     NO,
@@ -27,7 +27,7 @@ from backend.person_filter import (  # noqa: E402
     normalize,
     sort_people,
 )
-from backend.scroll_parser import ScrollParser  # noqa: E402
+from backend.scroll_parser import ScrollOptions, ScrollParser  # noqa: E402
 
 
 def person(nick, female=True, registered=False, guest=True, anonymous=False):
@@ -98,7 +98,7 @@ def collect(cdp, **kw):
     kw.setdefault("pause_ms", 0)
     kw.setdefault("poll_ms", 1)
     kw.setdefault("load_timeout_ms", 60)
-    parser = ScrollParser(cdp=cdp, **kw)
+    parser = ScrollParser(cdp=cdp, options=ScrollOptions(**kw))
     return run(parser.collect(min_new_users=kw.pop("min_new", 0)))
 
 
@@ -134,9 +134,7 @@ class TestStep1ScrollAndDetect(unittest.TestCase):
     def test_missing_viewport_is_reported_but_still_parses(self):
         cdp = FakeCDP([[person("Anna")]], viewport=False)
         msgs = []
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20,
-                              log_cb=lambda m, l: msgs.append((m, l)))
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, log_cb=lambda m, l: msgs.append((m, l))))
         res = run(parser.collect())
         self.assertEqual([p.nick for p in res.all_people], ["Anna"])
         self.assertTrue(any(l == "warn" for _, l in msgs))
@@ -147,7 +145,7 @@ class TestStep1ScrollAndDetect(unittest.TestCase):
             async def get_element_rect(self, s): return None
             async def mouse_wheel(self, *a): pass
         msgs = []
-        parser = ScrollParser(cdp=Dead(), log_cb=lambda m, l: msgs.append((m, l)))
+        parser = ScrollParser(cdp=Dead(), options=ScrollOptions(log_cb=lambda m, l: msgs.append((m, l))))
         res = run(parser.collect())
         self.assertEqual(res.all_people, [])
         self.assertTrue(any(l == "error" for _, l in msgs))
@@ -202,8 +200,7 @@ class TestStep2Filter(unittest.TestCase):
         cdp = FakeCDP([[person("Anna"),
                         person("Boris", female=False),
                         person("Carla", registered=True)]])
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter())
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter()))
         res = run(parser.collect())
         self.assertEqual([p.nick for p in res.all_people],
                          ["Anna", "Boris", "Carla"])
@@ -239,8 +236,7 @@ class TestStep3Queue(unittest.TestCase):
     def test_finishes_early_once_enough_new_people_found(self):
         pages = [[person(f"P{i}")] for i in range(20)]
         cdp = FakeCDP(pages, page_height=10)
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter())
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter()))
         res = run(parser.collect(min_new_users=2))
         self.assertTrue(res.stopped_early)
         self.assertGreaterEqual(len(res.new_unmessaged), 2)
@@ -248,8 +244,7 @@ class TestStep3Queue(unittest.TestCase):
 
     def test_already_messaged_people_are_marked_and_sink(self):
         cdp = FakeCDP([[person("Anna"), person("Bella")]])
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter())
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter()))
         res = run(parser.collect(known_messaged={"Anna"}))
         self.assertEqual([p.nick for p in res.collected], ["Bella", "Anna"])
         self.assertEqual([p.nick for p in res.new_unmessaged], ["Bella"])
@@ -257,8 +252,7 @@ class TestStep3Queue(unittest.TestCase):
     def test_min_new_users_zero_scrolls_to_the_end(self):
         pages = [[person(f"P{i}")] for i in range(5)]
         cdp = FakeCDP(pages, page_height=10)
-        parser = ScrollParser(cdp=cdp, pause_ms=0, poll_ms=1,
-                              load_timeout_ms=20, person_filter=PersonFilter())
+        parser = ScrollParser(cdp=cdp, options=ScrollOptions(pause_ms=0, poll_ms=1, load_timeout_ms=20, person_filter=PersonFilter()))
         res = run(parser.collect(min_new_users=0))
         self.assertFalse(res.stopped_early)
         self.assertEqual(len(res.collected), 5)
@@ -276,7 +270,7 @@ class TestScrollParseBlock(unittest.TestCase):
             criteria = None
             def report(self, m, l="info"): msgs.append((m, l))
 
-        result = run(block.run_pipeline(cdp, Eng()))
+        result = run(block.run_pipeline(cdp, PipelineRun(engine=Eng())))
         self.assertEqual([p.nick for p in result.collected], ["Anna"])
         text = " ".join(m for m, _ in msgs)
         self.assertIn("STEP 1", text)
@@ -438,6 +432,33 @@ class TestSharedModuleRule(unittest.TestCase):
                           f"{name} must use the shared visual runner")
             self.assertNotIn("click=True", src,
                              f"{name} must not build its own clicking probe")
+
+    def test_the_fallback_runner_resolves_when_a_block_has_no_own_import(self):
+        """`click_runner` must fall back to a name that actually exists.
+
+        Found by pyflakes on 2026-09-14 (Round H Area C): the fallback called
+        `_shared_runner()`, which was never defined — the module's shared
+        runner is `_click_runner()`. Every block in `actions/` imports
+        `find_and_click`, so the broken branch was never reached and no test
+        could fail. This drives it directly: a block whose module does NOT
+        import the runner must still get the shared one.
+        """
+        import sys
+        import types
+        from actions.base import FindClickBlock
+
+        class _Bare:
+            pass
+        _Bare.__module__ = "tests_bare_block_module"
+        sys.modules["tests_bare_block_module"] = types.ModuleType(
+            "tests_bare_block_module")          # deliberately no find_and_click
+        try:
+            from backend.visual_click import find_and_click as real
+            got = FindClickBlock.click_runner(_Bare())
+            self.assertIs(got, real,
+                          "the fallback must be the shared visual runner")
+        finally:
+            del sys.modules["tests_bare_block_module"]
 
     def test_shim_still_exports_the_runner(self):
         from actions.find_click_runner import find_and_click as shim

@@ -10,9 +10,11 @@ chat tab actually appeared before reporting the step as done.
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 from actions.base_action import BaseAction, ActionResult
+from actions.speed import scale_ms
 from backend.cdp_client import CDPClient
 from backend.visual_click import find_and_click_exact
 
@@ -37,12 +39,25 @@ def build_tab_count_js(tab_selector: str, title_selector: str) -> str:
 })()""" % {"tab": json.dumps(tab_selector), "title": json.dumps(title_selector)}
 
 
+@dataclass(frozen=True, slots=True)
+class NewTabCheck:
+    """What one new-tab verification is about (Round G step 4).
+
+    `before` is the tab-list snapshot taken before the click; None means it
+    was unreadable, and the counts are derived from it in `_tab_evidence`.
+    """
+
+    nick: str
+    label: str
+    before: Optional[dict] = None
+
+
 class ClickUser(BaseAction):
     block_id = "CLICK_USER"
     name = "Click User"
     icon = "👤"
 
-    def __init__(self, selector: str = "user-item",
+    def __init__(self, selector: str = "user-item",  # quality-override: params=13 reason=RULE 3 block wire: params are config_schema keys, blocks are built by cls(**data)
                  label_selector: str = ".primary-text",
                  click_selector: str = ".user-container",
                  tab_selector: str = "div[role='tab'].tab-item",
@@ -97,7 +112,7 @@ class ClickUser(BaseAction):
         and the "did the page react?" check is what makes this block refuse
         rather than report a click nobody can see.
         """
-        await self.pre_delay()
+        await self.pre_delay(engine)
         nick = self._resolve_nick(user_nick, engine)
         if nick is None:
             return ActionResult.FAIL
@@ -124,7 +139,7 @@ class ClickUser(BaseAction):
         self._remember_selection(engine, nick)
         if not self.verify_new_tab:
             return ActionResult.OK
-        return await self._verify_new_tab(cdp, engine, nick, label, before)
+        return await self._verify_new_tab(cdp, engine, NewTabCheck(nick, label, before))
 
     def _say(self, engine: Optional[object], message: str,
              level: str = "info") -> None:
@@ -172,8 +187,8 @@ class ClickUser(BaseAction):
         if note is not None:
             note(nick)
 
-    async def _verify_new_tab(self, cdp: CDPClient, engine, nick: str,
-                              label: str, before: Optional[dict]) -> str:
+    async def _verify_new_tab(self, cdp: CDPClient, engine,
+                              chk: NewTabCheck) -> str:
         """The tab check: a new tab, or a tab that now carries the nick's name.
 
         Unreadable page means the click is trusted (`OK` with a warning) — the
@@ -186,23 +201,23 @@ class ClickUser(BaseAction):
             self._say(engine, "⚠ Could not read the tab list to confirm the "
                               "new tab — assuming the click worked", "warn")
             return ActionResult.OK
-        before_count, after_count, titles = self._tab_evidence(before, after)
+        before_count, after_count, titles = self._tab_evidence(chk.before, after)
         if (after_count <= before_count
-                and not self._nick_in_titles(nick, titles)):
-            return self._no_new_tab(engine, nick, label, before_count,
-                                    after_count, titles)
-        how = self._confirm_phrase(nick, before_count, after_count)
-        self._say(engine, f"✅ New tab confirmed for {label} ({how})", "success")
-        log.info("Opened chat tab for %s", nick)
+                and not self._nick_in_titles(chk.nick, titles)):
+            return self._no_new_tab(engine, chk, after_count, titles)
+        how = self._confirm_phrase(chk.nick, before_count, after_count)
+        self._say(engine, f"✅ New tab confirmed for {chk.label} ({how})", "success")
+        log.info("Opened chat tab for %s", chk.nick)
         return ActionResult.OK
 
     async def _wait_for_new_tab(self, engine) -> None:
         """The configured pause that gives a new tab time to open."""
         if not self.tab_pause_ms:
             return
-        self._say(engine, f"⏸ Waiting {self.tab_pause_ms} ms for the new "
+        wait_ms = scale_ms(self.tab_pause_ms, engine)
+        self._say(engine, f"⏸ Waiting {wait_ms} ms for the new "
                           "tab…", "info")
-        await asyncio.sleep(self.tab_pause_ms / 1000.0)
+        await asyncio.sleep(wait_ms / 1000.0)
 
     @staticmethod
     def _tab_evidence(before: Optional[dict], after: dict) -> tuple:
@@ -224,12 +239,12 @@ class ClickUser(BaseAction):
             return f"tab count {before_count} → {after_count}"
         return f"a tab titled “{nick}” is open"
 
-    def _no_new_tab(self, engine, nick: str, label: str, before_count: int,
-                    after_count: int, titles: list) -> str:
+    def _no_new_tab(self, engine, chk: NewTabCheck, after_count: int,
+                    titles: list) -> str:
         listed = ", ".join(f"“{t[:24]}”" for t in titles[:5]) or "none"
-        self._say(engine, f"❌ No new tab appeared for {label} — still "
+        self._say(engine, f"❌ No new tab appeared for {chk.label} — still "
                           f"{after_count} tab(s): {listed}", "error")
-        log.warning("No new tab after clicking %s", nick)
+        log.warning("No new tab after clicking %s", chk.nick)
         return ActionResult.FAIL
 
     def config_schema(self) -> dict:

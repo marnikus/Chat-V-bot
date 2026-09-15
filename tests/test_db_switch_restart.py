@@ -42,6 +42,7 @@ from backend.bridge import Bridge  # noqa: E402
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.db_manager import DbManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from backend.label_store import LabelStore  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
@@ -72,8 +73,7 @@ class RestartCase(unittest.IsolatedAsyncioTestCase):
         self.db_path = os.path.join(self.dir, "history.db")
         self.memory = UserMemory(self.db_path)
         await self.memory.init()
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_path, memory=self.memory)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path, memory=self.memory))
         self.store = LabelStore(self.cfg, db=self.service.db)
         self.service.bind_labels(self.store)
         await self.service.init()
@@ -220,8 +220,7 @@ class TestFailClosed(RestartCase):
     async def test_a_failed_switch_does_not_mix_the_two_worlds(self):
         await self.seed(count=4, user="Ann")
         other = os.path.join(self.dir, "other.db")
-        probe = HistoryService(cdp=ConnectedPage([]), config=None,
-                               db_path=other)
+        probe = HistoryService(HistoryDeps(cdp=ConnectedPage([]), config=None, db_path=other))
         await probe.init()                      # a perfectly good world B
         await probe.close()
         with open(other, "r+b") as fh:          # now corrupt its header

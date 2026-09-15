@@ -89,19 +89,24 @@ class SettingsStore(JsonFileStore):
     def get(self, *keys: str, default: Any = None) -> Any:
         node: Any = self._data
         for key in keys:
-            if isinstance(node, dict):
-                node = node.get(key, _UNSET)
-            else:
+            if not isinstance(node, dict):
                 return default
+            node = node.get(key, _UNSET)
             if node is _UNSET:
                 # fall back to the defaults tree (same walk)
-                node = SETTINGS_DEFAULTS
-                for k in keys:
-                    node = (node.get(k, default)
-                            if isinstance(node, dict) else default)
-                    if node is default:
-                        return default
-                return node
+                return self._from_defaults(keys, default)
+        return node
+
+    @staticmethod
+    def _from_defaults(keys: tuple, default: Any) -> Any:
+        """The defaults-tree half of get(): the same walk, restarted from
+        the root of SETTINGS_DEFAULTS with the caller's default as sentinel."""
+        node: Any = SETTINGS_DEFAULTS
+        for k in keys:
+            node = (node.get(k, default)
+                    if isinstance(node, dict) else default)
+            if node is default:
+                return default
         return node
 
     def get_copy(self, *keys: str, default: Any = None) -> Any:

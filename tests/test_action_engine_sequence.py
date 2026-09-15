@@ -45,6 +45,7 @@ from backend.action_engine import (  # noqa: E402
     norm_level,
     normalize_blocks,
 )
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserRecord  # noqa: E402
 
 
@@ -113,7 +114,7 @@ class EngineCase(unittest.TestCase):
 
     def build(self, nicks=("u1", "u2")):
         memory = FakeMemory(list(nicks))
-        engine = ActionEngine(cdp=None, memory=memory, criteria=None)
+        engine = ActionEngine(RunDeps(cdp=None, memory=memory, criteria=None))
         events = {"user_complete": [], "marked_live": []}
         engine.user_complete.connect(
             lambda n, ok: events["user_complete"].append((n, ok)))

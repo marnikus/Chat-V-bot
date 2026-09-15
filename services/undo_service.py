@@ -55,6 +55,7 @@ from services.undo_timeline import TimelineCommit
 # tests/unit/services/test_world_events.py and test_bridge_results.py, which
 # patch `restart_world` on the db_bridge module namespace.
 from services.undo_world import WorldSync, emit_db_change, restart_world
+from services.wiring_requests import UndoDeps  # noqa: F401  (re-exported)
 
 __all__ = ["UndoService", "emit_db_change", "restart_world", "_values_equal",
            "LayoutService"]
@@ -75,17 +76,16 @@ class UndoService:
     #: undo kinds whose data belongs to a WORLD (a database file)
     WORLD_UNDO_KINDS = ("people", "labels", "archive", "dbconn")
 
-    def __init__(self, config, archive=None, people=None, labels=None,
-                 dbs=None, memory=None, engine=None,
-                 bus: EventBus | None = None):
+    def __init__(self, config, deps: UndoDeps | None = None):
+        deps = deps or UndoDeps()   # world collaborators as one value (G4)
         self._config = config
-        self._archive = archive
-        self._people = people
-        self._labels = labels
-        self._dbs = dbs
-        self._memory = memory
-        self._engine = engine
-        self._bus = bus or EventBus()
+        self._archive = deps.archive
+        self._people = deps.people
+        self._labels = deps.labels
+        self._dbs = deps.dbs
+        self._memory = deps.memory
+        self._engine = deps.engine
+        self._bus = deps.bus or EventBus()
         self._timeline: Optional[list] = None
         self._h_index = -1
         self._seq_next = 1
@@ -101,22 +101,22 @@ class UndoService:
         self._world = WorldSync(self)
 
     # ── wiring (main.py / attach_history) ────────────────────────
-    def attach(self, archive=None, people=None, labels=None, dbs=None,
-               memory=None, engine=None, bus=None) -> None:
-        if archive is not None:
-            self._archive = archive
-        if people is not None:
-            self._people = people
-        if labels is not None:
-            self._labels = labels
-        if dbs is not None:
-            self._dbs = dbs
-        if memory is not None:
-            self._memory = memory
-        if engine is not None:
-            self._engine = engine
-        if bus is not None:
-            self._bus = bus
+    def attach(self, deps: UndoDeps) -> None:
+        """Re-wire: only the deps fields that are set replace the current."""
+        if deps.archive is not None:
+            self._archive = deps.archive
+        if deps.people is not None:
+            self._people = deps.people
+        if deps.labels is not None:
+            self._labels = deps.labels
+        if deps.dbs is not None:
+            self._dbs = deps.dbs
+        if deps.memory is not None:
+            self._memory = deps.memory
+        if deps.engine is not None:
+            self._engine = deps.engine
+        if deps.bus is not None:
+            self._bus = deps.bus
 
     def _log(self, message: str, level: str = "info") -> None:
         emit_log(self._bus, message, level)

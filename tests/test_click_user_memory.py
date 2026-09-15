@@ -40,6 +40,7 @@ _REGISTRY_SNAPSHOT = dict(ActionRegistry._classes)
 from actions.click_user import ClickUser  # noqa: E402
 from actions.take_person import TakePerson  # noqa: E402
 from backend.action_engine import ActionEngine  # noqa: E402
+from services.run import RunDeps  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
 
@@ -268,7 +269,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 await seed(mem, rec("Anna"), rec("Bella"))
                 click = StubClick(use_person_from_memory=True)
                 take = TakePerson(pick_mode="order_first")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, click]
                 await eng.execute(None)
                 rows = {u.nick: u for u in await mem.get_all()}
@@ -290,7 +291,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, rec("Anna"), rec("Bella"))
                 click = StubClick(use_person_from_memory=True)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 logs, details = [], []
                 eng.log_msg.connect(lambda m: logs.append(m))
                 eng.debug_msg.connect(lambda m, lvl: details.append(m))
@@ -309,7 +310,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
             async with MemHarness() as mem:
                 await seed(mem, rec("Anna"), rec("Bella"))
                 click = StubClick(use_person_from_memory=False)
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [click]
                 await eng.execute(None)
                 rows = {u.nick: u for u in await mem.get_all()}
@@ -325,7 +326,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 await seed(mem, rec("Anna"), rec("Bella"))
                 off = StubClick(use_person_from_memory=True, enabled=False)
                 consumer = Consumer(match_text="hi {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [off, consumer]
                 await eng.execute(None)
                 return consumer.seen
@@ -343,7 +344,7 @@ class TestEngineSingleTargetMode(unittest.TestCase):
                 click = StubClick(use_person_from_memory=True)
                 take = TakePerson(pick_mode="order_first")
                 consumer = Consumer(match_text="msg {{nick}}")
-                eng = ActionEngine(cdp=None, memory=mem, criteria=None)
+                eng = ActionEngine(RunDeps(cdp=None, memory=mem, criteria=None))
                 eng._stack = [take, click, consumer]
                 eng._repeat_cycles = lambda: 10   # pretend a Repeat Loop marker
                 await eng.execute(None)

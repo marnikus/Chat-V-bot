@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.config_manager import ConfigManager  # noqa: E402
 from backend.db_manager import DbManager  # noqa: E402
 from backend.history_service import HistoryService  # noqa: E402
+from services.history import HistoryDeps  # noqa: E402
 from backend.label_store import LabelStore  # noqa: E402
 from backend.user_memory import UserMemory, UserRecord  # noqa: E402
 
@@ -60,8 +61,7 @@ class WorldCase(unittest.IsolatedAsyncioTestCase):
         # the people queue travels WITH the world file (v6)
         self.memory = UserMemory(self.db_path)
         await self.memory.init()
-        self.service = HistoryService(cdp=self.page, config=self.cfg,
-                                      db_path=self.db_path, memory=self.memory)
+        self.service = HistoryService(HistoryDeps(cdp=self.page, config=self.cfg, db_path=self.db_path, memory=self.memory))
         await self.service.init()
         self.manager = DbManager(config=self.cfg, service=self.service,
                                  root=self.dir)

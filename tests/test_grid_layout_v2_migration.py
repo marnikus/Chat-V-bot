@@ -34,9 +34,12 @@ LEGACY_WINDOWS = ["stats", "filters", "stack", "config", "composer", "people",
                   "log"]
 ARCHIVE_WINDOWS = ["history", "userdb", "collector"]
 MANAGEMENT_WINDOWS = ["labels", "dbconn"]
-NEW_WINDOWS = ARCHIVE_WINDOWS + MANAGEMENT_WINDOWS
+# v4 adds the AI Bot Chat and the Grok Prompt Editor.
+AI_WINDOWS = ["botchat", "botprompt"]
+NEW_WINDOWS = ARCHIVE_WINDOWS + MANAGEMENT_WINDOWS + AI_WINDOWS
 V2_WINDOWS = LEGACY_WINDOWS + ARCHIVE_WINDOWS
-ALL_WINDOWS = V2_WINDOWS + MANAGEMENT_WINDOWS
+V3_WINDOWS = V2_WINDOWS + MANAGEMENT_WINDOWS
+ALL_WINDOWS = V3_WINDOWS + AI_WINDOWS
 CURRENT = Bridge.GRID_VERSION
 
 

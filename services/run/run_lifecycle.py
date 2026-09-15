@@ -40,6 +40,7 @@ class RunLifecycleMixin:
             + f"_{self._run_seq}"
         self._tracer = RunTracer(run_id)
         self.selected_nick = ""
+        self.speed_multiplier = self._resolve_run_speed()
         self.log_msg.emit(f"▶▶ Run #{run_id} started")
         self.debug_msg.emit(
             f"📄 Trace file: {self._tracer.path}", "info")
@@ -48,6 +49,32 @@ class RunLifecycleMixin:
             "blocks": [b.block_id for b in self._stack],
         })
         return self._repeat_cycles()
+
+    def _resolve_run_speed(self) -> float:
+        """The run's wait-speed rate: last enabled SPEED block wins (×1.0 default)."""
+        # Local import: keeps "import services.run" light (actions/__init__
+        # scans every block module); same as error_recovery's stop helpers.
+        from actions.speed import describe, resolve_stack_multiplier
+        value = resolve_stack_multiplier(self._stack)
+        if value != 1.0:
+            self.debug_msg.emit(f"⏩ Global wait speed {describe(value)}",
+                                "info")
+        return value
+
+    def _announce_stopped(self) -> None:
+        """Emit the one stopped announcement (debug line + trace note).
+
+        Every stop boundary in the run ladder — the cycle gate, the queue
+        loop, the single-target cycle, the per-user step — announces a stop
+        the same way, so the two lines live here once instead of five times.
+        The trace write is guarded like the other lifecycle notes: a closed or
+        missing tracer must not turn a clean stop into a run error.
+        """
+        self.debug_msg.emit("⏹ Stack stopped by user", "warn")
+        try:
+            self._tracer.note({"type": "run_end", "reason": "stopped"})
+        except Exception:  # noqa: BLE001
+            pass
 
     def _announce_repeat(self, cycles: int) -> None:
         if cycles > 1:

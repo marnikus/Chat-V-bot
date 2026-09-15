@@ -19,19 +19,19 @@ class CycleLoopMixin:
     async def _gate_before_cycle(self) -> bool:
         """Stop check, pause wait, stop check. True when the run must end.
 
-        Verbatim from the old inline loop: on stop the debug line and the
-        ``run_end/stopped`` trace note are emitted directly (this boundary
-        note is intentionally NOT guarded, unlike the inner RunStopped one).
+        Verbatim from the old inline loop, except that the two lines it
+        repeated at both boundaries now come from the single
+        ``_announce_stopped`` on ``RunLifecycleMixin``: this gate only runs
+        between ``_begin_run`` and ``_finish_signals``, so the tracer it notes
+        through is always open.
         """
         from actions.cancellation import is_stop_requested
         if is_stop_requested(self):
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            self._announce_stopped()
             return True
         await self._wait_if_paused()
         if is_stop_requested(self):
-            self.debug_msg.emit("⏹ Stack stopped by user", "warn")
-            self._tracer.note({"type": "run_end", "reason": "stopped"})
+            self._announce_stopped()
             return True
         return False
 

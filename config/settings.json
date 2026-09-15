@@ -16,5 +16,24 @@
       "max_rows": 400,
       "show_images": true
     }
+  },
+  "grok": {
+    "prompts": {
+      "suggest_reply": "You are helping to continue a private chat with {nick}.\nHere is the conversation so far, oldest first:\nYou gave only saggestion from the role Man side. The Person I a'm talking is always a female.\n{all_msg}\n\nWrite ONE short next message that fits this conversation, in the same language the other person uses. Reply with the message text only — no quotes, no explanation. \nThis next MSG should not reply previous and must bee variative. It should be \"call to action\" lead female person to do somesing next for me. Making plot continue.\n15 - 25 words max."
+    },
+    "api_key": "xai-V9ZXvKN44AnM2J18YOhyVBjU5o0tvlKhtr0OjgqjqIHhVIaGlrEtK8CWRKSzWS7EXjd3McUmSRL2f668",
+    "model": "grok-4.3"
+  },
+  "collector": {
+    "enabled": true,
+    "my_nick": "Оу_Давай",
+    "heartbeat_ms": 1500,
+    "idle_ms": 3000,
+    "throttle_factor": 3,
+    "require_private": true,
+    "download_media": true,
+    "chunk_size": 80,
+    "chunk_pause_ms": 40,
+    "bootstrap_max": 2000
   }
 }
