@@ -420,6 +420,52 @@ t('every preset shows every window', () => {
   }
 });
 
+
+t('moveWindow: outer top creates new row above', () => {
+  let d = S.defaultTree();
+  d = S.moveWindow(d, 'composer', { kind: 'outer', side: 'top' });
+  valid(d);
+  eq(sorted(d), ALL);
+  ok(d.children[0].id === 'composer', 'composer now top row');
+  ok(d.children.length === 6, 'still 6 children after outer top (composer moved from middle)');
+});
+
+t('moveWindow: outer bottom creates new row below', () => {
+  let d = S.defaultTree();
+  d = S.moveWindow(d, 'stats', { kind: 'outer', side: 'bottom' });
+  valid(d);
+  eq(sorted(d), ALL);
+  const last = d.children[d.children.length-1];
+  ok(S.leafIds(last).includes('stats') || last.id === 'stats', 'stats now bottom');
+});
+
+t('moveWindow: outer left creates new column left', () => {
+  let d = S.defaultTree();
+  d = S.moveWindow(d, 'log', { kind: 'outer', side: 'left' });
+  valid(d);
+  eq(sorted(d), ALL);
+});
+
+t('moveWindow: outer right creates new column right', () => {
+  let d = S.defaultTree();
+  d = S.moveWindow(d, 'log', { kind: 'outer', side: 'right' });
+  valid(d);
+  eq(sorted(d), ALL);
+});
+
+t('moveWindow: outer insertion preserves minimum sizes', () => {
+  let d = S.defaultTree();
+  d = S.moveWindow(d, 'composer', { kind: 'outer', side: 'top' });
+  const check = (node) => {
+    if (S.isSplit(node)) {
+      ok(node.sizes.every(s => s >= S.MIN_SIZE), 'size >= MIN_SIZE');
+      node.children.forEach(check);
+    }
+  };
+  check(d);
+});
+
+
 // ── reporting ────────────────────────────────────────────────────
 
 console.log('sash_core: ' + passed + ' passed, ' + failed + ' failed');

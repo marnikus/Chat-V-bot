@@ -430,6 +430,37 @@
   }
 
   /**
+   * Insert `newId` as a new outer row/column around the whole grid.
+   * Used for drag-to-edge row creation (top/bottom/left/right of the grid).
+   * If root already splits in the desired direction, the new window shares
+   * space with the edge child; otherwise the root is wrapped in a new split.
+   */
+  function insertOuter(root, newId, side) {
+    const isTop = side === 'top', isBottom = side === 'bottom';
+    const isLeft = side === 'left', isRight = side === 'right';
+    const wantCol = isTop || isBottom;
+    const wantDir = wantCol ? 'col' : 'row';
+    const newFirst = isTop || isLeft;
+
+    if (isLeaf(root)) {
+      return split(wantDir, newFirst ? [leaf(newId), root] : [root, leaf(newId)], [20, 80]);
+    }
+    if (isSplit(root) && root.dir === wantDir) {
+      const idx = newFirst ? 0 : root.children.length;
+      const donorIdx = newFirst ? 0 : root.children.length - 1;
+      const half = root.sizes[donorIdx] / 2;
+      root.children.splice(idx, 0, leaf(newId));
+      root.sizes.splice(idx, 0, half);
+      const donorPos = donorIdx >= idx ? donorIdx + 1 : donorIdx;
+      root.sizes[donorPos] = half;
+      root.sizes = normalizeSizes(root.sizes);
+      return root;
+    }
+    // root splits in the other direction → wrap it
+    return split(wantDir, newFirst ? [leaf(newId), root] : [root, leaf(newId)], newFirst ? [20, 80] : [80, 20]);
+  }
+
+  /**
    * THE drop operation — move `draggedId` to a new place atomically.
    *
    * drop:
@@ -439,13 +470,16 @@
    *       join the row/column of `target` (share its size)
    *   { kind:'sash',    left, right }
    *       land between the two windows flanking the hovered sash
-   *       (left/right are window ids — groups; they may be sub-splits)
+   *   { kind:'outer',   side }                 // side: 'top'|'bottom'|'left'|'right'
+   *       new row/column around the whole grid
    *
    * Order matters: the window is INSERTED at the drop spot FIRST (all
    * targets are located in the pre-removal tree, where they are stable),
    * then the original node is removed BY IDENTITY. This makes every drop a
    * move, never a copy — including "drag a window onto its own sibling",
    * where the shared row survives instead of collapsing.
+   * Outer is the exception: it removes first, then inserts around the
+   * remaining tree, because its target is the whole grid.
    */
   function moveWindow(root, draggedId, drop) {
     if (drop.target && drop.target === draggedId)
@@ -453,6 +487,14 @@
     const orig = findNode(root, draggedId);
     if (!orig) throw new Error('moveWindow: unknown window ' + draggedId);
     const origNode = orig.node;
+
+    if (drop.kind === 'outer') {
+      const side = drop.side;
+      if (!['top', 'bottom', 'left', 'right'].includes(side))
+        throw new Error('moveWindow: bad outer side ' + side);
+      const without = removeNode(root, origNode);
+      return insertOuter(without, draggedId, side);
+    }
 
     // 1) insert the window at the drop spot (target located pre-removal)
     if (drop.kind === 'edge') {
@@ -477,8 +519,8 @@
       const iA = a[k], iB = b[k];
       if (!lca || !isSplit(lca) || Math.abs(iA - iB) !== 1)
         throw new Error('moveWindow: sash anchors not adjacent');
-      const insertIdx = Math.max(iA, iB);     // gap between the two groups
-      const half = lca.sizes[insertIdx] / 2;  // the right group gives up half
+      const insertIdx = Math.max(iA, iB);
+      const half = lca.sizes[insertIdx] / 2;
       lca.children.splice(insertIdx, 0, leaf(draggedId));
       lca.sizes.splice(insertIdx, 0, half);
       lca.sizes[insertIdx + 1] = half;
