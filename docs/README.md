@@ -39,7 +39,8 @@ docs/
     ├── 2026-09-14-test-arch-redesign/ ← the tiered runner design (run_tiers.py)
     ├── 2026-09-15-test-time-reduction/ ← the xdist lane stream (executed; closure in reports/)
     ├── 2026-09-15-test-integration-principles/ ← the RULE 8 lane/budget/ratchet doctrine
-    └── 2026-09-16-round-i/           ← Round I: post-split measurement, R0 reconciliation, areas R1–R4 (newest)
+    ├── 2026-09-16-round-i/           ← Round I: post-split measurement, R0 reconciliation, areas R1–R4
+    └── 2026-09-16-round-ii/          ← Round II: JS god-function decomposition + coverage floor (newest, plan)
 ```
 
 Also in the repo, not under `docs/`:
@@ -83,7 +84,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Size, parameter and test-debt rounds (F, G) | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16 / 18 / 19, and this map | [`2026-09-12-round-f-size-tail/`](archive/2026-09-12-round-f-size-tail/) (the 500-line tail and the two god classes), [`2026-09-13-round-f/`](archive/2026-09-13-round-f/) (the parameter objects), [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the tail inventory and the executed steps G1–G7), [`2026-09-13-rules-appendices/`](archive/2026-09-13-rules-appendices/) |
 | Where Round H will work (JS gate, spine, cohesion, verification) | [`archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md`](archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md), and [`reports/CODE_QUALITY_METRICS_2026-09-14.md`](../reports/CODE_QUALITY_METRICS_2026-09-14.md) for the numbers it is based on; Area D implemented in [`2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md`](archive/2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md) with tools `file_coverage_floor.py`, `double_audit.py`, `mutation_platform.py`, `smell_inventory.py` | [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the round whose tail it inherits), [`2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md`](archive/2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md) (the fake-double defect that motivates the verification area) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
-| Tests | system of record §7 · rules RULE 8 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/), [`2026-09-14-test-arch-redesign/`](archive/2026-09-14-test-arch-redesign/) (tier runner), [`2026-09-15-test-integration-principles/`](archive/2026-09-15-test-integration-principles/) (doctrine), [`2026-09-16-round-i/`](archive/2026-09-16-round-i/) (current round) |
+| Tests | system of record §7 · rules RULE 8 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/), [`2026-09-14-test-arch-redesign/`](archive/2026-09-14-test-arch-redesign/) (tier runner), [`2026-09-15-test-integration-principles/`](archive/2026-09-15-test-integration-principles/) (doctrine), [`2026-09-16-round-i/`](archive/2026-09-16-round-i/), [`2026-09-16-round-ii/`](archive/2026-09-16-round-ii/) (current round) |
 
 ---
 
