@@ -46,8 +46,27 @@ except Exception:
 # Gate: file name contains rule16, clone, smell, double_audit, file_coverage
 
 def pytest_collection_modifyitems(config, items):
+    # Chromium kills the process when the environment cannot boot it —
+    # this env crashes deterministically (SIGABRT the moment QWebEngineView
+    # is created, as the stub-libs only satisfy imports). Any CLI -m
+    # expression REPLACES the addopts exclusion, so deselect here unless the
+    # run explicitly asks for webengine (2026-09-16, R1.6 SIGABRT hunt).
+    markexpr = getattr(config.option, "markexpr", "") or ""
+    if "webengine" not in markexpr:
+        doomed = [i for i in items if "webengine" in str(i.fspath)]
+        if doomed:
+            config.hook.pytest_deselected(items=doomed)
+            items[:] = [i for i in items if "webengine" not in str(i.fspath)]
     for item in items:
         fspath = str(item.fspath)
+
+        # Real Chromium runtime — env-bound: needs a bootable GL/WebEngine.
+        # Off in every default lane (opt in with -m webengine); 2026-09-16.
+        if "webengine" in fspath:
+            item.add_marker("webengine")
+            item.add_marker("qt")
+            item.add_marker("slow")
+            continue
 
         # Gate
         if any(k in fspath for k in ("rule16", "clone", "smell", "double_audit", "file_coverage", "stores_module", "js_gate", "js_size", "js_coverage")):

@@ -197,9 +197,9 @@ class UndoService(
         ap = self._apply
         return ap.redo()
 
-    def rewind_after_failure(self, entry: Optional[dict], exc: Exception) -> None:
+    def rewind_after_failure(self, entry: Optional[dict], forward: bool) -> None:
         ap = self._apply
-        return ap.rewind_after_failure(entry, exc)
+        return ap.rewind_after_failure(entry, forward)
 
     # db commands
     async def _db_delete_op(self, value: dict, forward: bool) -> dict | None:

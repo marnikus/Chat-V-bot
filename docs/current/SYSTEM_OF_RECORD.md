@@ -308,7 +308,7 @@ and the ratchet baselines (`tests/wait_budget_baseline.txt`, `tests/js_coverage_
 
 | Date | Design | Why you'd open it |
 |---|---|---|
-| 2026-09-16 | [Round I plan](../archive/2026-09-16-round-i/ROUND_I_PLAN_2026-09-16.md) (+ its input [metrics](../archive/../../reports/CODE_QUALITY_METRICS_2026-09-16.md)) | The post-split RED measurement, the R0 reconciliation, and areas R1–R4 |
+| 2026-09-16 | [Round I plan](../archive/2026-09-16-round-i/ROUND_I_PLAN_2026-09-16.md) (+ its input [metrics](../archive/../../reports/CODE_QUALITY_METRICS_2026-09-16.md) · [R1 red roster](../archive/2026-09-16-round-i/ROUND_I_RED_ROSTER_2026-09-16.md)) | The post-split RED measurement, the R0 reconciliation, areas R2–R4; **R1 done**: 89 red → 0, Node suites 35/35, JS coverage 69.49→85.31 %, run_tiers green |
 | 2026-09-15 | [Test-integration principles](../archive/2026-09-15-test-integration-principles/TEST_INTEGRATION_PRINCIPLES_DESIGN_2026-09-15.md) · [time plan](../archive/2026-09-15-test-time-reduction/TEST_TIME_REDUCTION_PLAN_2026-09-15.md) | The lane/budget/ratchet doctrine behind RULE 8's extension |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |

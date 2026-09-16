@@ -106,10 +106,14 @@ def main(argv=None) -> int:
     # Tier 2: qt (needs -n0 because QApplication singleton not fork-safe)
     if args.with_qt or args.full:
         print("\n=== Tier 2: qt (pure+db+qt, single process) — expected ~30 s ===")
-        cmd = [py, "-m", "pytest", "-m", "qt or db or pure", "-q", "--tb=line", "-n", "0"]
+        cmd = [py, "-m", "pytest", "-m",
+               "(qt or db or pure) and not webengine",
+               "-q", "--tb=line", "-n", "0"]
         if args.k:
             cmd.extend(["-k", args.k])
-        code, out, elapsed = _run(cmd, timeout=300)
+        # merged suite (2026-09-16): 3298 qt/db/pure items single-process
+        # measure ~353 s; 300 s made the runner die on TimeoutExpired.
+        code, out, elapsed = _run(cmd, timeout=600)
         print(out[-3000:])
         print(f"Tier 2 done in {elapsed:.1f}s, exit {code}")
         total_elapsed += elapsed

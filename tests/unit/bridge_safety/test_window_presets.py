@@ -8,6 +8,7 @@ import types
 from types import SimpleNamespace
 
 import bridge.window_preset_bridge as preset_bridge
+import bridge.window_preset_export as preset_export
 from bridge.context import BridgeContext
 from bridge.window_preset_bridge import WindowPresetBridge
 from backend.config_manager import ConfigManager
@@ -84,7 +85,9 @@ def test_export_selects_folder_writes_portable_file_and_reveals_it(tmp_path, mon
     monkeypatch.setitem(sys.modules, "PySide6.QtWidgets",
                         types.SimpleNamespace(QFileDialog=dialog))
     assert preset_bridge._choose_export_folder() == str(export_folder)
-    assert preset_bridge._safe_filename("Desk / blue") == "window-preset-Desk-blue.json"
+    # _write_export resolves the filename builder in its own module now
+    # (H-split, 2026-09-16); the facade keeps _choose/_open re-exported.
+    assert preset_export._safe_filename("Desk / blue") == "window-preset-Desk-blue.json"
     real_open = preset_bridge._open_in_folder
     monkeypatch.setattr(preset_bridge, "_choose_export_folder",
                         lambda: str(export_folder))

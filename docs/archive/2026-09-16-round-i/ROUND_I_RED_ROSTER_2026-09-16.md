@@ -54,10 +54,14 @@ noise-drop-vs-reason).
 `test_js_coverage` floor ratchet (floor 82.7 vs actual 69.49 — the R2 problem
 statement, intentionally red; DO NOT lower the floor before R2.3).
 
-## J — Environment-bound (1) — R1.6
-`test_sash_webengine::test_grid_in_real_webengine` — needs real GPU/GL.
-Policy adopt: `webengine` mark + default-off (session-stream pattern),
-opt-in run on a GPU machine.
+## J — Environment-bound (1) — R1.6 CLOSED
+`test_sash_webengine::test_grid_in_real_webengine` boots real Chromium;
+in the offscreen/stub-libs env imports succeed but creating QWebEngineView
+SIGABRTs the process (faulthandler, exit 134). This was the "flaky −6"
+seen in mixed qt walks — deterministic, not flake. Decision: `webengine`
+mark + default-off (addopts `not webengine`; conftest deselects unless the
+run's own `-m` asks for webengine, since a CLI -m expression replaces the
+addopts one; opt-in: `-m webengine` on a GPU machine).
 
 ## Watchlist (state-dependent)
 Pre-merge (raw main) measurements had these RED; post-merge they PASS:
@@ -81,8 +85,14 @@ post-merge qt-only slice — R1.6 keeps a 3-run stability check open.
 | I machinery 2 | drift | js_coverage ratchet: now green (85.31% after suite repairs; floor 82.7 kept). wait_budget: 17 load-bearing waits annotated # wait-budget: <reason>, 12 stale pins regen'd to 13 current |
 | J webengine 1 | pending (R1.6) | env-bound: decide mark + default-off |
 | watchlist archive_delete_undo 4 + history_query_gaps 2 | fix (drift) | were truncated out of the first roster, still red: _my_nicks classmethod→module-function re-point; archive UI bundle reads |
-| residual (open) | 2 | test_window_presets::test_export_... (_safe_filename attr gone) + undo_support_contract timeline (rewind_after_failure(forward=...) signature) — under repair |
+| residual (the last 2) | fix 1 + drift 1 | same facade-rename class: UndoService.rewind_after_failure restored to (entry, forward) per the undo_apply implementation; _safe_filename re-pointed to bridge/window_preset_export.py where _write_export resolves it |
 
-Post-wave verification: three tier slices 3419 passed / 9 failed→(watchlist pair fixed in wave) — see commit.
-JS gate: 86 → 0 violations (PASS). Node suites: 14 red → 35/35 green.
-JS coverage: 69.49% → 85.31% (floor 82.7 cleared without touching it).
+## Exit verification (2026-09-16, post-wave-2)
+- Full suite by lanes: tier-2 expression `3298 passed` (exit 0),
+  qt-slice 879 passed ×3 consecutive runs (SIGABRT hunt negative),
+  residual slice 77 passed, Node suites 35/35, wait-budget + js_coverage
+  ratchets green, js_gate PASS, rule16_gate exit 0, stores_modules exit 0.
+- `run_tiers.py --with-qt` exit 0 (tier timeouts drifted 300→600 s:
+  the merged suite runs 3298 single-process qt/db/pure items ≈ 353 s).
+- JS gate: 86 → 0 violations (PASS at commit).
+- **Every roster family CLOSED. R1 exit achieved.**
