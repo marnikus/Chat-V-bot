@@ -250,7 +250,22 @@ global.LogConsole = { log() {} };
 
 // ── load the REAL modules ────────────────────────────────────────
 
-const load = (file, name) => new Function(readUi(file) + '\nreturn ' + name + ';')();
+const load = (file, name) => {
+  // Split modules (Round H): load the real parts first, sharing one scope
+  // like index.html does; single files keep the historical two-arg idiom.
+  const l = require('./_ui_loader');
+  if (l.partsOf(file).length)
+    return l.loadModule(file, global.window, global.document);
+  const src = readUi(file);
+  try {
+    return new Function(src + '\nreturn ' + name + ';')();
+  } catch (e) {
+    new Function(src)();           // window-attaching helper files
+    if ((global.window || {})[name] !== undefined)
+      return global.window[name];
+    throw e;
+  }
+};
 global.HistoryDb = load('js/history-db.js', 'HistoryDb');
 load('js/core/ui-helpers.js', 'UIHelpers');   // sets window.UIHelpers
 

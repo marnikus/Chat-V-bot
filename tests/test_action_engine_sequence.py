@@ -263,7 +263,7 @@ class TestStopAndPause(EngineCase):
                 if gate.calls:
                     break
             self.assertEqual(gate.calls, [STANDALONE_NICK])
-            await asyncio.sleep(0.4)             # paused window
+            await asyncio.sleep(0.4)  # wait-budget: paused window
             self.assertTrue(engine.is_running,
                             "a paused run must still count as running")
             self.assertEqual(tail.calls, [],

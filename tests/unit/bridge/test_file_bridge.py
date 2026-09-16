@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from bridge.context import BridgeContext            # noqa: E402
-import bridge.file_bridge as fb_mod                 # noqa: E402
+import bridge.file_bridge_import as fb_import       # noqa: E402
+import bridge.file_bridge_io as fb_io               # noqa: E402
 from bridge.file_bridge import FileBridge           # noqa: E402
 from core.events import EventBus                    # noqa: E402
 from services.preset_io import (build_block_export,  # noqa: E402
@@ -84,15 +85,17 @@ class FileBridgeCase(unittest.TestCase):
                                  presets=self.presets, bus=EventBus())
         self.ctx._undo_svc = self.undo
         self.bridge = FileBridge(self.ctx)
-        # monkeypatch the native dialogs
+        # monkeypatch the native dialogs — the dialog seams moved out of the
+        # file_bridge facade in the AREA-A split: patch them in the consuming
+        # modules' namespaces (io=export, import=import), not the facade.
         self.save_target = os.path.join(self.dir, "export.json")
         self.open_target = ""
-        self._orig = (fb_mod.pick_save_path, fb_mod.pick_open_path)
-        fb_mod.pick_save_path = lambda cap, name: self.save_target
-        fb_mod.pick_open_path = lambda cap: self.open_target
+        self._orig = (fb_io.pick_save_path, fb_import.pick_open_path)
+        fb_io.pick_save_path = lambda cap, name: self.save_target
+        fb_import.pick_open_path = lambda cap: self.open_target
 
     def tearDown(self):
-        fb_mod.pick_save_path, fb_mod.pick_open_path = self._orig
+        fb_io.pick_save_path, fb_import.pick_open_path = self._orig
         PresetStore._by_path.pop(os.path.abspath(self.presets.path), None)
 
     # ── helpers ──────────────────────────────────────────────────

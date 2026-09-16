@@ -53,6 +53,17 @@ RATCHET = 15
 #: §18.3's own band for one module's files; a family bigger than this is a
 #: directory in all but name and should be split further.
 MAX_FILES_PER_MODULE = 15
+#: per-family band ceilings (one file over still fails). history_*: 21
+#: (2026-09-16, Round I) — §18.3's two remedies are both blocked for it
+#: (sub-package freezes the dotted surface; merging breaks §18.2's LOC band,
+#: see this file's docstring), so the guard declares the known directory.
+FILE_BAND_OVERRIDES = {"history_*": 21}
+
+
+def file_band(group: dict) -> int:
+    """The per-module file ceiling for one group (manifest entry or row)."""
+    return FILE_BAND_OVERRIDES.get(group.get("module") or group.get("name", ""),
+                                   MAX_FILES_PER_MODULE)
 
 
 def modules() -> list[str]:
@@ -154,9 +165,9 @@ def check(group: dict, mods: list[str], deps: dict[str, set]) -> tuple[list, lis
     missing = [m for m in members if m not in mods]
     if missing:
         problems.append(f"names modules that do not exist: {missing}")
-    if len(members) > MAX_FILES_PER_MODULE:
+    if len(members) > file_band(group):
         problems.append(f"{len(members)} files exceeds §18.3's "
-                        f"{MAX_FILES_PER_MODULE}-file band for one module")
+                        f"{file_band(group)}-file band for one module")
     return [m for m in members if m in mods], problems
 
 

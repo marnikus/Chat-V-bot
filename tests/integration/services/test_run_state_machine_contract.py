@@ -357,7 +357,7 @@ class TestExecutionBranches(EngineCase):
 
         task = asyncio.ensure_future(engine.execute())
         await controller()
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.3)  # wait-budget: let the engine reach the paused state under test
         engine.stop()
         await asyncio.wait_for(task, timeout=3)
         self.assertEqual(block.calls, ["a"])

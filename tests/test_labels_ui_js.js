@@ -191,12 +191,20 @@ function firePointer(ev, x, y) {
 // ── load the real modules ────────────────────────────────────────
 const readUi = (f) => fs.readFileSync(path.join(__dirname, '..', 'ui', f), 'utf8');
 function load(file, name) {
-  const src = readUi(file);
-  const mod = { exports: {} };
-  new Function('module', 'exports', 'window', 'document', src)(
-    mod, mod.exports, global.window, global.document);
-  global[name] = mod.exports;
-  return mod.exports;
+  // Split modules (Round H): load parts first, sharing scope, like
+  // index.html; single files keep the historical module eval.
+  const l = require('./_ui_loader');
+  let out;
+  if (l.partsOf(file).length) {
+    out = l.loadModule(file, global.window, global.document);
+  } else {
+    const mod = { exports: {} };
+    new Function('module', 'exports', 'window', 'document', readUi(file))(
+      mod, mod.exports, global.window, global.document);
+    out = mod.exports;
+  }
+  global[name] = out;
+  return out;
 }
 const ColorPicker = load('js/color-picker.js', 'ColorPicker');
 const Labels = load('js/labels.js', 'Labels');
@@ -436,8 +444,9 @@ t('a caller can render read-only pills (no ✕)', () => {
 });
 
 t('both tables get the very same renderer', () => {
-  const userTable = readUi('js/user-table.js');
-  const userDb = readUi('js/history-db.js');
+  const bundle = require('./_ui_loader').sourceBundle;
+  const userTable = bundle('js/user-table.js');
+  const userDb = bundle('js/history-db.js');
   ok(/Labels\.pills\(/.test(userTable), 'People uses Labels.pills');
   ok(/Labels\.pills\(/.test(userDb), 'the Full User Database uses Labels.pills');
 });
@@ -805,7 +814,7 @@ t('setPerson keeps Section 4 and the hint in sync', () => {
 });
 
 t('the People table rows carry data-nick and react to plain row clicks', () => {
-  const src = readUi('js/user-table.js');
+  const src = require('./_ui_loader').sourceBundle('js/user-table.js');
   ok(/<tr class="\$\{rowCls\}" data-nick="\$\{attr\}">/.test(src),
      'every row is addressable by nick');
   ok(/Labels\.setPerson\(row\.dataset\.nick\)/.test(src),
@@ -816,7 +825,7 @@ t('the People table rows carry data-nick and react to plain row clicks', () => {
 });
 
 t('the Storage table also follows the quick-assign target', () => {
-  const src = readUi('js/history-db.js');
+  const src = require('./_ui_loader').sourceBundle('js/history-db.js');
   ok(/markLabelTarget\(nick\)/.test(src),
      'the target highlight moves in place');
   ok(/row-label-target/.test(src), 'render stamps the target class');

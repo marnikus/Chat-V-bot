@@ -132,7 +132,10 @@ class TestRequestObjectIsSmall(unittest.TestCase):
     """The new class must itself be inside the class limits."""
 
     def test_person_page_request_fits(self):
-        info = gate.classes("backend/history_query.py").get("PersonPageRequest")
+        # 2026-09-16: the owned request object moved into its own module
+        # (backend/history_query_request.py) in the history-query split.
+        info = gate.classes("backend/history_query_request.py").get(
+            "PersonPageRequest")
         self.assertIsNotNone(info, "PersonPageRequest does not exist")
         self.assertLessEqual(info["loc"], gate.CLASS_LIMITS["loc"],
                              f"PersonPageRequest is {info['loc']} LOC")
@@ -158,7 +161,7 @@ class TestClassLimitsAreEnforced(unittest.TestCase):
 
     def test_the_owned_request_object_is_reported_and_clean(self):
         rows = {r["target"]: r for r in gate.run()["class_rows"]}
-        key = "backend/history_query.py::PersonPageRequest"
+        key = "backend/history_query_request.py::PersonPageRequest"
         self.assertIn(key, rows, "class enforcement did not scan the owned file")
         self.assertEqual(rows[key]["violations"], [])
 

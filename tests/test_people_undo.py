@@ -292,9 +292,12 @@ class TestPeopleUndoFrontend(unittest.TestCase):
         self.app = "".join(
             open(os.path.join(UI_DIR, "js", f), encoding="utf-8").read()
             for f in self.APP_FAMILY)
-        with open(os.path.join(UI_DIR, "js", "user-table.js"),
-                  encoding="utf-8") as fh:
-            self.table = fh.read()
+        # user-table.js is a facade over user-table-*.js parts (2026-09
+        # JS split); assert wiring across the whole module bundle.
+        self.table = "".join(
+            open(os.path.join(UI_DIR, "js", name), encoding="utf-8").read()
+            for name in sorted(os.listdir(os.path.join(UI_DIR, "js")))
+            if name == "user-table.js" or name.startswith("user-table-"))
 
     def test_app_accepts_people_kind_in_load_and_apply(self):
         self.assertIn("entry.kind === 'people'", self.app)

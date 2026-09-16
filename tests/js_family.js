@@ -40,12 +40,22 @@ const FAMILIES = {
     'sash-grid-tree.js',
     'sash-grid-windows.js',
     'sash-grid-presets.js',
+    // Issue 4 split (2026-09): the drag part became three real parts plus
+    // an empty compat file; the order mirrors the index.html script tags.
+    'sash-grid-drag-core.js',
+    'sash-grid-drag-spec.js',
+    'sash-grid-drag-resize.js',
     'sash-grid-drag.js',
     'sash-grid.js',
   ],
   // stack-dnd facade + its parts (+ the StackDrag engine it drives).
   stackDnd: [
     'core/ui-helpers.js',
+    // StackDrag engine itself split (2026-09) into core/visual/scroll;
+    // order mirrors the index.html script tags.
+    'stack-drag-core.js',
+    'stack-drag-visual.js',
+    'stack-drag-scroll.js',
     'stack-drag.js',
     'stack-dnd-history.js',
     'stack-dnd-render.js',
@@ -70,8 +80,14 @@ const FILE_EXPORTS = {
   'sash-grid-tree.js': ['SashGridTree'],
   'sash-grid-windows.js': ['SashGridWindowStore', 'SashGridWindows', 'SashGridMenus'],
   'sash-grid-presets.js': ['SashGridPresets'],
-  'sash-grid-drag.js': ['SashGridDrag', 'SashGridSpec', 'SashGridResize'],
+  'sash-grid-drag-core.js': ['SashGridDrag'],
+  'sash-grid-drag-spec.js': ['SashGridSpec'],
+  'sash-grid-drag-resize.js': ['SashGridResize'],
   'sash-grid.js': ['SashGrid'],
+  'stack-drag-core.js': ['StackDragCore'],
+  'stack-drag-visual.js': ['StackDragVisual'],
+  'stack-drag-scroll.js': ['StackDragScroll'],
+  'stack-drag.js': ['StackDrag'],
   'stack-dnd-history.js': ['StackDnDMigration', 'StackDnDHistory'],
   'stack-dnd-render.js': ['StackDnDRender', 'StackDnDListOps'],
   'stack-dnd-menu.js': ['StackDnDMenu'],

@@ -95,8 +95,17 @@ window.UIHelpers = {
     for (const part of parts) {
       for (const key of Object.keys(part)) {
         if (key in host) continue;
-        const value = part[key];
-        host[key] = typeof value === 'function' ? value.bind(host) : value;
+        // Getter/setter members must stay live: a plain property read
+        // evaluates them once at bind time. That froze Labels.filterActive
+        // at its boot value (2026-09-16), so the include/exclude filter
+        // never activated in the running UI.
+        const desc = Object.getOwnPropertyDescriptor(part, key);
+        if (desc && (desc.get || desc.set)) {
+          Object.defineProperty(host, key, desc);
+          continue;
+        }
+        host[key] = typeof desc.value === 'function'
+          ? desc.value.bind(host) : desc.value;
       }
     }
     return host;

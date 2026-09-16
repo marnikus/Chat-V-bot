@@ -86,11 +86,11 @@ global.LogConsole = { log(msg, level) { logs.push({ msg, level }); } };
 global.App = { bridge: null };
 global.StackDnD = { stack: [] };
 
-// load the REAL shipped modules
-require(path.join(__dirname, '..', 'ui', 'js', 'core', 'ui-helpers.js'));
-const PresetsUI = new Function(
-  fs.readFileSync(path.join(__dirname, '..', 'ui', 'js', 'presets-ui.js'),
-                  'utf8') + '\nreturn PresetsUI;')();
+// load the REAL shipped modules — presets-ui.js is a facade over five
+// named parts merged via UIHelpers (Round H split); the loader loads the
+// parts first, sharing scope, exactly like the index.html script order.
+const PresetsUI = require('./_ui_loader').loadModule(
+  'js/presets-ui.js', global.window, global.document, 'PresetsUI');
 
 // ── tiny assertion kit ───────────────────────────────────────────
 let passed = 0, failed = 0;

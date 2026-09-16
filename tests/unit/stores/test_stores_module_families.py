@@ -77,7 +77,7 @@ class TestTheCountFits(unittest.TestCase):
     def test_no_group_is_bigger_than_one_module_may_be(self):
         for group in self.got["groups"]:
             self.assertLessEqual(group["files"],
-                                 stores_modules.MAX_FILES_PER_MODULE,
+                                 stores_modules.file_band(group),
                                  f"{group['module']} is a directory in all "
                                  "but name; §18.3 wants it split further")
             self.assertGreaterEqual(group["files"], 1)

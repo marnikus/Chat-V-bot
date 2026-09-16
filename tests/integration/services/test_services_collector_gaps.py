@@ -201,7 +201,7 @@ class TestSettingsSurface(CollectorCase):
 
     async def test_run_loop_exits_promptly_on_stop(self):
         task = asyncio.ensure_future(self.col.run())
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)  # wait-budget: give the run loop a beat before stop
         self.assertTrue(self.col.running)
         self.col.stop()
         await asyncio.wait_for(task, timeout=3)

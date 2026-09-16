@@ -163,9 +163,10 @@ class UndoService(
         proj = self._history
         return proj.stack_projection()
 
-    def set_stack_projection(self, history: list, index: int, world_idx: int) -> None:
+    def set_stack_projection(self, history: list, index: int,
+                             save: bool = True) -> None:
         proj = self._history
-        return proj.set_stack_projection(history, index, world_idx)
+        return proj.set_stack_projection(history, index, save)
 
     def kind_projection(self, kind: str) -> tuple[list, int]:
         proj = self._history

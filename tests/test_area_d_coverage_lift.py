@@ -247,7 +247,7 @@ class TestAwaitWithStop(unittest.IsolatedAsyncioTestCase):
 
     async def test_await_timeout(self):
         async def factory():
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.2)  # wait-budget: simulated slow factory under the timeout test
             return 1
         with self.assertRaises(TimeoutError):
             await await_with_stop(factory, lambda: False, slice_s=0.01,

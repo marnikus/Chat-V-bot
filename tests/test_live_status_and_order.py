@@ -138,7 +138,7 @@ class TestLiveRefresh(unittest.TestCase):
                 os.chdir(h._tmp.name)
                 try:
                     await h.engine.execute(None)
-                    await asyncio.sleep(0.2)   # let queued refreshes land
+                    await asyncio.sleep(0.2)  # wait-budget: let queued refreshes land
                 finally:
                     os.chdir(cwd)
 
@@ -320,9 +320,12 @@ class TestOrderUiContract(unittest.TestCase):
         self.assertIn('title="Processing order', html)
 
     def test_user_table_renders_and_sorts_the_order(self):
-        with open(os.path.join(UI_DIR, "js", "user-table.js"),
-                  encoding="utf-8") as fh:
-            js = fh.read()
+        # user-table.js is a facade over user-table-*.js parts (2026-09
+        # JS split); assert wiring across the whole module bundle.
+        js = "".join(
+            open(os.path.join(UI_DIR, "js", name), encoding="utf-8").read()
+            for name in sorted(os.listdir(os.path.join(UI_DIR, "js")))
+            if name == "user-table.js" or name.startswith("user-table-"))
         self.assertIn('class="col-order"', js)
         self.assertIn("colspan=\"9\"", js)
         self.assertIn("Number.isInteger(user.order)", js)

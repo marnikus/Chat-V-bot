@@ -1229,356 +1229,447 @@
    }
   },
   {
-   "file": "ui/js/bot-chat.js",
+   "file": "ui/js/bot-chat-bridge.js",
    "functions": [
     {
-     "end": 89,
-     "line": 61,
-     "loc": 29,
-     "name": "_wire"
-    },
-    {
-     "end": 59,
-     "line": 42,
-     "loc": 18,
-     "name": "init"
-    },
-    {
-     "end": 322,
-     "line": 305,
-     "loc": 18,
-     "name": "renderLabels"
-    },
-    {
-     "end": 170,
-     "line": 156,
-     "loc": 15,
-     "name": "onReply"
-    },
-    {
-     "end": 231,
-     "line": 217,
-     "loc": 15,
-     "name": "renderAnalysis"
-    },
-    {
-     "end": 303,
-     "line": 289,
-     "loc": 15,
-     "name": "applyReaction"
-    },
-    {
-     "end": 378,
-     "line": 364,
-     "loc": 15,
-     "name": "_verifyRow"
-    },
-    {
-     "end": 253,
-     "line": 240,
-     "loc": 14,
-     "name": "reject"
-    },
-    {
-     "end": 362,
-     "line": 349,
-     "loc": 14,
-     "name": "_card"
-    },
-    {
-     "end": 321,
-     "line": 309,
-     "loc": 13,
-     "name": "(arrow)"
-    },
-    {
-     "end": 302,
-     "line": 291,
-     "loc": 12,
-     "name": "(arrow)"
-    },
-    {
-     "end": 103,
-     "line": 93,
-     "loc": 11,
+     "end": 17,
+     "line": 9,
+     "loc": 9,
      "name": "openPerson"
     },
     {
-     "end": 215,
-     "line": 206,
-     "loc": 10,
-     "name": "renderSuggestion"
-    },
-    {
-     "end": 376,
-     "line": 368,
+     "end": 47,
+     "line": 39,
      "loc": 9,
-     "name": "(arrow)"
+     "name": "onReply"
     },
     {
-     "end": 388,
-     "line": 380,
-     "loc": 9,
-     "name": "_updateSendButton"
-    },
-    {
-     "end": 112,
-     "line": 105,
-     "loc": 8,
+     "end": 25,
+     "line": 19,
+     "loc": 7,
      "name": "refreshLabels"
     },
     {
-     "end": 202,
-     "line": 195,
-     "loc": 8,
-     "name": "_countNote"
-    },
-    {
-     "end": 347,
-     "line": 340,
-     "loc": 8,
-     "name": "_restore"
-    },
-    {
-     "end": 80,
-     "line": 74,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 126,
-     "line": 120,
-     "loc": 7,
+     "end": 37,
+     "line": 32,
+     "loc": 6,
      "name": "_send"
     },
     {
-     "end": 185,
-     "line": 179,
-     "loc": 7,
+     "end": 58,
+     "line": 54,
+     "loc": 5,
      "name": "renderDay"
     },
     {
-     "end": 285,
-     "line": 279,
-     "loc": 7,
-     "name": "onSent"
+     "end": 66,
+     "line": 62,
+     "loc": 5,
+     "name": "_countNote"
     },
     {
-     "end": 87,
-     "line": 82,
-     "loc": 6,
+     "end": 24,
+     "line": 21,
+     "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 141,
-     "line": 136,
-     "loc": 6,
-     "name": "_restoreScope"
-    },
-    {
-     "end": 177,
-     "line": 172,
-     "loc": 6,
-     "name": "onError"
-    },
-    {
-     "end": 238,
-     "line": 233,
-     "loc": 6,
-     "name": "approve"
-    },
-    {
-     "end": 268,
-     "line": 263,
-     "loc": 6,
-     "name": "sendDirect"
-    },
-    {
-     "end": 277,
-     "line": 272,
-     "loc": 6,
-     "name": "_deliver"
-    },
-    {
-     "end": 111,
-     "line": 107,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 118,
-     "line": 114,
-     "loc": 5,
+     "end": 30,
+     "line": 27,
+     "loc": 4,
      "name": "ask"
     },
     {
-     "end": 191,
-     "line": 187,
-     "loc": 5,
+     "end": 52,
+     "line": 49,
+     "loc": 4,
+     "name": "onError"
+    },
+    {
+     "end": 60,
+     "line": 60,
+     "loc": 1,
      "name": "_emptyNote"
-    },
-    {
-     "end": 261,
-     "line": 257,
-     "loc": 5,
-     "name": "sendApproved"
-    },
-    {
-     "end": 70,
-     "line": 67,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 79,
-     "line": 76,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 134,
-     "line": 131,
-     "loc": 4,
-     "name": "_rememberScope"
-    },
-    {
-     "end": 152,
-     "line": 149,
-     "loc": 4,
-     "name": "scope"
-    },
-    {
-     "end": 226,
-     "line": 223,
-     "loc": 4,
-     "name": "approve"
-    },
-    {
-     "end": 332,
-     "line": 329,
-     "loc": 4,
-     "name": "_bubble"
-    },
-    {
-     "end": 392,
-     "line": 390,
-     "loc": 3,
-     "name": "setStatus"
-    },
-    {
-     "end": 43,
-     "line": 43,
-     "loc": 1,
-     "name": "$"
-    },
-    {
-     "end": 62,
-     "line": 62,
-     "loc": 1,
-     "name": "on"
-    },
-    {
-     "end": 210,
-     "line": 210,
-     "loc": 1,
-     "name": "approve"
-    },
-    {
-     "end": 211,
-     "line": 211,
-     "loc": 1,
-     "name": "reject"
-    },
-    {
-     "end": 227,
-     "line": 227,
-     "loc": 1,
-     "name": "reject"
-    },
-    {
-     "end": 326,
-     "line": 326,
-     "loc": 1,
-     "name": "_clear"
     }
    ],
-   "lines": 397,
+   "lines": 70,
    "objects": [
     {
-     "end": 393,
+     "end": 67,
      "gated": true,
-     "line": 34,
-     "loc": 360,
-     "methods": 31
+     "line": 8,
+     "loc": 60,
+     "methods": 9
     },
     {
-     "end": 52,
+     "end": 23,
      "gated": false,
-     "line": 44,
-     "loc": 9,
-     "methods": 0
-    },
-    {
-     "end": 229,
-     "gated": true,
-     "line": 222,
-     "loc": 8,
-     "methods": 2
-    },
-    {
-     "end": 213,
-     "gated": true,
-     "line": 209,
-     "loc": 5,
-     "methods": 2
-    },
-    {
-     "end": 38,
-     "gated": false,
-     "line": 38,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 40,
-     "gated": false,
-     "line": 40,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 57,
-     "gated": false,
-     "line": 57,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 110,
-     "gated": false,
-     "line": 110,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 281,
-     "gated": false,
-     "line": 281,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 295,
-     "gated": false,
-     "line": 295,
+     "line": 23,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 45,
-    "max_object_loc": 360,
-    "max_object_methods": 31,
+    "functions": 10,
+    "max_object_loc": 60,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-chat-cards.js",
+   "functions": [
+    {
+     "end": 22,
+     "line": 16,
+     "loc": 7,
+     "name": "renderAnalysis"
+    },
+    {
+     "end": 41,
+     "line": 35,
+     "loc": 7,
+     "name": "_card"
+    },
+    {
+     "end": 49,
+     "line": 43,
+     "loc": 7,
+     "name": "_verifyRow"
+    },
+    {
+     "end": 14,
+     "line": 9,
+     "loc": 6,
+     "name": "renderSuggestion"
+    },
+    {
+     "end": 33,
+     "line": 28,
+     "loc": 6,
+     "name": "reject"
+    },
+    {
+     "end": 26,
+     "line": 24,
+     "loc": 3,
+     "name": "approve"
+    },
+    {
+     "end": 47,
+     "line": 45,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 12,
+     "line": 12,
+     "loc": 1,
+     "name": "approve"
+    },
+    {
+     "end": 12,
+     "line": 12,
+     "loc": 1,
+     "name": "reject"
+    },
+    {
+     "end": 20,
+     "line": 20,
+     "loc": 1,
+     "name": "approve"
+    },
+    {
+     "end": 20,
+     "line": 20,
+     "loc": 1,
+     "name": "reject"
+    }
+   ],
+   "lines": 53,
+   "objects": [
+    {
+     "end": 50,
+     "gated": true,
+     "line": 8,
+     "loc": 43,
+     "methods": 6
+    },
+    {
+     "end": 12,
+     "gated": true,
+     "line": 12,
+     "loc": 1,
+     "methods": 2
+    },
+    {
+     "end": 20,
+     "gated": true,
+     "line": 20,
+     "loc": 1,
+     "methods": 2
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 43,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-chat-core.js",
+   "functions": [
+    {
+     "end": 57,
+     "line": 37,
+     "loc": 21,
+     "name": "_wire"
+    },
+    {
+     "end": 35,
+     "line": 19,
+     "loc": 17,
+     "name": "init"
+    },
+    {
+     "end": 67,
+     "line": 63,
+     "loc": 5,
+     "name": "_restoreScope"
+    },
+    {
+     "end": 80,
+     "line": 76,
+     "loc": 5,
+     "name": "_updateSendButton"
+    },
+    {
+     "end": 50,
+     "line": 47,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 55,
+     "line": 52,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 72,
+     "line": 69,
+     "loc": 4,
+     "name": "scope"
+    },
+    {
+     "end": 61,
+     "line": 59,
+     "loc": 3,
+     "name": "_rememberScope"
+    },
+    {
+     "end": 20,
+     "line": 20,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 38,
+     "line": 38,
+     "loc": 1,
+     "name": "on"
+    },
+    {
+     "end": 43,
+     "line": 43,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 74,
+     "line": 74,
+     "loc": 1,
+     "name": "_clear"
+    },
+    {
+     "end": 82,
+     "line": 82,
+     "loc": 1,
+     "name": "setStatus"
+    }
+   ],
+   "lines": 86,
+   "objects": [
+    {
+     "end": 83,
+     "gated": true,
+     "line": 11,
+     "loc": 73,
+     "methods": 8
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 21,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 73,
+    "max_object_methods": 8,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-chat-send.js",
+   "functions": [
+    {
+     "end": 53,
+     "line": 43,
+     "loc": 11,
+     "name": "renderLabels"
+    },
+    {
+     "end": 41,
+     "line": 33,
+     "loc": 9,
+     "name": "applyReaction"
+    },
+    {
+     "end": 52,
+     "line": 45,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 31,
+     "line": 26,
+     "loc": 6,
+     "name": "onSent"
+    },
+    {
+     "end": 40,
+     "line": 35,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 62,
+     "line": 57,
+     "loc": 6,
+     "name": "_restore"
+    },
+    {
+     "end": 18,
+     "line": 14,
+     "loc": 5,
+     "name": "sendDirect"
+    },
+    {
+     "end": 24,
+     "line": 20,
+     "loc": 5,
+     "name": "_deliver"
+    },
+    {
+     "end": 12,
+     "line": 9,
+     "loc": 4,
+     "name": "sendApproved"
+    },
+    {
+     "end": 55,
+     "line": 55,
+     "loc": 1,
+     "name": "_bubble"
+    }
+   ],
+   "lines": 66,
+   "objects": [
+    {
+     "end": 63,
+     "gated": true,
+     "line": 8,
+     "loc": 56,
+     "methods": 8
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 37,
+     "gated": false,
+     "line": 37,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 10,
+    "max_object_loc": 56,
+    "max_object_methods": 8,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-chat.js",
+   "functions": [],
+   "lines": 17,
+   "objects": [
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
     "over_100": 0,
     "over_30": 0,
     "over_60": 0
@@ -1837,318 +1928,839 @@
    }
   },
   {
-   "file": "ui/js/bot-prompt.js",
+   "file": "ui/js/bot-prompt-actions.js",
    "functions": [
     {
-     "end": 89,
-     "line": 60,
-     "loc": 30,
-     "name": "_wire"
-    },
-    {
-     "end": 58,
-     "line": 37,
-     "loc": 22,
-     "name": "init"
-    },
-    {
-     "end": 133,
-     "line": 113,
-     "loc": 21,
-     "name": "_renderVariables"
-    },
-    {
-     "end": 132,
-     "line": 117,
-     "loc": 16,
-     "name": "(arrow)"
-    },
-    {
-     "end": 149,
-     "line": 136,
-     "loc": 14,
-     "name": "insert"
-    },
-    {
-     "end": 297,
-     "line": 284,
-     "loc": 14,
-     "name": "renderTabs"
-    },
-    {
-     "end": 334,
-     "line": 322,
-     "loc": 13,
+     "end": 31,
+     "line": 24,
+     "loc": 8,
      "name": "preview"
     },
     {
-     "end": 169,
-     "line": 158,
-     "loc": 12,
-     "name": "showWarnings"
-    },
-    {
-     "end": 282,
-     "line": 272,
-     "loc": 11,
-     "name": "select"
-    },
-    {
-     "end": 194,
-     "line": 185,
-     "loc": 10,
-     "name": "_renderPresets"
-    },
-    {
-     "end": 212,
-     "line": 203,
-     "loc": 10,
-     "name": "applyPreset"
-    },
-    {
-     "end": 237,
-     "line": 228,
-     "loc": 10,
-     "name": "_writePreset"
-    },
-    {
-     "end": 247,
-     "line": 239,
-     "loc": 9,
-     "name": "deletePreset"
-    },
-    {
-     "end": 296,
-     "line": 288,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 307,
-     "line": 299,
-     "loc": 9,
+     "end": 15,
+     "line": 9,
+     "loc": 7,
      "name": "save"
     },
     {
-     "end": 344,
-     "line": 336,
-     "loc": 9,
+     "end": 38,
+     "line": 33,
+     "loc": 6,
      "name": "onReply"
     },
     {
-     "end": 183,
-     "line": 176,
-     "loc": 8,
-     "name": "loadPresets"
-    },
-    {
-     "end": 262,
-     "line": 256,
-     "loc": 7,
-     "name": "setTemplates"
-    },
-    {
-     "end": 320,
-     "line": 314,
-     "loc": 7,
+     "end": 22,
+     "line": 19,
+     "loc": 4,
      "name": "reset"
     },
     {
-     "end": 111,
-     "line": 106,
-     "loc": 6,
-     "name": "setVariables"
-    },
-    {
-     "end": 236,
-     "line": 231,
-     "loc": 6,
+     "end": 14,
+     "line": 12,
+     "loc": 3,
      "name": "(arrow)"
     },
     {
-     "end": 270,
-     "line": 265,
-     "loc": 6,
-     "name": "open"
-    },
-    {
-     "end": 80,
-     "line": 76,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 87,
-     "line": 83,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 156,
-     "line": 152,
-     "loc": 5,
-     "name": "checkVariables"
-    },
-    {
-     "end": 182,
-     "line": 178,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 219,
-     "line": 215,
-     "loc": 5,
-     "name": "savePresetAs"
-    },
-    {
-     "end": 226,
-     "line": 222,
-     "loc": 5,
-     "name": "updatePreset"
-    },
-    {
-     "end": 246,
-     "line": 242,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 254,
-     "line": 250,
-     "loc": 5,
-     "name": "_ask"
-    },
-    {
-     "end": 306,
-     "line": 302,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 94,
-     "line": 91,
-     "loc": 4,
-     "name": "load"
-    },
-    {
-     "end": 104,
-     "line": 101,
-     "loc": 4,
-     "name": "loadVariables"
-    },
-    {
-     "end": 200,
-     "line": 197,
-     "loc": 4,
-     "name": "_excerpt"
-    },
-    {
-     "end": 312,
-     "line": 309,
-     "loc": 4,
+     "end": 17,
+     "line": 17,
+     "loc": 1,
      "name": "cancel"
     },
     {
-     "end": 319,
-     "line": 316,
+     "end": 21,
+     "line": 21,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 42,
+   "objects": [
+    {
+     "end": 39,
+     "gated": true,
+     "line": 8,
+     "loc": 32,
+     "methods": 5
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 32,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-prompt-core.js",
+   "functions": [
+    {
+     "end": 47,
+     "line": 30,
+     "loc": 18,
+     "name": "_wire"
+    },
+    {
+     "end": 28,
+     "line": 18,
+     "loc": 11,
+     "name": "init"
+    },
+    {
+     "end": 67,
+     "line": 61,
+     "loc": 7,
+     "name": "select"
+    },
+    {
+     "end": 74,
+     "line": 69,
+     "loc": 6,
+     "name": "renderTabs"
+    },
+    {
+     "end": 39,
+     "line": 36,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 350,
-     "line": 348,
-     "loc": 3,
-     "name": "setStatus"
+     "end": 45,
+     "line": 42,
+     "loc": 4,
+     "name": "(arrow)"
     },
     {
-     "end": 38,
-     "line": 38,
+     "end": 54,
+     "line": 51,
+     "loc": 4,
+     "name": "setTemplates"
+    },
+    {
+     "end": 59,
+     "line": 56,
+     "loc": 4,
+     "name": "open"
+    },
+    {
+     "end": 73,
+     "line": 71,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 19,
+     "line": 19,
      "loc": 1,
      "name": "$"
     },
     {
-     "end": 53,
-     "line": 53,
+     "end": 26,
+     "line": 26,
      "loc": 1,
      "name": "onPick"
     },
     {
-     "end": 61,
-     "line": 61,
+     "end": 31,
+     "line": 31,
      "loc": 1,
      "name": "on"
     },
     {
-     "end": 346,
-     "line": 346,
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "load"
+    },
+    {
+     "end": 76,
+     "line": 76,
+     "loc": 1,
+     "name": "setStatus"
+    },
+    {
+     "end": 78,
+     "line": 78,
      "loc": 1,
      "name": "onPromptsChanged"
     }
    ],
-   "lines": 355,
+   "lines": 82,
    "objects": [
     {
-     "end": 351,
+     "end": 79,
      "gated": true,
-     "line": 27,
-     "loc": 325,
-     "methods": 29
+     "line": 8,
+     "loc": 72,
+     "methods": 9
     },
     {
-     "end": 49,
+     "end": 24,
      "gated": false,
-     "line": 39,
-     "loc": 11,
+     "line": 20,
+     "loc": 5,
      "methods": 0
     },
     {
-     "end": 54,
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 26,
      "gated": true,
-     "line": 51,
-     "loc": 4,
+     "line": 26,
+     "loc": 1,
      "methods": 1
     },
     {
-     "end": 192,
+     "end": 53,
      "gated": false,
-     "line": 189,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 188,
-     "gated": false,
-     "line": 187,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 35,
-     "gated": false,
-     "line": 35,
+     "line": 53,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 261,
+     "end": 58,
      "gated": false,
-     "line": 261,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 269,
-     "gated": false,
-     "line": 269,
+     "line": 58,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 41,
-    "max_object_loc": 325,
-    "max_object_methods": 29,
+    "functions": 15,
+    "max_object_loc": 72,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-prompt-presets.js",
+   "functions": [
+    {
+     "end": 43,
+     "line": 36,
+     "loc": 8,
+     "name": "_writePreset"
+    },
+    {
+     "end": 15,
+     "line": 9,
+     "loc": 7,
+     "name": "loadPresets"
+    },
+    {
+     "end": 22,
+     "line": 17,
+     "loc": 6,
+     "name": "_renderPresets"
+    },
+    {
+     "end": 30,
+     "line": 26,
+     "loc": 5,
+     "name": "applyPreset"
+    },
+    {
+     "end": 49,
+     "line": 45,
+     "loc": 5,
+     "name": "deletePreset"
+    },
+    {
+     "end": 14,
+     "line": 11,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 42,
+     "line": 39,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "_excerpt"
+    },
+    {
+     "end": 32,
+     "line": 32,
+     "loc": 1,
+     "name": "savePresetAs"
+    },
+    {
+     "end": 34,
+     "line": 34,
+     "loc": 1,
+     "name": "updatePreset"
+    },
+    {
+     "end": 48,
+     "line": 48,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 51,
+     "line": 51,
+     "loc": 1,
+     "name": "_ask"
+    }
+   ],
+   "lines": 55,
+   "objects": [
+    {
+     "end": 52,
+     "gated": true,
+     "line": 8,
+     "loc": 45,
+     "methods": 9
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 20,
+     "gated": false,
+     "line": 20,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 12,
+    "max_object_loc": 45,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-prompt-vars.js",
+   "functions": [
+    {
+     "end": 24,
+     "line": 16,
+     "loc": 9,
+     "name": "_renderVariables"
+    },
+    {
+     "end": 33,
+     "line": 26,
+     "loc": 8,
+     "name": "insert"
+    },
+    {
+     "end": 23,
+     "line": 18,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 45,
+     "line": 40,
+     "loc": 6,
+     "name": "showWarnings"
+    },
+    {
+     "end": 14,
+     "line": 11,
+     "loc": 4,
+     "name": "setVariables"
+    },
+    {
+     "end": 38,
+     "line": 35,
+     "loc": 4,
+     "name": "checkVariables"
+    },
+    {
+     "end": 9,
+     "line": 9,
+     "loc": 1,
+     "name": "loadVariables"
+    }
+   ],
+   "lines": 49,
+   "objects": [
+    {
+     "end": 46,
+     "gated": true,
+     "line": 8,
+     "loc": 39,
+     "methods": 6
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 39,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-prompt.js",
+   "functions": [],
+   "lines": 17,
+   "objects": [
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-settings-actions.js",
+   "functions": [
+    {
+     "end": 42,
+     "line": 36,
+     "loc": 7,
+     "name": "save"
+    },
+    {
+     "end": 49,
+     "line": 44,
+     "loc": 6,
+     "name": "select"
+    },
+    {
+     "end": 69,
+     "line": 64,
+     "loc": 6,
+     "name": "onReply"
+    },
+    {
+     "end": 32,
+     "line": 28,
+     "loc": 5,
+     "name": "applyPreset"
+    },
+    {
+     "end": 60,
+     "line": 56,
+     "loc": 5,
+     "name": "test"
+    },
+    {
+     "end": 12,
+     "line": 9,
+     "loc": 4,
+     "name": "view"
+    },
+    {
+     "end": 17,
+     "line": 14,
+     "loc": 4,
+     "name": "_confirmDiscard"
+    },
+    {
+     "end": 22,
+     "line": 19,
+     "loc": 4,
+     "name": "addNew"
+    },
+    {
+     "end": 48,
+     "line": 45,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 54,
+     "line": 51,
+     "loc": 4,
+     "name": "remove"
+    },
+    {
+     "end": 74,
+     "line": 71,
+     "loc": 4,
+     "name": "onError"
+    },
+    {
+     "end": 41,
+     "line": 39,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "toggleKey"
+    },
+    {
+     "end": 26,
+     "line": 26,
+     "loc": 1,
+     "name": "choosePreset"
+    },
+    {
+     "end": 34,
+     "line": 34,
+     "loc": 1,
+     "name": "_fields"
+    },
+    {
+     "end": 47,
+     "line": 47,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 53,
+     "line": 53,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 62,
+     "line": 62,
+     "loc": 1,
+     "name": "_testDone"
+    },
+    {
+     "end": 76,
+     "line": 76,
+     "loc": 1,
+     "name": "setStatus"
+    }
+   ],
+   "lines": 80,
+   "objects": [
+    {
+     "end": 77,
+     "gated": true,
+     "line": 8,
+     "loc": 70,
+     "methods": 15
+    }
+   ],
+   "summary": {
+    "functions": 19,
+    "max_object_loc": 70,
+    "max_object_methods": 15,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/bot-settings-core.js",
+   "functions": [
+    {
+     "end": 47,
+     "line": 39,
+     "loc": 9,
+     "name": "_wire"
+    },
+    {
+     "end": 56,
+     "line": 49,
+     "loc": 8,
+     "name": "_wireLists"
+    },
+    {
+     "end": 25,
+     "line": 20,
+     "loc": 6,
+     "name": "init"
+    },
+    {
+     "end": 67,
+     "line": 62,
+     "loc": 6,
+     "name": "_onProviderPicked"
+    },
+    {
+     "end": 93,
+     "line": 88,
+     "loc": 6,
+     "name": "setConnections"
+    },
+    {
+     "end": 78,
+     "line": 74,
+     "loc": 5,
+     "name": "close"
+    },
+    {
+     "end": 99,
+     "line": 95,
+     "loc": 5,
+     "name": "_renderProviderChoices"
+    },
+    {
+     "end": 45,
+     "line": 42,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 53,
+     "line": 50,
+     "loc": 4,
+     "name": "pick"
+    },
+    {
+     "end": 72,
+     "line": 69,
+     "loc": 4,
+     "name": "open"
+    },
+    {
+     "end": 104,
+     "line": 101,
+     "loc": 4,
+     "name": "_render"
+    },
+    {
+     "end": 111,
+     "line": 108,
+     "loc": 4,
+     "name": "_renderForm"
+    },
+    {
+     "end": 37,
+     "line": 35,
+     "loc": 3,
+     "name": "_actions"
+    },
+    {
+     "end": 60,
+     "line": 58,
+     "loc": 3,
+     "name": "_wireDirty"
+    },
+    {
+     "end": 23,
+     "line": 23,
+     "loc": 1,
+     "name": "onPick"
+    },
+    {
+     "end": 27,
+     "line": 27,
+     "loc": 1,
+     "name": "current"
+    },
+    {
+     "end": 29,
+     "line": 29,
+     "loc": 1,
+     "name": "providerId"
+    },
+    {
+     "end": 31,
+     "line": 31,
+     "loc": 1,
+     "name": "presetsFor"
+    },
+    {
+     "end": 33,
+     "line": 33,
+     "loc": 1,
+     "name": "chosen"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "add"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "apply"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "cancel"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "close"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "remove"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "reveal"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "save"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "select"
+    },
+    {
+     "end": 36,
+     "line": 36,
+     "loc": 1,
+     "name": "test"
+    },
+    {
+     "end": 41,
+     "line": 41,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 44,
+     "line": 44,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 52,
+     "line": 52,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 59,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 59,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 80,
+     "line": 80,
+     "loc": 1,
+     "name": "toggle"
+    },
+    {
+     "end": 82,
+     "line": 82,
+     "loc": 1,
+     "name": "isOpen"
+    },
+    {
+     "end": 84,
+     "line": 84,
+     "loc": 1,
+     "name": "_place"
+    },
+    {
+     "end": 86,
+     "line": 86,
+     "loc": 1,
+     "name": "load"
+    },
+    {
+     "end": 106,
+     "line": 106,
+     "loc": 1,
+     "name": "_renderPresets"
+    }
+   ],
+   "lines": 115,
+   "objects": [
+    {
+     "end": 112,
+     "gated": true,
+     "line": 8,
+     "loc": 105,
+     "methods": 21
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 23,
+     "gated": true,
+     "line": 23,
+     "loc": 1,
+     "methods": 1
+    },
+    {
+     "end": 36,
+     "gated": true,
+     "line": 36,
+     "loc": 1,
+     "methods": 9
+    },
+    {
+     "end": 97,
+     "gated": false,
+     "line": 97,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 98,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 109,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 38,
+    "max_object_loc": 105,
+    "max_object_methods": 21,
     "over_100": 0,
     "over_30": 0,
     "over_60": 0
@@ -2158,416 +2770,32 @@
    "file": "ui/js/bot-settings.js",
    "functions": [
     {
-     "end": 106,
-     "line": 91,
-     "loc": 16,
-     "name": "_wire"
-    },
-    {
-     "end": 121,
-     "line": 108,
-     "loc": 14,
-     "name": "_wireLists"
-    },
-    {
-     "end": 195,
-     "line": 182,
-     "loc": 14,
-     "name": "setConnections"
-    },
-    {
-     "end": 304,
-     "line": 291,
-     "loc": 14,
-     "name": "save"
-    },
-    {
-     "end": 331,
-     "line": 321,
-     "loc": 11,
-     "name": "remove"
-    },
-    {
-     "end": 142,
-     "line": 133,
-     "loc": 10,
-     "name": "_onProviderPicked"
-    },
-    {
-     "end": 281,
-     "line": 272,
-     "loc": 10,
-     "name": "applyPreset"
-    },
-    {
-     "end": 319,
-     "line": 310,
-     "loc": 10,
-     "name": "select"
-    },
-    {
-     "end": 344,
-     "line": 335,
-     "loc": 10,
-     "name": "test"
-    },
-    {
-     "end": 57,
-     "line": 49,
-     "loc": 9,
-     "name": "init"
-    },
-    {
-     "end": 89,
-     "line": 81,
-     "loc": 9,
-     "name": "_actions"
-    },
-    {
-     "end": 238,
-     "line": 230,
-     "loc": 9,
-     "name": "view"
-    },
-    {
-     "end": 254,
-     "line": 246,
-     "loc": 9,
-     "name": "addNew"
-    },
-    {
-     "end": 362,
-     "line": 354,
-     "loc": 9,
-     "name": "onReply"
-    },
-    {
-     "end": 116,
-     "line": 109,
-     "loc": 8,
-     "name": "pick"
-    },
-    {
-     "end": 212,
-     "line": 205,
-     "loc": 8,
-     "name": "_render"
-    },
-    {
-     "end": 303,
-     "line": 296,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 318,
-     "line": 311,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 103,
-     "line": 97,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 152,
-     "line": 146,
-     "loc": 7,
-     "name": "open"
-    },
-    {
-     "end": 203,
-     "line": 197,
-     "loc": 7,
-     "name": "_renderProviderChoices"
-    },
-    {
-     "end": 129,
-     "line": 124,
-     "loc": 6,
-     "name": "_wireDirty"
-    },
-    {
-     "end": 160,
-     "line": 155,
-     "loc": 6,
-     "name": "close"
-    },
-    {
-     "end": 224,
-     "line": 219,
-     "loc": 6,
-     "name": "_renderForm"
-    },
-    {
-     "end": 351,
-     "line": 346,
-     "loc": 6,
-     "name": "_testDone"
-    },
-    {
-     "end": 115,
-     "line": 111,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 260,
-     "line": 256,
-     "loc": 5,
-     "name": "toggleKey"
-    },
-    {
-     "end": 317,
-     "line": 313,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 330,
-     "line": 326,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 76,
-     "line": 73,
-     "loc": 4,
-     "name": "chosen"
-    },
-    {
-     "end": 96,
-     "line": 93,
+     "end": 23,
+     "line": 20,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 102,
-     "line": 99,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 169,
-     "line": 166,
-     "loc": 4,
-     "name": "isOpen"
-    },
-    {
-     "end": 180,
-     "line": 177,
-     "loc": 4,
-     "name": "load"
-    },
-    {
-     "end": 217,
-     "line": 214,
-     "loc": 4,
-     "name": "_renderPresets"
-    },
-    {
-     "end": 243,
-     "line": 240,
-     "loc": 4,
-     "name": "_confirmDiscard"
-    },
-    {
-     "end": 268,
-     "line": 265,
-     "loc": 4,
-     "name": "choosePreset"
-    },
-    {
-     "end": 367,
-     "line": 364,
-     "loc": 4,
-     "name": "onError"
-    },
-    {
-     "end": 387,
-     "line": 384,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 391,
-     "line": 388,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 63,
-     "line": 61,
+     "end": 19,
+     "line": 17,
      "loc": 3,
-     "name": "current"
-    },
-    {
-     "end": 67,
-     "line": 65,
-     "loc": 3,
-     "name": "providerId"
-    },
-    {
-     "end": 71,
-     "line": 69,
-     "loc": 3,
-     "name": "presetsFor"
-    },
-    {
-     "end": 128,
-     "line": 126,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 164,
-     "line": 162,
-     "loc": 3,
-     "name": "toggle"
-    },
-    {
-     "end": 173,
-     "line": 171,
-     "loc": 3,
-     "name": "_place"
-    },
-    {
-     "end": 287,
-     "line": 285,
-     "loc": 3,
-     "name": "_fields"
-    },
-    {
-     "end": 371,
-     "line": 369,
-     "loc": 3,
-     "name": "setStatus"
-    },
-    {
-     "end": 54,
-     "line": 54,
-     "loc": 1,
-     "name": "onPick"
-    },
-    {
-     "end": 83,
-     "line": 83,
-     "loc": 1,
-     "name": "save"
-    },
-    {
-     "end": 83,
-     "line": 83,
-     "loc": 1,
-     "name": "select"
-    },
-    {
-     "end": 84,
-     "line": 84,
-     "loc": 1,
-     "name": "cancel"
-    },
-    {
-     "end": 84,
-     "line": 84,
-     "loc": 1,
-     "name": "close"
-    },
-    {
-     "end": 85,
-     "line": 85,
-     "loc": 1,
-     "name": "add"
-    },
-    {
-     "end": 85,
-     "line": 85,
-     "loc": 1,
-     "name": "test"
-    },
-    {
-     "end": 86,
-     "line": 86,
-     "loc": 1,
-     "name": "apply"
-    },
-    {
-     "end": 86,
-     "line": 86,
-     "loc": 1,
-     "name": "remove"
-    },
-    {
-     "end": 87,
-     "line": 87,
-     "loc": 1,
-     "name": "reveal"
-    },
-    {
-     "end": 127,
-     "line": 127,
-     "loc": 1,
      "name": "(arrow)"
     }
    ],
-   "lines": 395,
+   "lines": 27,
    "objects": [
     {
-     "end": 372,
-     "gated": true,
-     "line": 37,
-     "loc": 336,
-     "methods": 36
-    },
-    {
-     "end": 88,
-     "gated": true,
-     "line": 82,
-     "loc": 7,
-     "methods": 9
-    },
-    {
-     "end": 55,
-     "gated": true,
-     "line": 52,
-     "loc": 4,
-     "methods": 1
-    },
-    {
-     "end": 202,
+     "end": 11,
      "gated": false,
-     "line": 200,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 47,
-     "gated": false,
-     "line": 47,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 199,
-     "gated": false,
-     "line": 199,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 220,
-     "gated": false,
-     "line": 220,
+     "line": 11,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 59,
-    "max_object_loc": 336,
-    "max_object_methods": 36,
+    "functions": 2,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
     "over_100": 0,
     "over_30": 0,
     "over_60": 0
@@ -3357,9 +3585,9 @@
      "name": "chip"
     },
     {
-     "end": 103,
+     "end": 112,
      "line": 94,
-     "loc": 10,
+     "loc": 19,
      "name": "mergeParts"
     },
     {
@@ -3393,13 +3621,13 @@
      "name": "sortArrow"
     }
    ],
-   "lines": 105,
+   "lines": 114,
    "objects": [
     {
-     "end": 104,
+     "end": 113,
      "gated": true,
      "line": 16,
-     "loc": 89,
+     "loc": 98,
      "methods": 5
     },
     {
@@ -3412,7 +3640,7 @@
    ],
    "summary": {
     "functions": 7,
-    "max_object_loc": 89,
+    "max_object_loc": 98,
     "max_object_methods": 5,
     "over_100": 0,
     "over_30": 1,
@@ -3673,538 +3901,674 @@
    }
   },
   {
-   "file": "ui/js/db-panel.js",
+   "file": "ui/js/db-panel-actions.js",
    "functions": [
     {
-     "end": 349,
-     "line": 295,
-     "loc": 55,
-     "name": "renderList"
-    },
-    {
-     "end": 347,
-     "line": 307,
-     "loc": 41,
-     "name": "(arrow)"
-    },
-    {
-     "end": 293,
-     "line": 257,
-     "loc": 37,
-     "name": "renderStats"
-    },
-    {
-     "end": 68,
-     "line": 38,
-     "loc": 31,
-     "name": "init"
-    },
-    {
-     "end": 131,
-     "line": 108,
-     "loc": 24,
-     "name": "onChanged"
-    },
-    {
-     "end": 188,
-     "line": 165,
-     "loc": 24,
+     "end": 28,
+     "line": 22,
+     "loc": 7,
      "name": "remove"
     },
     {
-     "end": 255,
-     "line": 234,
-     "loc": 22,
-     "name": "renderActive"
-    },
-    {
-     "end": 105,
-     "line": 87,
-     "loc": 19,
-     "name": "onInfo"
-    },
-    {
-     "end": 291,
-     "line": 274,
-     "loc": 18,
-     "name": "(arrow)"
-    },
-    {
-     "end": 154,
-     "line": 140,
-     "loc": 15,
+     "end": 14,
+     "line": 9,
+     "loc": 6,
      "name": "create"
     },
     {
-     "end": 204,
-     "line": 190,
-     "loc": 15,
-     "name": "clean"
-    },
-    {
-     "end": 84,
-     "line": 77,
-     "loc": 8,
-     "name": "refresh"
-    },
-    {
-     "end": 163,
-     "line": 156,
-     "loc": 8,
+     "end": 20,
+     "line": 16,
+     "loc": 5,
      "name": "load"
     },
     {
-     "end": 219,
-     "line": 212,
+     "end": 34,
+     "line": 30,
+     "loc": 5,
+     "name": "clean"
+    },
+    {
+     "end": 27,
+     "line": 27,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 33,
+     "line": 33,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 38,
+   "objects": [
+    {
+     "end": 35,
+     "gated": true,
+     "line": 8,
+     "loc": 28,
+     "methods": 4
+    },
+    {
+     "end": 25,
+     "gated": false,
+     "line": 25,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 6,
+    "max_object_loc": 28,
+    "max_object_methods": 4,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/db-panel-core.js",
+   "functions": [
+    {
+     "end": 34,
+     "line": 19,
+     "loc": 16,
+     "name": "init"
+    },
+    {
+     "end": 59,
+     "line": 48,
+     "loc": 12,
+     "name": "onInfo"
+    },
+    {
+     "end": 68,
+     "line": 61,
      "loc": 8,
+     "name": "onChanged"
+    },
+    {
+     "end": 46,
+     "line": 41,
+     "loc": 6,
+     "name": "refresh"
+    },
+    {
+     "end": 82,
+     "line": 77,
+     "loc": 6,
      "name": "bytes"
     },
     {
-     "end": 232,
-     "line": 226,
-     "loc": 7,
-     "name": "render"
-    },
-    {
-     "end": 74,
-     "line": 70,
-     "loc": 5,
+     "end": 39,
+     "line": 36,
+     "loc": 4,
      "name": "_bridge"
     },
     {
-     "end": 137,
-     "line": 133,
-     "loc": 5,
+     "end": 73,
+     "line": 70,
+     "loc": 4,
      "name": "setStatus"
     },
     {
-     "end": 187,
-     "line": 183,
-     "loc": 5,
+     "end": 22,
+     "line": 22,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 30,
+     "line": 30,
+     "loc": 1,
      "name": "(arrow)"
     },
     {
-     "end": 203,
-     "line": 199,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 210,
-     "line": 207,
-     "loc": 4,
+     "end": 75,
+     "line": 75,
+     "loc": 1,
      "name": "baseName"
     },
     {
+     "end": 84,
+     "line": 84,
+     "loc": 1,
+     "name": "num"
+    }
+   ],
+   "lines": 88,
+   "objects": [
+    {
+     "end": 85,
+     "gated": true,
+     "line": 8,
+     "loc": 78,
+     "methods": 9
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 23,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 78,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/db-panel-render.js",
+   "functions": [
+    {
+     "end": 43,
+     "line": 24,
+     "loc": 20,
+     "name": "renderStats"
+    },
+    {
+     "end": 62,
+     "line": 45,
+     "loc": 18,
+     "name": "renderList"
+    },
+    {
      "end": 60,
-     "line": 58,
-     "loc": 3,
+     "line": 51,
+     "loc": 10,
      "name": "(arrow)"
     },
     {
-     "end": 223,
-     "line": 221,
+     "end": 22,
+     "line": 14,
+     "loc": 9,
+     "name": "renderActive"
+    },
+    {
+     "end": 41,
+     "line": 35,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 12,
+     "line": 9,
+     "loc": 4,
+     "name": "render"
+    }
+   ],
+   "lines": 66,
+   "objects": [
+    {
+     "end": 63,
+     "gated": true,
+     "line": 8,
+     "loc": 56,
+     "methods": 4
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 26,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 6,
+    "max_object_loc": 56,
+    "max_object_methods": 4,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/db-panel.js",
+   "functions": [],
+   "lines": 17,
+   "objects": [
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-db-core.js",
+   "functions": [
+    {
+     "end": 70,
+     "line": 26,
+     "loc": 45,
+     "name": "init"
+    },
+    {
+     "end": 53,
+     "line": 38,
+     "loc": 16,
+     "name": "(arrow)"
+    },
+    {
+     "end": 89,
+     "line": 81,
+     "loc": 9,
+     "name": "reload"
+    },
+    {
+     "end": 79,
+     "line": 72,
+     "loc": 8,
+     "name": "applySettings"
+    },
+    {
+     "end": 97,
+     "line": 91,
+     "loc": 7,
+     "name": "_request"
+    },
+    {
+     "end": 66,
+     "line": 61,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 58,
+     "line": 55,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 102,
+     "line": 99,
+     "loc": 4,
+     "name": "_requestStats"
+    },
+    {
+     "end": 27,
+     "line": 27,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 57,
+     "line": 57,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 106,
+   "objects": [
+    {
+     "end": 103,
+     "gated": true,
+     "line": 8,
+     "loc": 96,
+     "methods": 5
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 28,
+     "loc": 5,
+     "methods": 0
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 20,
+     "gated": false,
+     "line": 20,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 73,
+     "gated": false,
+     "line": 73,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 82,
+     "gated": false,
+     "line": 82,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 96,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 10,
+    "max_object_loc": 96,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-db-render.js",
+   "functions": [
+    {
+     "end": 87,
+     "line": 54,
+     "loc": 34,
+     "name": "render"
+    },
+    {
+     "end": 83,
+     "line": 67,
+     "loc": 17,
+     "name": "(arrow)"
+    },
+    {
+     "end": 52,
+     "line": 38,
+     "loc": 15,
+     "name": "_actions"
+    },
+    {
+     "end": 21,
+     "line": 9,
+     "loc": 13,
+     "name": "_flashIfPresent"
+    },
+    {
+     "end": 36,
+     "line": 30,
+     "loc": 7,
+     "name": "_cell"
+    },
+    {
+     "end": 47,
+     "line": 42,
+     "loc": 6,
+     "name": "button"
+    },
+    {
+     "end": 26,
+     "line": 23,
+     "loc": 4,
+     "name": "visibleRows"
+    },
+    {
+     "end": 20,
+     "line": 20,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 28,
+     "line": 28,
+     "loc": 1,
+     "name": "_day"
+    }
+   ],
+   "lines": 91,
+   "objects": [
+    {
+     "end": 88,
+     "gated": true,
+     "line": 8,
+     "loc": 81,
+     "methods": 6
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 74,
+     "gated": false,
+     "line": 74,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 9,
+    "max_object_loc": 81,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-db-sort.js",
+   "functions": [
+    {
+     "end": 60,
+     "line": 44,
+     "loc": 17,
+     "name": "onPage"
+    },
+    {
+     "end": 72,
+     "line": 62,
+     "loc": 11,
+     "name": "onStats"
+    },
+    {
+     "end": 104,
+     "line": 95,
+     "loc": 10,
+     "name": "markLabelTarget"
+    },
+    {
+     "end": 34,
+     "line": 26,
+     "loc": 9,
+     "name": "_updateSortHeaders"
+    },
+    {
+     "end": 16,
+     "line": 9,
+     "loc": 8,
+     "name": "_wireSortHeaders"
+    },
+    {
+     "end": 113,
+     "line": 106,
+     "loc": 8,
+     "name": "highlightNick"
+    },
+    {
+     "end": 24,
+     "line": 18,
+     "loc": 7,
+     "name": "sortBy"
+    },
+    {
+     "end": 33,
+     "line": 27,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 42,
+     "line": 36,
+     "loc": 7,
+     "name": "onError"
+    },
+    {
+     "end": 15,
+     "line": 10,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 87,
+     "line": 82,
+     "loc": 6,
+     "name": "_onScroll"
+    },
+    {
+     "end": 80,
+     "line": 76,
+     "loc": 5,
+     "name": "liveChanged"
+    },
+    {
+     "end": 103,
+     "line": 99,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 14,
+     "line": 12,
      "loc": 3,
-     "name": "num"
+     "name": "(arrow)"
     },
     {
      "end": 41,
      "line": 41,
      "loc": 1,
-     "name": "$"
+     "name": "(arrow)"
+    },
+    {
+     "end": 55,
+     "line": 55,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 74,
+     "line": 74,
+     "loc": 1,
+     "name": "onChanged"
+    },
+    {
+     "end": 79,
+     "line": 79,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 89,
+     "line": 89,
+     "loc": 1,
+     "name": "deletePerson"
+    },
+    {
+     "end": 91,
+     "line": 91,
+     "loc": 1,
+     "name": "clearHistory"
+    },
+    {
+     "end": 93,
+     "line": 93,
+     "loc": 1,
+     "name": "labelPerson"
     }
    ],
-   "lines": 354,
+   "lines": 117,
    "objects": [
     {
-     "end": 350,
+     "end": 114,
      "gated": true,
-     "line": 26,
-     "loc": 325,
-     "methods": 17
+     "line": 8,
+     "loc": 107,
+     "methods": 14
     },
     {
-     "end": 52,
+     "end": 41,
      "gated": false,
-     "line": 42,
-     "loc": 11,
-     "methods": 0
-    },
-    {
-     "end": 32,
-     "gated": false,
-     "line": 32,
+     "line": 41,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 169,
+     "end": 79,
      "gated": false,
-     "line": 169,
+     "line": 79,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 260,
+     "end": 93,
      "gated": false,
-     "line": 260,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 102,
+     "gated": false,
+     "line": 102,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 23,
-    "max_object_loc": 325,
-    "max_object_methods": 17,
+    "functions": 21,
+    "max_object_loc": 107,
+    "max_object_methods": 14,
     "over_100": 0,
-    "over_30": 4,
+    "over_30": 0,
     "over_60": 0
    }
   },
   {
    "file": "ui/js/history-db.js",
-   "functions": [
-    {
-     "end": 106,
-     "line": 47,
-     "loc": 60,
-     "name": "init"
-    },
-    {
-     "end": 444,
-     "line": 389,
-     "loc": 56,
-     "name": "render"
-    },
-    {
-     "end": 439,
-     "line": 410,
-     "loc": 30,
-     "name": "(arrow)"
-    },
-    {
-     "end": 235,
-     "line": 213,
-     "loc": 23,
-     "name": "onPage"
-    },
-    {
-     "end": 345,
-     "line": 324,
-     "loc": 22,
-     "name": "_flashIfPresent"
-    },
-    {
-     "end": 387,
-     "line": 367,
-     "loc": 21,
-     "name": "_actions"
-    },
-    {
-     "end": 81,
-     "line": 63,
-     "loc": 19,
-     "name": "(arrow)"
-    },
-    {
-     "end": 179,
-     "line": 163,
-     "loc": 17,
-     "name": "reload"
-    },
-    {
-     "end": 146,
-     "line": 135,
-     "loc": 12,
-     "name": "sortBy"
-    },
-    {
-     "end": 192,
-     "line": 181,
-     "loc": 12,
-     "name": "_request"
-    },
-    {
-     "end": 131,
-     "line": 121,
-     "loc": 11,
-     "name": "_wireSortHeaders"
-    },
-    {
-     "end": 161,
-     "line": 151,
-     "loc": 11,
-     "name": "_updateSortHeaders"
-    },
-    {
-     "end": 247,
-     "line": 237,
-     "loc": 11,
-     "name": "onStats"
-    },
-    {
-     "end": 101,
-     "line": 92,
-     "loc": 10,
-     "name": "(arrow)"
-    },
-    {
-     "end": 211,
-     "line": 202,
-     "loc": 10,
-     "name": "onError"
-    },
-    {
-     "end": 309,
-     "line": 300,
-     "loc": 10,
-     "name": "markLabelTarget"
-    },
-    {
-     "end": 380,
-     "line": 371,
-     "loc": 10,
-     "name": "button"
-    },
-    {
-     "end": 130,
-     "line": 122,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 160,
-     "line": 152,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 115,
-     "line": 108,
-     "loc": 8,
-     "name": "applySettings"
-    },
-    {
-     "end": 264,
-     "line": 257,
-     "loc": 8,
-     "name": "liveChanged"
-    },
-    {
-     "end": 319,
-     "line": 312,
-     "loc": 8,
-     "name": "highlightNick"
-    },
-    {
-     "end": 89,
-     "line": 83,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 364,
-     "line": 358,
-     "loc": 7,
-     "name": "_cell"
-    },
-    {
-     "end": 129,
-     "line": 124,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 271,
-     "line": 266,
-     "loc": 6,
-     "name": "_onScroll"
-    },
-    {
-     "end": 308,
-     "line": 304,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 88,
-     "line": 85,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 197,
-     "line": 194,
-     "loc": 4,
-     "name": "_requestStats"
-    },
-    {
-     "end": 210,
-     "line": 207,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 252,
-     "line": 249,
-     "loc": 4,
-     "name": "onChanged"
-    },
-    {
-     "end": 263,
-     "line": 260,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 281,
-     "line": 278,
-     "loc": 4,
-     "name": "deletePerson"
-    },
-    {
-     "end": 287,
-     "line": 284,
-     "loc": 4,
-     "name": "clearHistory"
-    },
-    {
-     "end": 293,
-     "line": 290,
-     "loc": 4,
-     "name": "labelPerson"
-    },
-    {
-     "end": 344,
-     "line": 341,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 351,
-     "line": 348,
-     "loc": 4,
-     "name": "visibleRows"
-    },
-    {
-     "end": 356,
-     "line": 354,
-     "loc": 3,
-     "name": "_day"
-    },
-    {
-     "end": 48,
-     "line": 48,
-     "loc": 1,
-     "name": "$"
-    },
-    {
-     "end": 230,
-     "line": 230,
-     "loc": 1,
-     "name": "(arrow)"
-    }
-   ],
-   "lines": 448,
+   "functions": [],
+   "lines": 16,
    "objects": [
     {
-     "end": 445,
-     "gated": true,
-     "line": 15,
-     "loc": 431,
-     "methods": 25
-    },
-    {
-     "end": 57,
+     "end": 11,
      "gated": false,
-     "line": 49,
-     "loc": 9,
-     "methods": 0
-    },
-    {
-     "end": 191,
-     "gated": false,
-     "line": 186,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 427,
-     "gated": false,
-     "line": 422,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 32,
-     "gated": false,
-     "line": 29,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 36,
-     "gated": false,
-     "line": 36,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 109,
-     "gated": false,
-     "line": 109,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 164,
-     "gated": false,
-     "line": 164,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 209,
-     "gated": false,
-     "line": 209,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 262,
-     "gated": false,
-     "line": 262,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 292,
-     "gated": false,
-     "line": 292,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 307,
-     "gated": false,
-     "line": 307,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 339,
-     "gated": false,
-     "line": 339,
+     "line": 11,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 40,
-    "max_object_loc": 431,
-    "max_object_methods": 25,
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
     "over_100": 0,
-    "over_30": 2,
+    "over_30": 0,
     "over_60": 0
    }
   },
@@ -4629,457 +4993,571 @@
    }
   },
   {
-   "file": "ui/js/history-store.js",
+   "file": "ui/js/history-store-bridge.js",
    "functions": [
     {
-     "end": 82,
-     "line": 27,
-     "loc": 56,
-     "name": "init"
-    },
-    {
-     "end": 432,
-     "line": 409,
-     "loc": 24,
-     "name": "render"
-    },
-    {
-     "end": 159,
-     "line": 138,
-     "loc": 22,
-     "name": "openPerson"
-    },
-    {
-     "end": 104,
-     "line": 85,
-     "loc": 20,
-     "name": "initMyNick"
-    },
-    {
-     "end": 228,
-     "line": 210,
-     "loc": 19,
+     "end": 52,
+     "line": 37,
+     "loc": 16,
      "name": "onLiveAppend"
     },
     {
-     "end": 208,
-     "line": 191,
-     "loc": 18,
+     "end": 35,
+     "line": 22,
+     "loc": 14,
      "name": "onSearch"
     },
     {
-     "end": 278,
-     "line": 262,
-     "loc": 17,
-     "name": "onMediaReady"
-    },
-    {
-     "end": 328,
-     "line": 312,
-     "loc": 17,
-     "name": "_onScroll"
-    },
-    {
-     "end": 293,
-     "line": 280,
+     "end": 100,
+     "line": 87,
      "loc": 14,
      "name": "_applyModelMedia"
     },
     {
-     "end": 126,
-     "line": 115,
-     "loc": 12,
-     "name": "applySettings"
+     "end": 85,
+     "line": 73,
+     "loc": 13,
+     "name": "onMediaReady"
     },
     {
-     "end": 189,
-     "line": 178,
+     "end": 20,
+     "line": 9,
      "loc": 12,
      "name": "onPage"
     },
     {
-     "end": 403,
-     "line": 392,
-     "loc": 12,
-     "name": "renderHeader"
-    },
-    {
-     "end": 244,
-     "line": 236,
-     "loc": 9,
+     "end": 66,
+     "line": 59,
+     "loc": 8,
      "name": "onStats"
     },
     {
-     "end": 255,
-     "line": 247,
-     "loc": 9,
-     "name": "openFolder"
-    },
-    {
-     "end": 368,
-     "line": 360,
-     "loc": 9,
-     "name": "deleteMessage"
-    },
-    {
-     "end": 379,
-     "line": 371,
-     "loc": 9,
-     "name": "clearHistory"
-    },
-    {
-     "end": 390,
-     "line": 382,
-     "loc": 9,
-     "name": "deletePerson"
-    },
-    {
-     "end": 442,
-     "line": 434,
-     "loc": 9,
-     "name": "_updateLatestButton"
-    },
-    {
-     "end": 95,
-     "line": 88,
-     "loc": 8,
-     "name": "commit"
-    },
-    {
-     "end": 113,
-     "line": 106,
-     "loc": 8,
-     "name": "setMyNick"
-    },
-    {
-     "end": 174,
-     "line": 167,
-     "loc": 8,
-     "name": "_send"
-    },
-    {
-     "end": 291,
-     "line": 284,
+     "end": 98,
+     "line": 91,
      "loc": 8,
      "name": "(arrow)"
     },
     {
-     "end": 303,
-     "line": 296,
-     "loc": 8,
+     "end": 106,
+     "line": 102,
+     "loc": 5,
      "name": "restoreMedia"
     },
     {
-     "end": 357,
-     "line": 350,
-     "loc": 8,
-     "name": "_context"
-    },
-    {
-     "end": 134,
-     "line": 128,
-     "loc": 7,
-     "name": "saveSettings"
-    },
-    {
-     "end": 346,
-     "line": 341,
-     "loc": 6,
-     "name": "runSearch"
-    },
-    {
-     "end": 454,
-     "line": 449,
-     "loc": 6,
-     "name": "copySelection"
-    },
-    {
-     "end": 58,
+     "end": 57,
      "line": 54,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 65,
-     "line": 61,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 334,
-     "line": 330,
-     "loc": 5,
-     "name": "jumpToLatest"
-    },
-    {
-     "end": 51,
-     "line": 48,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 165,
-     "line": 162,
-     "loc": 4,
-     "name": "reloadCurrent"
-    },
-    {
-     "end": 234,
-     "line": 231,
      "loc": 4,
      "name": "refreshStats"
     },
     {
-     "end": 308,
-     "line": 305,
+     "end": 71,
+     "line": 68,
+     "loc": 4,
+     "name": "openFolder"
+    },
+    {
+     "end": 111,
+     "line": 108,
      "loc": 4,
      "name": "onError"
-    },
-    {
-     "end": 339,
-     "line": 336,
-     "loc": 4,
-     "name": "_debounceSearch"
-    },
-    {
-     "end": 447,
-     "line": 444,
-     "loc": 4,
-     "name": "copyMedia"
-    },
-    {
-     "end": 100,
-     "line": 98,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 407,
-     "line": 405,
-     "loc": 3,
-     "name": "renderEmpty"
     },
     {
      "end": 28,
      "line": 28,
      "loc": 1,
-     "name": "$"
-    },
-    {
-     "end": 198,
-     "line": 198,
-     "loc": 1,
      "name": "onOpenHit"
-    },
-    {
-     "end": 354,
-     "line": 354,
-     "loc": 1,
-     "name": "onCopyMedia"
-    },
-    {
-     "end": 355,
-     "line": 355,
-     "loc": 1,
-     "name": "onRestoreMedia"
-    },
-    {
-     "end": 356,
-     "line": 356,
-     "loc": 1,
-     "name": "onDeleteMessage"
-    },
-    {
-     "end": 400,
-     "line": 400,
-     "loc": 1,
-     "name": "onRemove"
     }
    ],
-   "lines": 458,
+   "lines": 115,
    "objects": [
     {
-     "end": 455,
+     "end": 112,
      "gated": true,
-     "line": 12,
-     "loc": 444,
-     "methods": 32
+     "line": 8,
+     "loc": 105,
+     "methods": 10
     },
     {
-     "end": 41,
-     "gated": false,
-     "line": 29,
-     "loc": 13,
-     "methods": 0
-    },
-    {
-     "end": 402,
+     "end": 29,
      "gated": true,
-     "line": 394,
-     "loc": 9,
-     "methods": 2
-    },
-    {
-     "end": 356,
-     "gated": true,
-     "line": 351,
-     "loc": 6,
-     "methods": 3
-    },
-    {
-     "end": 133,
-     "gated": false,
-     "line": 130,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 199,
-     "gated": true,
-     "line": 196,
-     "loc": 4,
+     "line": 27,
+     "loc": 3,
      "methods": 1
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 28,
+     "gated": false,
+     "line": 28,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 32,
+     "gated": false,
+     "line": 32,
+     "loc": 1,
+     "methods": 0
     },
     {
      "end": 45,
      "gated": false,
-     "line": 43,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 146,
-     "gated": false,
-     "line": 144,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 220,
-     "gated": false,
-     "line": 218,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 345,
-     "gated": false,
-     "line": 343,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 132,
-     "gated": false,
-     "line": 131,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 400,
-     "gated": true,
-     "line": 399,
-     "loc": 2,
-     "methods": 1
-    },
-    {
-     "end": 23,
-     "gated": false,
-     "line": 23,
+     "line": 45,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 116,
+     "end": 45,
      "gated": false,
-     "line": 116,
+     "line": 45,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 140,
+     "end": 45,
      "gated": false,
-     "line": 140,
+     "line": 45,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 158,
+     "end": 48,
      "gated": false,
-     "line": 158,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 164,
-     "gated": false,
-     "line": 164,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 183,
-     "gated": false,
-     "line": 183,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 185,
-     "gated": false,
-     "line": 185,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 198,
-     "gated": false,
-     "line": 198,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 204,
-     "gated": false,
-     "line": 204,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 218,
-     "gated": false,
-     "line": 218,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 218,
-     "gated": false,
-     "line": 218,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 224,
-     "gated": false,
-     "line": 224,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 410,
-     "gated": false,
-     "line": 410,
+     "line": 48,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 44,
-    "max_object_loc": 444,
-    "max_object_methods": 32,
+    "functions": 12,
+    "max_object_loc": 105,
+    "max_object_methods": 10,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-store-core.js",
+   "functions": [
+    {
+     "end": 65,
+     "line": 21,
+     "loc": 45,
+     "name": "init"
+    },
+    {
+     "end": 82,
+     "line": 67,
+     "loc": 16,
+     "name": "initMyNick"
+    },
+    {
+     "end": 103,
+     "line": 92,
+     "loc": 12,
+     "name": "applySettings"
+    },
+    {
+     "end": 77,
+     "line": 70,
+     "loc": 8,
+     "name": "commit"
+    },
+    {
+     "end": 90,
+     "line": 84,
+     "loc": 7,
+     "name": "setMyNick"
+    },
+    {
+     "end": 50,
+     "line": 46,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 57,
+     "line": 53,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 43,
+     "line": 40,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 108,
+     "line": 105,
+     "loc": 4,
+     "name": "saveSettings"
+    },
+    {
+     "end": 22,
+     "line": 22,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 80,
+     "line": 80,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 112,
+   "objects": [
+    {
+     "end": 109,
+     "gated": true,
+     "line": 8,
+     "loc": 102,
+     "methods": 5
+    },
+    {
+     "end": 35,
+     "gated": false,
+     "line": 23,
+     "loc": 13,
+     "methods": 0
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 37,
+     "gated": false,
+     "line": 37,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 93,
+     "gated": false,
+     "line": 93,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 107,
+     "gated": false,
+     "line": 107,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 107,
+     "gated": false,
+     "line": 107,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 102,
+    "max_object_methods": 5,
     "over_100": 0,
     "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-store-open.js",
+   "functions": [
+    {
+     "end": 23,
+     "line": 9,
+     "loc": 15,
+     "name": "openPerson"
+    },
+    {
+     "end": 36,
+     "line": 30,
+     "loc": 7,
+     "name": "_send"
+    },
+    {
+     "end": 28,
+     "line": 25,
+     "loc": 4,
+     "name": "reloadCurrent"
+    }
+   ],
+   "lines": 40,
+   "objects": [
+    {
+     "end": 37,
+     "gated": true,
+     "line": 8,
+     "loc": 30,
+     "methods": 3
+    },
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 3,
+    "max_object_loc": 30,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-store-render.js",
+   "functions": [
+    {
+     "end": 64,
+     "line": 45,
+     "loc": 20,
+     "name": "render"
+    },
+    {
+     "end": 16,
+     "line": 9,
+     "loc": 8,
+     "name": "deleteMessage"
+    },
+    {
+     "end": 41,
+     "line": 34,
+     "loc": 8,
+     "name": "renderHeader"
+    },
+    {
+     "end": 24,
+     "line": 18,
+     "loc": 7,
+     "name": "clearHistory"
+    },
+    {
+     "end": 32,
+     "line": 26,
+     "loc": 7,
+     "name": "deletePerson"
+    },
+    {
+     "end": 72,
+     "line": 66,
+     "loc": 7,
+     "name": "_updateLatestButton"
+    },
+    {
+     "end": 83,
+     "line": 79,
+     "loc": 5,
+     "name": "copySelection"
+    },
+    {
+     "end": 77,
+     "line": 74,
+     "loc": 4,
+     "name": "copyMedia"
+    },
+    {
+     "end": 39,
+     "line": 39,
+     "loc": 1,
+     "name": "onRemove"
+    },
+    {
+     "end": 43,
+     "line": 43,
+     "loc": 1,
+     "name": "renderEmpty"
+    }
+   ],
+   "lines": 87,
+   "objects": [
+    {
+     "end": 84,
+     "gated": true,
+     "line": 8,
+     "loc": 77,
+     "methods": 9
+    },
+    {
+     "end": 40,
+     "gated": true,
+     "line": 36,
+     "loc": 5,
+     "methods": 2
+    },
+    {
+     "end": 39,
+     "gated": true,
+     "line": 39,
+     "loc": 1,
+     "methods": 1
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 46,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 10,
+    "max_object_loc": 77,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-store-scroll.js",
+   "functions": [
+    {
+     "end": 25,
+     "line": 9,
+     "loc": 17,
+     "name": "_onScroll"
+    },
+    {
+     "end": 51,
+     "line": 43,
+     "loc": 9,
+     "name": "_context"
+    },
+    {
+     "end": 31,
+     "line": 27,
+     "loc": 5,
+     "name": "jumpToLatest"
+    },
+    {
+     "end": 36,
+     "line": 33,
+     "loc": 4,
+     "name": "_debounceSearch"
+    },
+    {
+     "end": 41,
+     "line": 38,
+     "loc": 4,
+     "name": "runSearch"
+    },
+    {
+     "end": 47,
+     "line": 47,
+     "loc": 1,
+     "name": "onCopyMedia"
+    },
+    {
+     "end": 48,
+     "line": 48,
+     "loc": 1,
+     "name": "onRestoreMedia"
+    },
+    {
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "onDeleteMessage"
+    }
+   ],
+   "lines": 55,
+   "objects": [
+    {
+     "end": 52,
+     "gated": true,
+     "line": 8,
+     "loc": 45,
+     "methods": 5
+    },
+    {
+     "end": 50,
+     "gated": true,
+     "line": 44,
+     "loc": 7,
+     "methods": 3
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 40,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 45,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/history-store.js",
+   "functions": [],
+   "lines": 19,
+   "objects": [
+    {
+     "end": 12,
+     "gated": false,
+     "line": 12,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
     "over_60": 0
    }
   },
@@ -5355,537 +5833,652 @@
    }
   },
   {
-   "file": "ui/js/labels.js",
+   "file": "ui/js/labels-assign.js",
    "functions": [
     {
-     "end": 545,
-     "line": 483,
-     "loc": 63,
-     "name": "renderActive"
-    },
-    {
-     "end": 93,
-     "line": 35,
-     "loc": 59,
-     "name": "init"
-    },
-    {
-     "end": 619,
-     "line": 561,
-     "loc": 59,
-     "name": "_editRow"
-    },
-    {
-     "end": 753,
-     "line": 700,
-     "loc": 54,
+     "end": 75,
+     "line": 26,
+     "loc": 50,
      "name": "renderAssign"
     },
     {
-     "end": 543,
-     "line": 491,
-     "loc": 53,
-     "name": "(arrow)"
-    },
-    {
-     "end": 697,
-     "line": 646,
-     "loc": 52,
-     "name": "renderFilter"
-    },
-    {
-     "end": 249,
-     "line": 202,
-     "loc": 48,
-     "name": "pill"
-    },
-    {
-     "end": 129,
-     "line": 105,
-     "loc": 25,
-     "name": "applyState"
-    },
-    {
-     "end": 403,
-     "line": 381,
-     "loc": 23,
-     "name": "applyRole"
-    },
-    {
-     "end": 674,
-     "line": 653,
-     "loc": 22,
-     "name": "(arrow)"
-    },
-    {
-     "end": 192,
-     "line": 173,
-     "loc": 20,
-     "name": "pills"
-    },
-    {
-     "end": 364,
-     "line": 346,
-     "loc": 19,
-     "name": "saveEdit"
-    },
-    {
-     "end": 446,
-     "line": 431,
-     "loc": 16,
+     "end": 91,
+     "line": 77,
+     "loc": 15,
      "name": "setPerson"
     },
     {
-     "end": 636,
-     "line": 622,
-     "loc": 15,
+     "end": 24,
+     "line": 12,
+     "loc": 13,
      "name": "renderTarget"
     },
     {
-     "end": 339,
-     "line": 326,
-     "loc": 14,
-     "name": "startEdit"
+     "end": 65,
+     "line": 55,
+     "loc": 11,
+     "name": "(arrow)"
     },
     {
-     "end": 283,
-     "line": 271,
-     "loc": 13,
-     "name": "createFromForm"
-    },
-    {
-     "end": 309,
-     "line": 298,
-     "loc": 12,
-     "name": "toggleAssign"
-    },
-    {
-     "end": 323,
-     "line": 312,
-     "loc": 12,
-     "name": "flashNoTarget"
-    },
-    {
-     "end": 459,
-     "line": 448,
-     "loc": 12,
+     "end": 103,
+     "line": 93,
+     "loc": 11,
      "name": "assignSelected"
     },
     {
-     "end": 558,
-     "line": 548,
+     "end": 126,
+     "line": 116,
      "loc": 11,
-     "name": "_badgeTitle"
+     "name": "flashNoTarget"
     },
     {
-     "end": 599,
-     "line": 589,
-     "loc": 11,
-     "name": "(arrow)"
+     "end": 114,
+     "line": 105,
+     "loc": 10,
+     "name": "toggleAssign"
     },
     {
-     "end": 742,
-     "line": 732,
-     "loc": 11,
-     "name": "(arrow)"
-    },
-    {
-     "end": 581,
-     "line": 573,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 764,
-     "line": 756,
-     "loc": 9,
-     "name": "knownNicks"
-    },
-    {
-     "end": 66,
-     "line": 59,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 159,
-     "line": 152,
-     "loc": 8,
-     "name": "allows"
-    },
-    {
-     "end": 259,
-     "line": 252,
-     "loc": 8,
-     "name": "tint"
-    },
-    {
-     "end": 269,
-     "line": 262,
-     "loc": 8,
-     "name": "_bridge"
-    },
-    {
-     "end": 417,
-     "line": 410,
-     "loc": 8,
-     "name": "setDraftColor"
-    },
-    {
-     "end": 718,
-     "line": 711,
-     "loc": 8,
-     "name": "(arrow)"
-    },
-    {
-     "end": 774,
-     "line": 767,
-     "loc": 8,
-     "name": "repaintTables"
-    },
-    {
-     "end": 102,
-     "line": 96,
-     "loc": 7,
-     "name": "refresh"
-    },
-    {
-     "end": 245,
-     "line": 239,
+     "end": 43,
+     "line": 37,
      "loc": 7,
      "name": "(arrow)"
     },
     {
-     "end": 644,
-     "line": 638,
-     "loc": 7,
-     "name": "countFor"
-    },
-    {
-     "end": 318,
-     "line": 313,
+     "end": 122,
+     "line": 117,
      "loc": 6,
      "name": "flash"
     },
     {
-     "end": 467,
-     "line": 462,
-     "loc": 6,
-     "name": "render"
-    },
-    {
-     "end": 474,
-     "line": 469,
-     "loc": 6,
-     "name": "_notice"
-    },
-    {
-     "end": 519,
-     "line": 514,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 86,
-     "line": 82,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 165,
-     "line": 161,
-     "loc": 5,
-     "name": "roleOf"
-    },
-    {
-     "end": 289,
-     "line": 285,
-     "loc": 5,
-     "name": "deleteLabel"
-    },
-    {
-     "end": 397,
-     "line": 393,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 137,
-     "line": 134,
-     "loc": 4,
-     "name": "idsFor"
-    },
-    {
-     "end": 344,
-     "line": 341,
-     "loc": 4,
-     "name": "cancelEdit"
-    },
-    {
-     "end": 369,
-     "line": 366,
+     "end": 131,
+     "line": 128,
      "loc": 4,
      "name": "assignTo"
     },
     {
-     "end": 374,
-     "line": 371,
+     "end": 136,
+     "line": 133,
      "loc": 4,
      "name": "unassign"
     },
     {
-     "end": 379,
-     "line": 376,
+     "end": 141,
+     "line": 138,
      "loc": 4,
      "name": "setLabelsOf"
-    },
-    {
-     "end": 408,
-     "line": 405,
-     "loc": 4,
-     "name": "clearFilter"
-    },
-    {
-     "end": 597,
-     "line": 594,
-     "loc": 4,
-     "name": "onPick"
-    },
-    {
-     "end": 663,
-     "line": 660,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 73,
-     "line": 71,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 124,
-     "line": 122,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 142,
-     "line": 140,
-     "loc": 3,
-     "name": "forNick"
-    },
-    {
-     "end": 146,
-     "line": 144,
-     "loc": 3,
-     "name": "get filterActive"
-    },
-    {
-     "end": 190,
-     "line": 188,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 642,
-     "line": 640,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 38,
-     "line": 38,
-     "loc": 1,
-     "name": "$"
-    },
-    {
-     "end": 64,
-     "line": 64,
-     "loc": 1,
-     "name": "onPick"
-    },
-    {
-     "end": 132,
-     "line": 132,
-     "loc": 1,
-     "name": "byId"
-    },
-    {
-     "end": 572,
-     "line": 572,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 684,
-     "line": 684,
-     "loc": 1,
-     "name": "names"
-    },
-    {
-     "end": 759,
-     "line": 759,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 761,
-     "line": 761,
-     "loc": 1,
-     "name": "(arrow)"
     }
    ],
-   "lines": 779,
+   "lines": 145,
    "objects": [
     {
-     "end": 775,
+     "end": 142,
      "gated": true,
-     "line": 20,
-     "loc": 756,
-     "methods": 39
+     "line": 11,
+     "loc": 132,
+     "methods": 9
     },
     {
-     "end": 55,
+     "end": 63,
      "gated": false,
-     "line": 39,
-     "loc": 17,
-     "methods": 0
-    },
-    {
-     "end": 598,
-     "gated": true,
-     "line": 590,
-     "loc": 9,
-     "methods": 1
-    },
-    {
-     "end": 65,
-     "gated": true,
-     "line": 60,
-     "loc": 6,
-     "methods": 1
-    },
-    {
-     "end": 509,
-     "gated": false,
-     "line": 504,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 118,
-     "gated": false,
-     "line": 115,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 402,
-     "gated": false,
-     "line": 400,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 22,
-     "gated": false,
-     "line": 22,
+     "line": 63,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 23,
+     "end": 78,
      "gated": false,
-     "line": 23,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 32,
-     "gated": false,
-     "line": 32,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 85,
-     "gated": false,
-     "line": 85,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 113,
-     "gated": false,
-     "line": 113,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 114,
-     "gated": false,
-     "line": 114,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 174,
-     "gated": false,
-     "line": 174,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 203,
-     "gated": false,
-     "line": 203,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 432,
-     "gated": false,
-     "line": 432,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 665,
-     "gated": false,
-     "line": 665,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 684,
-     "gated": false,
-     "line": 684,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 740,
-     "gated": false,
-     "line": 740,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 763,
-     "gated": false,
-     "line": 763,
+     "line": 78,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 63,
-    "max_object_loc": 756,
-    "max_object_methods": 39,
+    "functions": 12,
+    "max_object_loc": 132,
+    "max_object_methods": 9,
     "over_100": 0,
-    "over_30": 7,
-    "over_60": 1
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/labels-edit.js",
+   "functions": [
+    {
+     "end": 102,
+     "line": 49,
+     "loc": 54,
+     "name": "_editRow"
+    },
+    {
+     "end": 47,
+     "line": 30,
+     "loc": 18,
+     "name": "saveEdit"
+    },
+    {
+     "end": 23,
+     "line": 11,
+     "loc": 13,
+     "name": "startEdit"
+    },
+    {
+     "end": 85,
+     "line": 75,
+     "loc": 11,
+     "name": "(arrow)"
+    },
+    {
+     "end": 68,
+     "line": 60,
+     "loc": 9,
+     "name": "(arrow)"
+    },
+    {
+     "end": 28,
+     "line": 25,
+     "loc": 4,
+     "name": "cancelEdit"
+    },
+    {
+     "end": 83,
+     "line": 80,
+     "loc": 4,
+     "name": "onPick"
+    },
+    {
+     "end": 59,
+     "line": 59,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 106,
+   "objects": [
+    {
+     "end": 103,
+     "gated": true,
+     "line": 10,
+     "loc": 94,
+     "methods": 4
+    },
+    {
+     "end": 84,
+     "gated": true,
+     "line": 76,
+     "loc": 9,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 94,
+    "max_object_methods": 4,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/labels-filter.js",
+   "functions": [
+    {
+     "end": 55,
+     "line": 11,
+     "loc": 45,
+     "name": "renderFilter"
+    },
+    {
+     "end": 79,
+     "line": 57,
+     "loc": 23,
+     "name": "applyRole"
+    },
+    {
+     "end": 39,
+     "line": 18,
+     "loc": 22,
+     "name": "(arrow)"
+    },
+    {
+     "end": 73,
+     "line": 69,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 28,
+     "line": 25,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 84,
+     "line": 81,
+     "loc": 4,
+     "name": "clearFilter"
+    },
+    {
+     "end": 46,
+     "line": 46,
+     "loc": 1,
+     "name": "names"
+    }
+   ],
+   "lines": 88,
+   "objects": [
+    {
+     "end": 85,
+     "gated": true,
+     "line": 10,
+     "loc": 76,
+     "methods": 3
+    },
+    {
+     "end": 78,
+     "gated": false,
+     "line": 76,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 30,
+     "gated": false,
+     "line": 30,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 46,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 76,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/labels-model.js",
+   "functions": [
+    {
+     "end": 82,
+     "line": 72,
+     "loc": 11,
+     "name": "_badgeTitle"
+    },
+    {
+     "end": 70,
+     "line": 62,
+     "loc": 9,
+     "name": "knownNicks"
+    },
+    {
+     "end": 46,
+     "line": 39,
+     "loc": 8,
+     "name": "allows"
+    },
+    {
+     "end": 60,
+     "line": 54,
+     "loc": 7,
+     "name": "countFor"
+    },
+    {
+     "end": 52,
+     "line": 48,
+     "loc": 5,
+     "name": "roleOf"
+    },
+    {
+     "end": 29,
+     "line": 26,
+     "loc": 4,
+     "name": "idsFor"
+    },
+    {
+     "end": 33,
+     "line": 31,
+     "loc": 3,
+     "name": "forNick"
+    },
+    {
+     "end": 37,
+     "line": 35,
+     "loc": 3,
+     "name": "get filterActive"
+    },
+    {
+     "end": 58,
+     "line": 56,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "byId"
+    },
+    {
+     "end": 65,
+     "line": 65,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 67,
+     "line": 67,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 86,
+   "objects": [
+    {
+     "end": 83,
+     "gated": true,
+     "line": 12,
+     "loc": 72,
+     "methods": 9
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 69,
+     "gated": false,
+     "line": 69,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 12,
+    "max_object_loc": 72,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/labels-render.js",
+   "functions": [
+    {
+     "end": 78,
+     "line": 32,
+     "loc": 47,
+     "name": "pill"
+    },
+    {
+     "end": 30,
+     "line": 11,
+     "loc": 20,
+     "name": "pills"
+    },
+    {
+     "end": 102,
+     "line": 95,
+     "loc": 8,
+     "name": "repaintTables"
+    },
+    {
+     "end": 74,
+     "line": 68,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 86,
+     "line": 80,
+     "loc": 7,
+     "name": "tint"
+    },
+    {
+     "end": 93,
+     "line": 88,
+     "loc": 6,
+     "name": "_notice"
+    },
+    {
+     "end": 28,
+     "line": 26,
+     "loc": 3,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 106,
+   "objects": [
+    {
+     "end": 103,
+     "gated": true,
+     "line": 10,
+     "loc": 94,
+     "methods": 5
+    },
+    {
+     "end": 12,
+     "gated": false,
+     "line": 12,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 7,
+    "max_object_loc": 94,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/labels.js",
+   "functions": [
+    {
+     "end": 74,
+     "line": 20,
+     "loc": 55,
+     "name": "init"
+    },
+    {
+     "end": 183,
+     "line": 148,
+     "loc": 36,
+     "name": "renderActive"
+    },
+    {
+     "end": 181,
+     "line": 155,
+     "loc": 27,
+     "name": "(arrow)"
+    },
+    {
+     "end": 103,
+     "line": 84,
+     "loc": 20,
+     "name": "applyState"
+    },
+    {
+     "end": 125,
+     "line": 114,
+     "loc": 12,
+     "name": "createFromForm"
+    },
+    {
+     "end": 50,
+     "line": 43,
+     "loc": 8,
+     "name": "(arrow)"
+    },
+    {
+     "end": 112,
+     "line": 105,
+     "loc": 8,
+     "name": "_bridge"
+    },
+    {
+     "end": 82,
+     "line": 76,
+     "loc": 7,
+     "name": "refresh"
+    },
+    {
+     "end": 139,
+     "line": 133,
+     "loc": 7,
+     "name": "setDraftColor"
+    },
+    {
+     "end": 146,
+     "line": 141,
+     "loc": 6,
+     "name": "render"
+    },
+    {
+     "end": 131,
+     "line": 127,
+     "loc": 5,
+     "name": "deleteLabel"
+    },
+    {
+     "end": 57,
+     "line": 55,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 68,
+     "line": 66,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 168,
+     "line": 166,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 23,
+     "line": 23,
+     "loc": 1,
+     "name": "$"
+    },
+    {
+     "end": 48,
+     "line": 48,
+     "loc": 1,
+     "name": "onPick"
+    },
+    {
+     "end": 99,
+     "line": 99,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 190,
+   "objects": [
+    {
+     "end": 184,
+     "gated": true,
+     "line": 16,
+     "loc": 169,
+     "methods": 9
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 24,
+     "loc": 17,
+     "methods": 0
+    },
+    {
+     "end": 49,
+     "gated": true,
+     "line": 44,
+     "loc": 6,
+     "methods": 1
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 93,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 67,
+     "gated": false,
+     "line": 67,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 91,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 92,
+     "gated": false,
+     "line": 92,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 161,
+     "gated": false,
+     "line": 161,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 17,
+    "max_object_loc": 169,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 2,
+    "over_60": 0
    }
   },
   {
@@ -5943,465 +6536,580 @@
    }
   },
   {
-   "file": "ui/js/presets-ui.js",
+   "file": "ui/js/presets-ui-blocks.js",
    "functions": [
     {
-     "end": 444,
-     "line": 404,
-     "loc": 41,
-     "name": "applyImported"
-    },
-    {
-     "end": 355,
-     "line": 319,
-     "loc": 37,
-     "name": "showImportPreview"
-    },
-    {
-     "end": 111,
-     "line": 79,
-     "loc": 33,
-     "name": "toggleStackPicker"
-    },
-    {
-     "end": 443,
-     "line": 418,
-     "loc": 26,
-     "name": "(arrow)"
-    },
-    {
-     "end": 175,
-     "line": 151,
-     "loc": 25,
-     "name": "toggleTemplatePicker"
-    },
-    {
-     "end": 212,
-     "line": 190,
+     "end": 42,
+     "line": 20,
      "loc": 23,
      "name": "renderCustomChips"
     },
     {
-     "end": 72,
-     "line": 52,
-     "loc": 21,
-     "name": "loadStack"
-    },
-    {
-     "end": 50,
-     "line": 35,
-     "loc": 16,
-     "name": "renderStackChips"
-    },
-    {
-     "end": 134,
-     "line": 119,
-     "loc": 16,
-     "name": "renderTemplateChips"
-    },
-    {
-     "end": 392,
-     "line": 377,
-     "loc": 16,
-     "name": "_wireImportButtons"
-    },
-    {
-     "end": 211,
-     "line": 198,
+     "end": 41,
+     "line": 28,
      "loc": 14,
      "name": "(arrow)"
     },
     {
-     "end": 71,
-     "line": 59,
-     "loc": 13,
-     "name": "(arrow)"
-    },
-    {
-     "end": 369,
-     "line": 357,
-     "loc": 13,
-     "name": "_importRow"
-    },
-    {
-     "end": 249,
-     "line": 238,
-     "loc": 12,
-     "name": "_placePicker"
-    },
-    {
-     "end": 317,
-     "line": 308,
-     "loc": 10,
-     "name": "onImportPreview"
-    },
-    {
-     "end": 473,
-     "line": 464,
-     "loc": 10,
-     "name": "(arrow)"
-    },
-    {
-     "end": 144,
-     "line": 136,
-     "loc": 9,
-     "name": "loadTemplate"
-    },
-    {
-     "end": 236,
-     "line": 228,
-     "loc": 9,
-     "name": "_makeChip"
-    },
-    {
-     "end": 269,
-     "line": 261,
-     "loc": 9,
-     "name": "exportCurrentStack"
-    },
-    {
-     "end": 402,
-     "line": 394,
-     "loc": 9,
-     "name": "closeImportPreview"
-    },
-    {
-     "end": 49,
-     "line": 43,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 104,
-     "line": 98,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 133,
-     "line": 127,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 220,
-     "line": 214,
+     "end": 50,
+     "line": 44,
      "loc": 7,
      "name": "addCustomBlock"
     },
     {
-     "end": 298,
-     "line": 292,
-     "loc": 7,
-     "name": "_parseResult"
-    },
-    {
-     "end": 306,
-     "line": 300,
-     "loc": 7,
-     "name": "onFileResult"
-    },
-    {
-     "end": 97,
-     "line": 92,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 110,
-     "line": 105,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 143,
-     "line": 138,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 168,
-     "line": 163,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 174,
-     "line": 169,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 183,
-     "line": 178,
-     "loc": 6,
+     "end": 14,
+     "line": 11,
+     "loc": 4,
      "name": "setCustomBlocks"
     },
     {
-     "end": 256,
-     "line": 251,
-     "loc": 6,
-     "name": "refreshAll"
-    },
-    {
-     "end": 103,
-     "line": 99,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 285,
-     "line": 281,
-     "loc": 5,
-     "name": "importStack"
-    },
-    {
-     "end": 375,
-     "line": 371,
-     "loc": 5,
-     "name": "escText"
-    },
-    {
-     "end": 27,
-     "line": 24,
-     "loc": 4,
-     "name": "_date"
-    },
-    {
-     "end": 33,
-     "line": 30,
-     "loc": 4,
-     "name": "setStackPresets"
-    },
-    {
-     "end": 77,
-     "line": 74,
-     "loc": 4,
-     "name": "deleteStack"
-    },
-    {
-     "end": 96,
-     "line": 93,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 109,
-     "line": 106,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 117,
-     "line": 114,
-     "loc": 4,
-     "name": "setTemplatePresets"
-    },
-    {
-     "end": 149,
-     "line": 146,
-     "loc": 4,
-     "name": "deleteTemplate"
-    },
-    {
-     "end": 167,
-     "line": 164,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 173,
-     "line": 170,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 188,
-     "line": 185,
-     "loc": 4,
-     "name": "setCustomBlocksJson"
-    },
-    {
-     "end": 225,
-     "line": 222,
+     "end": 55,
+     "line": 52,
      "loc": 4,
      "name": "deleteCustomBlock"
     },
     {
-     "end": 274,
-     "line": 271,
-     "loc": 4,
-     "name": "exportPreset"
-    },
-    {
-     "end": 279,
-     "line": 276,
+     "end": 60,
+     "line": 57,
      "loc": 4,
      "name": "exportBlock"
     },
     {
-     "end": 290,
-     "line": 287,
-     "loc": 4,
-     "name": "importBlock"
-    },
-    {
-     "end": 381,
-     "line": 378,
-     "loc": 4,
-     "name": "onclick"
-    },
-    {
-     "end": 456,
-     "line": 453,
-     "loc": 4,
-     "name": "confirmDelete"
-    },
-    {
-     "end": 22,
-     "line": 20,
+     "end": 18,
+     "line": 16,
      "loc": 3,
-     "name": "esc"
+     "name": "setCustomBlocksJson"
     },
     {
-     "end": 336,
-     "line": 334,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 343,
-     "line": 341,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 390,
-     "line": 388,
-     "loc": 3,
-     "name": "_importKeyHandler"
-    },
-    {
-     "end": 451,
-     "line": 449,
-     "loc": 3,
-     "name": "promptName"
-    },
-    {
-     "end": 461,
-     "line": 459,
-     "loc": 3,
-     "name": "confirm"
-    },
-    {
-     "end": 204,
-     "line": 204,
+     "end": 34,
+     "line": 34,
      "loc": 1,
      "name": "onLoad"
     },
     {
-     "end": 205,
-     "line": 205,
+     "end": 35,
+     "line": 35,
      "loc": 1,
      "name": "onDelete"
     },
     {
-     "end": 206,
-     "line": 206,
+     "end": 36,
+     "line": 36,
      "loc": 1,
      "name": "onExport"
-    },
-    {
-     "end": 383,
-     "line": 383,
-     "loc": 1,
-     "name": "onclick"
-    },
-    {
-     "end": 385,
-     "line": 385,
-     "loc": 1,
-     "name": "onclick"
-    },
-    {
-     "end": 387,
-     "line": 387,
-     "loc": 1,
-     "name": "onclick"
     }
    ],
-   "lines": 474,
+   "lines": 64,
    "objects": [
     {
-     "end": 462,
+     "end": 61,
      "gated": true,
-     "line": 9,
-     "loc": 454,
-     "methods": 37
+     "line": 8,
+     "loc": 54,
+     "methods": 6
     },
     {
-     "end": 208,
+     "end": 38,
      "gated": true,
-     "line": 202,
+     "line": 32,
      "loc": 7,
      "methods": 3
     },
     {
-     "end": 57,
+     "end": 12,
      "gated": false,
-     "line": 57,
+     "line": 12,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 180,
+     "end": 12,
      "gated": false,
-     "line": 180,
+     "line": 12,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 180,
+     "end": 12,
      "gated": false,
-     "line": 180,
+     "line": 12,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 180,
+     "end": 29,
      "gated": false,
-     "line": 180,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 199,
-     "gated": false,
-     "line": 199,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 234,
-     "gated": false,
-     "line": 234,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 413,
-     "gated": false,
-     "line": 413,
+     "line": 29,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 64,
-    "max_object_loc": 454,
-    "max_object_methods": 37,
+    "functions": 10,
+    "max_object_loc": 54,
+    "max_object_methods": 6,
     "over_100": 0,
-    "over_30": 3,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui-core.js",
+   "functions": [
+    {
+     "end": 86,
+     "line": 75,
+     "loc": 12,
+     "name": "_importRow"
+    },
+    {
+     "end": 34,
+     "line": 24,
+     "loc": 11,
+     "name": "_placePicker"
+    },
+    {
+     "end": 67,
+     "line": 59,
+     "loc": 9,
+     "name": "onImportPreview"
+    },
+    {
+     "end": 49,
+     "line": 43,
+     "loc": 7,
+     "name": "_parseResult"
+    },
+    {
+     "end": 57,
+     "line": 51,
+     "loc": 7,
+     "name": "onFileResult"
+    },
+    {
+     "end": 41,
+     "line": 36,
+     "loc": 6,
+     "name": "refreshAll"
+    },
+    {
+     "end": 73,
+     "line": 69,
+     "loc": 5,
+     "name": "escText"
+    },
+    {
+     "end": 17,
+     "line": 14,
+     "loc": 4,
+     "name": "_date"
+    },
+    {
+     "end": 22,
+     "line": 19,
+     "loc": 4,
+     "name": "_makeChip"
+    },
+    {
+     "end": 90,
+     "line": 88,
+     "loc": 3,
+     "name": "promptName"
+    },
+    {
+     "end": 94,
+     "line": 92,
+     "loc": 3,
+     "name": "confirmDelete"
+    },
+    {
+     "end": 98,
+     "line": 96,
+     "loc": 3,
+     "name": "confirm"
+    },
+    {
+     "end": 12,
+     "line": 12,
+     "loc": 1,
+     "name": "esc"
+    }
+   ],
+   "lines": 102,
+   "objects": [
+    {
+     "end": 99,
+     "gated": true,
+     "line": 11,
+     "loc": 89,
+     "methods": 13
+    },
+    {
+     "end": 20,
+     "gated": false,
+     "line": 20,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 13,
+    "max_object_loc": 89,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui-import.js",
+   "functions": [
+    {
+     "end": 53,
+     "line": 26,
+     "loc": 28,
+     "name": "showImportPreview"
+    },
+    {
+     "end": 99,
+     "line": 77,
+     "loc": 23,
+     "name": "applyImported"
+    },
+    {
+     "end": 98,
+     "line": 85,
+     "loc": 14,
+     "name": "(arrow)"
+    },
+    {
+     "end": 65,
+     "line": 55,
+     "loc": 11,
+     "name": "_wireImportButtons"
+    },
+    {
+     "end": 75,
+     "line": 67,
+     "loc": 9,
+     "name": "closeImportPreview"
+    },
+    {
+     "end": 19,
+     "line": 15,
+     "loc": 5,
+     "name": "importStack"
+    },
+    {
+     "end": 24,
+     "line": 21,
+     "loc": 4,
+     "name": "importBlock"
+    },
+    {
+     "end": 59,
+     "line": 56,
+     "loc": 4,
+     "name": "onclick"
+    },
+    {
+     "end": 39,
+     "line": 39,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 44,
+     "line": 44,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 60,
+     "line": 60,
+     "loc": 1,
+     "name": "onclick"
+    },
+    {
+     "end": 61,
+     "line": 61,
+     "loc": 1,
+     "name": "onclick"
+    },
+    {
+     "end": 62,
+     "line": 62,
+     "loc": 1,
+     "name": "onclick"
+    },
+    {
+     "end": 63,
+     "line": 63,
+     "loc": 1,
+     "name": "_importKeyHandler"
+    }
+   ],
+   "lines": 103,
+   "objects": [
+    {
+     "end": 100,
+     "gated": true,
+     "line": 11,
+     "loc": 90,
+     "methods": 6
+    },
+    {
+     "end": 82,
+     "gated": false,
+     "line": 82,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 90,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui-stack.js",
+   "functions": [
+    {
+     "end": 48,
+     "line": 32,
+     "loc": 17,
+     "name": "loadStack"
+    },
+    {
+     "end": 71,
+     "line": 55,
+     "loc": 17,
+     "name": "toggleStackPicker"
+    },
+    {
+     "end": 30,
+     "line": 19,
+     "loc": 12,
+     "name": "renderStackChips"
+    },
+    {
+     "end": 47,
+     "line": 38,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 80,
+     "line": 73,
+     "loc": 8,
+     "name": "exportCurrentStack"
+    },
+    {
+     "end": 17,
+     "line": 14,
+     "loc": 4,
+     "name": "setStackPresets"
+    },
+    {
+     "end": 53,
+     "line": 50,
+     "loc": 4,
+     "name": "deleteStack"
+    },
+    {
+     "end": 85,
+     "line": 82,
+     "loc": 4,
+     "name": "exportPreset"
+    },
+    {
+     "end": 29,
+     "line": 27,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 64,
+     "line": 62,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 67,
+     "line": 65,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 70,
+     "line": 68,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 63,
+     "line": 63,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 66,
+     "line": 66,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 69,
+     "line": 69,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 89,
+   "objects": [
+    {
+     "end": 86,
+     "gated": true,
+     "line": 11,
+     "loc": 76,
+     "methods": 7
+    },
+    {
+     "end": 36,
+     "gated": false,
+     "line": 36,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 15,
+    "max_object_loc": 76,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui-templates.js",
+   "functions": [
+    {
+     "end": 60,
+     "line": 47,
+     "loc": 14,
+     "name": "toggleTemplatePicker"
+    },
+    {
+     "end": 30,
+     "line": 19,
+     "loc": 12,
+     "name": "renderTemplateChips"
+    },
+    {
+     "end": 40,
+     "line": 32,
+     "loc": 9,
+     "name": "loadTemplate"
+    },
+    {
+     "end": 39,
+     "line": 34,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 17,
+     "line": 14,
+     "loc": 4,
+     "name": "setTemplatePresets"
+    },
+    {
+     "end": 45,
+     "line": 42,
+     "loc": 4,
+     "name": "deleteTemplate"
+    },
+    {
+     "end": 29,
+     "line": 27,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 56,
+     "line": 54,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 59,
+     "line": 57,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 55,
+     "line": 55,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 58,
+     "line": 58,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 64,
+   "objects": [
+    {
+     "end": 61,
+     "gated": true,
+     "line": 11,
+     "loc": 51,
+     "methods": 5
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 51,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/presets-ui.js",
+   "functions": [
+    {
+     "end": 29,
+     "line": 20,
+     "loc": 10,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 30,
+   "objects": [
+    {
+     "end": 12,
+     "gated": false,
+     "line": 12,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 1,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
     "over_60": 0
    }
   },
@@ -6409,20 +7117,20 @@
    "file": "ui/js/sash-core.js",
    "functions": [
     {
-     "end": 641,
+     "end": 683,
      "line": 23,
-     "loc": 619,
+     "loc": 661,
      "name": "(anonymous)"
     },
     {
-     "end": 492,
-     "line": 450,
-     "loc": 43,
+     "end": 534,
+     "line": 484,
+     "loc": 51,
      "name": "moveWindow"
     },
     {
-     "end": 532,
-     "line": 500,
+     "end": 574,
+     "line": 542,
      "loc": 33,
      "name": "validate"
     },
@@ -6433,20 +7141,26 @@
      "name": "insertAtSplitIndex"
     },
     {
-     "end": 625,
-     "line": 601,
+     "end": 667,
+     "line": 643,
      "loc": 25,
      "name": "deserialize"
     },
     {
-     "end": 524,
-     "line": 502,
+     "end": 461,
+     "line": 438,
+     "loc": 24,
+     "name": "insertOuter"
+    },
+    {
+     "end": 566,
+     "line": 544,
      "loc": 23,
      "name": "check"
     },
     {
-     "end": 563,
-     "line": 541,
+     "end": 605,
+     "line": 583,
      "loc": 23,
      "name": "pruneTree"
     },
@@ -6487,8 +7201,8 @@
      "name": "removeFrom"
     },
     {
-     "end": 593,
-     "line": 579,
+     "end": 635,
+     "line": 621,
      "loc": 15,
      "name": "migrate"
     },
@@ -6571,14 +7285,14 @@
      "name": "forEachLeaf"
     },
     {
-     "end": 558,
-     "line": 552,
+     "end": 600,
+     "line": 594,
      "loc": 7,
      "name": "(arrow)"
     },
     {
-     "end": 571,
-     "line": 566,
+     "end": 613,
+     "line": 608,
      "loc": 6,
      "name": "evenSizes"
     },
@@ -6673,18 +7387,18 @@
      "name": "isSplit"
     },
     {
-     "end": 595,
-     "line": 595,
+     "end": 637,
+     "line": 637,
      "loc": 1,
      "name": "serialize"
     }
    ],
-   "lines": 642,
+   "lines": 684,
    "objects": [
     {
-     "end": 640,
+     "end": 682,
      "gated": false,
-     "line": 627,
+     "line": 669,
      "loc": 14,
      "methods": 0
     },
@@ -6696,23 +7410,23 @@
      "methods": 0
     },
     {
-     "end": 562,
+     "end": 604,
      "gated": false,
-     "line": 561,
+     "line": 603,
      "loc": 2,
      "methods": 0
     },
     {
-     "end": 588,
+     "end": 630,
      "gated": false,
-     "line": 587,
+     "line": 629,
      "loc": 2,
      "methods": 0
     },
     {
-     "end": 591,
+     "end": 633,
      "gated": false,
-     "line": 590,
+     "line": 632,
      "loc": 2,
      "methods": 0
     },
@@ -6843,64 +7557,64 @@
      "methods": 0
     },
     {
-     "end": 595,
+     "end": 637,
      "gated": false,
-     "line": 595,
+     "line": 637,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 606,
+     "end": 648,
      "gated": false,
-     "line": 606,
+     "line": 648,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 612,
+     "end": 654,
      "gated": false,
-     "line": 612,
+     "line": 654,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 615,
+     "end": 657,
      "gated": false,
-     "line": 615,
+     "line": 657,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 615,
+     "end": 657,
      "gated": false,
-     "line": 615,
+     "line": 657,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 620,
+     "end": 662,
      "gated": false,
-     "line": 620,
+     "line": 662,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 623,
+     "end": 665,
      "gated": false,
-     "line": 623,
+     "line": 665,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 624,
+     "end": 666,
      "gated": false,
-     "line": 624,
+     "line": 666,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 45,
+    "functions": 46,
     "max_object_loc": 14,
     "max_object_methods": 0,
     "over_100": 1,
@@ -6909,339 +7623,152 @@
    }
   },
   {
-   "file": "ui/js/sash-grid-drag.js",
+   "file": "ui/js/sash-grid-drag-core.js",
    "functions": [
     {
-     "end": 291,
-     "line": 263,
-     "loc": 29,
-     "name": "_specGeometry"
-    },
-    {
-     "end": 355,
-     "line": 328,
-     "loc": 28,
-     "name": "_startResize"
-    },
-    {
-     "end": 126,
-     "line": 102,
+     "end": 130,
+     "line": 106,
      "loc": 25,
      "name": "_dragMove"
     },
     {
-     "end": 406,
-     "line": 385,
-     "loc": 22,
-     "name": "_resizeUp"
-    },
-    {
-     "end": 66,
-     "line": 48,
-     "loc": 19,
+     "end": 70,
+     "line": 51,
+     "loc": 20,
      "name": "_cacheDragRects"
     },
     {
-     "end": 261,
-     "line": 243,
-     "loc": 19,
-     "name": "_showSpec"
+     "end": 198,
+     "line": 181,
+     "loc": 18,
+     "name": "simulateDrop"
     },
     {
-     "end": 34,
-     "line": 18,
+     "end": 37,
+     "line": 21,
      "loc": 17,
      "name": "_startDrag"
     },
     {
-     "end": 373,
-     "line": 357,
-     "loc": 17,
-     "name": "_resizePixelAllocation"
-    },
-    {
-     "end": 166,
-     "line": 151,
+     "end": 170,
+     "line": 155,
      "loc": 16,
      "name": "_cleanupDrag"
     },
     {
-     "end": 452,
-     "line": 437,
-     "loc": 16,
-     "name": "simulateResize"
-    },
-    {
-     "end": 93,
-     "line": 79,
+     "end": 97,
+     "line": 83,
      "loc": 15,
      "name": "_buildDragVisual"
     },
     {
-     "end": 142,
-     "line": 128,
+     "end": 146,
+     "line": 132,
      "loc": 15,
      "name": "_dragUp"
     },
     {
-     "end": 422,
-     "line": 408,
-     "loc": 15,
-     "name": "_cancelResize"
-    },
-    {
-     "end": 190,
-     "line": 177,
-     "loc": 14,
-     "name": "simulateDrop"
-    },
-    {
-     "end": 16,
-     "line": 4,
+     "end": 19,
+     "line": 7,
      "loc": 13,
      "name": "_pointerDown"
     },
     {
-     "end": 232,
-     "line": 220,
-     "loc": 13,
-     "name": "_centerSpec"
-    },
-    {
-     "end": 206,
-     "line": 195,
-     "loc": 12,
-     "name": "_computeSpec"
-    },
-    {
-     "end": 435,
-     "line": 424,
-     "loc": 12,
-     "name": "_onDblClick"
-    },
-    {
-     "end": 46,
-     "line": 36,
+     "end": 49,
+     "line": 39,
      "loc": 11,
      "name": "_beginDrag"
     },
     {
-     "end": 218,
-     "line": 208,
-     "loc": 11,
-     "name": "_edgeZoneSpec"
-    },
-    {
-     "end": 77,
-     "line": 68,
+     "end": 81,
+     "line": 72,
      "loc": 10,
      "name": "_createDragVisuals"
     },
     {
-     "end": 65,
-     "line": 57,
+     "end": 69,
+     "line": 61,
      "loc": 9,
      "name": "(arrow)"
     },
     {
-     "end": 301,
-     "line": 293,
-     "loc": 9,
-     "name": "_siblingBar"
-    },
-    {
-     "end": 311,
-     "line": 303,
-     "loc": 9,
-     "name": "_placeIndicator"
-    },
-    {
-     "end": 383,
-     "line": 375,
-     "loc": 9,
-     "name": "_resizeMove"
-    },
-    {
-     "end": 175,
-     "line": 168,
+     "end": 179,
+     "line": 172,
      "loc": 8,
      "name": "_flashLanded"
     },
     {
-     "end": 241,
-     "line": 234,
-     "loc": 8,
-     "name": "_sashSpec"
-    },
-    {
-     "end": 100,
-     "line": 95,
+     "end": 104,
+     "line": 99,
      "loc": 6,
      "name": "_winIdOf"
     },
     {
-     "end": 149,
-     "line": 144,
+     "end": 153,
+     "line": 148,
      "loc": 6,
      "name": "_cancelDrag"
     },
     {
-     "end": 323,
-     "line": 318,
-     "loc": 6,
-     "name": "_applyDrop"
-    },
-    {
-     "end": 401,
-     "line": 396,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 55,
-     "line": 51,
+     "end": 59,
+     "line": 55,
      "loc": 5,
      "name": "(arrow)"
     },
     {
-     "end": 316,
-     "line": 313,
-     "loc": 4,
-     "name": "_specText"
-    },
-    {
-     "end": 353,
-     "line": 351,
-     "loc": 3,
-     "name": "_onResizeKey"
-    },
-    {
-     "end": 29,
-     "line": 29,
+     "end": 32,
+     "line": 32,
      "loc": 1,
      "name": "_onDragKey"
     },
     {
-     "end": 185,
-     "line": 185,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 335,
-     "line": 335,
-     "loc": 1,
-     "name": "axisSize"
-    },
-    {
-     "end": 350,
-     "line": 350,
-     "loc": 1,
-     "name": "_onResizeCancel"
-    },
-    {
-     "end": 382,
-     "line": 382,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 415,
-     "line": 415,
+     "end": 193,
+     "line": 193,
      "loc": 1,
      "name": "(arrow)"
     }
    ],
-   "lines": 454,
+   "lines": 200,
    "objects": [
     {
-     "end": 191,
+     "end": 199,
      "gated": true,
-     "line": 3,
-     "loc": 189,
+     "line": 6,
+     "loc": 194,
      "methods": 13
     },
     {
-     "end": 324,
-     "gated": true,
-     "line": 194,
-     "loc": 131,
-     "methods": 10
-    },
-    {
-     "end": 453,
-     "gated": true,
-     "line": 327,
-     "loc": 127,
-     "methods": 7
-    },
-    {
-     "end": 26,
+     "end": 29,
      "gated": false,
-     "line": 19,
+     "line": 22,
      "loc": 8,
      "methods": 0
     },
     {
-     "end": 64,
+     "end": 68,
      "gated": false,
-     "line": 60,
+     "line": 64,
      "loc": 5,
      "methods": 0
     },
     {
-     "end": 321,
+     "end": 33,
      "gated": false,
-     "line": 319,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 30,
-     "gated": false,
-     "line": 30,
+     "line": 33,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 50,
+     "end": 53,
      "gated": false,
-     "line": 50,
+     "line": 53,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 154,
+     "end": 158,
      "gated": false,
-     "line": 154,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 179,
-     "gated": false,
-     "line": 179,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 180,
-     "gated": false,
-     "line": 180,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 181,
-     "gated": false,
-     "line": 181,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 182,
-     "gated": false,
-     "line": 182,
+     "line": 158,
      "loc": 1,
      "methods": 0
     },
@@ -7260,115 +7787,445 @@
      "methods": 0
     },
     {
-     "end": 217,
-     "gated": true,
-     "line": 217,
-     "loc": 1,
-     "methods": 1
-    },
-    {
-     "end": 227,
+     "end": 185,
      "gated": false,
-     "line": 227,
+     "line": 185,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 231,
+     "end": 186,
      "gated": false,
-     "line": 231,
+     "line": 186,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 238,
+     "end": 187,
      "gated": false,
-     "line": 238,
+     "line": 187,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 270,
+     "end": 188,
      "gated": false,
-     "line": 270,
+     "line": 188,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 271,
+     "end": 189,
      "gated": false,
-     "line": 271,
+     "line": 189,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 286,
+     "end": 190,
      "gated": false,
-     "line": 286,
+     "line": 190,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 287,
+     "end": 191,
      "gated": false,
-     "line": 287,
+     "line": 191,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 290,
+     "end": 192,
      "gated": false,
-     "line": 290,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 297,
-     "gated": false,
-     "line": 297,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 300,
-     "gated": false,
-     "line": 300,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 338,
-     "gated": false,
-     "line": 338,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 338,
-     "gated": false,
-     "line": 338,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 348,
-     "gated": false,
-     "line": 348,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 411,
-     "gated": false,
-     "line": 411,
+     "line": 192,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 40,
-    "max_object_loc": 189,
+    "functions": 17,
+    "max_object_loc": 194,
     "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-drag-resize.js",
+   "functions": [
+    {
+     "end": 34,
+     "line": 7,
+     "loc": 28,
+     "name": "_startResize"
+    },
+    {
+     "end": 85,
+     "line": 64,
+     "loc": 22,
+     "name": "_resizeUp"
+    },
+    {
+     "end": 52,
+     "line": 36,
+     "loc": 17,
+     "name": "_resizePixelAllocation"
+    },
+    {
+     "end": 131,
+     "line": 116,
+     "loc": 16,
+     "name": "simulateResize"
+    },
+    {
+     "end": 101,
+     "line": 87,
+     "loc": 15,
+     "name": "_cancelResize"
+    },
+    {
+     "end": 114,
+     "line": 103,
+     "loc": 12,
+     "name": "_onDblClick"
+    },
+    {
+     "end": 62,
+     "line": 54,
+     "loc": 9,
+     "name": "_resizeMove"
+    },
+    {
+     "end": 80,
+     "line": 75,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 32,
+     "line": 30,
+     "loc": 3,
+     "name": "_onResizeKey"
+    },
+    {
+     "end": 14,
+     "line": 14,
+     "loc": 1,
+     "name": "axisSize"
+    },
+    {
+     "end": 29,
+     "line": 29,
+     "loc": 1,
+     "name": "_onResizeCancel"
+    },
+    {
+     "end": 61,
+     "line": 61,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 94,
+     "line": 94,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 133,
+   "objects": [
+    {
+     "end": 132,
+     "gated": true,
+     "line": 6,
+     "loc": 127,
+     "methods": 7
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 27,
+     "gated": false,
+     "line": 27,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 90,
+     "gated": false,
+     "line": 90,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 13,
+    "max_object_loc": 127,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-drag-spec.js",
+   "functions": [
+    {
+     "end": 130,
+     "line": 95,
+     "loc": 36,
+     "name": "_specGeometry"
+    },
+    {
+     "end": 93,
+     "line": 75,
+     "loc": 19,
+     "name": "_showSpec"
+    },
+    {
+     "end": 22,
+     "line": 7,
+     "loc": 16,
+     "name": "_computeSpec"
+    },
+    {
+     "end": 38,
+     "line": 24,
+     "loc": 15,
+     "name": "_outerSpec"
+    },
+    {
+     "end": 64,
+     "line": 52,
+     "loc": 13,
+     "name": "_centerSpec"
+    },
+    {
+     "end": 50,
+     "line": 40,
+     "loc": 11,
+     "name": "_edgeZoneSpec"
+    },
+    {
+     "end": 140,
+     "line": 132,
+     "loc": 9,
+     "name": "_siblingBar"
+    },
+    {
+     "end": 150,
+     "line": 142,
+     "loc": 9,
+     "name": "_placeIndicator"
+    },
+    {
+     "end": 73,
+     "line": 66,
+     "loc": 8,
+     "name": "_sashSpec"
+    },
+    {
+     "end": 163,
+     "line": 158,
+     "loc": 6,
+     "name": "_applyDrop"
+    },
+    {
+     "end": 156,
+     "line": 152,
+     "loc": 5,
+     "name": "_specText"
+    }
+   ],
+   "lines": 165,
+   "objects": [
+    {
+     "end": 164,
+     "gated": true,
+     "line": 6,
+     "loc": 159,
+     "methods": 11
+    },
+    {
+     "end": 161,
+     "gated": false,
+     "line": 159,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 33,
+     "gated": false,
+     "line": 33,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": false,
+     "line": 34,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 35,
+     "gated": false,
+     "line": 35,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 36,
+     "gated": false,
+     "line": 36,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 49,
+     "gated": true,
+     "line": 49,
+     "loc": 1,
+     "methods": 1
+    },
+    {
+     "end": 59,
+     "gated": false,
+     "line": 59,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 63,
+     "gated": false,
+     "line": 63,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 100,
+     "gated": false,
+     "line": 100,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 101,
+     "gated": false,
+     "line": 101,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 102,
+     "gated": false,
+     "line": 102,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 103,
+     "gated": false,
+     "line": 103,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 104,
+     "gated": false,
+     "line": 104,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 109,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 110,
+     "gated": false,
+     "line": 110,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 125,
+     "gated": false,
+     "line": 125,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 126,
+     "gated": false,
+     "line": 126,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 129,
+     "gated": false,
+     "line": 129,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 136,
+     "gated": false,
+     "line": 136,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 139,
+     "gated": false,
+     "line": 139,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 159,
+    "max_object_methods": 11,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-grid-drag.js",
+   "functions": [],
+   "lines": 6,
+   "objects": [],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 0,
+    "max_object_methods": 0,
     "over_100": 0,
     "over_30": 0,
     "over_60": 0
@@ -9972,197 +10829,265 @@
    }
   },
   {
-   "file": "ui/js/stack-drag.js",
+   "file": "ui/js/stack-drag-core.js",
    "functions": [
     {
-     "end": 152,
-     "line": 105,
-     "loc": 48,
-     "name": "_begin"
-    },
-    {
-     "end": 97,
-     "line": 67,
-     "loc": 31,
+     "end": 53,
+     "line": 33,
+     "loc": 21,
      "name": "_pointerDown"
     },
     {
-     "end": 279,
-     "line": 250,
-     "loc": 30,
-     "name": "_autoScroll"
-    },
-    {
-     "end": 309,
-     "line": 282,
-     "loc": 28,
-     "name": "_pointerUp"
-    },
-    {
-     "end": 174,
-     "line": 155,
-     "loc": 20,
-     "name": "_pointerMove"
-    },
-    {
-     "end": 195,
-     "line": 177,
-     "loc": 19,
-     "name": "_updateTarget"
-    },
-    {
-     "end": 276,
-     "line": 260,
-     "loc": 17,
-     "name": "tick"
-    },
-    {
-     "end": 344,
-     "line": 329,
-     "loc": 16,
-     "name": "_cleanupVisuals"
-    },
-    {
-     "end": 211,
-     "line": 198,
-     "loc": 14,
-     "name": "_applySlide"
-    },
-    {
-     "end": 53,
-     "line": 41,
-     "loc": 13,
+     "end": 21,
+     "line": 14,
+     "loc": 8,
      "name": "attach"
     },
     {
-     "end": 237,
-     "line": 228,
-     "loc": 10,
-     "name": "_placeBar"
-    },
-    {
-     "end": 320,
-     "line": 311,
-     "loc": 10,
-     "name": "_cancel"
-    },
-    {
-     "end": 247,
-     "line": 239,
-     "loc": 9,
-     "name": "_placeBadge"
-    },
-    {
-     "end": 62,
-     "line": 55,
-     "loc": 8,
+     "end": 29,
+     "line": 23,
+     "loc": 7,
      "name": "detach"
     },
     {
-     "end": 354,
-     "line": 347,
-     "loc": 8,
-     "name": "flashLanded"
-    },
-    {
-     "end": 300,
-     "line": 294,
-     "loc": 7,
-     "name": "finish"
-    },
-    {
-     "end": 225,
-     "line": 220,
-     "loc": 6,
-     "name": "_slotTop"
-    },
-    {
-     "end": 327,
-     "line": 322,
+     "end": 62,
+     "line": 57,
      "loc": 6,
      "name": "_teardownListeners"
     },
     {
-     "end": 102,
-     "line": 99,
-     "loc": 4,
-     "name": "_items"
-    },
-    {
-     "end": 339,
-     "line": 336,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 272,
-     "line": 270,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 64,
+     "end": 68,
      "line": 64,
+     "loc": 5,
+     "name": "_cancel"
+    },
+    {
+     "end": 74,
+     "line": 70,
+     "loc": 5,
+     "name": "flashLanded"
+    },
+    {
+     "end": 31,
+     "line": 31,
      "loc": 1,
      "name": "get dragging"
     },
     {
-     "end": 91,
-     "line": 91,
+     "end": 47,
+     "line": 47,
      "loc": 1,
      "name": "_onKey"
     },
     {
-     "end": 303,
-     "line": 303,
+     "end": 55,
+     "line": 55,
      "loc": 1,
-     "name": "swallow"
+     "name": "_items"
     }
    ],
-   "lines": 356,
+   "lines": 78,
    "objects": [
     {
-     "end": 355,
+     "end": 75,
      "gated": true,
-     "line": 23,
-     "loc": 333,
-     "methods": 18
+     "line": 8,
+     "loc": 68,
+     "methods": 8
     },
     {
-     "end": 87,
+     "end": 17,
      "gated": false,
-     "line": 80,
-     "loc": 8,
-     "methods": 0
-    },
-    {
-     "end": 49,
-     "gated": false,
-     "line": 44,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 92,
-     "gated": false,
-     "line": 92,
+     "line": 17,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 323,
+     "end": 44,
      "gated": false,
-     "line": 323,
+     "line": 44,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 48,
+     "gated": false,
+     "line": 48,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 58,
+     "gated": false,
+     "line": 58,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 24,
-    "max_object_loc": 333,
-    "max_object_methods": 18,
+    "functions": 9,
+    "max_object_loc": 68,
+    "max_object_methods": 8,
     "over_100": 0,
-    "over_30": 2,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-drag-scroll.js",
+   "functions": [
+    {
+     "end": 23,
+     "line": 9,
+     "loc": 15,
+     "name": "_autoScroll"
+    },
+    {
+     "end": 20,
+     "line": 15,
+     "loc": 6,
+     "name": "tick"
+    },
+    {
+     "end": 18,
+     "line": 18,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 27,
+   "objects": [
+    {
+     "end": 24,
+     "gated": true,
+     "line": 8,
+     "loc": 17,
+     "methods": 1
+    }
+   ],
+   "summary": {
+    "functions": 3,
+    "max_object_loc": 17,
+    "max_object_methods": 1,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-drag-visual.js",
+   "functions": [
+    {
+     "end": 19,
+     "line": 9,
+     "loc": 11,
+     "name": "_begin"
+    },
+    {
+     "end": 45,
+     "line": 37,
+     "loc": 9,
+     "name": "_applySlide"
+    },
+    {
+     "end": 80,
+     "line": 72,
+     "loc": 9,
+     "name": "_cleanupVisuals"
+    },
+    {
+     "end": 27,
+     "line": 21,
+     "loc": 7,
+     "name": "_pointerMove"
+    },
+    {
+     "end": 35,
+     "line": 29,
+     "loc": 7,
+     "name": "_updateTarget"
+    },
+    {
+     "end": 70,
+     "line": 64,
+     "loc": 7,
+     "name": "_pointerUp"
+    },
+    {
+     "end": 56,
+     "line": 52,
+     "loc": 5,
+     "name": "_placeBar"
+    },
+    {
+     "end": 62,
+     "line": 58,
+     "loc": 5,
+     "name": "_placeBadge"
+    },
+    {
+     "end": 50,
+     "line": 47,
+     "loc": 4,
+     "name": "_slotTop"
+    },
+    {
+     "end": 67,
+     "line": 67,
+     "loc": 1,
+     "name": "finish"
+    },
+    {
+     "end": 68,
+     "line": 68,
+     "loc": 1,
+     "name": "swallow"
+    },
+    {
+     "end": 78,
+     "line": 78,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 84,
+   "objects": [
+    {
+     "end": 81,
+     "gated": true,
+     "line": 8,
+     "loc": 74,
+     "methods": 9
+    }
+   ],
+   "summary": {
+    "functions": 12,
+    "max_object_loc": 74,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/stack-drag.js",
+   "functions": [],
+   "lines": 16,
+   "objects": [
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
     "over_60": 0
    }
   },
@@ -10353,654 +11278,816 @@
    }
   },
   {
-   "file": "ui/js/user-table.js",
+   "file": "ui/js/user-table-actions.js",
    "functions": [
     {
-     "end": 101,
-     "line": 28,
-     "loc": 74,
-     "name": "init"
-    },
-    {
-     "end": 253,
-     "line": 205,
-     "loc": 49,
-     "name": "_row"
-    },
-    {
-     "end": 91,
-     "line": 61,
-     "loc": 31,
-     "name": "(arrow)"
-    },
-    {
-     "end": 132,
-     "line": 104,
-     "loc": 29,
-     "name": "render"
-    },
-    {
-     "end": 163,
-     "line": 144,
-     "loc": 20,
-     "name": "_sortValue"
-    },
-    {
-     "end": 321,
-     "line": 302,
-     "loc": 20,
+     "end": 25,
+     "line": 14,
+     "loc": 12,
      "name": "_syncSelectionUI"
     },
     {
-     "end": 178,
-     "line": 165,
-     "loc": 14,
-     "name": "_compare"
-    },
-    {
-     "end": 400,
-     "line": 387,
-     "loc": 14,
-     "name": "flashRow"
-    },
-    {
-     "end": 203,
-     "line": 192,
-     "loc": 12,
-     "name": "_visible"
-    },
-    {
-     "end": 190,
-     "line": 180,
-     "loc": 11,
-     "name": "_updateSortHeaders"
-    },
-    {
-     "end": 344,
-     "line": 334,
-     "loc": 11,
+     "end": 34,
+     "line": 29,
+     "loc": 6,
      "name": "deleteSelected"
     },
     {
-     "end": 291,
-     "line": 282,
-     "loc": 10,
-     "name": "markLabelTarget"
+     "end": 62,
+     "line": 57,
+     "loc": 6,
+     "name": "flashRow"
     },
     {
-     "end": 415,
-     "line": 406,
-     "loc": 10,
-     "name": "onPersonRemoved"
-    },
-    {
-     "end": 55,
-     "line": 47,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 142,
-     "line": 134,
-     "loc": 9,
-     "name": "sortBy"
-    },
-    {
-     "end": 189,
-     "line": 181,
-     "loc": 9,
-     "name": "(arrow)"
-    },
-    {
-     "end": 354,
-     "line": 346,
-     "loc": 9,
+     "end": 40,
+     "line": 36,
+     "loc": 5,
      "name": "clearAll"
     },
     {
-     "end": 384,
-     "line": 376,
-     "loc": 9,
-     "name": "onPersonFound"
-    },
-    {
-     "end": 269,
-     "line": 262,
-     "loc": 8,
-     "name": "_paintLabels"
-    },
-    {
-     "end": 98,
-     "line": 92,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 300,
-     "line": 294,
-     "loc": 7,
-     "name": "toggleAll"
-    },
-    {
-     "end": 432,
-     "line": 426,
-     "loc": 7,
-     "name": "_bridge"
-    },
-    {
-     "end": 54,
-     "line": 49,
-     "loc": 6,
-     "name": "(arrow)"
-    },
-    {
-     "end": 366,
-     "line": 361,
-     "loc": 6,
+     "end": 48,
+     "line": 44,
+     "loc": 5,
      "name": "toggleMessaged"
     },
     {
-     "end": 423,
-     "line": 418,
-     "loc": 6,
+     "end": 68,
+     "line": 64,
+     "loc": 5,
+     "name": "onPersonRemoved"
+    },
+    {
+     "end": 12,
+     "line": 9,
+     "loc": 4,
+     "name": "toggleAll"
+    },
+    {
+     "end": 55,
+     "line": 52,
+     "loc": 4,
+     "name": "onPersonFound"
+    },
+    {
+     "end": 73,
+     "line": 70,
+     "loc": 4,
      "name": "onDeleted"
     },
     {
-     "end": 268,
-     "line": 264,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 290,
-     "line": 286,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 332,
-     "line": 328,
-     "loc": 5,
-     "name": "deleteNick"
-    },
-    {
-     "end": 438,
-     "line": 434,
-     "loc": 5,
-     "name": "_esc"
-    },
-    {
-     "end": 35,
-     "line": 32,
-     "loc": 4,
-     "name": "on"
-    },
-    {
-     "end": 46,
-     "line": 43,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 275,
-     "line": 272,
-     "loc": 4,
-     "name": "labelNick"
-    },
-    {
-     "end": 298,
-     "line": 295,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 359,
-     "line": 356,
-     "loc": 4,
-     "name": "resetMessaged"
-    },
-    {
-     "end": 370,
-     "line": 368,
-     "loc": 3,
-     "name": "manualMessage"
-    },
-    {
-     "end": 443,
-     "line": 441,
-     "loc": 3,
-     "name": "_attr"
-    },
-    {
-     "end": 108,
-     "line": 108,
+     "end": 10,
+     "line": 10,
      "loc": 1,
      "name": "(arrow)"
     },
     {
-     "end": 446,
-     "line": 446,
+     "end": 27,
+     "line": 27,
+     "loc": 1,
+     "name": "deleteNick"
+    },
+    {
+     "end": 42,
+     "line": 42,
+     "loc": 1,
+     "name": "resetMessaged"
+    },
+    {
+     "end": 50,
+     "line": 50,
+     "loc": 1,
+     "name": "manualMessage"
+    }
+   ],
+   "lines": 77,
+   "objects": [
+    {
+     "end": 74,
+     "gated": true,
+     "line": 8,
+     "loc": 67,
+     "methods": 12
+    },
+    {
+     "end": 61,
+     "gated": false,
+     "line": 61,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 13,
+    "max_object_loc": 67,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/user-table-core.js",
+   "functions": [
+    {
+     "end": 51,
+     "line": 15,
+     "loc": 37,
+     "name": "init"
+    },
+    {
+     "end": 42,
+     "line": 31,
+     "loc": 12,
+     "name": "(arrow)"
+    },
+    {
+     "end": 48,
+     "line": 43,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 58,
+     "line": 53,
+     "loc": 6,
+     "name": "_visible"
+    },
+    {
+     "end": 27,
+     "line": 24,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 63,
+     "line": 60,
+     "loc": 4,
+     "name": "_bridge"
+    },
+    {
+     "end": 18,
+     "line": 18,
+     "loc": 1,
+     "name": "on"
+    },
+    {
+     "end": 23,
+     "line": 23,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 26,
+     "line": 26,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 65,
+     "line": 65,
+     "loc": 1,
+     "name": "_esc"
+    },
+    {
+     "end": 67,
+     "line": 67,
+     "loc": 1,
+     "name": "_attr"
+    }
+   ],
+   "lines": 71,
+   "objects": [
+    {
+     "end": 68,
+     "gated": true,
+     "line": 8,
+     "loc": 61,
+     "methods": 5
+    },
+    {
+     "end": 12,
+     "gated": false,
+     "line": 12,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 11,
+    "max_object_loc": 61,
+    "max_object_methods": 5,
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/user-table-render.js",
+   "functions": [
+    {
+     "end": 24,
+     "line": 9,
+     "loc": 16,
+     "name": "render"
+    },
+    {
+     "end": 67,
+     "line": 56,
+     "loc": 12,
+     "name": "_row"
+    },
+    {
+     "end": 36,
+     "line": 28,
+     "loc": 9,
+     "name": "_sortValue"
+    },
+    {
+     "end": 45,
+     "line": 38,
+     "loc": 8,
+     "name": "_compare"
+    },
+    {
+     "end": 54,
+     "line": 47,
+     "loc": 8,
+     "name": "_updateSortHeaders"
+    },
+    {
+     "end": 53,
+     "line": 48,
+     "loc": 6,
+     "name": "(arrow)"
+    },
+    {
+     "end": 74,
+     "line": 69,
+     "loc": 6,
+     "name": "_paintLabels"
+    },
+    {
+     "end": 82,
+     "line": 78,
+     "loc": 5,
+     "name": "markLabelTarget"
+    },
+    {
+     "end": 73,
+     "line": 71,
+     "loc": 3,
+     "name": "(arrow)"
+    },
+    {
+     "end": 12,
+     "line": 12,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 26,
+     "line": 26,
+     "loc": 1,
+     "name": "sortBy"
+    },
+    {
+     "end": 76,
+     "line": 76,
+     "loc": 1,
+     "name": "labelNick"
+    },
+    {
+     "end": 81,
+     "line": 81,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 86,
+   "objects": [
+    {
+     "end": 83,
+     "gated": true,
+     "line": 8,
+     "loc": 76,
+     "methods": 9
+    },
+    {
+     "end": 29,
+     "gated": false,
+     "line": 29,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 43,
+     "gated": false,
+     "line": 43,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 76,
+     "gated": false,
+     "line": 76,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 81,
+     "gated": false,
+     "line": 81,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 13,
+    "max_object_loc": 76,
+    "max_object_methods": 9,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/user-table.js",
+   "functions": [
+    {
+     "end": 15,
+     "line": 15,
      "loc": 1,
      "name": "ready"
     }
    ],
-   "lines": 448,
+   "lines": 18,
    "objects": [
     {
-     "end": 444,
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 15,
      "gated": true,
-     "line": 18,
-     "loc": 427,
-     "methods": 26
-    },
-    {
-     "end": 24,
-     "gated": false,
-     "line": 24,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 146,
-     "gated": false,
-     "line": 146,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 176,
-     "gated": false,
-     "line": 176,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 274,
-     "gated": false,
-     "line": 274,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 289,
-     "gated": false,
-     "line": 289,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 398,
-     "gated": false,
-     "line": 398,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 446,
-     "gated": true,
-     "line": 446,
+     "line": 15,
      "loc": 1,
      "methods": 1
     }
    ],
    "summary": {
-    "functions": 38,
-    "max_object_loc": 427,
-    "max_object_methods": 26,
+    "functions": 1,
+    "max_object_loc": 1,
+    "max_object_methods": 1,
     "over_100": 0,
-    "over_30": 3,
-    "over_60": 1
+    "over_30": 0,
+    "over_60": 0
    }
   },
   {
-   "file": "ui/js/window-presets.js",
+   "file": "ui/js/window-presets-actions.js",
    "functions": [
     {
-     "end": 188,
-     "line": 157,
-     "loc": 32,
-     "name": "_renderList"
-    },
-    {
-     "end": 100,
-     "line": 73,
-     "loc": 28,
+     "end": 34,
+     "line": 17,
+     "loc": 18,
      "name": "_persistDocument"
     },
     {
-     "end": 320,
-     "line": 295,
-     "loc": 26,
-     "name": "_showPreview"
-    },
-    {
-     "end": 187,
-     "line": 168,
-     "loc": 20,
-     "name": "(arrow)"
-    },
-    {
-     "end": 271,
-     "line": 254,
-     "loc": 18,
-     "name": "showInFolder"
-    },
-    {
-     "end": 54,
-     "line": 39,
+     "end": 99,
+     "line": 84,
      "loc": 16,
-     "name": "setPresets"
+     "name": "_exportViaDownload"
     },
     {
-     "end": 293,
-     "line": 278,
-     "loc": 16,
-     "name": "_readFile"
-    },
-    {
-     "end": 361,
-     "line": 347,
-     "loc": 15,
+     "end": 130,
+     "line": 119,
+     "loc": 12,
      "name": "remove"
     },
     {
-     "end": 142,
-     "line": 130,
-     "loc": 13,
-     "name": "_renderQuickChips"
-    },
-    {
-     "end": 216,
-     "line": 204,
-     "loc": 13,
+     "end": 60,
+     "line": 51,
+     "loc": 10,
      "name": "_getDocument"
     },
     {
-     "end": 360,
-     "line": 348,
-     "loc": 13,
+     "end": 129,
+     "line": 120,
+     "loc": 10,
      "name": "(arrow)"
     },
     {
-     "end": 22,
-     "line": 11,
-     "loc": 12,
-     "name": "init"
-    },
-    {
-     "end": 155,
-     "line": 144,
-     "loc": 12,
-     "name": "_presetButton"
-    },
-    {
-     "end": 252,
-     "line": 242,
-     "loc": 11,
+     "end": 109,
+     "line": 101,
+     "loc": 9,
      "name": "_handleExportResponse"
     },
     {
-     "end": 71,
-     "line": 62,
-     "loc": 10,
+     "end": 15,
+     "line": 9,
+     "loc": 7,
      "name": "saveCurrent"
     },
     {
-     "end": 111,
-     "line": 102,
-     "loc": 10,
+     "end": 117,
+     "line": 111,
+     "loc": 7,
+     "name": "showInFolder"
+    },
+    {
+     "end": 41,
+     "line": 36,
+     "loc": 6,
      "name": "_saveLocalDocument"
     },
     {
-     "end": 318,
-     "line": 309,
-     "loc": 10,
-     "name": "(arrow)"
-    },
-    {
-     "end": 331,
-     "line": 322,
-     "loc": 10,
-     "name": "_previewMeta"
-    },
-    {
-     "end": 95,
-     "line": 87,
-     "loc": 9,
+     "end": 31,
+     "line": 27,
+     "loc": 5,
      "name": "done"
     },
     {
-     "end": 121,
-     "line": 113,
-     "loc": 9,
+     "end": 47,
+     "line": 43,
+     "loc": 5,
      "name": "_localDocuments"
     },
     {
-     "end": 371,
-     "line": 363,
-     "loc": 9,
+     "end": 59,
+     "line": 55,
+     "loc": 5,
+     "name": "(arrow)"
+    },
+    {
+     "end": 136,
+     "line": 132,
+     "loc": 5,
      "name": "_message"
     },
     {
-     "end": 290,
-     "line": 283,
-     "loc": 8,
-     "name": "onload"
-    },
-    {
-     "end": 30,
-     "line": 24,
-     "loc": 7,
-     "name": "_bindButton"
-    },
-    {
-     "end": 196,
-     "line": 190,
-     "loc": 7,
-     "name": "_rowAction"
-    },
-    {
-     "end": 339,
-     "line": 333,
-     "loc": 7,
-     "name": "_applyPreview"
-    },
-    {
-     "end": 37,
-     "line": 32,
-     "loc": 6,
-     "name": "_loadLocal"
-    },
-    {
-     "end": 128,
-     "line": 123,
-     "loc": 6,
-     "name": "render"
-    },
-    {
-     "end": 266,
-     "line": 261,
-     "loc": 6,
-     "name": "done"
-    },
-    {
-     "end": 60,
-     "line": 56,
-     "loc": 5,
-     "name": "refresh"
-    },
-    {
-     "end": 153,
-     "line": 149,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 202,
-     "line": 198,
-     "loc": 5,
-     "name": "load"
-    },
-    {
-     "end": 215,
-     "line": 211,
-     "loc": 5,
-     "name": "(arrow)"
-    },
-    {
-     "end": 233,
-     "line": 229,
-     "loc": 5,
-     "name": "done"
-    },
-    {
-     "end": 345,
-     "line": 341,
-     "loc": 5,
-     "name": "_closePreview"
-    },
-    {
-     "end": 29,
-     "line": 26,
+     "end": 14,
+     "line": 11,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 70,
-     "line": 67,
+     "end": 81,
+     "line": 78,
      "loc": 4,
      "name": "(arrow)"
     },
     {
-     "end": 276,
-     "line": 273,
-     "loc": 4,
-     "name": "_openFilePicker"
-    },
-    {
-     "end": 201,
-     "line": 199,
-     "loc": 3,
-     "name": "(arrow)"
-    },
-    {
-     "end": 220,
-     "line": 218,
-     "loc": 3,
-     "name": "exportSelected"
-    },
-    {
-     "end": 118,
-     "line": 118,
+     "end": 45,
+     "line": 45,
      "loc": 1,
      "name": "(arrow)"
-    },
-    {
-     "end": 185,
-     "line": 185,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 194,
-     "line": 194,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 291,
-     "line": 291,
-     "loc": 1,
-     "name": "onerror"
-    },
-    {
-     "end": 358,
-     "line": 358,
-     "loc": 1,
-     "name": "(arrow)"
-    },
-    {
-     "end": 374,
-     "line": 374,
-     "loc": 1,
-     "name": "documentById"
-    }
-   ],
-   "lines": 376,
-   "objects": [
-    {
-     "end": 372,
-     "gated": true,
-     "line": 4,
-     "loc": 369,
-     "methods": 27
     },
     {
      "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 49,
+     "line": 49,
+     "loc": 1,
+     "name": "load"
+    },
+    {
+     "end": 62,
+     "line": 62,
+     "loc": 1,
+     "name": "exportSelected"
+    },
+    {
+     "end": 73,
+     "line": 73,
+     "loc": 1,
+     "name": "done"
+    },
+    {
+     "end": 94,
+     "line": 94,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 115,
+     "line": 115,
+     "loc": 1,
+     "name": "done"
+    },
+    {
+     "end": 127,
+     "line": 127,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 140,
+   "objects": [
+    {
+     "end": 137,
+     "gated": true,
+     "line": 8,
+     "loc": 130,
+     "methods": 12
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 40,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 44,
      "gated": false,
      "line": 44,
-     "loc": 6,
-     "methods": 0
-    },
-    {
-     "end": 110,
-     "gated": false,
-     "line": 107,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 114,
-     "gated": false,
-     "line": 114,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 238,
+     "end": 75,
      "gated": false,
-     "line": 238,
+     "line": 75,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 245,
+     "end": 87,
      "gated": false,
-     "line": 245,
+     "line": 87,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 298,
+     "end": 103,
      "gated": false,
-     "line": 298,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 325,
-     "gated": false,
-     "line": 325,
+     "line": 103,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 45,
-    "max_object_loc": 369,
-    "max_object_methods": 27,
+    "functions": 23,
+    "max_object_loc": 130,
+    "max_object_methods": 12,
     "over_100": 0,
-    "over_30": 1,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/window-presets-core.js",
+   "functions": [
+    {
+     "end": 101,
+     "line": 81,
+     "loc": 21,
+     "name": "_renderList"
+    },
+    {
+     "end": 100,
+     "line": 88,
+     "loc": 13,
+     "name": "(arrow)"
+    },
+    {
+     "end": 26,
+     "line": 15,
+     "loc": 12,
+     "name": "init"
+    },
+    {
+     "end": 48,
+     "line": 37,
+     "loc": 12,
+     "name": "setPresets"
+    },
+    {
+     "end": 71,
+     "line": 63,
+     "loc": 9,
+     "name": "_renderQuickChips"
+    },
+    {
+     "end": 79,
+     "line": 73,
+     "loc": 7,
+     "name": "_presetButton"
+    },
+    {
+     "end": 61,
+     "line": 56,
+     "loc": 6,
+     "name": "render"
+    },
+    {
+     "end": 54,
+     "line": 50,
+     "loc": 5,
+     "name": "refresh"
+    },
+    {
+     "end": 107,
+     "line": 103,
+     "loc": 5,
+     "name": "_rowAction"
+    },
+    {
+     "end": 31,
+     "line": 28,
+     "loc": 4,
+     "name": "_bindButton"
+    },
+    {
+     "end": 35,
+     "line": 33,
+     "loc": 3,
+     "name": "_loadLocal"
+    },
+    {
+     "end": 30,
+     "line": 30,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 77,
+     "line": 77,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 98,
+     "line": 98,
+     "loc": 1,
+     "name": "(arrow)"
+    },
+    {
+     "end": 105,
+     "line": 105,
+     "loc": 1,
+     "name": "(arrow)"
+    }
+   ],
+   "lines": 111,
+   "objects": [
+    {
+     "end": 108,
+     "gated": true,
+     "line": 8,
+     "loc": 101,
+     "methods": 10
+    },
+    {
+     "end": 44,
+     "gated": false,
+     "line": 41,
+     "loc": 4,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 15,
+    "max_object_loc": 101,
+    "max_object_methods": 10,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/window-presets-preview.js",
+   "functions": [
+    {
+     "end": 53,
+     "line": 28,
+     "loc": 26,
+     "name": "_showPreview"
+    },
+    {
+     "end": 26,
+     "line": 14,
+     "loc": 13,
+     "name": "_readFile"
+    },
+    {
+     "end": 51,
+     "line": 42,
+     "loc": 10,
+     "name": "(arrow)"
+    },
+    {
+     "end": 62,
+     "line": 55,
+     "loc": 8,
+     "name": "_previewMeta"
+    },
+    {
+     "end": 70,
+     "line": 64,
+     "loc": 7,
+     "name": "_applyPreview"
+    },
+    {
+     "end": 23,
+     "line": 19,
+     "loc": 5,
+     "name": "onload"
+    },
+    {
+     "end": 76,
+     "line": 72,
+     "loc": 5,
+     "name": "_closePreview"
+    },
+    {
+     "end": 12,
+     "line": 9,
+     "loc": 4,
+     "name": "_openFilePicker"
+    },
+    {
+     "end": 24,
+     "line": 24,
+     "loc": 1,
+     "name": "onerror"
+    },
+    {
+     "end": 79,
+     "line": 79,
+     "loc": 1,
+     "name": "documentById"
+    }
+   ],
+   "lines": 82,
+   "objects": [
+    {
+     "end": 77,
+     "gated": true,
+     "line": 8,
+     "loc": 70,
+     "methods": 6
+    },
+    {
+     "end": 31,
+     "gated": false,
+     "line": 31,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 57,
+     "gated": false,
+     "line": 57,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 10,
+    "max_object_loc": 70,
+    "max_object_methods": 6,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/window-presets.js",
+   "functions": [],
+   "lines": 16,
+   "objects": [
+    {
+     "end": 11,
+     "gated": false,
+     "line": 11,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 0,
+    "max_object_loc": 1,
+    "max_object_methods": 0,
+    "over_100": 0,
+    "over_30": 0,
     "over_60": 0
    }
   }
  ],
  "totals": {
-  "files": 42,
-  "functions": 1144,
-  "lines": 12229,
+  "files": 85,
+  "functions": 1149,
+  "lines": 11195,
   "over_100": 5,
-  "over_30": 49,
-  "over_60": 8
+  "over_30": 37,
+  "over_60": 6
  }
 }

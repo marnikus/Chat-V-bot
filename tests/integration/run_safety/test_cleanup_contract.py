@@ -29,7 +29,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SlowBlock(delay=5.0)]
             task = asyncio.ensure_future(h.engine.execute(None))
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)  # wait-budget: let the run enter the block before cancel
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
@@ -53,13 +53,13 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
             orig_execute = block.execute
 
             async def hanging_execute(nick, cdp, engine=None):
-                await asyncio.sleep(5.0)
+                await asyncio.sleep(5.0)  # wait-budget: simulated hanging action body (the delay under test)
                 return ActionResult.OK
 
             block.execute = hanging_execute  # type: ignore
             h.engine._stack = [block]
             task = asyncio.ensure_future(h.engine.execute(None))
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)  # wait-budget: let the run enter the block before the mid-run assertion
             # Expansion happened (block attr rewritten while running).
             self.assertIn("Zoe", getattr(block, "selector", ""))
             task.cancel()
@@ -172,7 +172,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_during_post_run_still_cleans_up(self):
         class Hooks(RunHooks):
             async def post_run(self, coordinator, outcome):
-                await asyncio.sleep(5.0)
+                await asyncio.sleep(5.0)  # wait-budget: simulated slow post_run hook the cancel must interrupt
 
         with EngineHarness(
             users=[UserRecord(nick="a")], hooks=Hooks()
@@ -222,7 +222,7 @@ class CleanupCase(unittest.IsolatedAsyncioTestCase):
         with EngineHarness(users=[UserRecord(nick="a")]) as h:
             h.engine._stack = [SlowBlock(delay=5.0)]
             task = asyncio.ensure_future(h.engine.execute(None))
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.15)  # wait-budget: let the run reach the blocked block before cancel
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task

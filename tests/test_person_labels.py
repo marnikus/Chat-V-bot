@@ -381,8 +381,12 @@ class TestUiWiring(unittest.TestCase):
         base = os.path.join(os.path.dirname(__file__), "..", "ui")
         with open(os.path.join(base, "index.html"), encoding="utf-8") as fh:
             cls.html = fh.read()
-        with open(os.path.join(base, "js", "labels.js"), encoding="utf-8") as fh:
-            cls.js = fh.read()
+        # JS split (2026-09): labels.js is a facade over labels-*.js parts;
+        # the wiring contracts assert across the whole module bundle.
+        cls.js = "".join(
+            open(os.path.join(base, "js", name), encoding="utf-8").read()
+            for name in sorted(os.listdir(os.path.join(base, "js")))
+            if name == "labels.js" or name.startswith("labels-"))
         with open(os.path.join(base, "css", "labels.css"), encoding="utf-8") as fh:
             cls.css = fh.read()
 

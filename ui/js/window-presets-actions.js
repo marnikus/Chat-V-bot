@@ -62,17 +62,21 @@ const WindowPresetsActions = {
   exportSelected() { if (this.selectedName) this.export(this.selectedName); },
 
   export(name) {
+    // Bridge first — the backend holds presets that have no local copy;
+    // the _getDocument-gated download fallback is only for bridge-less use
+    // (2026-09-16: the H-split gated export behind the local document,
+    // breaking backend-outline exports with 'not found').
     const self = this;
+    const bridge = typeof App !== 'undefined' ? App.bridge : null;
+    if (bridge && bridge.export_window_preset) {
+      let handled = false;
+      const done = (raw) => { if (handled) return; handled = true; self._handleExportResponse(name, raw); };
+      try { const result = bridge.export_window_preset(name, done); if (typeof result === 'string' || (result && typeof result === 'object')) done(result); }
+      catch (error) { done(JSON.stringify({ ok: false, error: error.message })); }
+      return;
+    }
     this._getDocument(name, (doc) => {
       if (!doc) { self._message('Preset “' + name + '” not found.', 'error'); return; }
-      const bridge = typeof App !== 'undefined' ? App.bridge : null;
-      if (bridge && bridge.export_window_preset) {
-        let handled = false;
-        const done = (raw) => { if (handled) return; handled = true; self._handleExportResponse(name, raw); };
-        try { const result = bridge.export_window_preset(name, done); if (typeof result === 'string' || (result && typeof result === 'object')) done(result); }
-        catch (error) { done(JSON.stringify({ ok: false, error: error.message })); }
-        return;
-      }
       self._exportViaDownload(doc);
     });
   },

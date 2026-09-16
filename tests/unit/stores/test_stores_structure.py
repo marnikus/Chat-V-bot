@@ -34,7 +34,10 @@ SLOC_CEILING = 400
 #: B2 moved it with the downloader, so `media_fetch.py` owns the JS expression
 #: now and `stores/media_store.py` no longer imports `backend` at all — still
 #: exactly ONE inversion, just one file deeper (design §2.2, §3.5).
-ALLOWED_UPWARD_EDGES = {"media_fetch.py": "backend.chat_agent_js"}
+#: 2026-09-16 (Round I): the media-fetch http tier split moved the same
+#: single inversion one file deeper again (media_fetch.py ->
+#: media_fetch_http.py, the tier that evaluates the JS fetch expression).
+ALLOWED_UPWARD_EDGES = {"media_fetch_http.py": "backend.chat_agent_js"}
 
 
 def py_files():
@@ -100,7 +103,13 @@ class TestFileSize(unittest.TestCase):
         # each ≤200 LOC, keeping lifecycle/append/media/schema within 150-300.
         # The family layout stays cohesive (history_* 10->16, media_* 4->5),
         # and the new modules are leaves (no Qt, no services import).
-        self.assertLessEqual(len(py_files()), 44)
+        # 44 -> 57 (2026-09-16, Round I): the final H-wave splits land in the
+        # integrated tree — history_repo identity/lifecycle/media leaves
+        # (16 -> 21 in that family), the media_fetch family (store, layout,
+        # cache, fetch, fetch_http, fetch_queue, network), history_schema.
+        # Every addition is a 68-263 LOC leaf named by responsibility; the
+        # per-family §18.3 ceilings (stores_modules.py) still gate shape.
+        self.assertLessEqual(len(py_files()), 57)
         self.assertGreaterEqual(len(py_files()), 17)
 
 

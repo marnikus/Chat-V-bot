@@ -429,7 +429,7 @@ class TestDbBridge(DbCase):
 
     async def test_a_failed_action_is_not_recorded(self):
         self.bridge.db_load(os.path.join(self.dir, "ghost.db"))
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)  # wait-budget: let the failed action's rejection settle before asserting
         history, _index = self.bridge._get_global_history()
         self.assertEqual(history, [], "a refused action is not an undo step")
 
@@ -493,8 +493,12 @@ class TestUiWiring(unittest.TestCase):
         base = os.path.join(os.path.dirname(__file__), "..", "ui")
         with open(os.path.join(base, "index.html"), encoding="utf-8") as fh:
             cls.html = fh.read()
-        with open(os.path.join(base, "js", "db-panel.js"), encoding="utf-8") as fh:
-            cls.js = fh.read()
+        # JS split (2026-09): the panel is the db-panel.js facade plus
+        # db-panel-*.js parts; the wiring contracts assert across the bundle.
+        cls.js = "".join(
+            open(os.path.join(base, "js", name), encoding="utf-8").read()
+            for name in sorted(os.listdir(os.path.join(base, "js")))
+            if name == "db-panel.js" or name.startswith("db-panel-"))
 
     def test_db_connection_is_a_normal_grid_window(self):
         self.assertIn('data-window="dbconn"', self.html)

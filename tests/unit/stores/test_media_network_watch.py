@@ -193,7 +193,10 @@ class TestDownloadChain(unittest.IsolatedAsyncioTestCase):
             seen.append("network")
             return {"ok": False, "error": "no"}
 
-        fetcher._fetch_in_page, fetcher._fetch_via_python = page, python
+        # tier seams moved onto fetcher._http in the media-store split
+        # (2026-09); the network tier stays on the fetcher itself
+        fetcher._http.fetch_in_page, fetcher._http.fetch_via_python = \
+            page, python
         fetcher._fetch_via_network = network
         payload, errors = await fetcher._download("https://x/a.png")
         self.assertTrue(payload["ok"])
@@ -213,7 +216,10 @@ class TestDownloadChain(unittest.IsolatedAsyncioTestCase):
         async def network(url):
             return {"ok": False, "error": "network capture timed out"}
 
-        fetcher._fetch_in_page, fetcher._fetch_via_python = page, python
+        # tier seams moved onto fetcher._http in the media-store split
+        # (2026-09); the network tier stays on the fetcher itself
+        fetcher._http.fetch_in_page, fetcher._http.fetch_via_python = \
+            page, python
         fetcher._fetch_via_network = network
         payload, errors = await fetcher._download("https://x/a.png")
         self.assertFalse(payload["ok"])
@@ -227,7 +233,7 @@ class TestDownloadChain(unittest.IsolatedAsyncioTestCase):
         async def nope(url):
             return {"ok": False, "error": "no downloadable media"}
 
-        fetcher._fetch_in_page = fetcher._fetch_via_python = nope
+        fetcher._http.fetch_in_page = fetcher._http.fetch_via_python = nope
         fetcher._fetch_via_network = nope
         _payload, errors = await fetcher._download("https://x/a.png")
         self.assertEqual(errors, ["no downloadable media"],

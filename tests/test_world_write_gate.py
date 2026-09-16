@@ -434,7 +434,7 @@ class TestArchiveFacts(unittest.IsolatedAsyncioTestCase):
             _archive=None, _bus=bus, _log=lambda *a, **k: logged.append(a))
 
         async def slow_apply(rows, forward=False):
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.5)  # wait-budget: simulated slow apply so the write gate logic races it
             return None
 
         service._people = types.SimpleNamespace(apply=slow_apply)
@@ -542,7 +542,7 @@ class TestTwoConnectionsShareTheWorld(WorldCase):
         real_restore = repo.restore_person
 
         async def slow_commit():
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.3)  # wait-budget: simulated slow commit so the retry path is exercised
             await real_commit()
             timeline.append("queue committed")
 
@@ -617,7 +617,7 @@ class TestTwoConnectionsShareTheWorld(WorldCase):
         await db.turn.begin()
         waiting = asyncio.ensure_future(
             self.memory.upsert_user(UserRecord(nick="Late")))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)  # wait-budget: let the upsert land after begin before the gate assertion
         self.assertFalse(waiting.done(), "the queue must queue up")
         await db.commit()
         await asyncio.wait_for(waiting, 2.0)

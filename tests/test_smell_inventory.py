@@ -39,13 +39,15 @@ class TestVultureInventory(unittest.TestCase):
 
 class TestCloneBaseline(unittest.TestCase):
     def test_clone_count_matches_gate(self):
-        # rule16_gate.py CLONE_BASELINE has 13 groups
+        # rule16_gate.py CLONE_BASELINE has 12 groups (2026-09-16: the
+        # final H wave re-grouped the bridge set to five members, dropped
+        # two stale pairs, and admitted one preset_store/undo_world pair).
         import importlib.util
         path = os.path.join(ROOT, "tools", "metrics", "rule16_gate.py")
         spec = importlib.util.spec_from_file_location("rule16_gate", path)
         rg = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(rg)
-        self.assertEqual(len(rg.CLONE_BASELINE), 13)
+        self.assertEqual(len(rg.CLONE_BASELINE), 12)
 
 
 class TestBoundaryCrossings(unittest.TestCase):

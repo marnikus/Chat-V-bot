@@ -104,11 +104,35 @@
    "lines": 93,
    "pct": 100.0
   },
+  "ui/js/bot-chat-bridge.js": {
+   "covered": 70,
+   "executable": 70,
+   "lines": 70,
+   "pct": 100.0
+  },
+  "ui/js/bot-chat-cards.js": {
+   "covered": 53,
+   "executable": 53,
+   "lines": 53,
+   "pct": 100.0
+  },
+  "ui/js/bot-chat-core.js": {
+   "covered": 86,
+   "executable": 86,
+   "lines": 86,
+   "pct": 100.0
+  },
+  "ui/js/bot-chat-send.js": {
+   "covered": 66,
+   "executable": 66,
+   "lines": 66,
+   "pct": 100.0
+  },
   "ui/js/bot-chat.js": {
-   "covered": 387,
-   "executable": 397,
-   "lines": 397,
-   "pct": 97.48
+   "covered": 17,
+   "executable": 17,
+   "lines": 17,
+   "pct": 100.0
   },
   "ui/js/bot-connection-view.js": {
    "covered": 237,
@@ -122,17 +146,53 @@
    "lines": 76,
    "pct": 82.89
   },
+  "ui/js/bot-prompt-actions.js": {
+   "covered": 42,
+   "executable": 42,
+   "lines": 42,
+   "pct": 100.0
+  },
+  "ui/js/bot-prompt-core.js": {
+   "covered": 80,
+   "executable": 82,
+   "lines": 82,
+   "pct": 97.56
+  },
+  "ui/js/bot-prompt-presets.js": {
+   "covered": 55,
+   "executable": 55,
+   "lines": 55,
+   "pct": 100.0
+  },
+  "ui/js/bot-prompt-vars.js": {
+   "covered": 49,
+   "executable": 49,
+   "lines": 49,
+   "pct": 100.0
+  },
   "ui/js/bot-prompt.js": {
-   "covered": 342,
-   "executable": 355,
-   "lines": 355,
-   "pct": 96.34
+   "covered": 17,
+   "executable": 17,
+   "lines": 17,
+   "pct": 100.0
+  },
+  "ui/js/bot-settings-actions.js": {
+   "covered": 79,
+   "executable": 80,
+   "lines": 80,
+   "pct": 98.75
+  },
+  "ui/js/bot-settings-core.js": {
+   "covered": 115,
+   "executable": 115,
+   "lines": 115,
+   "pct": 100.0
   },
   "ui/js/bot-settings.js": {
-   "covered": 375,
-   "executable": 395,
-   "lines": 395,
-   "pct": 94.94
+   "covered": 27,
+   "executable": 27,
+   "lines": 27,
+   "pct": 100.0
   },
   "ui/js/collector-panel.js": {
    "covered": 289,
@@ -165,9 +225,9 @@
    "pct": 94.29
   },
   "ui/js/core/ui-helpers.js": {
-   "covered": 105,
-   "executable": 105,
-   "lines": 105,
+   "covered": 114,
+   "executable": 114,
+   "lines": 114,
    "pct": 100.0
   },
   "ui/js/criteria-editor.js": {
@@ -182,17 +242,53 @@
    "lines": 195,
    "pct": 98.97
   },
+  "ui/js/db-panel-actions.js": {
+   "covered": 38,
+   "executable": 38,
+   "lines": 38,
+   "pct": 100.0
+  },
+  "ui/js/db-panel-core.js": {
+   "covered": 88,
+   "executable": 88,
+   "lines": 88,
+   "pct": 100.0
+  },
+  "ui/js/db-panel-render.js": {
+   "covered": 66,
+   "executable": 66,
+   "lines": 66,
+   "pct": 100.0
+  },
   "ui/js/db-panel.js": {
-   "covered": 349,
-   "executable": 354,
-   "lines": 354,
-   "pct": 98.59
+   "covered": 17,
+   "executable": 17,
+   "lines": 17,
+   "pct": 100.0
+  },
+  "ui/js/history-db-core.js": {
+   "covered": 98,
+   "executable": 106,
+   "lines": 106,
+   "pct": 92.45
+  },
+  "ui/js/history-db-render.js": {
+   "covered": 90,
+   "executable": 91,
+   "lines": 91,
+   "pct": 98.9
+  },
+  "ui/js/history-db-sort.js": {
+   "covered": 114,
+   "executable": 117,
+   "lines": 117,
+   "pct": 97.44
   },
   "ui/js/history-db.js": {
-   "covered": 413,
-   "executable": 448,
-   "lines": 448,
-   "pct": 92.19
+   "covered": 16,
+   "executable": 16,
+   "lines": 16,
+   "pct": 100.0
   },
   "ui/js/history-model.js": {
    "covered": 376,
@@ -200,11 +296,41 @@
    "lines": 412,
    "pct": 91.26
   },
+  "ui/js/history-store-bridge.js": {
+   "covered": 79,
+   "executable": 115,
+   "lines": 115,
+   "pct": 68.7
+  },
+  "ui/js/history-store-core.js": {
+   "covered": 94,
+   "executable": 112,
+   "lines": 112,
+   "pct": 83.93
+  },
+  "ui/js/history-store-open.js": {
+   "covered": 38,
+   "executable": 40,
+   "lines": 40,
+   "pct": 95.0
+  },
+  "ui/js/history-store-render.js": {
+   "covered": 78,
+   "executable": 87,
+   "lines": 87,
+   "pct": 89.66
+  },
+  "ui/js/history-store-scroll.js": {
+   "covered": 37,
+   "executable": 55,
+   "lines": 55,
+   "pct": 67.27
+  },
   "ui/js/history-store.js": {
-   "covered": 324,
-   "executable": 458,
-   "lines": 458,
-   "pct": 70.74
+   "covered": 19,
+   "executable": 19,
+   "lines": 19,
+   "pct": 100.0
   },
   "ui/js/history-view.js": {
    "covered": 323,
@@ -212,11 +338,41 @@
    "lines": 345,
    "pct": 93.62
   },
+  "ui/js/labels-assign.js": {
+   "covered": 142,
+   "executable": 145,
+   "lines": 145,
+   "pct": 97.93
+  },
+  "ui/js/labels-edit.js": {
+   "covered": 103,
+   "executable": 106,
+   "lines": 106,
+   "pct": 97.17
+  },
+  "ui/js/labels-filter.js": {
+   "covered": 86,
+   "executable": 88,
+   "lines": 88,
+   "pct": 97.73
+  },
+  "ui/js/labels-model.js": {
+   "covered": 86,
+   "executable": 86,
+   "lines": 86,
+   "pct": 100.0
+  },
+  "ui/js/labels-render.js": {
+   "covered": 102,
+   "executable": 106,
+   "lines": 106,
+   "pct": 96.23
+  },
   "ui/js/labels.js": {
-   "covered": 747,
-   "executable": 779,
-   "lines": 779,
-   "pct": 95.89
+   "covered": 182,
+   "executable": 190,
+   "lines": 190,
+   "pct": 95.79
   },
   "ui/js/log-console.js": {
    "covered": 39,
@@ -224,23 +380,71 @@
    "lines": 39,
    "pct": 100.0
   },
+  "ui/js/presets-ui-blocks.js": {
+   "covered": 31,
+   "executable": 64,
+   "lines": 64,
+   "pct": 48.44
+  },
+  "ui/js/presets-ui-core.js": {
+   "covered": 82,
+   "executable": 102,
+   "lines": 102,
+   "pct": 80.39
+  },
+  "ui/js/presets-ui-import.js": {
+   "covered": 98,
+   "executable": 103,
+   "lines": 103,
+   "pct": 95.15
+  },
+  "ui/js/presets-ui-stack.js": {
+   "covered": 37,
+   "executable": 89,
+   "lines": 89,
+   "pct": 41.57
+  },
+  "ui/js/presets-ui-templates.js": {
+   "covered": 31,
+   "executable": 64,
+   "lines": 64,
+   "pct": 48.44
+  },
   "ui/js/presets-ui.js": {
-   "covered": 224,
-   "executable": 474,
-   "lines": 474,
-   "pct": 47.26
+   "covered": 22,
+   "executable": 30,
+   "lines": 30,
+   "pct": 73.33
   },
   "ui/js/sash-core.js": {
-   "covered": 613,
-   "executable": 642,
-   "lines": 642,
-   "pct": 95.48
+   "covered": 654,
+   "executable": 684,
+   "lines": 684,
+   "pct": 95.61
+  },
+  "ui/js/sash-grid-drag-core.js": {
+   "covered": 62,
+   "executable": 200,
+   "lines": 200,
+   "pct": 31.0
+  },
+  "ui/js/sash-grid-drag-resize.js": {
+   "covered": 46,
+   "executable": 133,
+   "lines": 133,
+   "pct": 34.59
+  },
+  "ui/js/sash-grid-drag-spec.js": {
+   "covered": 46,
+   "executable": 165,
+   "lines": 165,
+   "pct": 27.88
   },
   "ui/js/sash-grid-drag.js": {
-   "covered": 121,
-   "executable": 454,
-   "lines": 454,
-   "pct": 26.65
+   "covered": 6,
+   "executable": 6,
+   "lines": 6,
+   "pct": 100.0
   },
   "ui/js/sash-grid-presets.js": {
    "covered": 159,
@@ -302,11 +506,29 @@
    "lines": 269,
    "pct": 95.17
   },
+  "ui/js/stack-drag-core.js": {
+   "covered": 38,
+   "executable": 78,
+   "lines": 78,
+   "pct": 48.72
+  },
+  "ui/js/stack-drag-scroll.js": {
+   "covered": 14,
+   "executable": 27,
+   "lines": 27,
+   "pct": 51.85
+  },
+  "ui/js/stack-drag-visual.js": {
+   "covered": 38,
+   "executable": 84,
+   "lines": 84,
+   "pct": 45.24
+  },
   "ui/js/stack-drag.js": {
-   "covered": 110,
-   "executable": 356,
-   "lines": 356,
-   "pct": 30.9
+   "covered": 16,
+   "executable": 16,
+   "lines": 16,
+   "pct": 100.0
   },
   "ui/js/url-toolbar.js": {
    "covered": 168,
@@ -314,26 +536,62 @@
    "lines": 168,
    "pct": 100.0
   },
+  "ui/js/user-table-actions.js": {
+   "covered": 56,
+   "executable": 77,
+   "lines": 77,
+   "pct": 72.73
+  },
+  "ui/js/user-table-core.js": {
+   "covered": 55,
+   "executable": 71,
+   "lines": 71,
+   "pct": 77.46
+  },
+  "ui/js/user-table-render.js": {
+   "covered": 77,
+   "executable": 86,
+   "lines": 86,
+   "pct": 89.53
+  },
   "ui/js/user-table.js": {
-   "covered": 296,
-   "executable": 448,
-   "lines": 448,
-   "pct": 66.07
+   "covered": 18,
+   "executable": 18,
+   "lines": 18,
+   "pct": 100.0
+  },
+  "ui/js/window-presets-actions.js": {
+   "covered": 76,
+   "executable": 140,
+   "lines": 140,
+   "pct": 54.29
+  },
+  "ui/js/window-presets-core.js": {
+   "covered": 108,
+   "executable": 111,
+   "lines": 111,
+   "pct": 97.3
+  },
+  "ui/js/window-presets-preview.js": {
+   "covered": 71,
+   "executable": 82,
+   "lines": 82,
+   "pct": 86.59
   },
   "ui/js/window-presets.js": {
-   "covered": 275,
-   "executable": 376,
-   "lines": 376,
-   "pct": 73.14
+   "covered": 16,
+   "executable": 16,
+   "lines": 16,
+   "pct": 100.0
   }
  },
  "never_loaded": [],
  "test_failures": [],
  "totals": {
-  "covered": 10091,
-  "executable": 12229,
-  "files": 42,
-  "lines": 12229,
-  "pct": 82.52
+  "covered": 9551,
+  "executable": 11195,
+  "files": 85,
+  "lines": 11195,
+  "pct": 85.31
  }
 }

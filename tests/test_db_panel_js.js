@@ -80,12 +80,10 @@ global.document = {
 global.window = { addEventListener() {}, removeEventListener() {} };
 
 // ── the real module ──────────────────────────────────────────────
-const readUi = (f) => fs.readFileSync(path.join(__dirname, '..', 'ui', f), 'utf8');
-const mod = { exports: {} };
-new Function('module', 'exports', 'window', 'document',
-             readUi('js/db-panel.js'))(mod, mod.exports, global.window,
-                                       global.document);
-const DbPanel = mod.exports;
+// Round H split: db-panel.js is a facade over db-panel-*.js parts merged
+// via UIHelpers; load parts first, sharing scope, like index.html does.
+const DbPanel = require('./_ui_loader').loadModule(
+    'js/db-panel.js', global.window, global.document);
 
 const calls = [];
 const confirms = [];

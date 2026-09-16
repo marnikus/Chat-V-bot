@@ -239,9 +239,9 @@ class TestDeleteSlots(ArchiveCase):
         self.bridge.history_delete_message("Nick", str(victim["id"]))
         await wait_for(self.changed)
         self.bridge.undo()
-        await asyncio.sleep(0.15)
+        await asyncio.sleep(0.15)  # wait-budget: let the undo write settle before the redo
         self.bridge.redo()
-        await asyncio.sleep(0.15)
+        await asyncio.sleep(0.15)  # wait-budget: let the undo write settle before the redo
         self.assertNotIn(victim["text"], await self.visible())
 
     async def test_clearing_the_chat_keeps_the_person_and_is_undoable(self):
@@ -306,9 +306,15 @@ class TestUiWiring(unittest.TestCase):
                 return fh.read()
 
         cls.html = read("index.html")
-        cls.store = read("js", "history-store.js")
-        cls.view = read("js", "history-view.js")
-        cls.db = read("js", "history-db.js")
+        # H-B2b JS split (2026-09): the three modules are facades over
+        # <name>-*.js parts; the wiring contracts assert across each bundle.
+        def bundle(mod):
+            names = [n for n in sorted(os.listdir(os.path.join(base, "js")))
+                     if n == mod or n.startswith(mod[:-3] + "-")]
+            return "".join(read("js", n) for n in names)
+        cls.store = bundle("history-store.js")
+        cls.view = bundle("history-view.js")
+        cls.db = bundle("history-db.js")
 
     def test_a_message_row_carries_a_delete_button(self):
         self.assertIn("msg-del", self.view)

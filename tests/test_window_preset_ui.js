@@ -39,8 +39,10 @@ global.localStorage = { data: {}, getItem(k) { return this.data[k] || null; }, s
 global.Dialog = {};
 global.LogConsole = { log() {} };
 global.App = { bridge: null };
-vm.runInThisContext(fs.readFileSync('ui/js/window-presets.js', 'utf8') +
-  '\nglobalThis.__WindowPresets = WindowPresets;');
+// Round H split: window-presets.js is a facade over three parts merged via
+// UIHelpers — load the real parts first, sharing scope, like index.html.
+global.__WindowPresets = require('./_ui_loader').loadModule(
+  'js/window-presets.js', global.window, global.document, 'WindowPresets');
 const presets = global.__WindowPresets;
 presets.init();
 

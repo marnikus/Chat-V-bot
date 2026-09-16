@@ -218,7 +218,7 @@ class TestUserDatabase(BridgeCase):
     async def test_hard_delete_removes_the_messages(self):
         await self.seed("Nick", 3)
         self.bridge.history_delete_person("Nick", True)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)  # wait-budget: let the hard-delete write settle before seeding again
         rows = await self.service.db.fetchall("SELECT COUNT(*) FROM messages")
         self.assertEqual(rows[0][0], 0)
 
