@@ -10,12 +10,15 @@
    this one"), and loadModule follows that list. */
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 
 const UI_DIR = path.join(__dirname, '..', 'ui');
+const ROOT_DIR = path.join(__dirname, '..');
 
 function readUi(rel) {
-  return fs.readFileSync(path.join(UI_DIR, rel), 'utf8');
+  // 'backend/…' modules (Round II Area A: chat_agent) live at repo root,
+  // not under ui/ — same parts convention, different directory.
+  const base = rel.startsWith('backend/') ? ROOT_DIR : UI_DIR;
+  return fs.readFileSync(path.join(base, rel), 'utf8');
 }
 
 /** Part files named by the facade header, in index.html order. */
@@ -28,12 +31,16 @@ function partsOf(rel) {
           .replace(/^\.\//, ''));
 }
 
-/** Top-level `const NAME =` declarations of a file — the names later files
-    resolve by bare name (the browser's global lexical scope across
-    <script> tags). */
+/** Top-level `const NAME =` / `var NAME =` declarations and
+    `function NAME(` declarations of a file — the names later files would
+    resolve by bare name in the browser (global lexical scope + global
+    object across <script> tags). */
 function exportNames(src) {
   const out = [];
-  for (const m of src.matchAll(/^const ([A-Za-z_$][\w$]*) =/gm)) out.push(m[1]);
+  for (const m of src.matchAll(/^(?:const|var) ([A-Za-z_$][\w$]*) =/gm))
+    out.push(m[1]);
+  for (const m of src.matchAll(/^function ([A-Za-z_$][\w$]*)\s*\(/gm))
+    out.push(m[1]);
   return out;
 }
 
@@ -49,38 +56,39 @@ function insertBeforePragma(src, extra) {
 }
 
 /** Load rel (e.g. 'js/db-panel.js') after UIHelpers and its own parts.
-    Every file evaluates as its OWN top-level script, exactly like the
-    browser's <script> tags: js/core/ui-helpers.js first (it attaches
-    window.UIHelpers, which index.html makes a global), then each part
-    (its top-level consts are exported to globalThis so the next file
-    resolves them by bare name), finally the facade. Per-file evaluation
-    keeps each part's coverage attribution intact (a concatenated eval
+    Every file evaluates as its OWN script in a fresh function scope bound
+    to globalThis (`new Function(src).call(globalThis)`): the top-level
+    `this` stays the global like a classic <script> tag, but nothing is
+    left in Node's persistent script-lexical scope — so a suite can reload
+    a module for a fresh page env and get FRESH objects, while earlier
+    loads can never be resolved by stale name bindings (vm.runInThisContext
+    left `const`s pinned in script scope: reloads collided, and the
+    rewritten fallback still resolved to the FIRST load's bindings).
+    Names cross files exactly once, through globalThis — the same surface
+    the browser exposes across <script> tags. Per-file evaluation keeps
+    each part's coverage attribution intact (a concatenated eval
     attributes every line to the last pragma — the facade).
+    ui/js modules load js/core/ui-helpers.js first (index.html order);
+    backend modules have no prelude.
     Returns the facade: window[name], else the CamelCase-of-filename
     binding, else globalThis's. */
 function loadModule(rel, window, document, name) {
-  const files = ['js/core/ui-helpers.js'].concat(partsOf(rel)).concat([rel]);
+  // The files reference bare `window` like the page does; guarantee one
+  // exists (suites with a stub env assign their own first).
+  if (!globalThis.window) globalThis.window = {};
+  const prelude = rel.startsWith('backend/') ? [] : ['js/core/ui-helpers.js'];
+  const files = prelude.concat(partsOf(rel)).concat([rel]);
   for (const f of files) {
     let src = readUi(f);
-    const base = path.basename(f);
     const exp = exportNames(src).map((n) => `;globalThis.${n} = ${n};`);
     // ui-helpers.js attaches window.UIHelpers instead of declaring a const;
     // index.html promotes window members to globals — mirror it here so the
     // facade's bare UIHelpers resolves before its own script runs.
-    if (base === 'ui-helpers.js') exp.push(';globalThis.UIHelpers = window.UIHelpers;');
+    if (path.basename(f) === 'ui-helpers.js')
+      exp.push(';globalThis.UIHelpers = window.UIHelpers;');
     if (exp.length) src = insertBeforePragma(src, exp.join('') + '\n');
-    try {
-      vm.runInThisContext(src);
-    } catch (e) {
-      // A suite may reload the same module inside one test (a
-      // per-session-state contract): Node's shared context forbids a
-      // second `const`. Rewriting top-level declarations to globalThis
-      // assignments builds a fresh facade object, as the test intends.
-      if (!/already been declared/.test(String(e))) throw e;
-      const reassigned = src.replace(/^(?:const|let) ([A-Za-z_$][\w$]*) =/gm,
-                                     'globalThis.$1 =');
-      vm.runInThisContext(reassigned);
-    }
+    // eslint-disable-next-line no-new-func -- the point: per-file script
+    new Function(src).call(globalThis);
   }
   window = window || {};
   if (window.UIHelpers && !globalThis.UIHelpers)

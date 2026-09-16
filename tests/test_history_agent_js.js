@@ -11,12 +11,8 @@
    Run:  node tests/test_history_agent_js.js
 */
 'use strict';
-const fs = require('fs');
-const path = require('path');
 const { buildChat } = require('./dom_stub.js');
-
-const SRC = fs.readFileSync(
-  path.join(__dirname, '..', 'backend', 'js', 'chat_agent.js'), 'utf8');
+const { loadModule } = require('./_ui_loader.js');
 
 let passed = 0, failed = 0;
 function t(name, fn) {
@@ -29,13 +25,18 @@ function eq(a, b, msg) {
 }
 function ok(cond, msg) { if (!cond) throw new Error(msg || 'ok'); }
 
-/** load the agent into a fresh page environment */
+/** load the agent into a fresh page environment: the stub becomes the page
+    globals, then the real files evaluate part-by-part (per-file eval keeps
+    V8 coverage attribution — a concatenated eval collapses it onto the
+    facade, see tests/_ui_loader.js). */
 function load(spec) {
   const env = buildChat(spec);
-  new Function('window', 'document', 'MutationObserver', 'setTimeout',
-               'clearTimeout', SRC)(
-    env.window, env.document, env.MutationObserver, env.setTimeout,
-    env.clearTimeout);
+  Object.assign(globalThis, {
+    window: env.window, document: env.document,
+    MutationObserver: env.MutationObserver,
+    setTimeout: env.setTimeout, clearTimeout: env.clearTimeout,
+  });
+  loadModule('backend/js/chat_agent.js', env.window, env.document);
   env.agent = env.window.__cvbAgent;
   ok(env.agent, 'the agent must publish window.__cvbAgent');
   return env;
@@ -52,10 +53,7 @@ const many = (n, over) => Array.from({ length: n }, (_, i) => msg(i, over));
 t('installing twice keeps a single agent and a single observer', () => {
   const env = load({ messages: many(3) });
   const first = env.agent;
-  new Function('window', 'document', 'MutationObserver', 'setTimeout',
-               'clearTimeout', SRC)(
-    env.window, env.document, env.MutationObserver, env.setTimeout,
-    env.clearTimeout);
+  loadModule('backend/js/chat_agent.js', env.window, env.document);
   ok(env.window.__cvbAgent === first, 'the agent must not be replaced');
   const live = env.observers.filter((o) => o.target).length;
   eq(live, 1, 'exactly one live MutationObserver');

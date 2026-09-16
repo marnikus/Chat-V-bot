@@ -4,7 +4,9 @@
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
-const SashCore = require('../ui/js/sash-core.js');
+// Round II Area B: sash-core is a facade over part files, so a bare
+// require() sees no parts — load the family like the browser does.
+const SashCore = require('./_ui_loader.js').loadModule('js/sash-core.js', {}, {});
 
 let passed = 0, failed = 0;
 function test(name, fn) {

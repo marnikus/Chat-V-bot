@@ -334,10 +334,14 @@ class TestUIWiring(unittest.TestCase):
     # Round H (H-A3): the sash-grid surface now spans a facade + part files;
     # the UI contract is checked against the whole family (same load order as
     # tests/js_family.js / ui/index.html).
+    # Round II Area B (2026-09-16): sash-core itself is now four parts + a
+    # facade — checked in index.html / js_family.js order.
     SASH_FAMILY = [
-        "core/ui-helpers.js", "sash-core.js", "sash-grid-tree.js",
-        "sash-grid-windows.js", "sash-grid-presets.js", "sash-grid-drag.js",
-        "sash-grid.js",
+        "core/ui-helpers.js",
+        "sash-core-tree.js", "sash-core-layouts.js", "sash-core-move.js",
+        "sash-core-validate.js", "sash-core.js",
+        "sash-grid-tree.js", "sash-grid-windows.js", "sash-grid-presets.js",
+        "sash-grid-drag.js", "sash-grid.js",
     ]
 
     def setUp(self):

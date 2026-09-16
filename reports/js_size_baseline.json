@@ -1,630 +1,877 @@
 {
  "files": [
   {
-   "file": "backend/js/chat_agent.js",
+   "file": "backend/js/chat_agent-dom.js",
    "functions": [
     {
-     "end": 802,
-     "line": 21,
-     "loc": 782,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 209,
-     "line": 164,
-     "loc": 46,
-     "name": "selectPane"
-    },
-    {
-     "end": 410,
-     "line": 366,
-     "loc": 45,
-     "name": "walk"
-    },
-    {
-     "end": 268,
-     "line": 225,
-     "loc": 44,
-     "name": "visiblePane"
-    },
-    {
-     "end": 765,
-     "line": 725,
-     "loc": 41,
-     "name": "state"
-    },
-    {
-     "end": 664,
-     "line": 633,
-     "loc": 32,
-     "name": "scrollerCandidates"
-    },
-    {
-     "end": 504,
-     "line": 478,
-     "loc": 27,
-     "name": "onMutations"
-    },
-    {
-     "end": 709,
-     "line": 686,
-     "loc": 24,
-     "name": "scrollToTop"
-    },
-    {
-     "end": 325,
-     "line": 303,
-     "loc": 23,
-     "name": "parseNode"
-    },
-    {
-     "end": 476,
-     "line": 454,
-     "loc": 23,
-     "name": "sendPush"
-    },
-    {
-     "end": 571,
-     "line": 549,
-     "loc": 23,
-     "name": "describeTab"
-    },
-    {
-     "end": 608,
-     "line": 593,
-     "loc": 16,
-     "name": "describePane"
-    },
-    {
-     "end": 349,
-     "line": 335,
-     "loc": 15,
-     "name": "liveFields"
-    },
-    {
-     "end": 432,
-     "line": 419,
-     "loc": 14,
-     "name": "authorsOf"
-    },
-    {
-     "end": 162,
-     "line": 150,
-     "loc": 13,
-     "name": "groupAuthors"
-    },
-    {
-     "end": 287,
-     "line": 275,
-     "loc": 13,
-     "name": "messagesRoot"
-    },
-    {
-     "end": 591,
-     "line": 580,
+     "end": 112,
+     "line": 101,
      "loc": 12,
      "name": "countPaneUsers"
     },
     {
-     "end": 723,
-     "line": 712,
-     "loc": 12,
-     "name": "restoreScroll"
-    },
-    {
-     "end": 81,
-     "line": 72,
+     "end": 35,
+     "line": 26,
      "loc": 10,
      "name": "ownText"
     },
     {
-     "end": 148,
-     "line": 139,
-     "loc": 10,
-     "name": "paneGroups"
-    },
-    {
-     "end": 102,
-     "line": 94,
+     "end": 65,
+     "line": 57,
      "loc": 9,
      "name": "isHidden"
     },
     {
-     "end": 514,
-     "line": 506,
+     "end": 92,
+     "line": 84,
      "loc": 9,
-     "name": "install"
+     "name": "containerOf"
     },
     {
-     "end": 48,
-     "line": 41,
-     "loc": 8,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 137,
-     "line": 130,
+     "end": 55,
+     "line": 48,
      "loc": 8,
      "name": "distinctNicks"
     },
     {
-     "end": 358,
-     "line": 351,
-     "loc": 8,
-     "name": "fieldsStale"
-    },
-    {
-     "end": 546,
-     "line": 539,
-     "loc": 8,
-     "name": "containerOf"
-    },
-    {
-     "end": 623,
-     "line": 616,
-     "loc": 8,
-     "name": "scrollInfo"
-    },
-    {
-     "end": 774,
-     "line": 767,
-     "loc": 8,
-     "name": "slice"
-    },
-    {
-     "end": 116,
-     "line": 110,
-     "loc": 7,
-     "name": "paneOf"
-    },
-    {
-     "end": 452,
-     "line": 446,
-     "loc": 7,
-     "name": "schedulePush"
-    },
-    {
-     "end": 525,
-     "line": 519,
-     "loc": 7,
-     "name": "reattach"
-    },
-    {
-     "end": 681,
-     "line": 675,
-     "loc": 7,
-     "name": "dispatchScroll"
-    },
-    {
-     "end": 782,
-     "line": 776,
-     "loc": 7,
-     "name": "drain"
-    },
-    {
-     "end": 59,
-     "line": 54,
-     "loc": 6,
-     "name": "fingerprint"
-    },
-    {
-     "end": 219,
-     "line": 214,
+     "end": 77,
+     "line": 72,
      "loc": 6,
      "name": "inDocument"
     },
     {
-     "end": 53,
-     "line": 49,
-     "loc": 5,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 301,
-     "line": 297,
-     "loc": 5,
-     "name": "liveMediaUrl"
-    },
-    {
-     "end": 416,
-     "line": 412,
-     "loc": 5,
-     "name": "strip"
-    },
-    {
-     "end": 531,
-     "line": 527,
-     "loc": 5,
-     "name": "uninstall"
-    },
-    {
-     "end": 614,
-     "line": 610,
-     "loc": 5,
-     "name": "describe"
-    },
-    {
-     "end": 65,
-     "line": 62,
+     "end": 16,
+     "line": 13,
      "loc": 4,
      "name": "qs"
     },
     {
-     "end": 69,
-     "line": 66,
+     "end": 21,
+     "line": 18,
      "loc": 4,
      "name": "qsa"
     },
     {
-     "end": 85,
-     "line": 82,
+     "end": 40,
+     "line": 37,
      "loc": 4,
      "name": "isAncestor"
     },
     {
-     "end": 107,
-     "line": 104,
+     "end": 70,
+     "line": 67,
      "loc": 4,
      "name": "visible"
     },
     {
-     "end": 363,
-     "line": 360,
-     "loc": 4,
-     "name": "keyOf"
-    },
-    {
-     "end": 444,
-     "line": 441,
-     "loc": 4,
-     "name": "bufferRecord"
-    },
-    {
-     "end": 451,
-     "line": 448,
-     "loc": 4,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 537,
-     "line": 534,
+     "end": 82,
+     "line": 79,
      "loc": 4,
      "name": "classContains"
     },
     {
-     "end": 673,
-     "line": 670,
-     "loc": 4,
-     "name": "scrollMetrics"
-    },
-    {
-     "end": 128,
-     "line": 126,
+     "end": 46,
+     "line": 44,
      "loc": 3,
      "name": "normNick"
     },
     {
-     "end": 185,
-     "line": 183,
-     "loc": 3,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 223,
-     "line": 221,
-     "loc": 3,
-     "name": "paneAmong"
-    },
-    {
-     "end": 272,
-     "line": 270,
-     "loc": 3,
-     "name": "containers"
-    },
-    {
-     "end": 668,
-     "line": 666,
-     "loc": 3,
-     "name": "chatScroller"
-    },
-    {
-     "end": 794,
-     "line": 792,
-     "loc": 3,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 70,
-     "line": 70,
+     "end": 23,
+     "line": 23,
      "loc": 1,
      "name": "clean"
     },
     {
-     "end": 86,
-     "line": 86,
+     "end": 42,
+     "line": 42,
      "loc": 1,
      "name": "num"
-    },
-    {
-     "end": 182,
-     "line": 182,
-     "loc": 1,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 187,
-     "line": 187,
-     "loc": 1,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 737,
-     "line": 737,
-     "loc": 1,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 738,
-     "line": 738,
-     "loc": 1,
-     "name": "(anonymous)"
     }
    ],
-   "lines": 803,
+   "lines": 114,
    "objects": [
     {
-     "end": 764,
+     "end": 113,
      "gated": true,
-     "line": 742,
-     "loc": 23,
-     "methods": 1
+     "line": 12,
+     "loc": 102,
+     "methods": 14
     },
     {
-     "end": 474,
+     "end": 103,
      "gated": false,
-     "line": 460,
-     "loc": 15,
-     "methods": 0
-    },
-    {
-     "end": 797,
-     "gated": true,
-     "line": 784,
-     "loc": 14,
-     "methods": 1
-    },
-    {
-     "end": 348,
-     "gated": false,
-     "line": 341,
-     "loc": 8,
-     "methods": 0
-    },
-    {
-     "end": 607,
-     "gated": false,
-     "line": 600,
-     "loc": 8,
-     "methods": 0
-    },
-    {
-     "end": 734,
-     "gated": false,
-     "line": 730,
-     "loc": 5,
-     "methods": 0
-    },
-    {
-     "end": 405,
-     "gated": false,
-     "line": 402,
-     "loc": 4,
-     "methods": 0
-    },
-    {
-     "end": 267,
-     "gated": false,
-     "line": 265,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 415,
-     "gated": false,
-     "line": 413,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 622,
-     "gated": false,
-     "line": 620,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 708,
-     "gated": false,
-     "line": 706,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 794,
-     "gated": false,
-     "line": 792,
-     "loc": 3,
-     "methods": 0
-    },
-    {
-     "end": 240,
-     "gated": false,
-     "line": 239,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 256,
-     "gated": false,
-     "line": 255,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 324,
-     "gated": false,
-     "line": 323,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 570,
-     "gated": false,
-     "line": 569,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 672,
-     "gated": false,
-     "line": 671,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 773,
-     "gated": false,
-     "line": 772,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 144,
-     "gated": false,
-     "line": 144,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 161,
-     "gated": false,
-     "line": 161,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 167,
-     "gated": false,
-     "line": 167,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 290,
-     "gated": false,
-     "line": 290,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 311,
-     "gated": false,
-     "line": 311,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 316,
-     "gated": false,
-     "line": 316,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 343,
-     "gated": false,
-     "line": 343,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 431,
-     "gated": false,
-     "line": 431,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 511,
-     "gated": false,
-     "line": 511,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 582,
-     "gated": false,
-     "line": 582,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 662,
-     "gated": false,
-     "line": 662,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 678,
-     "gated": false,
-     "line": 678,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 697,
-     "gated": false,
-     "line": 697,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 721,
-     "gated": false,
-     "line": 721,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 722,
-     "gated": false,
-     "line": 722,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 734,
-     "gated": false,
-     "line": 734,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 781,
-     "gated": false,
-     "line": 781,
+     "line": 103,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 61,
-    "max_object_loc": 23,
-    "max_object_methods": 1,
-    "over_100": 1,
-    "over_30": 6,
-    "over_60": 1
+    "functions": 14,
+    "max_object_loc": 102,
+    "max_object_methods": 14,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent-fingerprint.js",
+   "functions": [
+    {
+     "end": 38,
+     "line": 33,
+     "loc": 6,
+     "name": "fingerprint"
+    }
+   ],
+   "lines": 40,
+   "objects": [
+    {
+     "end": 39,
+     "gated": true,
+     "line": 14,
+     "loc": 26,
+     "methods": 2
+    }
+   ],
+   "summary": {
+    "functions": 1,
+    "max_object_loc": 26,
+    "max_object_methods": 2,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent-pane.js",
+   "functions": [
+    {
+     "end": 101,
+     "line": 73,
+     "loc": 29,
+     "name": "selectPane"
+    },
+    {
+     "end": 70,
+     "line": 47,
+     "loc": 24,
+     "name": "scoreGroup"
+    },
+    {
+     "end": 194,
+     "line": 174,
+     "loc": 21,
+     "name": "describeTab"
+    },
+    {
+     "end": 152,
+     "line": 135,
+     "loc": 18,
+     "name": "visiblePane"
+    },
+    {
+     "end": 211,
+     "line": 196,
+     "loc": 16,
+     "name": "describePane"
+    },
+    {
+     "end": 171,
+     "line": 159,
+     "loc": 13,
+     "name": "messagesRoot"
+    },
+    {
+     "end": 38,
+     "line": 29,
+     "loc": 10,
+     "name": "paneGroups"
+    },
+    {
+     "end": 133,
+     "line": 124,
+     "loc": 10,
+     "name": "stalePaneStay"
+    },
+    {
+     "end": 118,
+     "line": 111,
+     "loc": 8,
+     "name": "noNodesPane"
+    },
+    {
+     "end": 27,
+     "line": 21,
+     "loc": 7,
+     "name": "paneOf"
+    },
+    {
+     "end": 218,
+     "line": 213,
+     "loc": 6,
+     "name": "describe"
+    },
+    {
+     "end": 57,
+     "line": 55,
+     "loc": 3,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 105,
+     "line": 103,
+     "loc": 3,
+     "name": "paneAmong"
+    },
+    {
+     "end": 156,
+     "line": 154,
+     "loc": 3,
+     "name": "containers"
+    },
+    {
+     "end": 54,
+     "line": 54,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 59,
+     "line": 59,
+     "loc": 1,
+     "name": "(anonymous)"
+    }
+   ],
+   "lines": 220,
+   "objects": [
+    {
+     "end": 219,
+     "gated": true,
+     "line": 16,
+     "loc": 204,
+     "methods": 13
+    },
+    {
+     "end": 210,
+     "gated": false,
+     "line": 203,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 151,
+     "gated": false,
+     "line": 149,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 193,
+     "gated": false,
+     "line": 191,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 77,
+     "gated": false,
+     "line": 76,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 117,
+     "gated": false,
+     "line": 116,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 132,
+     "gated": false,
+     "line": 131,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 34,
+     "gated": false,
+     "line": 34,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 16,
+    "max_object_loc": 204,
+    "max_object_methods": 13,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent-parse.js",
+   "functions": [
+    {
+     "end": 72,
+     "line": 51,
+     "loc": 22,
+     "name": "parseNode"
+    },
+    {
+     "end": 163,
+     "line": 142,
+     "loc": 22,
+     "name": "walk"
+    },
+    {
+     "end": 139,
+     "line": 119,
+     "loc": 21,
+     "name": "recordFor"
+    },
+    {
+     "end": 97,
+     "line": 80,
+     "loc": 18,
+     "name": "liveFields"
+    },
+    {
+     "end": 186,
+     "line": 172,
+     "loc": 15,
+     "name": "authorsOf"
+    },
+    {
+     "end": 203,
+     "line": 190,
+     "loc": 14,
+     "name": "groupAuthors"
+    },
+    {
+     "end": 106,
+     "line": 99,
+     "loc": 8,
+     "name": "fieldsStale"
+    },
+    {
+     "end": 47,
+     "line": 41,
+     "loc": 7,
+     "name": "mediaOf"
+    },
+    {
+     "end": 38,
+     "line": 34,
+     "loc": 5,
+     "name": "liveMediaUrl"
+    },
+    {
+     "end": 112,
+     "line": 108,
+     "loc": 5,
+     "name": "keyOf"
+    },
+    {
+     "end": 169,
+     "line": 165,
+     "loc": 5,
+     "name": "strip"
+    },
+    {
+     "end": 26,
+     "line": 23,
+     "loc": 4,
+     "name": "statsSnapshot"
+    }
+   ],
+   "lines": 205,
+   "objects": [
+    {
+     "end": 204,
+     "gated": true,
+     "line": 16,
+     "loc": 189,
+     "methods": 12
+    },
+    {
+     "end": 96,
+     "gated": false,
+     "line": 89,
+     "loc": 8,
+     "methods": 0
+    },
+    {
+     "end": 136,
+     "gated": false,
+     "line": 133,
+     "loc": 4,
+     "methods": 0
+    },
+    {
+     "end": 168,
+     "gated": false,
+     "line": 166,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 25,
+     "gated": false,
+     "line": 24,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 71,
+     "gated": false,
+     "line": 70,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 202,
+     "gated": false,
+     "line": 201,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 21,
+     "gated": false,
+     "line": 21,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 46,
+     "gated": false,
+     "line": 46,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 60,
+     "gated": false,
+     "line": 60,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 91,
+     "gated": false,
+     "line": 91,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 185,
+     "gated": false,
+     "line": 185,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 12,
+    "max_object_loc": 189,
+    "max_object_methods": 12,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent-push.js",
+   "functions": [
+    {
+     "end": 63,
+     "line": 41,
+     "loc": 23,
+     "name": "sendPush"
+    },
+    {
+     "end": 81,
+     "line": 66,
+     "loc": 16,
+     "name": "addedMessageNodes"
+    },
+    {
+     "end": 98,
+     "line": 83,
+     "loc": 16,
+     "name": "onMutations"
+    },
+    {
+     "end": 109,
+     "line": 100,
+     "loc": 10,
+     "name": "install"
+    },
+    {
+     "end": 39,
+     "line": 32,
+     "loc": 8,
+     "name": "schedulePush"
+    },
+    {
+     "end": 120,
+     "line": 114,
+     "loc": 7,
+     "name": "reattach"
+    },
+    {
+     "end": 135,
+     "line": 129,
+     "loc": 7,
+     "name": "drain"
+    },
+    {
+     "end": 30,
+     "line": 25,
+     "loc": 6,
+     "name": "bufferRecord"
+    },
+    {
+     "end": 126,
+     "line": 122,
+     "loc": 5,
+     "name": "uninstall"
+    },
+    {
+     "end": 38,
+     "line": 35,
+     "loc": 4,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 22,
+     "line": 22,
+     "loc": 1,
+     "name": "pending"
+    },
+    {
+     "end": 23,
+     "line": 23,
+     "loc": 1,
+     "name": "droppedCount"
+    },
+    {
+     "end": 105,
+     "line": 105,
+     "loc": 1,
+     "name": "(anonymous)"
+    }
+   ],
+   "lines": 137,
+   "objects": [
+    {
+     "end": 136,
+     "gated": true,
+     "line": 12,
+     "loc": 125,
+     "methods": 11
+    },
+    {
+     "end": 61,
+     "gated": false,
+     "line": 47,
+     "loc": 15,
+     "methods": 0
+    },
+    {
+     "end": 106,
+     "gated": false,
+     "line": 106,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 134,
+     "gated": false,
+     "line": 134,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 13,
+    "max_object_loc": 125,
+    "max_object_methods": 11,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent-scroll.js",
+   "functions": [
+    {
+     "end": 110,
+     "line": 87,
+     "loc": 24,
+     "name": "scrollToTop"
+    },
+    {
+     "end": 52,
+     "line": 31,
+     "loc": 22,
+     "name": "scrollerClassify"
+    },
+    {
+     "end": 72,
+     "line": 60,
+     "loc": 13,
+     "name": "scrollerCandidates"
+    },
+    {
+     "end": 125,
+     "line": 113,
+     "loc": 13,
+     "name": "restoreScroll"
+    },
+    {
+     "end": 27,
+     "line": 19,
+     "loc": 9,
+     "name": "scrollInfo"
+    },
+    {
+     "end": 84,
+     "line": 78,
+     "loc": 7,
+     "name": "dispatchScroll"
+    },
+    {
+     "end": 17,
+     "line": 13,
+     "loc": 5,
+     "name": "scrollMetrics"
+    },
+    {
+     "end": 76,
+     "line": 74,
+     "loc": 3,
+     "name": "chatScroller"
+    }
+   ],
+   "lines": 127,
+   "objects": [
+    {
+     "end": 126,
+     "gated": true,
+     "line": 10,
+     "loc": 117,
+     "methods": 8
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 14,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 26,
+     "gated": false,
+     "line": 24,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 109,
+     "gated": false,
+     "line": 107,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 70,
+     "gated": false,
+     "line": 70,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 81,
+     "gated": false,
+     "line": 81,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 98,
+     "gated": false,
+     "line": 98,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 123,
+     "gated": false,
+     "line": 123,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 124,
+     "gated": false,
+     "line": 124,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 117,
+    "max_object_methods": 8,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "backend/js/chat_agent.js",
+   "functions": [
+    {
+     "end": 70,
+     "line": 44,
+     "loc": 27,
+     "name": "okState"
+    },
+    {
+     "end": 84,
+     "line": 73,
+     "loc": 12,
+     "name": "state"
+    },
+    {
+     "end": 129,
+     "line": 119,
+     "loc": 11,
+     "name": "installChatAgent"
+    },
+    {
+     "end": 95,
+     "line": 87,
+     "loc": 9,
+     "name": "slice"
+    },
+    {
+     "end": 41,
+     "line": 34,
+     "loc": 8,
+     "name": "emptyState"
+    },
+    {
+     "end": 111,
+     "line": 106,
+     "loc": 6,
+     "name": "stats"
+    },
+    {
+     "end": 101,
+     "line": 99,
+     "loc": 3,
+     "name": "fingerprint"
+    },
+    {
+     "end": 45,
+     "line": 45,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 46,
+     "line": 46,
+     "loc": 1,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 97,
+     "line": 97,
+     "loc": 1,
+     "name": "drain"
+    },
+    {
+     "end": 103,
+     "line": 103,
+     "loc": 1,
+     "name": "scrollToTop"
+    },
+    {
+     "end": 104,
+     "line": 104,
+     "loc": 1,
+     "name": "restoreScroll"
+    },
+    {
+     "end": 113,
+     "line": 113,
+     "loc": 1,
+     "name": "install"
+    },
+    {
+     "end": 114,
+     "line": 114,
+     "loc": 1,
+     "name": "uninstall"
+    }
+   ],
+   "lines": 130,
+   "objects": [
+    {
+     "end": 115,
+     "gated": true,
+     "line": 30,
+     "loc": 86,
+     "methods": 11
+    },
+    {
+     "end": 69,
+     "gated": true,
+     "line": 47,
+     "loc": 23,
+     "methods": 1
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 35,
+     "loc": 6,
+     "methods": 0
+    },
+    {
+     "end": 94,
+     "gated": false,
+     "line": 92,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 110,
+     "gated": false,
+     "line": 108,
+     "loc": 3,
+     "methods": 0
+    },
+    {
+     "end": 40,
+     "gated": false,
+     "line": 40,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 14,
+    "max_object_loc": 86,
+    "max_object_methods": 11,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
    }
   },
   {
@@ -7114,326 +7361,130 @@
    }
   },
   {
-   "file": "ui/js/sash-core.js",
+   "file": "ui/js/sash-core-layouts.js",
    "functions": [
     {
-     "end": 683,
-     "line": 23,
-     "loc": 661,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 534,
-     "line": 484,
-     "loc": 51,
-     "name": "moveWindow"
-    },
-    {
-     "end": 574,
-     "line": 542,
-     "loc": 33,
-     "name": "validate"
-    },
-    {
-     "end": 280,
-     "line": 256,
-     "loc": 25,
-     "name": "insertAtSplitIndex"
-    },
-    {
-     "end": 667,
-     "line": 643,
-     "loc": 25,
-     "name": "deserialize"
-    },
-    {
-     "end": 461,
-     "line": 438,
-     "loc": 24,
-     "name": "insertOuter"
-    },
-    {
-     "end": 566,
-     "line": 544,
-     "loc": 23,
-     "name": "check"
-    },
-    {
-     "end": 605,
-     "line": 583,
-     "loc": 23,
-     "name": "pruneTree"
-    },
-    {
-     "end": 423,
-     "line": 403,
-     "loc": 21,
-     "name": "removeNode"
-    },
-    {
-     "end": 182,
-     "line": 165,
+     "end": 98,
+     "line": 81,
      "loc": 18,
-     "name": "normalizeSizes"
-    },
-    {
-     "end": 362,
-     "line": 346,
-     "loc": 17,
-     "name": "insertAtSplitPath"
-    },
-    {
-     "end": 132,
-     "line": 117,
-     "loc": 16,
      "name": "layoutB"
     },
     {
-     "end": 153,
-     "line": 138,
-     "loc": 16,
+     "end": 121,
+     "line": 104,
+     "loc": 18,
      "name": "layoutC"
     },
     {
-     "end": 419,
-     "line": 404,
+     "end": 59,
+     "line": 44,
      "loc": 16,
-     "name": "removeFrom"
-    },
-    {
-     "end": 635,
-     "line": 621,
-     "loc": 15,
-     "name": "migrate"
-    },
-    {
-     "end": 98,
-     "line": 85,
-     "loc": 14,
      "name": "defaultTree"
     },
     {
-     "end": 247,
-     "line": 235,
-     "loc": 13,
-     "name": "splitLeaf"
-    },
-    {
-     "end": 309,
-     "line": 300,
-     "loc": 10,
-     "name": "insertBetween"
-    },
-    {
-     "end": 385,
-     "line": 376,
-     "loc": 10,
-     "name": "parentPath"
-    },
-    {
-     "end": 112,
-     "line": 104,
-     "loc": 9,
-     "name": "layoutA"
-    },
-    {
-     "end": 373,
-     "line": 365,
-     "loc": 9,
-     "name": "setSplitSizesByPath"
-    },
-    {
-     "end": 396,
-     "line": 388,
-     "loc": 9,
-     "name": "leafPaths"
-    },
-    {
      "end": 75,
-     "line": 68,
-     "loc": 8,
-     "name": "split"
+     "line": 65,
+     "loc": 11,
+     "name": "layoutA"
+    }
+   ],
+   "lines": 139,
+   "objects": [
+    {
+     "end": 122,
+     "gated": true,
+     "line": 11,
+     "loc": 112,
+     "methods": 4
     },
     {
-     "end": 218,
-     "line": 211,
-     "loc": 8,
-     "name": "findNode"
-    },
-    {
-     "end": 294,
-     "line": 287,
-     "loc": 8,
-     "name": "insertSibling"
-    },
-    {
-     "end": 319,
-     "line": 312,
-     "loc": 8,
-     "name": "setSplitSizes"
-    },
-    {
-     "end": 339,
-     "line": 332,
-     "loc": 8,
-     "name": "nodeAtPath"
-    },
-    {
-     "end": 202,
-     "line": 196,
-     "loc": 7,
-     "name": "forEachLeaf"
-    },
-    {
-     "end": 600,
-     "line": 594,
-     "loc": 7,
-     "name": "(arrow)"
-    },
-    {
-     "end": 613,
-     "line": 608,
+     "end": 138,
+     "gated": false,
+     "line": 133,
      "loc": 6,
-     "name": "evenSizes"
+     "methods": 0
+    },
+    {
+     "end": 14,
+     "gated": false,
+     "line": 14,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 15,
+     "gated": false,
+     "line": 15,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 16,
+     "gated": false,
+     "line": 16,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 17,
+     "gated": false,
+     "line": 17,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 18,
+     "gated": false,
+     "line": 18,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 19,
+     "gated": false,
+     "line": 19,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 20,
+     "gated": false,
+     "line": 20,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 22,
+     "gated": false,
+     "line": 22,
+     "loc": 1,
+     "methods": 0
     },
     {
      "end": 23,
-     "line": 19,
-     "loc": 5,
-     "name": "(anonymous)"
-    },
-    {
-     "end": 208,
-     "line": 204,
-     "loc": 5,
-     "name": "leafIds"
-    },
-    {
-     "end": 382,
-     "line": 378,
-     "loc": 5,
-     "name": "walk"
-    },
-    {
-     "end": 430,
-     "line": 426,
-     "loc": 5,
-     "name": "removeLeaf"
-    },
-    {
-     "end": 170,
-     "line": 167,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 193,
-     "line": 190,
-     "loc": 4,
-     "name": "firstLeafId"
-    },
-    {
-     "end": 200,
-     "line": 197,
-     "loc": 4,
-     "name": "walk"
-    },
-    {
-     "end": 216,
-     "line": 213,
-     "loc": 4,
-     "name": "(arrow)"
-    },
-    {
-     "end": 224,
-     "line": 221,
-     "loc": 4,
-     "name": "parentSplit"
-    },
-    {
-     "end": 329,
-     "line": 326,
-     "loc": 4,
-     "name": "normalizePath"
-    },
-    {
-     "end": 393,
-     "line": 390,
-     "loc": 4,
-     "name": "walk"
-    },
-    {
-     "end": 66,
-     "line": 66,
-     "loc": 1,
-     "name": "leaf"
-    },
-    {
-     "end": 77,
-     "line": 77,
-     "loc": 1,
-     "name": "clone"
-    },
-    {
-     "end": 186,
-     "line": 186,
-     "loc": 1,
-     "name": "isLeaf"
-    },
-    {
-     "end": 187,
-     "line": 187,
-     "loc": 1,
-     "name": "isSplit"
-    },
-    {
-     "end": 637,
-     "line": 637,
-     "loc": 1,
-     "name": "serialize"
-    }
-   ],
-   "lines": 684,
-   "objects": [
-    {
-     "end": 682,
      "gated": false,
-     "line": 669,
-     "loc": 14,
+     "line": 23,
+     "loc": 1,
      "methods": 0
     },
     {
-     "end": 160,
+     "end": 24,
      "gated": false,
-     "line": 155,
-     "loc": 6,
+     "line": 24,
+     "loc": 1,
      "methods": 0
     },
     {
-     "end": 604,
+     "end": 26,
      "gated": false,
-     "line": 603,
-     "loc": 2,
+     "line": 26,
+     "loc": 1,
      "methods": 0
     },
     {
-     "end": 630,
+     "end": 27,
      "gated": false,
-     "line": 629,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 633,
-     "gated": false,
-     "line": 632,
-     "loc": 2,
-     "methods": 0
-    },
-    {
-     "end": 28,
-     "gated": false,
-     "line": 28,
+     "line": 27,
      "loc": 1,
      "methods": 0
     },
@@ -7450,176 +7501,507 @@
      "line": 30,
      "loc": 1,
      "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 4,
+    "max_object_loc": 112,
+    "max_object_methods": 4,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-core-move.js",
+   "functions": [
+    {
+     "end": 49,
+     "line": 29,
+     "loc": 21,
+     "name": "insertAtSashGap"
+    },
+    {
+     "end": 86,
+     "line": 69,
+     "loc": 18,
+     "name": "moveWindow"
+    },
+    {
+     "end": 67,
+     "line": 52,
+     "loc": 16,
+     "name": "insertForDrop"
+    }
+   ],
+   "lines": 88,
+   "objects": [
+    {
+     "end": 87,
+     "gated": true,
+     "line": 26,
+     "loc": 62,
+     "methods": 3
+    }
+   ],
+   "summary": {
+    "functions": 3,
+    "max_object_loc": 62,
+    "max_object_methods": 3,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-core-tree.js",
+   "functions": [
+    {
+     "end": 299,
+     "line": 278,
+     "loc": 22,
+     "name": "removeNode"
+    },
+    {
+     "end": 54,
+     "line": 36,
+     "loc": 19,
+     "name": "normalizeSizes"
+    },
+    {
+     "end": 235,
+     "line": 219,
+     "loc": 17,
+     "name": "insertAtSplitPath"
+    },
+    {
+     "end": 295,
+     "line": 280,
+     "loc": 16,
+     "name": "removeFrom"
+    },
+    {
+     "end": 344,
+     "line": 329,
+     "loc": 16,
+     "name": "insertOuter"
+    },
+    {
+     "end": 139,
+     "line": 125,
+     "loc": 15,
+     "name": "insertAtSplitIndex"
+    },
+    {
+     "end": 116,
+     "line": 104,
+     "loc": 13,
+     "name": "splitLeaf"
+    },
+    {
+     "end": 259,
+     "line": 249,
+     "loc": 11,
+     "name": "parentPath"
+    },
+    {
+     "end": 320,
+     "line": 310,
+     "loc": 11,
+     "name": "insertOuterEdge"
+    },
+    {
+     "end": 181,
+     "line": 172,
+     "loc": 10,
+     "name": "insertBetween"
+    },
+    {
+     "end": 271,
+     "line": 262,
+     "loc": 10,
+     "name": "leafPaths"
+    },
+    {
+     "end": 152,
+     "line": 144,
+     "loc": 9,
+     "name": "donorIndexFor"
+    },
+    {
+     "end": 212,
+     "line": 204,
+     "loc": 9,
+     "name": "nodeAtPath"
+    },
+    {
+     "end": 246,
+     "line": 238,
+     "loc": 9,
+     "name": "setSplitSizesByPath"
     },
     {
      "end": 31,
-     "gated": false,
-     "line": 31,
-     "loc": 1,
-     "methods": 0
+     "line": 24,
+     "loc": 8,
+     "name": "split"
     },
     {
-     "end": 32,
-     "gated": false,
-     "line": 32,
-     "loc": 1,
-     "methods": 0
+     "end": 73,
+     "line": 66,
+     "loc": 8,
+     "name": "forEachLeaf"
     },
     {
-     "end": 33,
-     "gated": false,
-     "line": 33,
-     "loc": 1,
-     "methods": 0
+     "end": 89,
+     "line": 82,
+     "loc": 8,
+     "name": "findNode"
     },
     {
-     "end": 34,
-     "gated": false,
-     "line": 34,
-     "loc": 1,
-     "methods": 0
+     "end": 166,
+     "line": 159,
+     "loc": 8,
+     "name": "insertSibling"
     },
     {
-     "end": 36,
-     "gated": false,
-     "line": 36,
-     "loc": 1,
-     "methods": 0
+     "end": 191,
+     "line": 184,
+     "loc": 8,
+     "name": "setSplitSizes"
     },
     {
-     "end": 37,
-     "gated": false,
-     "line": 37,
-     "loc": 1,
-     "methods": 0
+     "end": 79,
+     "line": 75,
+     "loc": 5,
+     "name": "leafIds"
     },
     {
-     "end": 38,
-     "gated": false,
-     "line": 38,
-     "loc": 1,
-     "methods": 0
+     "end": 256,
+     "line": 252,
+     "loc": 5,
+     "name": "walk"
     },
     {
-     "end": 40,
-     "gated": false,
-     "line": 40,
-     "loc": 1,
-     "methods": 0
+     "end": 306,
+     "line": 302,
+     "loc": 5,
+     "name": "removeLeaf"
     },
     {
      "end": 41,
+     "line": 38,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 63,
+     "line": 60,
+     "loc": 4,
+     "name": "firstLeafId"
+    },
+    {
+     "end": 71,
+     "line": 68,
+     "loc": 4,
+     "name": "walk"
+    },
+    {
+     "end": 87,
+     "line": 84,
+     "loc": 4,
+     "name": "(arrow)"
+    },
+    {
+     "end": 95,
+     "line": 92,
+     "loc": 4,
+     "name": "parentSplit"
+    },
+    {
+     "end": 201,
+     "line": 198,
+     "loc": 4,
+     "name": "normalizePath"
+    },
+    {
+     "end": 268,
+     "line": 265,
+     "loc": 4,
+     "name": "walk"
+    },
+    {
+     "end": 22,
+     "line": 22,
+     "loc": 1,
+     "name": "leaf"
+    },
+    {
+     "end": 33,
+     "line": 33,
+     "loc": 1,
+     "name": "clone"
+    },
+    {
+     "end": 56,
+     "line": 56,
+     "loc": 1,
+     "name": "isLeaf"
+    },
+    {
+     "end": 57,
+     "line": 57,
+     "loc": 1,
+     "name": "isSplit"
+    }
+   ],
+   "lines": 346,
+   "objects": [
+    {
+     "end": 345,
+     "gated": true,
+     "line": 17,
+     "loc": 329,
+     "methods": 27
+    },
+    {
+     "end": 22,
      "gated": false,
-     "line": 41,
+     "line": 22,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 43,
+     "end": 30,
      "gated": false,
-     "line": 43,
+     "line": 30,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 44,
+     "end": 85,
      "gated": false,
-     "line": 44,
+     "line": 85,
      "loc": 1,
      "methods": 0
     },
     {
-     "end": 66,
+     "end": 263,
      "gated": false,
-     "line": 66,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 74,
-     "gated": false,
-     "line": 74,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 214,
-     "gated": false,
-     "line": 214,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 389,
-     "gated": false,
-     "line": 389,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 637,
-     "gated": false,
-     "line": 637,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 648,
-     "gated": false,
-     "line": 648,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 654,
-     "gated": false,
-     "line": 654,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 657,
-     "gated": false,
-     "line": 657,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 657,
-     "gated": false,
-     "line": 657,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 662,
-     "gated": false,
-     "line": 662,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 665,
-     "gated": false,
-     "line": 665,
-     "loc": 1,
-     "methods": 0
-    },
-    {
-     "end": 666,
-     "gated": false,
-     "line": 666,
+     "line": 263,
      "loc": 1,
      "methods": 0
     }
    ],
    "summary": {
-    "functions": 46,
-    "max_object_loc": 14,
+    "functions": 33,
+    "max_object_loc": 329,
+    "max_object_methods": 27,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-core-validate.js",
+   "functions": [
+    {
+     "end": 151,
+     "line": 126,
+     "loc": 26,
+     "name": "deserialize"
+    },
+    {
+     "end": 40,
+     "line": 17,
+     "loc": 24,
+     "name": "treeError"
+    },
+    {
+     "end": 85,
+     "line": 62,
+     "loc": 24,
+     "name": "pruneTree"
+    },
+    {
+     "end": 116,
+     "line": 101,
+     "loc": 16,
+     "name": "migrate"
+    },
+    {
+     "end": 55,
+     "line": 46,
+     "loc": 10,
+     "name": "validate"
+    },
+    {
+     "end": 80,
+     "line": 74,
+     "loc": 7,
+     "name": "(arrow)"
+    },
+    {
+     "end": 93,
+     "line": 88,
+     "loc": 6,
+     "name": "evenSizes"
+    },
+    {
+     "end": 120,
+     "line": 118,
+     "loc": 3,
+     "name": "serialize"
+    }
+   ],
+   "lines": 153,
+   "objects": [
+    {
+     "end": 152,
+     "gated": true,
+     "line": 13,
+     "loc": 140,
+     "methods": 7
+    },
+    {
+     "end": 84,
+     "gated": false,
+     "line": 83,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 111,
+     "gated": false,
+     "line": 110,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 114,
+     "gated": false,
+     "line": 113,
+     "loc": 2,
+     "methods": 0
+    },
+    {
+     "end": 119,
+     "gated": false,
+     "line": 119,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 132,
+     "gated": false,
+     "line": 132,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 138,
+     "gated": false,
+     "line": 138,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 141,
+     "gated": false,
+     "line": 141,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 141,
+     "gated": false,
+     "line": 141,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 146,
+     "gated": false,
+     "line": 146,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 149,
+     "gated": false,
+     "line": 149,
+     "loc": 1,
+     "methods": 0
+    },
+    {
+     "end": 150,
+     "gated": false,
+     "line": 150,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 8,
+    "max_object_loc": 140,
+    "max_object_methods": 7,
+    "over_100": 0,
+    "over_30": 0,
+    "over_60": 0
+   }
+  },
+  {
+   "file": "ui/js/sash-core.js",
+   "functions": [
+    {
+     "end": 75,
+     "line": 23,
+     "loc": 53,
+     "name": "(anonymous)"
+    },
+    {
+     "end": 74,
+     "line": 48,
+     "loc": 27,
+     "name": "publicApi"
+    },
+    {
+     "end": 38,
+     "line": 29,
+     "loc": 10,
+     "name": "flatten"
+    },
+    {
+     "end": 23,
+     "line": 19,
+     "loc": 5,
+     "name": "(anonymous)"
+    }
+   ],
+   "lines": 76,
+   "objects": [
+    {
+     "end": 73,
+     "gated": false,
+     "line": 49,
+     "loc": 25,
+     "methods": 0
+    },
+    {
+     "end": 30,
+     "gated": false,
+     "line": 30,
+     "loc": 1,
+     "methods": 0
+    }
+   ],
+   "summary": {
+    "functions": 4,
+    "max_object_loc": 25,
     "max_object_methods": 0,
-    "over_100": 1,
-    "over_30": 3,
-    "over_60": 1
+    "over_100": 0,
+    "over_30": 1,
+    "over_60": 0
    }
   },
   {
@@ -12083,11 +12465,11 @@
   }
  ],
  "totals": {
-  "files": 85,
-  "functions": 1149,
-  "lines": 11195,
-  "over_100": 5,
-  "over_30": 37,
-  "over_60": 6
+  "files": 95,
+  "functions": 1172,
+  "lines": 11483,
+  "over_100": 3,
+  "over_30": 29,
+  "over_60": 4
  }
 }

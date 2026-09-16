@@ -16,11 +16,9 @@ Exits 0 + prints "OK" when every test passes.
 const fs = require('fs');
 const path = require('path');
 
-const src = fs.readFileSync(
-  path.join(__dirname, '..', 'ui', 'js', 'sash-core.js'), 'utf8');
-const module_ = { exports: {} };
-new Function('module', 'exports', src)(module_, module_.exports);
-const S = module_.exports;
+// Round II Area B: the model is a facade + four part files; load them
+// per-file (parts → facade) exactly like the browser's script tags.
+const S = require('./_ui_loader.js').loadModule('js/sash-core.js', {}, {});
 
 let passed = 0, failed = 0;
 function t(name, fn) {

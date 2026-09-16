@@ -31,10 +31,9 @@ function loadJS(rel) {
 }
 
 // Load core for real tests
-const coreSrc = fs.readFileSync(path.join(__dirname, '..', 'ui', 'js', 'sash-core.js'), 'utf8');
-const coreMod = { exports: {} };
-new Function('module','exports', coreSrc)(coreMod, coreMod.exports);
-const S = coreMod.exports;
+// Round II Area B: the model is a facade + four part files; load them
+// per-file (parts → facade) exactly like the browser's script tags.
+const S = require('./_ui_loader.js').loadModule('js/sash-core.js', {}, {});
 
 // Load drag parts via fs to ensure coverage tool sees them as loaded
 // The js_coverage tool instruments files and checks if they are required by Node tests

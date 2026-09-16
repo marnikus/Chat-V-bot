@@ -21,10 +21,9 @@ const fs = require('fs');
 const path = require('path');
 
 // ── load the real modules ──────────────────────────────────────────
-const coreSrc = fs.readFileSync(path.join(__dirname, '..', 'ui', 'js', 'sash-core.js'), 'utf8');
-const coreModule = { exports: {} };
-new Function('module', 'exports', coreSrc)(coreModule, coreModule.exports);
-global.SashCore = coreModule.exports;
+// Round II Area B: the model is a facade + four part files; loadModule
+// publishes the facade (and the parts) onto globalThis, as index.html does.
+require('./_ui_loader.js').loadModule('js/sash-core.js', {}, {});
 
 // ── minimal DOM stub ───────────────────────────────────────────────
 let ID_SEQ = 0;

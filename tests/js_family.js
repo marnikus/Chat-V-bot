@@ -34,8 +34,14 @@ const UI = path.join(__dirname, '..', 'ui', 'js');
 // UIHelpers.mergeParts at load time.
 const FAMILIES = {
   // sash-grid facade + its four parts (+ the DOM-free model they all need).
+  // Round II Area B (2026-09-16): the sash-core model itself became four
+  // parts + a facade; the order mirrors the index.html script tags.
   sashGrid: [
     'core/ui-helpers.js',
+    'sash-core-tree.js',
+    'sash-core-layouts.js',
+    'sash-core-move.js',
+    'sash-core-validate.js',
     'sash-core.js',
     'sash-grid-tree.js',
     'sash-grid-windows.js',

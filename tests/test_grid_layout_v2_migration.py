@@ -248,7 +248,9 @@ class TestUiKnowsTheNewWindows(unittest.TestCase):
         base = os.path.join(os.path.dirname(__file__), "..", "ui")
         self.html = open(os.path.join(base, "index.html"),
                          encoding="utf-8").read()
-        self.core = open(os.path.join(base, "js", "sash-core.js"),
+        # Round II Area B (2026-09-16): the window registry moved from the
+        # sash-core facade into the layouts part — the contract follows it.
+        self.core = open(os.path.join(base, "js", "sash-core-layouts.js"),
                          encoding="utf-8").read()
 
     def test_the_core_lists_the_new_windows(self):

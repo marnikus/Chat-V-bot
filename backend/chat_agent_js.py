@@ -21,17 +21,34 @@ import os
 #: longer stays an empty '' forever (Bug 2 of 2026-09-08).
 AGENT_VERSION = 11
 
-AGENT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js",
-                          "chat_agent.js")
+AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
+
+#: Install parts, concatenated BEFORE the facade — the order the facade's
+#: own header documents ("Parts loaded before this one"), kept as one
+#: Runtime.evaluate so the wire shape never changes (Round II Area A split).
+AGENT_PARTS = (
+    "chat_agent-fingerprint.js",
+    "chat_agent-dom.js",
+    "chat_agent-parse.js",
+    "chat_agent-pane.js",
+    "chat_agent-push.js",
+    "chat_agent-scroll.js",
+)
+AGENT_FILE = "chat_agent.js"
 
 _CACHE: dict[str, str] = {}
 
 
 def agent_source() -> str:
-    """The shipped in-page agent, read once."""
+    """The shipped in-page agent: parts + facade, read once, one script."""
     if "src" not in _CACHE:
-        with open(AGENT_PATH, encoding="utf-8") as handle:
-            _CACHE["src"] = handle.read()
+        chunks = []
+        for name in AGENT_PARTS + (AGENT_FILE,):
+            path = os.path.join(AGENT_DIR, name)
+            assert os.path.isfile(path), "chat agent part missing: " + path
+            with open(path, encoding="utf-8") as handle:
+                chunks.append(handle.read())
+        _CACHE["src"] = "\n".join(chunks)
     return _CACHE["src"]
 
 
