@@ -336,3 +336,40 @@ panes        → how many conversation panes exist in the document
 `out_authors` and `authors` next to the items, so Python can re-apply the
 two-step private gate (`backend/chat_parser.verify_private`) to a push
 without trusting the previous tick.
+
+
+### Fixed selector registry — Area A integration (2026-09-19)
+
+`backend/selectors.py` owns the **20 fixed selectors below**, not every
+selector in this reference or arbitrary user settings. The standalone agent
+mirrors this mapping between `/*CVB_SELECTORS_BEGIN*/` and
+`/*CVB_SELECTORS_END*/`; the scroll probe uses `js_literals()`.
+`tests/unit/backend/test_selector_registry.py` checks exact registry/mirror/
+table parity and prevents new Python definition sites outside its inventory.
+`tests/test_chat_agent_golden.js` pins eight synthetic DOM-stub scenarios;
+this detects local regressions, **not** live-site drift or DOM-stub fidelity.
+
+| Registry name | Selector |
+|---|---|
+| `active_tab` | `.tab-item.active` |
+| `tab_type_icon` | `mat-icon.chat-type-icon` |
+| `tab_icon_any` | `mat-icon` |
+| `tab_title` | `p.chat-title` |
+| `user_item` | `user-item` |
+| `user_nick` | `.primary-text` |
+| `my_user_row` | `.primary-text.bold` |
+| `users_counter` | `.users-counter` |
+| `avatar_wrapper` | `.avatar-wrapper` |
+| `user_badge` | `.badge` |
+| `messages_pane` | `app-messages` |
+| `messages_root` | `.messages-root` |
+| `message_node` | `div.message-container` |
+| `message_body` | `p.message` |
+| `message_from` | `span.from` |
+| `message_text` | `span.message` |
+| `message_image` | `app-chat-image img` |
+| `image_any` | `img` |
+| `sent_time` | `span.sent-time` |
+| `sent_time_any` | `.sent-time` |
+
+Integration record: `docs/archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md`.

@@ -1,5 +1,9 @@
 """Compatibility shim — the run engine lives in services/run/."""
 
+from backend.legacy_shims import deprecated_module
+
+deprecated_module("action_engine", "services.run")
+
 from services.run import (  # noqa: F401
     RETIRED_BLOCK_KEYS,
     STANDALONE_NICK,

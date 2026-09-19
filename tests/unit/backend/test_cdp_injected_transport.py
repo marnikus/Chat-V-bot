@@ -8,7 +8,7 @@ import json
 import unittest
 
 from backend.cdp_client import CDPClient, client_with_transport
-from backend.cdp_client_transport import BrowserTransport
+from backend.cdp_transport import WebSocketConnector, HttpTabDiscovery
 
 
 class ScriptedConnection:
@@ -69,7 +69,9 @@ class TestInjectedTransport(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)  # flush cancellation, never a wall-clock delay
 
     async def test_default_adapter_is_retained(self):
-        self.assertIsInstance(CDPClient()._transport, BrowserTransport)
+        wire = CDPClient().wire
+        self.assertIsInstance(wire.connector, WebSocketConnector)
+        self.assertIsInstance(wire.discovery, HttpTabDiscovery)
 
     async def test_connect_domain_order_evaluate_and_disconnect(self):
         signals = []

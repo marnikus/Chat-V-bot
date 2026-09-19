@@ -14,6 +14,8 @@ in each round, not implied by the presence of a plan.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-19-area-a-integration/`](#2026-09-19-area-a-integration) | 1 | Area A code transfer integrated with Round I; compatibility fixes, measured mutation/coverage and unchanged baseline failures. |
+| [`2026-09-16-area-a-cdp-boundary/`](#2026-09-16-area-a-cdp-boundary) | 1 | Reconstructed source design supplied for transfer: wire, typed gate, selector/golden tests and shim retirement ladder. |
 | [`2026-09-19-round-i-seams/`](#2026-09-19-round-i-seams) | 2 | Next cycle: reviewed six-area seams/testability audit; only Area A authorized, first transport slice implemented, remaining gates explicit. |
 | [`2026-09-04-foundation/`](#2026-09-04-foundation) | 5 | The original architecture proposal (written before any code existed — **superseded by `docs/current/SYSTEM_OF_RECORD.md`**) plus the first three rounds of bug fixes and the configurable Find & Click block. |
 | [`2026-09-05-grid-scroll-undo/`](#2026-09-05-grid-scroll-undo) | 15 | The window grid ("sash layout"), the Scroll & Parse pipeline, visual click confirmation, filter purging and the first global undo timeline. |
@@ -398,3 +400,12 @@ Round H Area D implementation — verification debt closed without touching prod
 
 - [`ROUND_I_DESIGN_2026-09-19.md`](2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) — corrected audit, six-area roadmap, ownership/dependencies and Area A exit gates. B–F are proposals only.
 - [`AREA_A_IMPLEMENTATION_2026-09-19.md`](2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) — first transport slice, tests, baseline failures and pending work; not full Area A completion.
+
+
+## 2026-09-16-area-a-cdp-boundary
+
+- [`AREA_A_CDP_BOUNDARY_DESIGN_2026-09-16.md`](2026-09-16-area-a-cdp-boundary/AREA_A_CDP_BOUNDARY_DESIGN_2026-09-16.md) — reconstructed source design, imported September 19; local results live in the transfer record.
+
+## 2026-09-19-area-a-integration
+
+- [`AREA_A_TRANSFER_2026-09-19.md`](2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) — merged Area A implementation, compatibility/correctness adjustments and explicit remaining audit gates.

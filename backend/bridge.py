@@ -6,6 +6,10 @@ under the historical names. The old monolith is preserved verbatim at
 bridge/_legacy_bridge.py for reference during the transition.
 """
 
+from backend.legacy_shims import deprecated_module
+
+deprecated_module("bridge", "bridge.router")
+
 from bridge.router import Router as Bridge  # noqa: F401
 from bridge.context import BridgeContext    # noqa: F401
 

@@ -5,17 +5,9 @@ Adapters own network acquisition; the client still owns request IDs, pending
 responses, domain enable order and event dispatch. No Qt or network imports.
 """
 
-from typing import AsyncIterator, Protocol
+from typing import Protocol
 
-
-class CdpConnection(Protocol):
-    """The portion of a WebSocket consumed by the CDP receive loop."""
-
-    def __aiter__(self) -> AsyncIterator[str | bytes]: ...
-
-    async def send(self, payload: str) -> None: ...
-
-    async def close(self) -> None: ...
+from backend.cdp_transport import CdpConnection  # noqa: F401 (public re-export)
 
 
 class CdpTransport(Protocol):
@@ -24,3 +16,16 @@ class CdpTransport(Protocol):
     async def connect(self, ws_url: str) -> CdpConnection: ...
 
     async def discover(self, base_url: str) -> list[dict]: ...
+
+
+class CombinedTransportAdapter:
+    """Keep Round I's combined transport usable with the split CdpWire."""
+
+    def __init__(self, browser: CdpTransport):
+        self.browser = browser
+
+    async def open(self, ws_url: str) -> CdpConnection:
+        return await self.browser.connect(ws_url)
+
+    async def list_tabs(self, base_url: str) -> list[dict]:
+        return await self.browser.discover(base_url)

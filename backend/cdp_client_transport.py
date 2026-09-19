@@ -23,24 +23,22 @@ import logging
 from typing import Any
 from urllib.parse import urlparse
 
-import aiohttp
-import websockets
+from backend.cdp_transport import default_wire
 
 log = logging.getLogger("chatbot")
 
 
 class BrowserTransport:
-    """Production adapter; only this boundary acquires browser sockets/HTTP."""
+    """Compatibility adapter for Round I's combined browser port.
+
+    Production acquisition lives in cdp_transport; new clients use CdpWire.
+    """
 
     async def connect(self, ws_url: str):
-        return await websockets.connect(ws_url, max_size=50 * 1024 * 1024,
-                                        open_timeout=10, close_timeout=5)
+        return await default_wire().connector.open(ws_url)
 
     async def discover(self, base_url: str) -> list[dict]:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{base_url}/json/list",
-                                   timeout=aiohttp.ClientTimeout(total=5)) as r:
-                return await r.json() if r.status == 200 else []
+        return await default_wire().discovery.list_tabs(base_url)
 
 
 def _domain_matches(host: str, domain: str) -> bool:
@@ -75,7 +73,7 @@ async def open_client(client, ws_url: str) -> bool:
     """Connect, enable the four domains and start the receive loop."""
     await close_client(client)
     try:
-        client._ws = await client._transport.connect(ws_url)
+        client._ws = await client.wire.connector.open(ws_url)
         client._connected = True
         client._receive_task = asyncio.create_task(receive_loop(client))
         for dom in ("Page", "DOM", "Runtime", "Network"):
@@ -124,7 +122,7 @@ async def receive_loop(client) -> None:
                 client._pending.pop(mid).set_result(data)
             elif data.get("method"):
                 client._dispatch_event(data)
-    except (websockets.ConnectionClosed, asyncio.CancelledError):
+    except asyncio.CancelledError:
         pass
     except Exception as e:
         log.error("CDP receive error: %s", e)
@@ -136,7 +134,7 @@ async def receive_loop(client) -> None:
 # ── tab discovery (plain HTTP, not the socket) ────────────────────
 async def _fetch_tab_list(client) -> list:
     """The raw `/json/list` payload (empty when the endpoint is unhappy)."""
-    return await client._transport.discover(client.base_url)
+    return await client.wire.discovery.list_tabs(client.base_url)
 
 
 async def fetch_tabs(client) -> list[dict]:

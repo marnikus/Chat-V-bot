@@ -19,8 +19,9 @@ tests/unit/backend/test_cdp_client_transport.py). `CdpLease` and `TabInfo`
 stay defined here because the public API snapshot pins them to this module
 (tests/unit/backend/backend_api_snapshot.json).
 
-Imports: the two part modules only (plus PySide6); the parts never import
-this file back.
+Imports: the part modules and wire contracts (plus PySide6); parts never
+import this file back. Area A adds `with_wire`; the Round I combined-port
+construction helper remains compatible through an adapter.
 """
 
 import asyncio
@@ -34,7 +35,8 @@ from PySide6.QtCore import QObject, Signal
 from backend import cdp_client_transport as transport
 from backend.cdp_client_commands import CdpClientCommands, TabInfo
 from backend.cdp_client_events import CdpEvents
-from backend.cdp_ports import CdpTransport
+from backend.cdp_ports import CdpTransport, CombinedTransportAdapter
+from backend.cdp_transport import CdpWire, default_wire
 
 log = logging.getLogger("chatbot")
 
@@ -141,7 +143,15 @@ class CDPClient(CdpClientCommands, QObject):
         self._connected = False
         self.lease = CdpLease()
         self._events = CdpEvents()
-        self._transport: CdpTransport = transport.BrowserTransport()
+        self.wire: CdpWire = default_wire()
+
+    @classmethod
+    def with_wire(cls, wire: CdpWire, host: str = "127.0.0.1",
+                  port: int = 9222) -> "CDPClient":
+        """Construct with browser acquisition injected before any I/O."""
+        client = cls(host, port)
+        client.wire = wire
+        return client
 
     # ── event fan-out (body in cdp_client_events.py) ──────────────
     def on_event(self, method: str, callback: Callable) -> Callable:
@@ -188,5 +198,6 @@ def client_with_transport(browser: CdpTransport, host: str = "127.0.0.1",
     before any network activity; request/event/lifecycle code is identical.
     """
     client = CDPClient(host, port, parent)
-    client._transport = browser
+    adapter = CombinedTransportAdapter(browser)
+    client.wire = CdpWire(adapter, adapter)
     return client

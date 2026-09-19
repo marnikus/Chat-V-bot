@@ -14,11 +14,12 @@ and are linked from here.
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
 
 **2026-09-19 scoped verification:** the table above and §7/§8 figures are
-historical baselines, not a fresh green-suite claim. Round I's Area A transport
-slice passes its backend tests; the full run has 3275 passes and 72 failures,
-with the identical 72 failures reproduced on the parent production code.
-Observed coverage is 92.85% line / 88.38% branch, not a promoted baseline.
-See [the validation record](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md).
+historical baselines, not a fresh green-suite claim. The integrated Area A
+transfer passes 424 targeted tests. The full run has 3,347 passes and the same
+72 existing failures; observed coverage is 92.94% line / 88.46% branch, not a
+promoted baseline. Gate/decoder mutation scores are 91.50% / 96.73% (scoped).
+See [the transfer report](../../reports/AREA_A_TRANSFER_2026-09-19.md) for
+commands, denominators, baseline comparisons and remaining acceptance gaps.
 
 > **Conflict rule.** If a statement here disagrees with an archived design doc,
 > **this file wins.** Archived docs are true *as of the date in their name* —
@@ -183,7 +184,7 @@ Each one is enforced in code and pinned by a test. Rule numbers refer to
 | **I-10** | One chronological undo timeline for every editable surface; automatic side-effects are never recorded | `services/undo_service.py` (RULE 12) |
 | **I-11** | State that cannot be read back is never persisted (grid layout is validated and rejected, not repaired) | `services/layout_service.py` (RULE 13) |
 | **I-12** | The archive is not the queue: filters, purges, undo and People-list edits never delete archived messages; collectors never add to the queue | `stores/history_repo*`, `stores/user_memory.py` (RULE 14) |
-| **I-13** | Nothing is archived without the two-step private gate, re-applied on every write path; the gate fails **closed** | `backend/chat_parser.verify_private()` (RULE 15) |
+| **I-13** | Nothing is archived without the two-step private gate, re-applied on every write path; unreadable author lists explicitly refuse | `backend/chat_parser.verify_private()` (RULE 15 door) → `backend/private_gate.judge_private()` on `probe_results.TabState`; `tests/unit/backend/test_private_gate_truth_table.py` pins precedence and the 768-cell contract |
 | **I-14** | Media bytes are filed under the conversation they belong to, never in a global pile | `stores/media_layout.py` (RULE 15) |
 | **I-15** | Deleting a world is permanent and leaves no orphans; the last world cannot be deleted; a failed switch leaves the app connected to the previous world | `services/db_deletion_flow.py`, `services/db_lifecycle.py` |
 | **I-16** | No `os.unlink` happens before scan + plan + switch + detach + revalidate | `services/db_deletion_flow.py` |
@@ -244,7 +245,7 @@ non-destructive).
 |---|---|---|
 | Contracts | `core/` (5 files) | DI container, EventBus, interfaces, `Result` — no Qt, no I/O |
 | Blocks | `actions/` (25) | The 17 action blocks + `BaseAction`, registry, cancellation, wait-speed scaling |
-| Page-facing | `backend/` (30) | CDP client, DOM probes, chat parser + private gate, chat sync, scroll parser, visual click, media handler; **compatibility shims** for the pre-split names |
+| Page-facing | `backend/` | CDP wire ports/adapters, DOM probes and fixed-selector registry, typed private gate behind the compatible chat-parser door, chat sync, scroll parser, visual click and media; deprecated pre-split shims remain importable |
 | Wire | `bridge/` (14) | `bridge/router.py` — ONE QObject on the QWebChannel, assembled from eleven domain bridges: cdp · stack · people · history · label · db · collector · undo · layout · file · window-preset |
 | Orchestration | `services/` (55) | `run/` (engine), `history/` (service + `trash.py` session-sized trash + `migrate.py` install migration), collector (the `collector_*` family), db lifecycle + deletion (the `db_deletion_*` family), layout, people, undo (the `undo_*` family: `undo_service.py` facade + `undo_history.py` / `undo_apply.py` / `undo_db.py` / `undo_world.py` + `undo_archive.py` verified archive commands + `undo_timeline.py` timeline commit + `undo_support.py`) + `world_events.py` (the world's clock: wait for it, announce it live) |
 | Persistence | `stores/` (37) | SQLite world store + schema/repair, JSON stores, labels, media, presets, undo, `world_lock.py` (one write gate per world file) |
@@ -258,20 +259,32 @@ connects them to the window and starts the qasync loop.
 
 ---
 
-### Round I / Area A: injectable browser acquisition
+### Round I / Area A: browser boundary and typed gate
 
-`backend/cdp_ports.py` defines `CdpTransport` (connect/discover) and
-`CdpConnection` (send/close/async frame iteration). The default
-`BrowserTransport` in `backend/cdp_client_transport.py` owns socket and HTTP
-acquisition. `backend.cdp_client.client_with_transport(...)` constructs a
-client with an injected adapter before any I/O; `CDPClient`'s frozen
-constructor and public methods remain unchanged. Framing, domain enable
-order, dispatch, timeout behavior and legacy test seams remain in place.
+`backend/cdp_transport.py` defines the connection, connector and discovery
+ports bundled in `CdpWire`; its production adapters own backend network-library
+imports. `CDPClient.with_wire(...)` injects the wire before I/O. The earlier
+`client_with_transport(...)` helper still works through `cdp_ports`' combined-
+port adapter. Frozen constructors/methods, framing, enable order and pending-
+request timeout behavior are unchanged; scripted replay tests use real client
+code. Dedicated adapter tests pin HTTP status/timeout/cleanup policy.
 
-`tests/unit/backend/test_cdp_injected_transport.py` exercises the real client
-with synthetic scripted frames, without network patches. This is **only the
-first Area A slice**, not a typed-probe/selector migration or shim retirement.
-The remaining work is in the [Round I plan](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md).
+`verify_private(dict, ...)` remains the gate door; it decodes once into frozen
+`TabState`/`PaneAuthors` and delegates to the typed private gate. Valid inputs
+keep their judgments; unreadable author lists now explicitly refuse. Other
+sync/scroll consumers still use dicts. `PrivateCheck` retains its historical
+public/serialization identity.
+
+`backend/selectors.py` owns 20 fixed collector/scroll selectors; the agent
+mirror and explicit DOM reference table have exact parity tests. Eight
+synthetic golden-DOM scenarios pin the real agent's output, not live-site
+compatibility. Twelve compatibility shims still export the original API, now
+with deprecation warnings and a production-importer inventory.
+
+[Transfer design and validation](../archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md)
+records the scope and remaining gates: full typed-consumer migration, actual
+shim retirement, live captures and CI activation. The canary job is in the
+**inactive** `tools/ci/quality-gate.yml` template. Areas B–F remain planned only.
 
 ## 7. Tests
 
@@ -332,6 +345,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-19 | [Area A transferred implementation](../archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) · [source design](../archive/2026-09-16-area-a-cdp-boundary/AREA_A_CDP_BOUNDARY_DESIGN_2026-09-16.md) | CdpWire, typed gate, selector/golden canaries and shim deprecation integrated with Round I; local validation and remaining release gates |
 | 2026-09-19 | [Round I — seams & testability](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [Area A implementation](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) | Reviewed six-area audit and corrected evidence; Area A transport slice implemented, remaining A gates pending; B–F not implemented |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |

@@ -1,5 +1,9 @@
 """Compatibility shim — the collector lives in services/collector_service.py."""
 
+from backend.legacy_shims import deprecated_module
+
+deprecated_module("collector", "services.collector_service")
+
 from services.collector_service import (  # noqa: F401
     Collector, CollectorState, DEFAULTS,
 )

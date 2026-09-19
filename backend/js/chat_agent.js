@@ -30,6 +30,32 @@
   var AUTHOR_SCAN_MAX = 1200;   // per-pane author scan cap (keeps state cheap)
   var SEP = '\u001f';
 
+  // Fixed-selector mirror; backend/selectors.py and parity tests own it.
+  /*CVB_SELECTORS_BEGIN*/
+  var SEL = {
+    "active_tab": ".tab-item.active",
+    "tab_type_icon": "mat-icon.chat-type-icon",
+    "tab_icon_any": "mat-icon",
+    "tab_title": "p.chat-title",
+    "user_item": "user-item",
+    "user_nick": ".primary-text",
+    "my_user_row": ".primary-text.bold",
+    "users_counter": ".users-counter",
+    "avatar_wrapper": ".avatar-wrapper",
+    "user_badge": ".badge",
+    "messages_pane": "app-messages",
+    "messages_root": ".messages-root",
+    "message_node": "div.message-container",
+    "message_body": "p.message",
+    "message_from": "span.from",
+    "message_text": "span.message",
+    "message_image": "app-chat-image img",
+    "image_any": "img",
+    "sent_time": "span.sent-time",
+    "sent_time_any": ".sent-time"
+};
+  /*CVB_SELECTORS_END*/
+
   if (window.__cvbAgent && window.__cvbAgent.version === VERSION) {
     return window.__cvbAgent.version;
   }
@@ -225,7 +251,7 @@
   function visiblePane() {
     var summary = describeTab();
     var currentPartner = normNick(summary.partner);
-    var nodes = qsa(document, 'div.message-container');
+    var nodes = qsa(document, SEL.message_node);
     if (!nodes.length) {
       /* No message nodes right now. The active pane can be momentarily
          empty while it is loading older history, and document order may put
@@ -234,8 +260,8 @@
          collector sees "empty" on a non-empty conversation. If we already
          know which pane the user is watching, keep using that pane. */
       var known = lastPane && inDocument(lastPane) ? lastPane : null;
-      var pane = known || qs(document, '.messages-root') ||
-                 qs(document, 'app-messages');
+      var pane = known || qs(document, SEL.messages_root) ||
+                 qs(document, SEL.messages_pane);
       return { pane: pane, nodes: nodes, panes: 0,
                source: known ? 'last' : 'first' };
     }
@@ -276,8 +302,8 @@
     var found = visiblePane();
     var nodes = found.nodes;
     if (!nodes.length) {
-      return found.pane || qs(document, '.messages-root') ||
-             qs(document, 'app-messages');
+      return found.pane || qs(document, SEL.messages_root) ||
+             qs(document, SEL.messages_pane);
     }
     var last = nodes[nodes.length - 1];
     for (var p = nodes[0].parentElement; p; p = p.parentElement) {
@@ -304,22 +330,22 @@
     stats.parsed++;
     var dir = node.classList && node.classList.contains('my-message-background')
       ? 'out' : 'in';
-    var body = qs(node, 'p.message');
+    var body = qs(node, SEL.message_body);
     var from = '', text = '', kind = 'text', media = null;
     if (body) {
-      from = clean(ownText(qs(body, 'span.from')) ||
-                   (qs(body, 'span.from') || {}).textContent);
-      var img = qs(body, 'app-chat-image img') || qs(body, 'img');
+      from = clean(ownText(qs(body, SEL.message_from)) ||
+                   (qs(body, SEL.message_from) || {}).textContent);
+      var img = qs(body, SEL.message_image) || qs(body, SEL.image_any);
       if (img) {
         var url = liveMediaUrl(img);
         kind = /\.gif(\?|#|$)/i.test(url) ? 'gif' : 'image';
         media = { url: url, kind: kind };
       } else {
-        var span = qs(body, 'span.message');
+        var span = qs(body, SEL.message_text);
         text = clean(span ? span.textContent : '');
       }
     }
-    var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
+    var stamp = qs(node, SEL.sent_time) || qs(node, SEL.sent_time_any);
     return { dir: dir, from: from, kind: kind, text: text, media: media,
              time: clean(stamp ? stamp.textContent : '') };
   }
@@ -333,14 +359,14 @@
    * compares these fields against the cache and re-parses on ANY change
    * (text, nick, time, media url). */
   function liveFields(node) {
-    var body = qs(node, 'p.message');
-    var img = body ? (qs(body, 'app-chat-image img') || qs(body, 'img'))
+    var body = qs(node, SEL.message_body);
+    var img = body ? (qs(body, SEL.message_image) || qs(body, SEL.image_any))
                    : null;
-    var span = body ? qs(body, 'span.message') : null;
-    var stamp = qs(node, 'span.sent-time') || qs(node, '.sent-time');
+    var span = body ? qs(body, SEL.message_text) : null;
+    var stamp = qs(node, SEL.sent_time) || qs(node, SEL.sent_time_any);
     return {
-      from: body ? clean(ownText(qs(body, 'span.from')) ||
-                         (qs(body, 'span.from') || {}).textContent) : '',
+      from: body ? clean(ownText(qs(body, SEL.message_from)) ||
+                         (qs(body, SEL.message_from) || {}).textContent) : '',
       text: span ? clean(span.textContent) : '',
       hasMedia: !!img,
       mediaUrl: img ? liveMediaUrl(img) : '',
@@ -485,7 +511,7 @@
         if (node.classList && node.classList.contains('message-container')) {
           added.push(node);
         } else {
-          added = added.concat(qsa(node, 'div.message-container'));
+          added = added.concat(qsa(node, SEL.message_node));
         }
       }
     }
@@ -547,13 +573,13 @@
 
   /** Active-tab facts only. `describe()` adds pane-scoped user data. */
   function describeTab() {
-    var active = qs(document, '.tab-item.active');
+    var active = qs(document, SEL.active_tab);
     var tab = 'none', partner = '', title = '';
     if (active) {
-      var icon = qs(active, 'mat-icon.chat-type-icon') ||
-                 qs(active, 'mat-icon');
+      var icon = qs(active, SEL.tab_type_icon) ||
+                 qs(active, SEL.tab_icon_any);
       var name = icon ? icon.getAttribute('data-mat-icon-name') : '';
-      title = ownText(qs(active, 'p.chat-title'));
+      title = ownText(qs(active, SEL.tab_title));
       /* The main room is the ONLY tab we identify positively, by its own
        * icon. Every other open tab that names a person in its title IS a
        * private chat: a partner without an avatar identification (guest,
@@ -565,7 +591,7 @@
       tab = name === 'room' ? 'room' : (clean(title) ? 'private' : 'none');
       partner = title;
     }
-    var mine = qs(document, '.primary-text.bold');
+    var mine = qs(document, SEL.my_user_row);
     return { tab: tab, partner: partner, title: title,
              me: clean(mine ? mine.textContent : ''), participants: 0 };
   }
@@ -579,9 +605,9 @@
    * is consulted. */
   function countPaneUsers(container) {
     if (!container) return 0;
-    var items = qsa(container, 'user-item'), seen = {}, n = 0;
+    var items = qsa(container, SEL.user_item), seen = {}, n = 0;
     for (var i = 0; i < items.length; i++) {
-      var el = qs(items[i], '.primary-text');
+      var el = qs(items[i], SEL.user_nick);
       var nick = normNick(el ? el.textContent : '');
       if (!nick || seen[nick]) continue;
       seen[nick] = 1;
@@ -593,9 +619,9 @@
   function describePane(pane) {
     var base = describeTab();
     var container = containerOf(pane);
-    var counter = container ? qs(container, '.users-counter') : null;
-    var mine = container ? qs(container, '.primary-text.bold') : null;
-    var globalMine = qs(document, '.primary-text.bold');
+    var counter = container ? qs(container, SEL.users_counter) : null;
+    var mine = container ? qs(container, SEL.my_user_row) : null;
+    var globalMine = qs(document, SEL.my_user_row);
     var count = counter ? num(clean(counter.textContent)) : 0;
     return {
       tab: base.tab,
@@ -609,7 +635,7 @@
 
   function describe() {
     var pane = lastPane || visiblePane().pane ||
-               qs(document, '.messages-root') || qs(document, 'app-messages');
+               qs(document, SEL.messages_root) || qs(document, SEL.messages_pane);
     return describePane(pane);
   }
 
@@ -632,7 +658,7 @@
    * one `state()` reports and `scrollToTop()` drives. */
   function scrollerCandidates() {
     var root = messagesRoot() || visiblePane().pane ||
-               qs(document, '.messages-root') || qs(document, 'app-messages');
+               qs(document, SEL.messages_root) || qs(document, SEL.messages_pane);
     var candidates = [], seen = [];
     for (var el = root; el; el = el.parentElement) {
       if (seen.indexOf(el) >= 0) break;
@@ -724,8 +750,8 @@
 
   function state() {
     reattach();
-    var anchor = qs(document, 'app-messages') || qs(document, '.messages-root') ||
-                 qs(document, '.tab-item.active');
+    var anchor = qs(document, SEL.messages_pane) || qs(document, SEL.messages_root) ||
+                 qs(document, SEL.active_tab);
     if (!anchor && !containers().length) {
       return { ok: false, reason: 'no chat on this page', agent: VERSION,
                tab: 'none', partner: '', title: '', me: '', participants: 0,

@@ -10,10 +10,8 @@ tests that lock current behaviour first").
 
 Two conventions keep the pins honest across the split:
 
-  * `websockets.connect` and `aiohttp.ClientSession` are patched on the
-    *modules* they live in (attribute lookup at call time), so the same test
-    stays green whether the transport calls them from the old file or from
-    the split-out transport module;
+  * acquisition is scripted through `cdp.wire` (Area A); HTTP/WebSocket
+    adapter behavior is tested separately in test_cdp_wire_adapters.py;
   * the instance seam the existing `tests/test_cdp_events.py` uses — shadowing
     `cdp.send` with a fake, assigning `cdp._ws` / `cdp._connected` — is reused
     verbatim, because that seam is the contract the split must keep.
@@ -30,10 +28,27 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
-import aiohttp                      # noqa: E402
-import websockets                   # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from backend.cdp_transport import CdpWire  # noqa: E402
+from fake_cdp_wire import FakeTabDiscovery  # noqa: E402
 
 from backend.cdp_client import CDPClient, CdpLease, LOW, HIGH  # noqa: E402
+
+
+class _Connector:
+    def __init__(self, socket=None, error=None):
+        self._socket, self._error = socket, error
+
+    async def open(self, ws_url):
+        if self._error is not None:
+            raise self._error
+        return self._socket
+
+
+def wired(cdp, socket=None, error=None, tabs=()):
+    cdp.wire = CdpWire(_Connector(socket, error), FakeTabDiscovery(tabs))
+    return cdp
 
 
 def run(coro):
@@ -217,19 +232,10 @@ class TestConnectDisconnect(unittest.TestCase):
             cdp.connected.connect(lambda: states.append("connected"))
             cdp.error.connect(lambda _e: states.append("error"))
 
-            real = websockets.connect
-            socket_box = []
-            ok = None
-            try:
-                async def fake(url, **kw):
-                    socket = ReplySocket()
-                    socket_box.append(socket)
-                    return socket
-                websockets.connect = fake
-                ok = await cdp.connect("ws://tab/1")
-            finally:
-                websockets.connect = real
-            sent = [json.loads(f)["method"] for f in socket_box[0].sent]
+            socket = ReplySocket()
+            wired(cdp, socket)
+            ok = await cdp.connect("ws://tab/1")
+            sent = [json.loads(f)["method"] for f in socket.sent]
             await cdp.disconnect()
             return ok, states, sent
         ok, states, methods = run(scenario())
@@ -245,15 +251,8 @@ class TestConnectDisconnect(unittest.TestCase):
             cdp.error.connect(lambda _e: states.append("error"))
             cdp.disconnected.connect(lambda: states.append("disconnected"))
 
-            async def fake_connect(url, **kw):
-                raise OSError("refused")
-
-            real = websockets.connect
-            websockets.connect = fake_connect
-            try:
-                ok = await cdp.connect("ws://tab/1")
-            finally:
-                websockets.connect = real
+            wired(cdp, error=OSError("refused"))
+            ok = await cdp.connect("ws://tab/1")
             return ok, states, cdp.is_connected
         ok, states, connected = run(scenario())
         self.assertFalse(ok)
@@ -310,14 +309,16 @@ class TestConnectDisconnect(unittest.TestCase):
 
 class TestFetchTabs(unittest.TestCase):
     def _tabs(self, session_factory):
+        # Discovery consumer tests, not HTTP status-policy tests. The real
+        # HttpTabDiscovery is independently exercised by adapter contracts.
+        session = session_factory()
+        items = session._payload if session._status == 200 else []
+
         async def scenario():
             cdp = CDPClient("h", 9223)
-            real = aiohttp.ClientSession
-            aiohttp.ClientSession = session_factory
-            try:
-                return await cdp.fetch_tabs()
-            finally:
-                aiohttp.ClientSession = real
+            cdp.wire = CdpWire(_Connector(),
+                               FakeTabDiscovery(items or [], session._exc))
+            return await cdp.fetch_tabs()
         return run(scenario())
 
     def test_only_page_entries_survive_as_tab_info(self):

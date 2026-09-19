@@ -14,6 +14,7 @@ import logging
 from backend.dom_highlight import build_highlight_probe
 from backend.probe_requests import HighlightSpec
 from backend.scroll_parser_model import STOPPED
+from backend.selectors import js_literals
 from stores.user_memory import UserRecord
 
 log = logging.getLogger("chatbot")
@@ -23,12 +24,12 @@ log = logging.getLogger("chatbot")
 #: a single evaluate() call.
 _EXTRACT_JS = """(function(){
     var vp = document.querySelector(%(vp)s);
-    var items = document.querySelectorAll('user-item');
+    var items = document.querySelectorAll(%(user_item)s);
     var users = [];
     items.forEach(function(item){
-        var wrapper = item.querySelector('.avatar-wrapper');
-        var badge = item.querySelector('.badge');
-        var nickEl = item.querySelector('.primary-text');
+        var wrapper = item.querySelector(%(avatar_wrapper)s);
+        var badge = item.querySelector(%(user_badge)s);
+        var nickEl = item.querySelector(%(user_nick)s);
         if(!wrapper||!nickEl) return;
         var cl = wrapper.classList;
         users.push({
@@ -88,7 +89,8 @@ class ScrollDom:
     async def snapshot(self) -> dict | None:
         """Read the rendered people and the scroll geometry in one probe."""
         raw = await self.p._cdp.evaluate(
-            _EXTRACT_JS % {"vp": json.dumps(self.p.options.viewport_sel)})
+            _EXTRACT_JS % {"vp": json.dumps(self.p.options.viewport_sel),
+                           **js_literals()})
         if not raw:
             return None
         try:
