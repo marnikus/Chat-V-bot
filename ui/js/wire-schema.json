@@ -1,0 +1,1146 @@
+{
+  "methods": {
+    "add_url_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "apply_imported": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_analyze_reaction": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_apply_reaction": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_check_prompt": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_connections": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "bot_delete_connection": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "bot_delete_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "bot_get_presets": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_get_prompts": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "bot_get_variables": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "bot_load_today": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_preview_prompt": {
+      "arity": 4,
+      "params": [
+        "QString",
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_reaction_state": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_reset_prompt": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "bot_save_connection": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_save_preset": {
+      "arity": 4,
+      "params": [
+        "QString",
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "bot_save_prompt": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "bot_send_message": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_suggest_reply": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_test_connection": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_use_connection": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "clear_memory": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "collector_command": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "collector_set": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "collector_state": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "connect_tab": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "copy_media": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "copy_text": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "db_clean": {
+      "arity": 0,
+      "params": [],
+      "return": "bool"
+    },
+    "db_create": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "db_delete": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "db_info": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "db_list": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "db_load": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "delete_custom_block": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "delete_stack_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "delete_template_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "delete_user": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "delete_users": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "delete_window_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "detect_my_nick": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "export_custom_block": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "export_stack": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "export_stack_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "export_window_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "find_tab_by_url": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "get_app_state": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_criteria": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_grid_layout": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_history_settings": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_labels": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_message": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_my_nick": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_stack_history": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_stack_json": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_tabs": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_undo_history": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_url_presets": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "get_window_states": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "history_clear_person": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "history_delete_message": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "history_delete_person": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "bool"
+      ],
+      "return": "bool"
+    },
+    "history_merge": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "history_open": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_page": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_purge_deleted": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "history_restore_person": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "history_search": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_stats": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "import_file": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "label_assign": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "label_clear_filter": {
+      "arity": 0,
+      "params": [],
+      "return": "bool"
+    },
+    "label_create": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "label_delete": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "label_set_filter": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "label_set_for": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "label_unassign": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "label_update": {
+      "arity": 3,
+      "params": [
+        "QString",
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "list_custom_blocks": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "list_stack_presets": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "list_template_presets": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "list_window_presets": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "load_stack_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "load_template_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "load_window_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "media_folder": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "QString"
+    },
+    "media_path": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "media_restore": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "open_media_folder": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "pause_stack": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "push_global_history": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "push_stack_history": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "redo": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "redo_grid_layout": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "redo_stack": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "refresh_users": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "remove_url_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "reset_grid_layout": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "reset_messaged": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "resume_stack": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "run_stack": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_criteria": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_custom_block": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_grid_layout": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "save_history_settings": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_message": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_stack_history": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "int"
+      ],
+      "return": "void"
+    },
+    "save_stack_preset": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_template_preset": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "save_window_preset": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "save_window_states": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "set_block_config_pinned": {
+      "arity": 1,
+      "params": [
+        "bool"
+      ],
+      "return": "void"
+    },
+    "set_last_url_preset": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "set_my_nick": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "set_user_messaged": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "bool"
+      ],
+      "return": "void"
+    },
+    "show_window_preset_in_folder": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "bool"
+    },
+    "snapshot_stack": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "stop_stack": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "undo": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "undo_grid_layout": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "undo_stack": {
+      "arity": 0,
+      "params": [],
+      "return": "QString"
+    },
+    "userdb_page": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "userdb_stats": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    }
+  },
+  "signals": {
+    "bot_error": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_prompts_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "bot_reply_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "collector_log": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "collector_status": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "connection_status": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "custom_blocks_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "db_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "db_info_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "export_done": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "grid_layout_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "grid_layout_persisted": {
+      "arity": 1,
+      "params": [
+        "bool"
+      ],
+      "return": "void"
+    },
+    "history_appended": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_changed": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "history_error": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_page_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_search_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "history_stats_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "import_preview": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "labels_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "log_message": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "media_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "my_nick_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "person_found": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "person_removed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "preset_list_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "stack_complete": {
+      "arity": 0,
+      "params": [],
+      "return": "void"
+    },
+    "stack_loaded": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "stats_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "step_complete": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "step_started": {
+      "arity": 3,
+      "params": [
+        "int",
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "tab_match_result": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "tabs_received": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "template_list_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "template_loaded": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "url_presets_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "userdb_changed": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "userdb_page_ready": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "QString"
+      ],
+      "return": "void"
+    },
+    "users_deleted": {
+      "arity": 2,
+      "params": [
+        "QString",
+        "int"
+      ],
+      "return": "void"
+    },
+    "users_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    },
+    "window_preset_list_updated": {
+      "arity": 1,
+      "params": [
+        "QString"
+      ],
+      "return": "void"
+    }
+  },
+  "version": 1
+}

@@ -38,7 +38,8 @@ docs/
     ├── 2026-09-16-area-a-cdp-boundary/ ← reconstructed source design
     ├── 2026-09-19-round-i-seams/      ← reviewed six-area audit
     ├── 2026-09-19-area-a-integration/ ← Area A transfer and measured validation
-    └── 2026-09-19-area-a-quality/     ← prioritized quality follow-up
+    ├── 2026-09-19-area-a-quality/     ← prioritized quality follow-up
+    └── 2026-09-19-area-b-integration/ ← humble bridges, clocks and wire schema
 ```
 
 Also in the repo, not under `docs/`:
@@ -55,9 +56,10 @@ Also in the repo, not under `docs/`:
 
 | You want to… | Read |
 |---|---|
+| Inspect the integrated Area B reconstruction | [`Verification report`](../reports/AREA_B_TRANSFER_2026-09-19.md) · [`Design`](archive/2026-09-19-area-b-integration/DESIGN.md) · [`Port notes`](archive/2026-09-19-area-b-integration/PORT_NOTES.md) — pure policies, scheduler, complete wire schema and honest remaining gates |
 | Review quality improvements and remaining priorities | [`Area A quality report`](../reports/AREA_A_QUALITY_2026-09-19.md) · [`Design and execution`](archive/2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) — safety-test gaps, simpler identity checks and repaired quality assertions |
 | Inspect the integrated Area A transfer | [`Transfer record`](archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) · [`Local verification report`](../reports/AREA_A_TRANSFER_2026-09-19.md) — wire, typed gate, selector/golden tests and shim inventory; remaining gates explicit |
-| Review the next improvement cycle (Round I; Area A only authorized) | [`Round I seams & testability plan`](archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [`Area A first-slice implementation and validation`](archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) |
+| Review the original improvement-cycle plan (Round I; A and B now implemented) | [`Round I seams & testability plan`](archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [`Area A first-slice implementation and validation`](archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) |
 | Know how the app behaves right now | [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) |
 | Change code and not break a contract | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) — then the matching section of the system of record |
 | Touch a DOM probe or selector | [`current/DOM_SELECTORS.md`](current/DOM_SELECTORS.md) |

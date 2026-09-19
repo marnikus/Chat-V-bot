@@ -17,19 +17,11 @@ from core.events import DbChanged, LogMessage
 from services.undo_service import emit_db_change, restart_world
 from services.wiring_requests import RestartDeps
 
+from bridge.wire_db import (world_switched as _db_world_switched,
+                            rebuild_needed, undo_entry, success_text)
+from core.announcer import Announcer
+
 log = logging.getLogger("chatbot")
-
-
-def _db_world_switched(result: dict) -> bool:
-    """Whether the action really moved the live world and may be reported.
-
-    `unchanged` (the world was already this one) and `offline` (the switch
-    was recorded but nothing is connected) are both "no success log, no undo
-    entry" — they are not failures either, so the caller takes the same
-    branch and lets `world_changed` decide whether a rebuild is owed.
-    """
-    return bool(result.get("ok") and not result.get("unchanged")
-                and not result.get("offline"))
 
 
 class DbBridge(QObject):
@@ -95,23 +87,16 @@ class DbBridge(QObject):
 
     async def _db_switched(self, result: dict, op: str, success: str) -> None:
         """The success half: rebuild the world, record the undo, log it."""
-        if op in ("create", "load", "delete"):
+        if rebuild_needed(op):
             # REBUILD the timeline before recording this step
             # (the in-memory copy still holds the world being LEFT)
             await restart_world(RestartDeps(
                 memory=self.ctx.memory, archive=self.ctx.archive,
                 labels=self.ctx.label_store(), undo=self.ctx.undo, bus=self.ctx.bus), op)
-        if op != "delete":
-            self.ctx.undo.push("dbconn", {
-                "op": result["op"],
-                "path": result.get("path", ""),
-                "before_path": result.get("before_path", ""),
-                "backup": result.get("backup", ""),
-            })
-        self.ctx.bus.emit(LogMessage(message=success.format(**{
-            "path": result.get("path", ""),
-            "name": os.path.basename(result.get("path", "")),
-        }), level="success"))
+        entry = undo_entry(op, result)
+        if entry is not None:
+            self.ctx.undo.push("dbconn", entry)
+        Announcer(self.ctx.bus).report("dbconn", result, success_text(success, result))
 
     async def _db_not_switched(self, result: dict, op: str) -> None:
         """The failure half: refresh only what really moved, never log success.
@@ -120,7 +105,7 @@ class DbBridge(QObject):
         (switch-only change / partial after switch). No success log, no undo
         push (and never a delete push).
         """
-        if op in ("create", "load", "delete") and result.get("world_changed"):
+        if rebuild_needed(op) and result.get("world_changed"):
             try:
                 await restart_world(RestartDeps(
                     memory=self.ctx.memory, archive=self.ctx.archive,

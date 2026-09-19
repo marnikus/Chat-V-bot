@@ -95,7 +95,7 @@ def _apply_labels_command(host, value: dict, forward: bool) -> bool:
 #: DbManager's result). A new kind joins this tuple ONLY if it applies inside
 #: the call; the default is silence, because a missing line is recoverable and
 #: a false one is the bug this list exists to prevent.
-_ANNOUNCED_FROM_INTENT = ("labels",)
+from core.announcer import INTENT_ONLY as _ANNOUNCED_FROM_INTENT
 
 
 def _log_command(host, entry: dict, forward: bool) -> None:

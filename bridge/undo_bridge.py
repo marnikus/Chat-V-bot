@@ -13,8 +13,7 @@ import logging
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import LogMessage, UndoHistoryChanged
-from core.result import Err, Ok
-from services.layout_service import LayoutService
+from bridge.wire_undo import global_payload, kind_value, list_arg, trim_history
 
 log = logging.getLogger("chatbot")
 
@@ -51,24 +50,7 @@ class UndoBridge(QObject):
         self._remember_global_edit(kind, value)
         return True
 
-    @staticmethod
-    def _global_payload(kind: str, value_json: str) -> tuple:
-        """(accepted, value) for one frontend edit of the global timeline.
-
-        Only `stack` and `grid` are global-timeline kinds. Anything else is
-        refused rather than recorded: an unvalidated payload would make every
-        later undo step lie about what it restores.
-        """
-        if kind == "stack":
-            try:
-                value = json.loads(value_json or "[]")
-            except json.JSONDecodeError:
-                return False, None
-            return isinstance(value, list), value
-        if kind == "grid":
-            value, err = LayoutService.canonical_grid_payload(value_json or "")
-            return not err, value
-        return False, None
+    _global_payload = staticmethod(global_payload)
 
     def _remember_global_edit(self, kind: str, value) -> None:
         """Persist the edit the timeline has just accepted."""
@@ -105,49 +87,19 @@ class UndoBridge(QObject):
     #    projected through the old per-surface names) ─────────────
     @Slot(result=str)
     def undo_stack(self):
-        raw = self.undo()
-        try:
-            result = json.loads(raw)
-            return json.dumps(result["value"], ensure_ascii=False) \
-                if isinstance(result, dict) and \
-                result.get("kind") == "stack" else "null"
-        except (TypeError, KeyError, json.JSONDecodeError):
-            return "null"
+        return kind_value(self.undo(), "stack")
 
     @Slot(result=str)
     def redo_stack(self):
-        raw = self.redo()
-        try:
-            result = json.loads(raw)
-            return json.dumps(result["value"], ensure_ascii=False) \
-                if isinstance(result, dict) and \
-                result.get("kind") == "stack" else "null"
-        except (TypeError, KeyError, json.JSONDecodeError):
-            return "null"
+        return kind_value(self.redo(), "stack")
 
     @Slot(result=str)
     def undo_grid_layout(self):
-        raw = self.undo()
-        try:
-            result = json.loads(raw)
-            return (LayoutService.legacy_grid_payload(result.get("value",
-                                                                 "null"))
-                    if isinstance(result, dict)
-                    and result.get("kind") == "grid" else "null")
-        except (TypeError, json.JSONDecodeError):
-            return "null"
+        return kind_value(self.undo(), "grid")
 
     @Slot(result=str)
     def redo_grid_layout(self):
-        raw = self.redo()
-        try:
-            result = json.loads(raw)
-            return (LayoutService.legacy_grid_payload(result.get("value",
-                                                                 "null"))
-                    if isinstance(result, dict)
-                    and result.get("kind") == "grid" else "null")
-        except (TypeError, json.JSONDecodeError):
-            return "null"
+        return kind_value(self.redo(), "grid")
 
     # ── legacy stack-history slots (frontend bulk save / restore) ─
     @Slot(result=str)
@@ -158,29 +110,18 @@ class UndoBridge(QObject):
 
     @Slot(str)
     def push_stack_history(self, stack_json):
-        try:
-            blocks = json.loads(stack_json or "[]")
-        except json.JSONDecodeError:
-            return
-        if isinstance(blocks, list):
+        blocks = list_arg(stack_json)
+        if blocks is not None:
             self.undo_service.push_stack(blocks)
 
     @Slot(str, int)
     def save_stack_history(self, history_json, index):
-        try:
-            hist = json.loads(history_json or "[]")
-        except json.JSONDecodeError:
+        hist = list_arg(history_json)
+        if hist is None:
             return
-        if not isinstance(hist, list):
-            return
-        if not isinstance(index, int):
-            index = -1
         hist = self.undo_service._clean_history(hist)
         from backend.config_manager import MAX_STACK_HISTORY
-        if len(hist) > MAX_STACK_HISTORY:
-            overflow = len(hist) - MAX_STACK_HISTORY
-            hist = hist[overflow:]
-            index = max(0, index - overflow)
+        hist, index = trim_history(hist, index, MAX_STACK_HISTORY)
         self.undo_service.set_stack_projection(hist, index)
         log.info("History saved from frontend: %d entries, index %d",
                  len(hist), index)

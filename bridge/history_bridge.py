@@ -29,9 +29,8 @@ import os
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import LogMessage, UserDbChanged
-from backend.history_query import (
-    DEFAULT_LIMIT, DEFAULT_SORT, PersonPageRequest,
-)
+from bridge.wire_codec import (object_arg, clean_nick, message_id as wire_message_id,
+                               person_request as _person_request)
 from services.world_events import run_when_world_open
 from bridge import history_bridge_delete as delete
 from bridge import history_bridge_media as media
@@ -39,24 +38,6 @@ from bridge import history_bridge_read as read
 from bridge import history_bridge_settings as settings
 
 log = logging.getLogger("chatbot")
-
-
-def _person_request(opts: dict) -> PersonPageRequest:
-    """The UI's JSON blob as a `PersonPageRequest`.
-
-    Kept out of the `work()` closure so that closure stays a short, readable
-    "fetch, decorate, emit" sequence.
-
-    `dir` defaults to `""` — the sort key's *natural* direction — so a payload
-    written before the sortable headers existed means exactly what it meant.
-    """
-    return PersonPageRequest(
-        q=str(opts.get("q") or ""),
-        limit=int(opts.get("limit") or DEFAULT_LIMIT),
-        offset=int(opts.get("offset") or 0),
-        sort=str(opts.get("sort") or DEFAULT_SORT),
-        dir=str(opts.get("dir") or ""),
-        include_deleted=bool(opts.get("include_deleted")))
 
 
 class HistoryBridge(QObject):
@@ -91,15 +72,7 @@ class HistoryBridge(QObject):
             coro.close()
             return False
 
-    @staticmethod
-    def _json_arg(raw, default=None):
-        if isinstance(raw, dict):
-            return raw
-        try:
-            data = json.loads(raw or "{}")
-        except (TypeError, ValueError):
-            return dict(default or {})
-        return data if isinstance(data, dict) else dict(default or {})
+    _json_arg = staticmethod(object_arg)
 
     def _ask(self, scope: str, fn, *args) -> bool:
         """Guard + schedule `fn(self, *args)`; False when the archive is
@@ -150,7 +123,7 @@ class HistoryBridge(QObject):
     # ── deleting from the archive (all reversible, RULE 12) ──────
     @Slot(str, bool, result=bool)
     def history_delete_person(self, nick, hard=False):
-        clean = " ".join(str(nick or "").split()).strip()
+        clean = clean_nick(nick)
         if not clean:
             return False
         return self._ask("history_delete_person", delete.delete_person,
@@ -158,18 +131,15 @@ class HistoryBridge(QObject):
 
     @Slot(str, result=bool)
     def history_clear_person(self, nick):
-        clean = " ".join(str(nick or "").split()).strip()
+        clean = clean_nick(nick)
         if not clean:
             return False
         return self._ask("history_clear_person", delete.clear_person, clean)
 
     @Slot(str, str, result=bool)
     def history_delete_message(self, nick, message_id):
-        clean = " ".join(str(nick or "").split()).strip()
-        try:
-            mid = int(str(message_id or "0").strip() or 0)
-        except (TypeError, ValueError):
-            mid = 0
+        clean = clean_nick(nick)
+        mid = wire_message_id(message_id)
         if not clean or mid <= 0:
             return False
         return self._ask("history_delete_message", delete.delete_message,

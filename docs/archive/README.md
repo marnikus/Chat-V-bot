@@ -14,6 +14,7 @@ in each round, not implied by the presence of a plan.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-19-area-b-integration/`](#2026-09-19-area-b-integration) | 3 | Reconstruction of supplied humble-bridge implementation; design, compatibility decisions and file map. Measured report preserves existing failure/coverage debt. |
 | [`2026-09-19-area-a-quality/`](#2026-09-19-area-a-quality) | 1 | Safety-test strengthening, simpler gate identity comparisons, repaired RULE 16 assertions and priority-sorted quality results. |
 | [`2026-09-19-area-a-integration/`](#2026-09-19-area-a-integration) | 1 | Area A code transfer integrated with Round I; compatibility fixes, measured mutation/coverage and unchanged baseline failures. |
 | [`2026-09-16-area-a-cdp-boundary/`](#2026-09-16-area-a-cdp-boundary) | 1 | Reconstructed source design supplied for transfer: wire, typed gate, selector/golden tests and shim retirement ladder. |
@@ -415,3 +416,11 @@ Round H Area D implementation — verification debt closed without touching prod
 ## 2026-09-19-area-a-quality
 
 - [`AREA_A_QUALITY_2026-09-19.md`](2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) — design and verified report follow-up; remaining release gates stay explicit.
+
+
+## 2026-09-19-area-b-integration
+
+* [Design recorded before implementation](2026-09-19-area-b-integration/DESIGN.md)
+* [Port decisions and survivor queue](2026-09-19-area-b-integration/PORT_NOTES.md)
+* [Integrated file map](2026-09-19-area-b-integration/FILES.md)
+* Measured evidence: [Area B transfer report](../../reports/AREA_B_TRANSFER_2026-09-19.md)

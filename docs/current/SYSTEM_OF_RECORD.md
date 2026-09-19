@@ -13,14 +13,15 @@ and are linked from here.
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
 
-**2026-09-19 scoped verification (quality follow-up):** the table above and
-§7/§8 figures are historical baselines, not a fresh green-suite claim. Latest
-Area A selection: 436 passes; full run: 3,361 passes and 70 existing failures
-(two stale quality-test assertions repaired; no new failures). Gate/decoder
-coverage is 100% line/branch; scoped mutation is 97.95% / 100%. Overall measured
-coverage is 92.94% line / 88.49% branch, still below the historical official
-floor, not a promoted baseline. See the [prioritized quality report](../../reports/AREA_A_QUALITY_2026-09-19.md)
-for commands, denominators, remaining risks and comparison with the transfer.
+**2026-09-19 verification (Area B integration):** the table above and §7/§8
+figures are historical baselines, not a fresh green-suite claim. Latest full
+run: **3,465 passed, 70 existing failures**, no new failure IDs versus Area A
+quality. New B tests: 104 passed (101 pure-selection, 3 Qt smoke). RULE16 and
+clone checks pass; scoped mutation is **381/400 killed (95.25%)**, with 19
+survivors included. Overall coverage **93.068868% line / 88.595618% branch**
+still misses historical **93.16% / 88.85%** floors; no baseline was lowered.
+See the [Area B verification report](../../reports/AREA_B_TRANSFER_2026-09-19.md)
+and the preceding [Area A quality report](../../reports/AREA_A_QUALITY_2026-09-19.md).
 
 > **Conflict rule.** If a statement here disagrees with an archived design doc,
 > **this file wins.** Archived docs are true *as of the date in their name* —
@@ -285,7 +286,39 @@ with deprecation warnings and a production-importer inventory.
 [Transfer design and validation](../archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md)
 records the scope and remaining gates: full typed-consumer migration, actual
 shim retirement, live captures and CI activation. The canary job is in the
-**inactive** `tools/ci/quality-gate.yml` template. Areas B–F remain planned only.
+**inactive** `tools/ci/quality-gate.yml` template. Area B is integrated below; Areas C–F remain planned only.
+
+### Round I / Area B: humble bridges and explicit wire policy
+
+`bridge/wire_codec.py`, `wire_db.py` and `wire_undo.py` own pure translation,
+DB-result decisions and compatibility projections. Existing People, History,
+DB and Undo QObjects delegate without changing the Router's **124 methods and
+41 signals**. Stack-history normalization still precedes capping/persistence;
+delete remains permanent and never records a new DB undo entry.
+
+`core.scheduler.Scheduler` has real `AsyncioScheduler` and logical
+`ManualScheduler` implementations. `WorldGate` waits for the open flag and still
+runs work after timeout/no store so its own failure can answer the UI. The
+historical world-event function signatures and two-argument error callback
+remain; cancellation propagates. PeopleBridge accepts a keyword-only scheduler;
+HistoryBridge retains its compatibility runner. Invalid nonpositive/NaN polling
+steps refuse instead of hanging a logical clock.
+
+`core.announcer.Announcer` requires a dictionary with truthy `ok` for outcome
+reporting except synchronous labels. DbBridge separately rejects offline and
+unchanged outcomes before announcing. `undo_apply` imports the same labels-only
+intent whitelist; other domain-specific success reporters remain in place.
+
+`tools/wire_schema.py` generates `ui/js/wire-schema.json` from the complete real
+Router metaobject; `--check` enforces byte parity. `ui/js/wire_schema.js` offers
+opt-in loading, arity diagnostics, forwarding guards and method-presence parity.
+It is **not installed in UI boot or active CI**. Pure tests prove transitive
+Qt-free imports; three `needs_qt` tests retain real metaobject/signal coverage.
+The old bridge test suite is not claimed Qt-free.
+
+[Design](../archive/2026-09-19-area-b-integration/DESIGN.md) and
+[port notes](../archive/2026-09-19-area-b-integration/PORT_NOTES.md) distinguish
+compatibility repairs from the source manifest's unverified targets.
 
 ## 7. Tests
 
@@ -346,9 +379,10 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-19 | [Area B integration](../archive/2026-09-19-area-b-integration/DESIGN.md) · [verification](../../reports/AREA_B_TRANSFER_2026-09-19.md) | Pure wire policies, deterministic clock, announcement policy and complete Router schema; original 70 failures and unmet coverage floors explicit |
 | 2026-09-19 | [Area A quality follow-up](../archive/2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) | Unknown/renamed-nick contracts, reduced gate complexity, fixed RULE 16 test locations and priority-sorted remaining work |
 | 2026-09-19 | [Area A transferred implementation](../archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) · [source design](../archive/2026-09-16-area-a-cdp-boundary/AREA_A_CDP_BOUNDARY_DESIGN_2026-09-16.md) | CdpWire, typed gate, selector/golden canaries and shim deprecation integrated with Round I; local validation and remaining release gates |
-| 2026-09-19 | [Round I — seams & testability](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [Area A implementation](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) | Reviewed six-area audit and corrected evidence; Area A transport slice implemented, remaining A gates pending; B–F not implemented |
+| 2026-09-19 | [Round I — seams & testability](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [Area A implementation](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) | Reviewed six-area audit and corrected evidence; Area A transport slice implemented, remaining A gates pending; B subsequently integrated above; C–F not implemented |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |

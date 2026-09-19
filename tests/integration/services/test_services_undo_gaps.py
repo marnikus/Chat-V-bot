@@ -370,22 +370,26 @@ class TestDbSwitchOp(DbConnCase):
 # how a delete entry can exist at all — and what Ctrl+Z then does
 # ═════════════════════════════════════════════════════════════════
 class TestHowADeleteEntryCanExist(DbConnCase):
-    def test_nothing_in_the_product_records_a_delete_entry(self):
-        """The guard that makes delete entries legacy-only.
+    async def test_nothing_in_the_product_records_a_delete_entry(self):
+        """Execute the bridge guard, not the pre-extraction source spelling."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from bridge.db_bridge import DbBridge
+        from core.events import EventBus
 
-        Pinned behaviourally by
-        `test_db_manager.py::test_a_delete_is_not_an_undo_step` (a permanent
-        delete is not an undo step); pinned here at the source so the reason
-        `_db_delete_op` is reachable only from persisted data sits next to the
-        tests that exercise it.
-        """
-        with open(os.path.join(ROOT, "bridge", "db_bridge.py"),
-                  encoding="utf-8") as fh:
-            src = fh.read()
-        guard = src.index('if op != "delete":')
-        push = src.index('push("dbconn"')
-        self.assertLess(guard, push,
-                        "the only dbconn push must stay behind the delete guard")
+        undo = Mock()
+        ctx = SimpleNamespace(bus=EventBus(), undo=undo, memory=None,
+                              archive=None, label_store=lambda: None)
+        bridge = DbBridge(ctx)
+        for op in ("delete", "load"):
+            result = {"ok": True, "op": op, "path": "world.db"}
+            await bridge._db_switched(result, op, "{name}")
+            if op == "delete":
+                undo.push.assert_not_called()
+            else:
+                undo.push.assert_called_once_with("dbconn", {
+                    "op": "load", "path": "world.db",
+                    "before_path": "", "backup": ""})
 
     async def test_a_legacy_delete_entry_still_restores_the_world(self):
         """Ctrl+Z on an entry a *previous* version persisted.

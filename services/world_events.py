@@ -33,53 +33,63 @@ import time
 from core.events import (EventBus, LabelsChanged, PeopleChanged,
                          UserDbChanged)
 
+# Historical module constant remains patchable by legacy callers.
+from core.scheduler import WAIT_S, POLL_STEP_S, Scheduler, poll
+
 log = logging.getLogger("chatbot")
 
-#: how long a request that raced the boot waits for the world to open. The
-#: same 15 s the write gate waits for an outside holder: long enough for the
-#: install migration on a big world, short enough to still answer with an
-#: error instead of hanging forever.
-WAIT_S = 15.0
+
+class AsyncioScheduler:
+    """Production monotonic clock; the same polling policy as the fake."""
+
+    def now(self) -> float:
+        return time.monotonic()
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+    async def until(self, predicate, timeout: float,
+                    step: float = POLL_STEP_S) -> bool:
+        return await poll(self, predicate, timeout, step)
+
+
+class WorldGate:
+    """Wait for a store, then run even on timeout so work reports its error."""
+
+    def __init__(self, scheduler: Scheduler | None = None):
+        self.scheduler = AsyncioScheduler() if scheduler is None else scheduler
+
+    async def wait(self, store, timeout: float | None = None,
+                   step: float = POLL_STEP_S) -> bool:
+        if store is None or not hasattr(store, "is_open"):
+            return False
+        return await self.scheduler.until(
+            lambda: store.is_open, WAIT_S if timeout is None else timeout, step)
+
+    async def run(self, scope: str, coro, store, on_error=None) -> None:
+        started = False
+        try:
+            await self.wait(store)
+            started = True
+            await coro
+        except Exception as exc:                         # noqa: BLE001
+            log.warning("archive %s failed: %s", scope, exc)
+            if on_error is not None:
+                on_error(scope, str(exc))
+        finally:
+            if not started and asyncio.iscoroutine(coro):
+                coro.close()
 
 
 async def wait_for_world_open(store, timeout: float | None = None,
                               step: float = 0.05) -> bool:
-    """Wait until `store.is_open`; False when it never opened in time.
-
-    Nothing is waited on when `store` is not a store (no `is_open`): a test
-    double must not turn a unit test into a 15-second sleep. The caller runs
-    its work either way — a world that never opened still reports its own
-    error, exactly as before this helper existed.
-
-    `timeout=None` means `WAIT_S`, read at call time so a test can shorten it.
-    """
-    if store is None or not hasattr(store, "is_open"):
-        return False
-    deadline = time.monotonic() + max(0.0, WAIT_S if timeout is None
-                                      else timeout)
-    while not store.is_open:
-        if time.monotonic() >= deadline:
-            return False
-        await asyncio.sleep(step)
-    return True
+    """Compatibility facade; WAIT_S is still read at call time."""
+    return await WorldGate().wait(store, timeout, step)
 
 
 async def run_when_world_open(scope: str, coro, store, on_error=None) -> None:
-    """Await `coro` once `store` is open, and never lose its failure.
-
-    The archive's reply used to be an exception the window never heard:
-    `userdb_page` before the world opened raised “history database is not
-    open”, nothing answered the `req_id`, and the table stayed empty until ↻
-    was pressed (bug 2026-09-11). Waiting here answers the same request; a
-    world that never opens still reports its own error through `on_error`.
-    """
-    try:
-        await wait_for_world_open(store)
-        await coro
-    except Exception as exc:                            # noqa: BLE001
-        log.warning("archive %s failed: %s", scope, exc)
-        if on_error is not None:
-            on_error(scope, str(exc))
+    """Compatibility facade preserving the two-argument error callback."""
+    await WorldGate().run(scope, coro, store, on_error)
 
 
 def announce_world_live(bus: EventBus, labels=None,

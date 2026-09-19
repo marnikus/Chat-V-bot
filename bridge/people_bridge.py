@@ -8,14 +8,13 @@ events and the engine's live-collection Qt signals to JS.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.events import PeopleChanged, UsersDeleted
-from core.result import Ok
-from services.world_events import wait_for_world_open
+from bridge.wire_codec import selection, people_payload
+from services.world_events import WorldGate
 
 log = logging.getLogger("chatbot")
 
@@ -27,9 +26,10 @@ class PeopleBridge(QObject):
     person_found = Signal(str)               # JSON: one newly collected person
     person_removed = Signal(str)             # JSON: one purged person
 
-    def __init__(self, ctx, parent=None):
+    def __init__(self, ctx, parent=None, *, scheduler=None):
         super().__init__(parent)
         self.ctx = ctx
+        self._world_gate = WorldGate(scheduler)
         ctx.bus.subscribe(PeopleChanged, lambda e: self._refresh())
         ctx.bus.subscribe(UsersDeleted,
                           lambda e: self.users_deleted.emit(e.nicks_json,
@@ -73,13 +73,11 @@ class PeopleBridge(QObject):
         """
         if self.ctx.memory is None:       # archive-only bridges (tests)
             return
-        await wait_for_world_open(self.ctx.memory)
-        result = await self.ctx.people.payload()
-        if result.is_ok:
-            payload = result.value
-            self.users_updated.emit(json.dumps(payload["users"],
-                                               ensure_ascii=False))
-            self.stats_updated.emit(json.dumps(payload["stats"]))
+        await self._world_gate.wait(self.ctx.memory)
+        payload = people_payload(await self.ctx.people.payload())
+        if payload is not None:
+            self.users_updated.emit(payload[0])
+            self.stats_updated.emit(payload[1])
 
     @staticmethod
     def _schedule(coro) -> None:
@@ -100,21 +98,12 @@ class PeopleBridge(QObject):
 
     @Slot(str)
     def delete_users(self, nicks_json):
-        try:
-            nicks = json.loads(nicks_json or "[]")
-        except json.JSONDecodeError:
+        nicks, error = selection(nicks_json)
+        if error is not None:
             from core.events import LogMessage
-            self.ctx.bus.emit(LogMessage(
-                message="❌ Delete aborted: bad selection payload",
-                level="error"))
+            self.ctx.bus.emit(LogMessage(message=error, level="error"))
             return
-        if not isinstance(nicks, list):
-            from core.events import LogMessage
-            self.ctx.bus.emit(LogMessage(
-                message="❌ Delete aborted: selection is not a list",
-                level="error"))
-            return
-        self._schedule(self._do_delete_many([str(n) for n in nicks]))
+        self._schedule(self._do_delete_many(nicks))
 
     @Slot(str, bool)
     def set_user_messaged(self, nick, messaged):

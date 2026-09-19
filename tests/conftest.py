@@ -47,6 +47,11 @@ except Exception:
 
 def pytest_collection_modifyitems(config, items):
     for item in items:
+        if item.get_closest_marker("needs_qt"):
+            item.add_marker("qt")
+            continue
+        if item.get_closest_marker("pure"):
+            continue
         fspath = str(item.fspath)
 
         # Gate
