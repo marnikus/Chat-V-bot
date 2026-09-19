@@ -34,6 +34,7 @@ from PySide6.QtCore import QObject, Signal
 from backend import cdp_client_transport as transport
 from backend.cdp_client_commands import CdpClientCommands, TabInfo
 from backend.cdp_client_events import CdpEvents
+from backend.cdp_ports import CdpTransport
 
 log = logging.getLogger("chatbot")
 
@@ -140,6 +141,7 @@ class CDPClient(CdpClientCommands, QObject):
         self._connected = False
         self.lease = CdpLease()
         self._events = CdpEvents()
+        self._transport: CdpTransport = transport.BrowserTransport()
 
     # ── event fan-out (body in cdp_client_events.py) ──────────────
     def on_event(self, method: str, callback: Callable) -> Callable:
@@ -175,3 +177,16 @@ class CDPClient(CdpClientCommands, QObject):
     @property
     def base_url(self) -> str:
         return f"http://{self._host}:{self._port}"
+
+
+def client_with_transport(browser: CdpTransport, host: str = "127.0.0.1",
+                          port: int = 9222,
+                          parent: Optional[QObject] = None) -> CDPClient:
+    """Construct a client with browser I/O injected, without changing its API.
+
+    The frozen CDPClient constructor remains compatible. Injection happens
+    before any network activity; request/event/lifecycle code is identical.
+    """
+    client = CDPClient(host, port, parent)
+    client._transport = browser
+    return client

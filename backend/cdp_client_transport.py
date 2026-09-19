@@ -29,6 +29,20 @@ import websockets
 log = logging.getLogger("chatbot")
 
 
+class BrowserTransport:
+    """Production adapter; only this boundary acquires browser sockets/HTTP."""
+
+    async def connect(self, ws_url: str):
+        return await websockets.connect(ws_url, max_size=50 * 1024 * 1024,
+                                        open_timeout=10, close_timeout=5)
+
+    async def discover(self, base_url: str) -> list[dict]:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{base_url}/json/list",
+                                   timeout=aiohttp.ClientTimeout(total=5)) as r:
+                return await r.json() if r.status == 200 else []
+
+
 def _domain_matches(host: str, domain: str) -> bool:
     """Whether a cookie's domain covers the requested host.
 
@@ -61,10 +75,7 @@ async def open_client(client, ws_url: str) -> bool:
     """Connect, enable the four domains and start the receive loop."""
     await close_client(client)
     try:
-        client._ws = await websockets.connect(ws_url,
-                                              max_size=50 * 1024 * 1024,
-                                              open_timeout=10,
-                                              close_timeout=5)
+        client._ws = await client._transport.connect(ws_url)
         client._connected = True
         client._receive_task = asyncio.create_task(receive_loop(client))
         for dom in ("Page", "DOM", "Runtime", "Network"):
@@ -125,10 +136,7 @@ async def receive_loop(client) -> None:
 # ── tab discovery (plain HTTP, not the socket) ────────────────────
 async def _fetch_tab_list(client) -> list:
     """The raw `/json/list` payload (empty when the endpoint is unhappy)."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"{client.base_url}/json/list",
-                               timeout=aiohttp.ClientTimeout(total=5)) as r:
-            return await r.json() if r.status == 200 else []
+    return await client._transport.discover(client.base_url)
 
 
 async def fetch_tabs(client) -> list[dict]:

@@ -13,6 +13,13 @@ and are linked from here.
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
 
+**2026-09-19 scoped verification:** the table above and §7/§8 figures are
+historical baselines, not a fresh green-suite claim. Round I's Area A transport
+slice passes its backend tests; the full run has 3275 passes and 72 failures,
+with the identical 72 failures reproduced on the parent production code.
+Observed coverage is 92.85% line / 88.38% branch, not a promoted baseline.
+See [the validation record](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md).
+
 > **Conflict rule.** If a statement here disagrees with an archived design doc,
 > **this file wins.** Archived docs are true *as of the date in their name* —
 > they are the reasoning, not the spec.
@@ -251,6 +258,21 @@ connects them to the window and starts the qasync loop.
 
 ---
 
+### Round I / Area A: injectable browser acquisition
+
+`backend/cdp_ports.py` defines `CdpTransport` (connect/discover) and
+`CdpConnection` (send/close/async frame iteration). The default
+`BrowserTransport` in `backend/cdp_client_transport.py` owns socket and HTTP
+acquisition. `backend.cdp_client.client_with_transport(...)` constructs a
+client with an injected adapter before any I/O; `CDPClient`'s frozen
+constructor and public methods remain unchanged. Framing, domain enable
+order, dispatch, timeout behavior and legacy test seams remain in place.
+
+`tests/unit/backend/test_cdp_injected_transport.py` exercises the real client
+with synthetic scripted frames, without network patches. This is **only the
+first Area A slice**, not a typed-probe/selector migration or shim retirement.
+The remaining work is in the [Round I plan](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md).
+
 ## 7. Tests
 
 ```bash
@@ -310,6 +332,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-19 | [Round I — seams & testability](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [Area A implementation](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) | Reviewed six-area audit and corrected evidence; Area A transport slice implemented, remaining A gates pending; B–F not implemented |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |
 | 2026-09-11 | [Delete in the DB window, Ctrl+Z, and the “database is locked” that ate it](../archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md) | The world write gate, the verified archive command, the DB window’s auto-refresh and the delete/trash safety ladder |
 | 2026-09-10 | [Safety refactor — Area A design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_A_DESIGN_2026-09-10.md) · [Area C design](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_AREA_C_DESIGN_2026-09-10.md) · [master plan](../archive/2026-09-10-safety-refactor/SAFETY_REFACTOR_2026-09-10_PLAN.md) | The fail-closed deletion pipeline and its frozen contract |

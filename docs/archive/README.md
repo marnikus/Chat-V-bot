@@ -9,10 +9,12 @@ live in [`docs/current/AGENT_RULES.md`](../current/AGENT_RULES.md).
 An archived doc is true *as of the date in its folder name*. Do not edit one to
 catch up with the code — write a new dated doc instead (RULE 17).
 
-**106 documents in 23 groups.**
+The dated groups below preserve design history; implementation status is recorded
+in each round, not implied by the presence of a plan.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-19-round-i-seams/`](#2026-09-19-round-i-seams) | 2 | Next cycle: reviewed six-area seams/testability audit; only Area A authorized, first transport slice implemented, remaining gates explicit. |
 | [`2026-09-04-foundation/`](#2026-09-04-foundation) | 5 | The original architecture proposal (written before any code existed — **superseded by `docs/current/SYSTEM_OF_RECORD.md`**) plus the first three rounds of bug fixes and the configurable Find & Click block. |
 | [`2026-09-05-grid-scroll-undo/`](#2026-09-05-grid-scroll-undo) | 15 | The window grid ("sash layout"), the Scroll & Parse pipeline, visual click confirmation, filter purging and the first global undo timeline. |
 | [`2026-09-06-collector-and-history/`](#2026-09-06-collector-and-history) | 15 | The message-history archive, its three windows, the passive collector, and the person-targeting blocks (`{{nick}}`, Pick Person, Mark Messaged, attach/composer behaviour). |
@@ -390,3 +392,9 @@ Round H Area D implementation — verification debt closed without touching prod
 *1 doc.*
 
 - [`AREA_D_IMPLEMENTATION_2026-09-14.md`](2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md) — What landed: H-D1 mutation platform (job1 widened 159→910 reachable + job2 over pure bot family 9 files, report `reports/MUTATION_REPORT_2026-09-14.md` with explicit reachable arithmetic), H-D2 double audit (`tools/metrics/double_audit.py` + `tests/test_double_audit.py`, FakeArchive.labels pinned), H-D3 per-file floor (`file_coverage_floor.py` 208 lines + ratchet 15 files, test `test_file_coverage_floor.py`), H-D4 baseline/doc currency (AGENT_RULES §16.3 re-quoted 90.44/84.38→92.64/88.03, §18.2 corrected 186→208 files and 507→511, doc maps updated), H-D5 smell ratchet (`smell_inventory.py` 7 vulture findings with delete/protocol disposition, 13 clone groups, 4 boundary crossings, 11 wide params). All tools respect RULE 18 ideals and RULE 16 gates; verification battery included.
+
+
+## 2026-09-19-round-i-seams
+
+- [`ROUND_I_DESIGN_2026-09-19.md`](2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) — corrected audit, six-area roadmap, ownership/dependencies and Area A exit gates. B–F are proposals only.
+- [`AREA_A_IMPLEMENTATION_2026-09-19.md`](2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) — first transport slice, tests, baseline failures and pending work; not full Area A completion.

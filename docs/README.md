@@ -1,6 +1,6 @@
 # Docs: start here
 
-This repository has **three current docs** and **105 archived ones**. That is
+This repository has **three current docs** and dated archived designs. That is
 deliberate: the current set is small enough to keep true, and nothing has been
 thrown away.
 
@@ -12,7 +12,7 @@ docs/
 │   ├── AGENT_RULES.md               ← RULE 1–19: what every code change must obey
 │   └── DOM_SELECTORS.md             ← verified DOM selectors of the target site
 └── archive/                         ← historical. One folder per date+topic.
-    ├── README.md                    ← index of all 105 archived docs
+    ├── README.md                    ← index of dated archived docs
     ├── 2026-09-04-foundation/
     ├── 2026-09-05-grid-scroll-undo/
     ├── 2026-09-06-collector-and-history/
@@ -51,6 +51,7 @@ Also in the repo, not under `docs/`:
 
 | You want to… | Read |
 |---|---|
+| Review the next improvement cycle (Round I; Area A only authorized) | [`Round I seams & testability plan`](archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [`Area A first-slice implementation and validation`](archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) |
 | Know how the app behaves right now | [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) |
 | Change code and not break a contract | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) — then the matching section of the system of record |
 | Touch a DOM probe or selector | [`current/DOM_SELECTORS.md`](current/DOM_SELECTORS.md) |
@@ -76,6 +77,7 @@ wins. Archived docs are true as of the date in their folder name.
 | Undo, locking, DB-window refresh, session trash | system of record §2, invariants I-10, I-17…I-20 | [`2026-09-11-db-undo-restore/`](archive/2026-09-11-db-undo-restore/DB_UNDO_RESTORE_DESIGN_2026-09-11.md), [`2026-09-12-db-undo-restore-port/`](archive/2026-09-12-db-undo-restore-port/PORT_NOTES_2026-09-12.md) (how it was ported here, and the `init()` bug the port exposed) |
 | Code complexity / size debt | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16, 18, 19 | [`2026-09-11-cc-tail/`](archive/2026-09-11-cc-tail/CC_TAIL_FIXES_DESIGN_2026-09-11.md) (the round that took CC > 10 from 63 functions to 0), [`2026-09-11-rules-appendices/`](archive/2026-09-11-rules-appendices/) |
 | Size, parameter and test-debt rounds (F, G) | [`current/AGENT_RULES.md`](current/AGENT_RULES.md) RULE 16 / 18 / 19, and this map | [`2026-09-12-round-f-size-tail/`](archive/2026-09-12-round-f-size-tail/) (the 500-line tail and the two god classes), [`2026-09-13-round-f/`](archive/2026-09-13-round-f/) (the parameter objects), [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the tail inventory and the executed steps G1–G7), [`2026-09-13-rules-appendices/`](archive/2026-09-13-rules-appendices/) |
+| Next cycle: seams and testability (Round I) | System of record §6/§9; **Area A transport slice implemented, remainder pending; B–F planned only** | [`2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md`](archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) (audit analysis, corrections, six-area roadmap) · [`Area A record`](archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) |
 | Where Round H will work (JS gate, spine, cohesion, verification) | [`archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md`](archive/2026-09-14-round-h/ROUND_H_DESIGN_2026-09-14.md), and [`reports/CODE_QUALITY_METRICS_2026-09-14.md`](../reports/CODE_QUALITY_METRICS_2026-09-14.md) for the numbers it is based on; Area D implemented in [`2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md`](archive/2026-09-14-round-h-area-d/AREA_D_IMPLEMENTATION_2026-09-14.md) with tools `file_coverage_floor.py`, `double_audit.py`, `mutation_platform.py`, `smell_inventory.py` | [`2026-09-13-round-g-write-gate/`](archive/2026-09-13-round-g-write-gate/) (the round whose tail it inherits), [`2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md`](archive/2026-09-13-ai-bot-chat/BOT_CHAT_DEFECTS_2026-09-13.md) (the fake-double defect that motivates the verification area) |
 | Blocks, grid, undo, scroll | system of record §2, invariants I-1…I-11 | [`2026-09-05-grid-scroll-undo/`](archive/2026-09-05-grid-scroll-undo/) |
 | Tests | system of record §7 | [`2026-09-09-test-suite/`](archive/2026-09-09-test-suite/) |
