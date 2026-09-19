@@ -37,7 +37,8 @@ docs/
     ├── 2026-09-14-round-h/           ← Round H: the four-area plan (JS gate, spine, cohesion, verification)
     ├── 2026-09-16-area-a-cdp-boundary/ ← reconstructed source design
     ├── 2026-09-19-round-i-seams/      ← reviewed six-area audit
-    └── 2026-09-19-area-a-integration/ ← Area A transfer and measured validation
+    ├── 2026-09-19-area-a-integration/ ← Area A transfer and measured validation
+    └── 2026-09-19-area-a-quality/     ← prioritized quality follow-up
 ```
 
 Also in the repo, not under `docs/`:
@@ -54,6 +55,7 @@ Also in the repo, not under `docs/`:
 
 | You want to… | Read |
 |---|---|
+| Review quality improvements and remaining priorities | [`Area A quality report`](../reports/AREA_A_QUALITY_2026-09-19.md) · [`Design and execution`](archive/2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) — safety-test gaps, simpler identity checks and repaired quality assertions |
 | Inspect the integrated Area A transfer | [`Transfer record`](archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) · [`Local verification report`](../reports/AREA_A_TRANSFER_2026-09-19.md) — wire, typed gate, selector/golden tests and shim inventory; remaining gates explicit |
 | Review the next improvement cycle (Round I; Area A only authorized) | [`Round I seams & testability plan`](archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [`Area A first-slice implementation and validation`](archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) |
 | Know how the app behaves right now | [`current/SYSTEM_OF_RECORD.md`](current/SYSTEM_OF_RECORD.md) |

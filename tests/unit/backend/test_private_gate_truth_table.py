@@ -152,3 +152,63 @@ class TestPinnedCells(unittest.TestCase):
         result = judge(cell('private', 'named', 'exact', 'two_nicks'))
         self.assertEqual(result.__class__.__module__, 'backend.chat_parser')
         self.assertEqual(pickle.loads(pickle.dumps(result)), result)
+
+
+class TestIdentityEdges(unittest.TestCase):
+    """Safety corners the first mutation run found under-specified."""
+
+    def test_unknown_me_and_multiple_outbound_authors_refuses_all(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'in_authors': [PARTNER],
+                 'out_authors': ['First', 'Second']}
+        got = judge(state, my_nick='')
+        self.assertEqual((got.ok, got.reason, got.me, got.partner, got.strangers),
+                         (False, 'strangers', '', PARTNER, ['First', 'Second']))
+        self.assertEqual(got.detail, 'other people write here: First, Second')
+
+    def test_unknown_me_and_empty_pane_keeps_legacy_acceptance(self):
+        got = judge({'tab': 'private', 'partner': PARTNER, 'authors': []}, my_nick='')
+        self.assertEqual((got.ok, got.me, got.partner, got.strangers), (True, '', PARTNER, []))
+
+    def test_flat_authors_without_me_use_target_fallback(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'authors': [PARTNER, STRANGER]}
+        got = judge(state, my_nick='')
+        self.assertEqual((got.reason, got.me, got.strangers), ('strangers', '', [STRANGER]))
+
+    def test_flat_authors_report_only_configured_me_as_outbound(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'authors': [PARTNER, ME, STRANGER]}
+        got = judge(state)
+        self.assertEqual((got.reason, got.me, got.strangers), ('strangers', ME, [STRANGER]))
+
+    def test_renamed_me_preserves_configured_reporting_and_accepts_current(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'me': 'Current',
+                 'in_authors': [PARTNER], 'out_authors': ['Old', 'Current', PARTNER, STRANGER]}
+        got = judge(state, my_nick='Old')
+        self.assertEqual((got.reason, got.me, got.partner, got.strangers),
+                         ('strangers', 'Old', PARTNER, [STRANGER]))
+
+    def test_state_me_is_reported_when_configuration_missing(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'me': ME,
+                 'in_authors': [PARTNER], 'out_authors': [ME, STRANGER]}
+        got = judge(state, my_nick='')
+        self.assertEqual((got.reason, got.me, got.strangers), ('strangers', ME, [STRANGER]))
+
+    def test_stale_config_matching_partner_is_not_self_chat_after_rename(self):
+        state = {'tab': 'private', 'partner': PARTNER, 'me': ME,
+                 'in_authors': [PARTNER], 'out_authors': [ME]}
+        got = judge(state, my_nick=PARTNER)
+        self.assertEqual((got.reason, got.me), ('ok', PARTNER))
+
+    def test_three_strangers_not_elided_and_display_identity_preserved(self):
+        state = {'tab': 'private', 'partner': '  ански ', 'me': ME,
+                 'in_authors': ['АНСКИ', 'A', 'B', 'C'], 'out_authors': [ME, 'A']}
+        got = judge(state)
+        self.assertEqual((got.reason, got.detail, got.partner, got.strangers),
+                         ('strangers', 'other people write here: A, B, C', 'ански', ['A', 'B', 'C']))
+
+    def test_default_typed_query_is_strict_and_has_no_item_override(self):
+        state = decode_tab_state(cell('private', 'named', 'exact', 'stranger_in'))
+        self.assertEqual(judge_private(state, PARTNER, ME).reason, 'strangers')
+        self.assertEqual(judge_private(state.with_tab('room', PARTNER), PARTNER, ME).reason, 'not_private')
+
+    def test_empty_nick_never_authorizes_despite_valid_state(self):
+        self.assertEqual(judge(cell('private', 'named', 'exact', 'two_nicks'), nick='').reason, 'no_partner')

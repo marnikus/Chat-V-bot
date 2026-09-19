@@ -13,13 +13,14 @@ and are linked from here.
 | Map of current vs. historical docs | [`docs/README.md`](../README.md) |
 | User-facing manual (install, Chrome, UI tour) | [`README.md`](../../README.md) |
 
-**2026-09-19 scoped verification:** the table above and §7/§8 figures are
-historical baselines, not a fresh green-suite claim. The integrated Area A
-transfer passes 424 targeted tests. The full run has 3,347 passes and the same
-72 existing failures; observed coverage is 92.94% line / 88.46% branch, not a
-promoted baseline. Gate/decoder mutation scores are 91.50% / 96.73% (scoped).
-See [the transfer report](../../reports/AREA_A_TRANSFER_2026-09-19.md) for
-commands, denominators, baseline comparisons and remaining acceptance gaps.
+**2026-09-19 scoped verification (quality follow-up):** the table above and
+§7/§8 figures are historical baselines, not a fresh green-suite claim. Latest
+Area A selection: 436 passes; full run: 3,361 passes and 70 existing failures
+(two stale quality-test assertions repaired; no new failures). Gate/decoder
+coverage is 100% line/branch; scoped mutation is 97.95% / 100%. Overall measured
+coverage is 92.94% line / 88.49% branch, still below the historical official
+floor, not a promoted baseline. See the [prioritized quality report](../../reports/AREA_A_QUALITY_2026-09-19.md)
+for commands, denominators, remaining risks and comparison with the transfer.
 
 > **Conflict rule.** If a statement here disagrees with an archived design doc,
 > **this file wins.** Archived docs are true *as of the date in their name* —
@@ -345,6 +346,7 @@ dict, and the collector status strings.
 
 | Date | Design | Why you'd open it |
 |---|---|---|
+| 2026-09-19 | [Area A quality follow-up](../archive/2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) | Unknown/renamed-nick contracts, reduced gate complexity, fixed RULE 16 test locations and priority-sorted remaining work |
 | 2026-09-19 | [Area A transferred implementation](../archive/2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) · [source design](../archive/2026-09-16-area-a-cdp-boundary/AREA_A_CDP_BOUNDARY_DESIGN_2026-09-16.md) | CdpWire, typed gate, selector/golden canaries and shim deprecation integrated with Round I; local validation and remaining release gates |
 | 2026-09-19 | [Round I — seams & testability](../archive/2026-09-19-round-i-seams/ROUND_I_DESIGN_2026-09-19.md) · [Area A implementation](../archive/2026-09-19-round-i-seams/AREA_A_IMPLEMENTATION_2026-09-19.md) | Reviewed six-area audit and corrected evidence; Area A transport slice implemented, remaining A gates pending; B–F not implemented |
 | 2026-09-13 | [Global wait speed multiplier](../archive/2026-09-13-speed-multiplier/SPEED_MULTIPLIER_DESIGN_2026-09-13.md) | Why one coefficient scales every wait (global, not positional: the collect phase runs before the per-user loop), which waits scale and which do not, and why scroll pacing scales via `dataclasses.replace` instead of a new `ScrollOptions` field |

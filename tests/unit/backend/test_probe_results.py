@@ -111,3 +111,16 @@ class TestScroll(unittest.TestCase):
         for raw in (None, 'top', [], 0):
             with self.subTest(raw=raw):
                 self.assertEqual(decode_scroll_pos(raw), ScrollPos())
+
+
+class TestNonDefaultState(unittest.TestCase):
+    def test_pending_and_scroll_survive_the_outer_decoder(self):
+        state = decode_tab_state({'ok': True, 'pending': '7',
+                                  'scroll': {'top': '42', 'atTop': True}})
+        self.assertEqual((state.pending, state.scroll), (7, ScrollPos(True, 42)))
+
+    def test_falsey_tab_defaults_to_none_but_unknown_tab_is_not_rewritten(self):
+        for tab in (None, '', 0, False):
+            with self.subTest(tab=tab):
+                self.assertEqual(decode_tab_state({'tab': tab}).tab, 'none')
+        self.assertEqual(decode_tab_state({'tab': 'unknown'}).tab, 'unknown')

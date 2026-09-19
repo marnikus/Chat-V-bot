@@ -40,7 +40,7 @@ def title_matches(title: str, nick: str) -> bool:
     want, have = _norm(nick), _norm(title)
     if not want or not have:
         return False
-    return have == want or want in have
+    return want in have
 
 
 @dataclass(frozen=True)
@@ -88,9 +88,10 @@ def _is_self_chat(names: _GateNames) -> bool:
 
 def _split_authors(everyone, names: _GateNames) -> tuple:
     """Some pages report only one flat `authors` list — guess the sides."""
-    ins = [a for a in everyone
-           if _norm(a) != _norm(names.effective_me or names.target)]
-    outs = [a for a in everyone if _norm(a) == _norm(names.effective_me)]
+    effective = _norm(names.effective_me)
+    inbound_exclusion = effective or _norm(names.target)
+    ins = [a for a in everyone if _norm(a) != inbound_exclusion]
+    outs = [a for a in everyone if _norm(a) == effective]
     return ins, outs
 
 
@@ -116,10 +117,8 @@ def _foreign_authors(outs, names: _GateNames) -> tuple:
     """
     me = names.me_cfg or names.me_state or (outs[0] if len(outs) == 1 else "")
     if me:
-        return me, [a for a in outs
-                    if _norm(a) != _norm(me)
-                    and _norm(a) != _norm(names.me_state)
-                    and _norm(a) != _norm(names.target)]
+        known = {_norm(me), _norm(names.me_state), _norm(names.target)}
+        return me, [a for a in outs if _norm(a) not in known]
     return me, list(outs) if len(outs) > 1 else []
 
 
@@ -194,7 +193,6 @@ def _strangers_verdict(authors, names) -> PrivateCheck:
     return PrivateCheck(False, "strangers",
                         f"other people write here: {shown}",
                         me, names.partner, strangers)
-
 
 
 # Preserve the historical public/serialization home, not just import aliases.

@@ -14,6 +14,7 @@ in each round, not implied by the presence of a plan.
 
 | Group | Docs | What it covers |
 |---|---:|---|
+| [`2026-09-19-area-a-quality/`](#2026-09-19-area-a-quality) | 1 | Safety-test strengthening, simpler gate identity comparisons, repaired RULE 16 assertions and priority-sorted quality results. |
 | [`2026-09-19-area-a-integration/`](#2026-09-19-area-a-integration) | 1 | Area A code transfer integrated with Round I; compatibility fixes, measured mutation/coverage and unchanged baseline failures. |
 | [`2026-09-16-area-a-cdp-boundary/`](#2026-09-16-area-a-cdp-boundary) | 1 | Reconstructed source design supplied for transfer: wire, typed gate, selector/golden tests and shim retirement ladder. |
 | [`2026-09-19-round-i-seams/`](#2026-09-19-round-i-seams) | 2 | Next cycle: reviewed six-area seams/testability audit; only Area A authorized, first transport slice implemented, remaining gates explicit. |
@@ -409,3 +410,8 @@ Round H Area D implementation — verification debt closed without touching prod
 ## 2026-09-19-area-a-integration
 
 - [`AREA_A_TRANSFER_2026-09-19.md`](2026-09-19-area-a-integration/AREA_A_TRANSFER_2026-09-19.md) — merged Area A implementation, compatibility/correctness adjustments and explicit remaining audit gates.
+
+
+## 2026-09-19-area-a-quality
+
+- [`AREA_A_QUALITY_2026-09-19.md`](2026-09-19-area-a-quality/AREA_A_QUALITY_2026-09-19.md) — design and verified report follow-up; remaining release gates stay explicit.
